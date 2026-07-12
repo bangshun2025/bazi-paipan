@@ -698,6 +698,17 @@ class BaziPaipanExt < Clacky::ApiExtension
       error!("standalone.html not found", status: 500)
     end
   end
+
+  # 回归测试页面
+  get "/tests/runner" do
+    html_path = File.join(self.class.ext_dir, "tests", "runner.html")
+    if File.exist?(html_path)
+      html = File.read(html_path, encoding: "UTF-8")
+      raise Clacky::ApiExtension::Halt.new(200, html, "text/html; charset=utf-8")
+    else
+      error!("runner.html not found", status: 500)
+    end
+  end
   get "/" do
     json(message: "八字排盘 · 从真版 API", endpoints: ["/paipan", "/liunian", "/standalone"])
   end

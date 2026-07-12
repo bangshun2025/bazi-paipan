@@ -1511,28 +1511,51 @@ function updTopCols(data, dyIdx, lnIdx, container) {
   }
   const pd = p(dy.gan, dy.zhi), pl = p(lnGz[0], lnGz[1]);
 
-  const rows = container.querySelectorAll('.chart tr');
-  function set(r, c, txt, cls) { rows[r].children[c].textContent = txt; if (cls !== undefined) rows[r].children[c].className = cls; }
-  // 大运列 (col 5)
-  set(1, 5, pd.rs, 'sep col-dy');
-  set(2, 5, pd.gan, 'sep '+pd.wg+' col-dy');
-  set(3, 5, pd.zhi, 'sep '+pd.wz+' col-dy');
-  rows[4].children[5].innerHTML = pd.cg; rows[4].children[5].className = 'sep col-dy';
-  set(5, 5, pd.ny, 'sep col-dy');
-  set(6, 5, pd.xy, 'sep col-dy');
-  set(7, 5, pd.zz, 'sep col-dy');
-  set(8, 5, pd.kw, 'sep col-dy');
-  set(9, 5, pd.sh, 'sep col-dy');
-  // 流年列 (col 6)
-  set(1, 6, pl.rs, 'col-ln');
-  set(2, 6, pl.gan, pl.wg+' col-ln');
-  set(3, 6, pl.zhi, pl.wz+' col-ln');
-  rows[4].children[6].innerHTML = pl.cg; rows[4].children[6].className = 'col-ln';
-  set(5, 6, pl.ny, 'col-ln');
-  set(6, 6, pl.xy, 'col-ln');
-  set(7, 6, pl.zz, 'col-ln');
-  set(8, 6, pl.kw, 'col-ln');
-  set(9, 6, pl.sh, 'col-ln');
+  const tb = container.querySelector('.chart');
+  if (!tb || !tb.rows) return;
+  const rows = tb.rows;
+  const nCols = rows[0] ? rows[0].cells.length : 7;
+  const dyCol = nCols - 2; // 大运：倒数第2列
+  const lnCol = nCols - 1; // 流年：倒数第1列
+  // 找到「主星」行作为基准（单表 row1，双胞 row2）
+  let base = 1;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].cells.length >= nCols && rows[i].cells[0].textContent.trim() === '主星') {
+      base = i; break;
+    }
+  }
+  function set(r, c, txt, cls) {
+    const row = rows[base + r];
+    if (!row) return;
+    const cell = row.cells[c];
+    if (!cell) return;
+    cell.textContent = txt;
+    if (cls !== undefined) cell.className = cls;
+  }
+  // 大运列（r=0主星,1天干,2地支,3藏气,4纳音,5星运,6自坐,7空亡,8神煞）
+  set(0, dyCol, pd.rs, 'sep col-dy');
+  set(1, dyCol, pd.gan, 'sep '+pd.wg+' col-dy');
+  set(2, dyCol, pd.zhi, 'sep '+pd.wz+' col-dy');
+  if (rows[base+3] && rows[base+3].cells[dyCol]) {
+    rows[base+3].cells[dyCol].innerHTML = pd.cg; rows[base+3].cells[dyCol].className = 'sep col-dy';
+  }
+  set(4, dyCol, pd.ny, 'sep col-dy');
+  set(5, dyCol, pd.xy, 'sep col-dy');
+  set(6, dyCol, pd.zz, 'sep col-dy');
+  set(7, dyCol, pd.kw, 'sep col-dy');
+  set(8, dyCol, pd.sh, 'sep col-dy');
+  // 流年列
+  set(0, lnCol, pl.rs, 'col-ln');
+  set(1, lnCol, pl.gan, pl.wg+' col-ln');
+  set(2, lnCol, pl.zhi, pl.wz+' col-ln');
+  if (rows[base+3] && rows[base+3].cells[lnCol]) {
+    rows[base+3].cells[lnCol].innerHTML = pl.cg; rows[base+3].cells[lnCol].className = 'col-ln';
+  }
+  set(4, lnCol, pl.ny, 'col-ln');
+  set(5, lnCol, pl.xy, 'col-ln');
+  set(6, lnCol, pl.zz, 'col-ln');
+  set(7, lnCol, pl.kw, 'col-ln');
+  set(8, lnCol, pl.sh, 'col-ln');
 }
 
 // ============ 双胞胎对比渲染（单表+共享大运流年）============
@@ -2230,6 +2253,179 @@ function doAiParse() {
 document.addEventListener('click', function(e) {
   if (e.target.id === 'aiOverlay') hideAiInput();
 });
+
+// ===== 回归测试模式（URL 加 ?test=1）=====
+(function() {
+  if (!/[\?&]test=1(&|$)/.test(location.search)) return;
+  document.title = '八字排盘 · 回归测试';
+
+  // 隐藏正常 UI
+  const page = document.querySelector('.page');
+  if (page) page.style.display = 'none';
+
+  // 测试 UI
+  const root = document.createElement('div');
+  root.style.cssText = 'font-family:-apple-system,system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px;min-height:100vh';
+  root.innerHTML = '<h1 style="margin-bottom:8px">🧪 八字排盘 · 回归测试</h1>'
+    + '<div id="test-summary" style="background:#16213e;border-radius:8px;padding:16px;margin-bottom:20px">⏳ 运行中…</div>'
+    + '<div id="test-results"></div>'
+    + '<div id="test-time" style="color:#888;font-size:12px;margin-top:12px"></div>';
+  document.body.appendChild(root);
+
+  function eq(label, actual, expected) {
+    const ok = actual === expected;
+    return { label, ok, detail: ok ? '=' + expected : '期望 "' + expected + '", 实际 "' + actual + '"' };
+  }
+
+  function fail(label, detail) {
+    return { label, ok: false, detail: detail };
+  }
+
+  const start = Date.now();
+  const tests = [];
+
+  // === 十神 ===
+  tests.push({ section:'十神计算' });
+  tests.push(eq('shiShen("甲","辛") → 官',           shiShen('甲','辛'), '官'));
+  tests.push(eq('shiShen("甲","甲") → 比',           shiShen('甲','甲'), '比'));
+  tests.push(eq('shiShen("丙","壬") → 杀',           shiShen('丙','壬'), '杀'));
+  tests.push(eq('shiShen("癸","乙") → 食',           shiShen('癸','乙'), '食'));
+  tests.push(eq('shiShen("庚","戊") → 枭',           shiShen('庚','戊'), '枭'));
+  tests.push(eq('shiShen("壬","丁") → 财',           shiShen('壬','丁'), '财'));
+
+  // === 纳音 ===
+  tests.push({ section:'纳音' });
+  tests.push(eq('甲子→海中金', NAYIN['甲子'], '海中金'));
+  tests.push(eq('壬戌→大海水', NAYIN['壬戌'], '大海水'));
+
+  // === 十二长生 ===
+  tests.push({ section:'十二长生' });
+  tests.push(eq('changSheng("甲","亥")→长生',       changSheng('甲','亥'), '长生'));
+  tests.push(eq('changSheng("甲","子")→沐浴',       changSheng('甲','子'), '沐浴'));
+  tests.push(eq('changSheng("丙","寅")→长生',       changSheng('丙','寅'), '长生'));
+  tests.push(eq('changSheng("辛","丑")→养(阴干)',   changSheng('辛','丑'), '养'));
+  tests.push(eq('changSheng("辛","子")→长生(阴干)', changSheng('辛','子'), '长生'));
+
+  // === 流年 ===
+  tests.push({ section:'流年干支' });
+  tests.push(eq('liuNianJZ(2026)→丙午',            liuNianJZ(2026), '丙午'));
+  tests.push(eq('liuNianJZ(1982)→壬戌',            liuNianJZ(1982), '壬戌'));
+  tests.push(eq('liuNianJZ(1984)→甲子',            liuNianJZ(1984), '甲子'));
+
+  // === 地支序号 ===
+  tests.push({ section:'地支序号' });
+  tests.push(eq('dzNum("寅")→1',                    dzNum('寅'), 1));
+  tests.push(eq('dzNum("子")→11',                   dzNum('子'), 11));
+  tests.push(eq('numZhi(1)→寅',                     numZhi(1), '寅'));
+  tests.push(eq('numZhi(11)→子',                    numZhi(11), '子'));
+
+  // === 全盘回归 ===
+  function testChart(label, name, gender, y, m, d, h, mi, checks) {
+    tests.push({ section:'全盘 — ' + label });
+    const p = paipan(name, gender, y, m, d, h, mi);
+    for (const [k, expected] of Object.entries(checks)) {
+      // 支持复合字段：nianGan+nianZhi → p.nianGan + p.nianZhi
+      let actual;
+      if (k.includes('+')) {
+        const parts = k.split('+');
+        actual = parts.map(pt => {
+          const keys = pt.split('.');
+          let v = p;
+          for (const key of keys) { v = v ? (v[key] !== undefined ? v[key] : (Array.isArray(v) && /^\d+$/.test(key) ? v[parseInt(key)] : undefined)) : undefined; }
+          return v !== undefined ? String(v) : '?';
+        }).join('');
+      }
+      // 支持数组索引：daYun.0.gan+zhi
+      else if (k.includes('.') && !k.includes('[')) {
+        const keys = k.split('.');
+        let v = p;
+        for (const key of keys) {
+          if (!v) break;
+          if (/^\d+$/.test(key)) v = v[parseInt(key)];
+          else v = v[key];
+        }
+        actual = v !== undefined ? String(v) : '?';
+      } else {
+        actual = String(p[k] !== undefined ? p[k] : '?');
+      }
+      tests.push(eq(k, String(actual), expected));
+    }
+  }
+
+  testChart('邦顺', '邦顺', '男', 1982,10,18,5,1, {
+    'nian.gan+nian.zhi': '壬戌', 'yue.gan+yue.zhi': '庚戌',
+    'ri.gan+ri.zhi': '甲戌', 'shi.gan+shi.zhi': '丁卯',
+    'ri.gan': '甲',
+    'daYun.0.gan+daYun.0.zhi': '辛亥', 'daYun.1.gan+daYun.1.zhi': '壬子',
+    'shen.gan+shen.zhi': '壬寅', 'tai.gan+tai.zhi': '辛丑'
+  });
+
+  testChart('芝晓', '芝晓', '女', 1983,5,15,9,45, {
+    'nian.gan+nian.zhi': '癸亥', 'yue.gan+yue.zhi': '丁巳',
+    'ri.gan+ri.zhi': '癸卯', 'shi.gan+shi.zhi': '丁巳',
+    'ri.gan': '癸', 'shen.gan+shen.zhi': '癸亥',
+    'daYun.0.gan+daYun.0.zhi': '戊午'
+  });
+
+  testChart('素素', '素素', '女', 1986,1,1,12,0, {
+    'nian.gan+nian.zhi': '乙丑', 'ri.gan+ri.zhi': '乙巳', 'ri.gan': '乙'
+  });
+
+  testChart('小龙', '小龙', '男', 1985,3,21,14,30, {
+    'nian.gan+nian.zhi': '乙丑', 'ri.gan+ri.zhi': '己未', 'ri.gan': '己'
+  });
+
+  testChart('苓菲', '苓菲', '女', 1988,7,7,22,15, {
+    'ri.gan+ri.zhi': '癸亥', 'ri.gan': '癸'
+  });
+
+  testChart('新善', '新善', '男', 1989,12,12,7,30, {
+    'ri.gan+ri.zhi': '丙午', 'ri.gan': '丙'
+  });
+
+  testChart('冯际州', '冯际州', '男', 2010,2,14,15,0, {
+    'ri.gan+ri.zhi': '乙未', 'ri.gan': '乙'
+  });
+
+  testChart('吴星宝', '吴星宝', '男', 2012,6,8,11,0, {
+    'ri.gan+ri.zhi': '庚子', 'ri.gan': '庚'
+  });
+
+  testChart('邵凡语', '邵凡语', '女', 2014,9,19,18,30, {
+    'ri.gan+ri.zhi': '癸巳', 'ri.gan': '癸'
+  });
+
+  // 渲染结果
+  const results = document.getElementById('test-results');
+  const summary = document.getElementById('test-summary');
+  let html = '', passed = 0, failed = 0;
+
+  for (const t of tests) {
+    if (t.section) { html += '<div style="color:#ff9800;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px">' + t.section + '</div>'; continue; }
+    if (t.ok) {
+      passed++;
+      html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#1b3a1b;border-left:3px solid #4caf50"><span style="font-weight:bold;margin-right:8px">✅</span>' + t.label + (t.detail ? ' <span style="color:#aaa;font-size:12px">' + t.detail + '</span>' : '') + '</div>';
+    } else {
+      failed++;
+      html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#3a1b1b;border-left:3px solid #f44336"><span style="font-weight:bold;margin-right:8px">❌</span>' + t.label + ' <span style="color:#f99;font-size:12px">' + t.detail + '</span></div>';
+    }
+  }
+
+  const elapsed = Date.now() - start;
+  const total = passed + failed;
+  summary.innerHTML = total + ' 条断言，<span style="color:' + (failed===0?'#4caf50':'#f44336') + ';font-weight:bold">'
+    + passed + ' 通过</span>'
+    + (failed>0 ? '，<span style="color:#f44336;font-weight:bold">' + failed + ' 失败</span>' : '')
+    + ' · ' + elapsed + 'ms';
+  results.innerHTML = html;
+  document.getElementById('test-time').textContent = new Date().toLocaleString();
+
+  if (failed === 0) {
+    document.title = '✅ 全部通过 — 八字排盘回归测试';
+  } else {
+    document.title = '❌ ' + failed + ' 失败 — 八字排盘回归测试';
+  }
+})();
 </script>
 
 </body>
