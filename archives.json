@@ -1,0 +1,13 @@
+[
+  {"name":"邦顺","gender":"男","year":1982,"month":10,"day":18,"hour":5,"min":1,"prov":"","city":"","dist":"","useSolar":false,"id":1780918829523,"createdAt":"2026-06-08T11:40:29.523Z","updatedAt":"2026-07-11T09:00:48.611Z"},
+  {"name":"芝晓","gender":"女","year":1981,"month":4,"day":23,"hour":0,"min":17,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T14:59:29.374Z"},
+  {"name":"素素","gender":"女","year":1990,"month":2,"day":6,"hour":10,"min":2,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-23T02:56:45.098Z"},
+  {"name":"小龙","gender":"男","year":1989,"month":10,"day":2,"hour":19,"min":48,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T15:02:43.998Z"},
+  {"name":"苓菲","gender":"女","year":1992,"month":12,"day":31,"hour":0,"min":12,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T15:02:39.328Z"},
+  {"name":"新善","gender":"男","year":1991,"month":9,"day":15,"hour":7,"min":4,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T14:59:25.443Z"},
+  {"name":"冯际州","gender":"男","year":2006,"month":11,"day":20,"hour":1,"min":38,"prov":"广西","city":"南宁市","dist":"","useSolar":true,"id":1780931825858,"createdAt":"2026-06-08T15:17:05.858Z","updatedAt":"2026-06-08T15:53:23.438Z"},
+  {"name":"测试","gender":"男","year":2006,"month":11,"day":20,"hour":1,"min":38,"prov":"广西","city":"南宁市","dist":"青秀区","useSolar":true,"id":1780932196106,"createdAt":"2026-06-08T15:23:16.106Z","updatedAt":"2026-06-08T15:23:16.106Z"},
+  {"name":"冯际诈","gender":"男","year":2006,"month":11,"day":20,"hour":1,"min":38,"prov":"广西","city":"南宁市","dist":"青秀区","useSolar":true,"id":1780932316592,"createdAt":"2026-06-08T15:25:16.592Z","updatedAt":"2026-06-08T15:25:16.592Z"},
+  {"name":"吴星宝","gender":"男","year":2017,"month":5,"day":22,"hour":18,"min":30,"prov":"","city":"","dist":"","useSolar":false,"id":1780964541245,"createdAt":"2026-06-09T00:22:21.245Z","updatedAt":"2026-06-09T00:22:27.745Z"},
+  {"name":"邵凡语","gender":"男","year":2017,"month":7,"day":31,"hour":4,"min":25,"prov":"广西","city":"南宁市","dist":"青秀区","useSolar":true,"id":1783302857280,"createdAt":"2026-07-06T01:54:17.280Z","updatedAt":"2026-07-06T01:58:49.823Z"}
+]
