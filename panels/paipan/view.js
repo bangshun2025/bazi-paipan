@@ -101,6 +101,17 @@
   .bz-chart { min-width:500px; }
   .bz-chart .rg td { font-size:24px; }
 }
+.bz-twin-wrap { display:flex; gap:16px; overflow-x:auto; }
+.bz-twin-col { flex:1; min-width:380px; }
+.bz-twin-col .bz-body { flex-direction:column; }
+.bz-twin-col .bz-luck { width:100%; }
+.bz-twin-col h3 { font-family:"Songti SC","SimSun",serif; font-size:18px; color:#2c2416; text-align:center; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid #e0d8c8; letter-spacing:.08em; }
+.bz-twin-col:last-child h3 { color:#b5343a; border-bottom-color:#b5343a; }
+/* 双胞胎对比：单表三栏 */
+.bz-chart .bz-twin-sep { width:4px; min-width:4px; padding:0; background:#e0d8c8; opacity:0.35; }
+.bz-chart .bz-twin-sub-hd td { padding:6px 4px !important; }
+.bz-chart .bz-twin-sub-hd h3 { font-family:"Songti SC","SimSun",serif; font-size:16px; text-align:center; margin:0; padding:2px 0; border-bottom:2px solid #e0d8c8; letter-spacing:.08em; }
+.bz-chart .bz-twin-red { color:#b5343a; border-bottom-color:#b5343a; }
 `;
     document.head.appendChild(s);
   }
@@ -137,6 +148,7 @@
       '<label>日</label><input type="number" id="bzDay" value="18" min="1" max="31" style="width:44px;">' +
       '<label>时</label><input type="number" id="bzHour" value="5" min="0" max="23" style="width:44px;">' +
       '<label>分</label><input type="number" id="bzMin" value="1" min="0" max="59" style="width:44px;">' +
+      '<label>双胞</label><select id="bzTwin"><option value="0">无</option><option value="1">对比</option></select>' +
       '<label style="cursor:pointer;font-size:13px;"><input type="checkbox" id="bzSolar" onchange="document.getElementById(\'bzSolarGroup\').style.display=this.checked?\'\':\'none\';">真太阳时</label>' +
       '<span id="bzSolarGroup" style="display:none;">' +
       '<label>省</label><select id="bzProv" onchange="onBzProvChange()" style="width:72px;"><option value="">—</option>'+provOpts+'</select>' +
@@ -170,15 +182,29 @@
     if (!resultEl) return;
     resultEl.innerHTML = '<div style="color:#8b7e6a;padding:60px;text-align:center;font-family:\'Songti SC\',serif;">排盘中…</div>';
 
-    fetch('/api/ext/bazi-paipan/paipan?' + params.toString())
-      .then(function(res){ return res.json(); })
-      .then(function(d){
-        if (d.error) { resultEl.innerHTML = '<div style="color:#b5343a;padding:30px;">'+d.error+'</div>'; return; }
-        render(d);
-      })
-      .catch(function(e){
-        resultEl.innerHTML = '<div style="color:#b5343a;padding:30px;">出错：'+e.message+'</div>';
-      });
+    var twin = document.getElementById('bzTwin').value;
+    var baseUrl = '/api/ext/bazi-paipan/paipan?' + params.toString();
+
+    if (twin === '1') {
+      // 双胞胎对比：单表合并 + 共享大运流年
+      var p1 = fetch(baseUrl + '&twin=1').then(function(r){return r.json();});
+      var p2 = fetch(baseUrl + '&twin=2').then(function(r){return r.json();});
+      Promise.all([p1, p2]).then(function(arr){
+        var d1 = arr[0], d2 = arr[1];
+        if (d1.error || d2.error) { resultEl.innerHTML = '<div style="color:#b5343a;">'+(d1.error||d2.error)+'</div>'; return; }
+        resultEl.innerHTML = renderTwinHtml(d1, d2);
+      }).catch(function(e){ resultEl.innerHTML = '<div style="color:#b5343a;">出错：'+e.message+'</div>'; });
+    } else {
+      fetch(baseUrl)
+        .then(function(res){ return res.json(); })
+        .then(function(d){
+          if (d.error) { resultEl.innerHTML = '<div style="color:#b5343a;padding:30px;">'+d.error+'</div>'; return; }
+          resultEl.innerHTML = renderHtml(d, '');
+        })
+        .catch(function(e){
+          resultEl.innerHTML = '<div style="color:#b5343a;padding:30px;">出错：'+e.message+'</div>';
+        });
+    }
   };
 
   window.onBzProvChange = function () {
@@ -203,7 +229,7 @@
     (LOC[prov].cities[city].dist||[]).forEach(function(d){var o=document.createElement('option');o.value=d;o.textContent=d;dSel.appendChild(o);});
   };
 
-  function render(d) {
+  function renderHtml(d, label) {
     var p = d.pillars;
     var tstHtml = '';
     if (d.true_solar) {
@@ -266,6 +292,123 @@
       '<div class="bz-luck-col"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;color:#8b7e6a;"><span>起运</span> 出生后 '+qy.years+'年'+qy.months+'月'+qy.days+'天 &nbsp; <span>交运</span> 逢己、甲年</div></div>' +
       '<div class="bz-luck-section"><div class="bz-luck-table">'+luckHd+luckGz+luckLn+'</div></div></div></div></div>';
 
-    document.getElementById('bzResult').innerHTML = html;
+    return html;
+  }
+
+  function renderTwinHtml(d1, d2) {
+    var p1 = d1.pillars, p2 = d2.pillars;
+    var cd = d1.cur_da_yun, cl = d1.cur_liu_nian;
+    var qy = d1.qi_yun;
+    var tstHtml = '', ryHtml = '';
+    if (d1.true_solar) {
+      var ts = d1.true_solar;
+      tstHtml = '<span class="bz-meta-tag tst">☀ 真太阳时 '+pad(ts.h)+':'+pad(ts.mi)+' ('+(ts.offset_min>=0?'+':'')+ts.offset_min+'分)</span>';
+    }
+    if (d1.ren_yuan) {
+      ryHtml = '<span class="bz-meta-tag">'+d1.ren_yuan.gan+'（'+d1.ren_yuan.month_zhi+'月·节后'+d1.ren_yuan.days_after+'日）</span>';
+    }
+
+    function tc(txt, wx, cls) { var c=wx?WX_COLOR[wx]:'#2c2416'; var ca=cls?' class="'+cls+'"':''; return '<td'+ca+' style="color:'+c+'">'+txt+'</td>'; }
+    function tds(txt, cls) { return '<td class="'+(cls||'')+'">'+txt+'</td>'; }
+
+    var rows = [
+      '<tr class="hd">'+tds('盘式','rl')+'<th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><td class="bz-twin-sep"></td><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep">大运</th><th>流年</th></tr>',
+      '<tr class="bz-twin-sub-hd">'+tds('','rl')+'<td colspan="4"><h3>大宝（兄）</h3></td><td class="bz-twin-sep"></td><td colspan="4"><h3 class="bz-twin-red">小宝（弟）</h3></td><td colspan="2" class="sep"><h3 style="color:#8b7e6a;">共享</h3></td></tr>',
+      // 主星
+      '<tr class="rs">'+tds('主星','rl')+
+        tds(p1.nian.shi_shen)+tds(p1.yue.shi_shen)+tds(p1.ri.shi_shen)+tds(p1.shi.shi_shen)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.shi_shen)+tds(p2.yue.shi_shen)+tds(p2.ri.shi_shen)+tds(p2.shi.shi_shen)+
+        tds(cd.shi_shen,'sep')+tds(cl.shi_shen)+'</tr>',
+      // 天干
+      '<tr class="rg"><td class="rl"></td>'+
+        tc(p1.nian.gan,WX[p1.nian.gan])+tc(p1.yue.gan,WX[p1.yue.gan])+tc(p1.ri.gan,WX[p1.ri.gan])+tc(p1.shi.gan,WX[p1.shi.gan])+'<td class="bz-twin-sep"></td>'+
+        tc(p2.nian.gan,WX[p2.nian.gan])+tc(p2.yue.gan,WX[p2.yue.gan])+tc(p2.ri.gan,WX[p2.ri.gan])+tc(p2.shi.gan,WX[p2.shi.gan])+
+        tc(cd.gan,WX[cd.gan],'sep')+tc(cl.gan,WX[cl.gan])+'</tr>',
+      // 地支
+      '<tr class="rg"><td class="rl"></td>'+
+        tc(p1.nian.zhi,WX[p1.nian.zhi])+tc(p1.yue.zhi,WX[p1.yue.zhi])+tc(p1.ri.zhi,WX[p1.ri.zhi])+tc(p1.shi.zhi,WX[p1.shi.zhi])+'<td class="bz-twin-sep"></td>'+
+        tc(p2.nian.zhi,WX[p2.nian.zhi])+tc(p2.yue.zhi,WX[p2.yue.zhi])+tc(p2.ri.zhi,WX[p2.ri.zhi])+tc(p2.shi.zhi,WX[p2.shi.zhi])+
+        tc(cd.zhi,WX[cd.zhi],'sep')+tc(cl.zhi,WX[cl.zhi])+'</tr>',
+      // 藏气
+      '<tr class="rh">'+tds('藏气','rl')+
+        tds(p1.nian.cang_gan)+tds(p1.yue.cang_gan)+tds(p1.ri.cang_gan)+tds(p1.shi.cang_gan)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.cang_gan)+tds(p2.yue.cang_gan)+tds(p2.ri.cang_gan)+tds(p2.shi.cang_gan)+
+        tds(cd.cang_gan,'sep')+tds(cl.cang_gan)+'</tr>',
+      // 纳音
+      '<tr class="rn">'+tds('纳音','rl')+
+        tds(p1.nian.nayin)+tds(p1.yue.nayin)+tds(p1.ri.nayin)+tds(p1.shi.nayin)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.nayin)+tds(p2.yue.nayin)+tds(p2.ri.nayin)+tds(p2.shi.nayin)+
+        tds(cd.nayin,'sep')+tds(cl.nayin)+'</tr>',
+      // 星运
+      '<tr class="rm">'+tds('星运','rl')+
+        tds(p1.nian.xing_yun)+tds(p1.yue.xing_yun)+tds(p1.ri.xing_yun)+tds(p1.shi.xing_yun)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.xing_yun)+tds(p2.yue.xing_yun)+tds(p2.ri.xing_yun)+tds(p2.shi.xing_yun)+
+        tds(cd.xing_yun,'sep')+tds(cl.xing_yun)+'</tr>',
+      // 自坐
+      '<tr class="rm">'+tds('自坐','rl')+
+        tds(p1.nian.zi_zuo)+tds(p1.yue.zi_zuo)+tds(p1.ri.zi_zuo)+tds(p1.shi.zi_zuo)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.zi_zuo)+tds(p2.yue.zi_zuo)+tds(p2.ri.zi_zuo)+tds(p2.shi.zi_zuo)+
+        tds(cd.zi_zuo,'sep')+tds(cl.zi_zuo)+'</tr>',
+      // 空亡
+      '<tr class="rm">'+tds('空亡','rl')+
+        tds(p1.nian.kong_wang)+tds(p1.yue.kong_wang)+tds(p1.ri.kong_wang)+tds(p1.shi.kong_wang)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.kong_wang)+tds(p2.yue.kong_wang)+tds(p2.ri.kong_wang)+tds(p2.shi.kong_wang)+
+        tds(cd.kong_wang,'sep')+tds(cl.kong_wang)+'</tr>',
+      // 神煞
+      '<tr class="rm">'+tds('神煞','rl')+
+        tds(p1.nian.shen_sha)+tds(p1.yue.shen_sha)+tds(p1.ri.shen_sha)+tds(p1.shi.shen_sha)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.nian.shen_sha)+tds(p2.yue.shen_sha)+tds(p2.ri.shen_sha)+tds(p2.shi.shen_sha)+
+        tds(cd.shen_sha,'sep')+tds(cl.shen_sha)+'</tr>',
+      // 三垣 header
+      '<tr class="hd">'+tds('三垣','rl')+'<td></td><th>胎元</th><th>命宫</th><th>身宫</th><td class="bz-twin-sep"></td><th>胎元</th><th>命宫</th><th>身宫</th><td class="sep"></td><td></td></tr>',
+      // 三垣 主星
+      '<tr class="rs">'+tds('主星','rl')+'<td></td>'+
+        tds(p1.tai.shi_shen)+tds(p1.ming.shi_shen)+tds(p1.shen.shi_shen)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.tai.shi_shen)+tds(p2.ming.shi_shen)+tds(p2.shen.shi_shen)+
+        '<td class="sep"></td><td></td></tr>',
+      // 三垣 天干
+      '<tr class="rg"><td class="rl"></td><td></td>'+
+        tc(p1.tai.gan,WX[p1.tai.gan])+tc(p1.ming.gan,WX[p1.ming.gan])+tc(p1.shen.gan,WX[p1.shen.gan])+'<td class="bz-twin-sep"></td>'+
+        tc(p2.tai.gan,WX[p2.tai.gan])+tc(p2.ming.gan,WX[p2.ming.gan])+tc(p2.shen.gan,WX[p2.shen.gan])+
+        '<td class="sep"></td><td></td></tr>',
+      // 三垣 地支
+      '<tr class="rg"><td class="rl"></td><td></td>'+
+        tc(p1.tai.zhi,WX[p1.tai.zhi])+tc(p1.ming.zhi,WX[p1.ming.zhi])+tc(p1.shen.zhi,WX[p1.shen.zhi])+'<td class="bz-twin-sep"></td>'+
+        tc(p2.tai.zhi,WX[p2.tai.zhi])+tc(p2.ming.zhi,WX[p2.ming.zhi])+tc(p2.shen.zhi,WX[p2.shen.zhi])+
+        '<td class="sep"></td><td></td></tr>',
+      // 三垣 藏气
+      '<tr class="rh">'+tds('藏气','rl')+'<td></td>'+
+        tds(p1.tai.cang_gan)+tds(p1.ming.cang_gan)+tds(p1.shen.cang_gan)+'<td class="bz-twin-sep"></td>'+
+        tds(p2.tai.cang_gan)+tds(p2.ming.cang_gan)+tds(p2.shen.cang_gan)+
+        '<td class="sep"></td><td></td></tr>'
+    ];
+
+    // 大运流年表（共享，用 d1 的数据）
+    var luckHd = '<div class="bz-luck-row hd"><div class="cell rtag">大运</div>';
+    var luckGz = '<div class="bz-luck-row"><div class="cell rtag">干支</div>';
+    var luckLn = '<div class="bz-luck-row bz-liu-row"><div class="cell rtag">流年</div>';
+    for (var i=0; i<d1.da_yun.length; i++) {
+      var dy = d1.da_yun[i];
+      var cc = i===d1.cur_da_yun.idx ? ' cc' : '';
+      luckHd += '<div class="cell'+cc+'"><span class="year">'+dy.start_year+'</span><span class="age">'+(dy.start_age+1)+'岁</span></div>';
+      luckGz += '<div class="cell'+cc+'"><div class="sm" style="color:'+wxColor(dy.gan)+'">'+dy.gan+'</div><div class="bm" style="color:'+wxColor(dy.zhi)+'">'+dy.zhi+'</div></div>';
+      var lis = '';
+      for (var j=0; j<10; j++) {
+        var lnY = dy.start_year + j;
+        var idx = (lnY-4)%60; if(idx<0)idx+=60;
+        var g=TG[idx%10], z=DZ[idx%12];
+        lis += '<span class="li'+(i===d1.cur_da_yun.idx&&lnY===d1.now_year?' cur':'')+'" style="cursor:pointer" onclick="window._bzDoLiunian('+lnY+')"><span style="color:'+wxColor(g)+'">'+g+'</span><span style="color:'+wxColor(z)+'">'+z+'</span></span>';
+      }
+      luckLn += '<div class="cell'+cc+'">'+lis+'</div>';
+    }
+    luckHd += '</div>'; luckGz += '</div>'; luckLn += '</div>';
+
+    var html = '<div class="bz-page">' +
+      '<div class="bz-top-bar"><div class="bz-person"><b>'+d1.name+'</b><span class="sex">'+(d1.gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+d1.gender+' · '+d1.year+'年'+d1.month+'月'+d1.day+'日 '+pad(d1.hour)+':'+pad(d1.min)+'</span>'+tstHtml+ryHtml+'</div><div class="bz-person meta">'+d1.pillars.nian.gan+d1.pillars.nian.zhi+'年 · 属'+d1.sheng_xiao+' （当前'+d1.now_year+'年）</div></div>' +
+      '<div style="overflow-x:auto;"><table class="bz-chart" style="min-width:auto;table-layout:fixed;">'+rows.join('\n')+'</table></div>' +
+      '<div style="margin-top:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;color:#8b7e6a;"><span>起运</span> 出生后 '+qy.years+'年'+qy.months+'月'+qy.days+'天 &nbsp; <span>交运</span> 逢己、甲年</div></div>' +
+      '<div class="bz-luck-section"><div class="bz-luck-table">'+luckHd+luckGz+luckLn+'</div></div></div></div>';
+
+    return html;
   }
 })();
