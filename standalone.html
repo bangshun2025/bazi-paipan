@@ -43,6 +43,22 @@
   .ai-dialog .btn-cancel:hover { background:var(--c-line); }
   .ai-dialog .parse-result { font-size:12px; color:var(--c-gray); margin-top:8px; min-height:18px; }
 
+  /* 双胞胎对比：三栏布局 — 盘式+大宝 | 小宝 | 大运流年 */
+  .twin-wrap { display:block; overflow-x:hidden; }
+  .twin-wrap .chart-wrap { margin-bottom:8px; }
+  .twin-wrap .chart { width:100%; min-width:auto; table-layout:fixed; }
+  .twin-wrap .chart th, .twin-wrap .chart td { padding:4px 4px; font-size:13px; }
+  .twin-wrap .chart .rl { width:42px; min-width:42px; }
+  .twin-wrap .chart .twin-col-sep { width:4px; min-width:4px; padding:0; background:var(--c-line); opacity:0.35; }
+  .twin-wrap .chart .sep { border-left:2px solid var(--c-red); }
+  .twin-wrap .chart .col-ln { border-left:1px solid var(--c-line); }
+  .twin-wrap h3 { font-family:var(--font-display); font-size:16px; text-align:center; margin:0; padding:2px 0; border-bottom:2px solid var(--c-line); letter-spacing:.08em; }
+  .twin-wrap .twin-header-dabao h3 { color:var(--c-ink); }
+  .twin-wrap .twin-header-xiaobao h3 { color:var(--c-red); border-bottom-color:var(--c-red); }
+  .twin-wrap .twin-header-dayun h3 { color:var(--c-gray); }
+  .twin-wrap .twin-sub-hd td { padding:6px 4px !important; }
+  .twin-wrap .luck-section-wrap { margin-top:8px; }
+
   /* 顶部 */
   .top-bar { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; border-bottom:1px solid var(--c-line); padding-bottom:12px; }
   .person-info { font-family:var(--font-display); font-size:22px; color:var(--c-ink); letter-spacing:.08em; }
@@ -162,6 +178,7 @@
       <button class="btn-arch" onclick="saveArchive()" title="保存">💾</button>
       <button class="btn-arch" onclick="delArchive()" title="移到回收站">🗑</button>
       <button class="btn-arch" onclick="showTrash()" title="回收站">♻️</button>
+      <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">对比</option></select>
       <button class="btn-ai" onclick="showAiInput()">🤖 AI录入</button>
     </div>
   </div>
@@ -741,6 +758,18 @@ const CANG_GAN = {
   '申':['庚','壬','戊'],'酉':['辛'],'戌':['戊','辛','丁'],'亥':['壬','甲']
 };
 
+// 双胞胎后出者 日/时/命/身 支主气 & 藏干
+const ZHI_TWIN_MAIN = {
+  '子':'壬','丑':'癸','寅':'丙','卯':'甲','辰':'乙','巳':'庚',
+  '午':'己','未':'丁','申':'壬','酉':'庚','戌':'辛','亥':'甲'
+};
+const ZHI_TWIN_CANG = {
+  '子':['壬'],'丑':['癸','辛'],'寅':['丙','戊'],'卯':['甲'],
+  '辰':['乙','癸'],'巳':['庚','戊'],'午':['己'],'未':['丁','乙'],
+  '申':['壬','戊'],'酉':['庚'],'戌':['辛','丁'],'亥':['甲']
+};
+const TWIN_PILLARS = ['ri','shi','ming','shen'];
+
 // 十二长生表
 const CS12_MAP = {
   '甲':['亥','子','丑','寅','卯','辰','巳','午','未','申','酉','戌'],
@@ -942,8 +971,13 @@ function shiShen(riGan, gan, short) {
 const ZHI_WX = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
 const ZHI_MAIN = { '子':'癸','丑':'己','寅':'甲','卯':'乙','辰':'戊','巳':'丙','午':'丁','未':'己','申':'庚','酉':'辛','戌':'戊','亥':'壬' };
 
-function zhiShiShen(riGan, zhi) {
-  const mainGan = ZHI_MAIN[zhi];
+function zhiShiShen(riGan, zhi, twin, pillarType) {
+  let mainGan;
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
+    mainGan = ZHI_TWIN_MAIN[zhi] || (ZHI_TWIN_CANG[zhi] ? ZHI_TWIN_CANG[zhi][0] : '');
+  } else {
+    mainGan = ZHI_MAIN[zhi];
+  }
   if (!mainGan) return '?';
   return shiShen(riGan, mainGan);
 }
@@ -959,8 +993,13 @@ function changSheng(gan, zhi) {
 }
 
 // ============ 藏干文本 ============
-function cangGanText(zhi, riGan) {
-  const cg = CANG_GAN[zhi] || [];
+function cangGanText(zhi, riGan, twin, pillarType) {
+  let cg;
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
+    cg = ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || [];
+  } else {
+    cg = CANG_GAN[zhi] || [];
+  }
   return cg.map(c => '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c)).join('<br>');
 }
 
@@ -1210,12 +1249,14 @@ function toggleSimple() {
   tables.forEach(t => t.classList.toggle('simple', active));
 }
 
-function renderChart(data) {
+function renderChart(data, twin, targetId) {
+  twin = twin || 1;
+  targetId = targetId || 'output';
   const { name, gender, y, m, d, h, mi, nian, yue, ri, shi, tai, ming, shen, shengXiao, daYun, qiYun, renYuan } = data;
   const riGan = ri.gan, riZhi = ri.zhi;
 
   // 各柱的完整解析
-  function pillar(gan, zhi) {
+  function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
       rs: shiShen(riGan, gan),
@@ -1224,18 +1265,18 @@ function renderChart(data) {
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
       kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
-      cg: cangGanText(zhi, riGan),
+      cg: cangGanText(zhi, riGan, twin, type),
       sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, yue.zhi) : '—'
     };
   }
 
-  const pNian = pillar(nian.gan, nian.zhi);
-  const pYue = pillar(yue.gan, yue.zhi);
-  const pRi = pillar(ri.gan, ri.zhi);
-  const pShi = pillar(shi.gan, shi.zhi);
-  const pTai = pillar(tai.gan, tai.zhi);
-  const pMing = pillar(ming.gan, ming.zhi);
-  const pShen = pillar(shen.gan, shen.zhi);
+  const pNian = pillar(nian.gan, nian.zhi, 'nian');
+  const pYue = pillar(yue.gan, yue.zhi, 'yue');
+  const pRi = pillar(ri.gan, ri.zhi, 'ri');
+  const pShi = pillar(shi.gan, shi.zhi, 'shi');
+  const pTai = pillar(tai.gan, tai.zhi, 'tai');
+  const pMing = pillar(ming.gan, ming.zhi, 'ming');
+  const pShen = pillar(shen.gan, shen.zhi, 'shen');
 
   // 当前大运索引（找覆盖当前年份的大运）
   const nowYear = new Date().getFullYear();
@@ -1385,58 +1426,63 @@ function renderChart(data) {
     </div>`;
 
   // 存储数据用于交互
-  document.getElementById('output').innerHTML = html;
-  window._paipanData = data;
+  const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
+  container.innerHTML = html;
+  container._paipanData = data;
+  if (targetId === 'output' || (typeof targetId === 'object' && targetId.id === 'output')) {
+    window._paipanData = data;
+  }
   window._getSolarTerm = getSolarTerm;
 
   // 绑定交互
-  bindEvents(data);
+  bindEvents(data, container);
 }
 
-function bindEvents(data) {
+function bindEvents(data, container) {
   const { daYun, ri, y } = data;
   const riGan = ri.gan;
+  container = container || document;
 
   // 大运点击
-  document.querySelectorAll('[data-dy]').forEach(c => {
+  container.querySelectorAll('[data-dy]').forEach(c => {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
       const dy = daYun[i];
-      hiDy(i);
-      hiLn(i, 0);  // 重置流年到大运首年
-      updTopCols(data, i, 0);
+      hiDy(i, container);
+      hiLn(i, 0, container);
+      updTopCols(data, i, 0, container);
     });
   });
 
   // 流年点击
-  document.querySelectorAll('.liu-row .li').forEach(li => {
+  container.querySelectorAll('.liu-row .li').forEach(li => {
     li.addEventListener('click', e => {
       e.stopPropagation();
       const di = parseInt(li.dataset.di);
       const liIdx = parseInt(li.dataset.li);
-      hiDy(di); hiLn(di, liIdx);
-      updTopCols(data, di, liIdx);
+      hiDy(di, container); hiLn(di, liIdx, container);
+      updTopCols(data, di, liIdx, container);
     });
   });
 }
 
-function hiDy(i) {
-  document.querySelectorAll('[data-dy]').forEach(c => c.classList.remove('cc'));
-  const t = document.querySelector('[data-dy="'+i+'"]');
+function hiDy(i, container) {
+  container.querySelectorAll('[data-dy]').forEach(c => c.classList.remove('cc'));
+  const t = container.querySelector('[data-dy="'+i+'"]');
   if (t) t.classList.add('cc');
   // 高亮年龄头行
-  const hd = document.querySelectorAll('.luck-row.hd .cell');
+  const hd = container.querySelectorAll('.luck-row.hd .cell');
   hd.forEach(c => c.classList.remove('cc'));
   if (hd[i + 1]) hd[i + 1].classList.add('cc');
   // 高亮流年列
-  const lc = document.querySelectorAll('.liu-row .cell');
+  const lc = container.querySelectorAll('.liu-row .cell');
   lc.forEach(c => c.classList.remove('cc'));
   if (lc[i + 1]) lc[i + 1].classList.add('cc');
 }
 
-function hiLn(di, li) {
-  document.querySelectorAll('.liu-row .li').forEach(c => c.classList.remove('cur'));
-  const cells = document.querySelectorAll('.liu-row .cell');
+function hiLn(di, li, container) {
+  container.querySelectorAll('.liu-row .li').forEach(c => c.classList.remove('cur'));
+  const cells = container.querySelectorAll('.liu-row .cell');
   const col = cells[di + 1];
   if (col) {
     const lis = col.querySelectorAll('.li');
@@ -1444,7 +1490,7 @@ function hiLn(di, li) {
   }
 }
 
-function updTopCols(data, dyIdx, lnIdx) {
+function updTopCols(data, dyIdx, lnIdx, container) {
   const { daYun, ri } = data;
   const riGan = ri.gan;
   const dy = daYun[dyIdx];
@@ -1465,7 +1511,7 @@ function updTopCols(data, dyIdx, lnIdx) {
   }
   const pd = p(dy.gan, dy.zhi), pl = p(lnGz[0], lnGz[1]);
 
-  const rows = document.querySelectorAll('.chart tr');
+  const rows = container.querySelectorAll('.chart tr');
   function set(r, c, txt, cls) { rows[r].children[c].textContent = txt; if (cls !== undefined) rows[r].children[c].className = cls; }
   // 大运列 (col 5)
   set(1, 5, pd.rs, 'sep col-dy');
@@ -1487,6 +1533,256 @@ function updTopCols(data, dyIdx, lnIdx) {
   set(7, 6, pl.zz, 'col-ln');
   set(8, 6, pl.kw, 'col-ln');
   set(9, 6, pl.sh, 'col-ln');
+}
+
+// ============ 双胞胎对比渲染（单表+共享大运流年）============
+function renderTwinChart(data, targetId) {
+  targetId = targetId || 'output';
+  const { name, gender, y, m, d, h, mi, nian, yue, ri, shi, tai, ming, shen, shengXiao, daYun, qiYun, renYuan } = data;
+  const riGan = ri.gan, riZhi = ri.zhi;
+
+  function pillar(gan, zhi, twin, type) {
+    return {
+      gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
+      rs: shiShen(riGan, gan),
+      ny: NAYIN[gan + zhi] || '',
+      xy: changSheng(riGan, zhi),
+      zz: changSheng(gan, zhi),
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      cg: cangGanText(zhi, riGan, twin, type),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, yue.zhi) : '—'
+    };
+  }
+
+  // 大宝 (twin=1)
+  const p1 = {
+    nian: pillar(nian.gan, nian.zhi, 1, 'nian'),
+    yue:  pillar(yue.gan,  yue.zhi,  1, 'yue'),
+    ri:   pillar(ri.gan,   ri.zhi,   1, 'ri'),
+    shi:  pillar(shi.gan,  shi.zhi,  1, 'shi'),
+    tai:  pillar(tai.gan,  tai.zhi,  1, 'tai'),
+    ming: pillar(ming.gan, ming.zhi, 1, 'ming'),
+    shen: pillar(shen.gan, shen.zhi, 1, 'shen')
+  };
+  // 小宝 (twin=2)
+  const p2 = {
+    nian: pillar(nian.gan, nian.zhi, 2, 'nian'),
+    yue:  pillar(yue.gan,  yue.zhi,  2, 'yue'),
+    ri:   pillar(ri.gan,   ri.zhi,   2, 'ri'),
+    shi:  pillar(shi.gan,  shi.zhi,  2, 'shi'),
+    tai:  pillar(tai.gan,  tai.zhi,  2, 'tai'),
+    ming: pillar(ming.gan, ming.zhi, 2, 'ming'),
+    shen: pillar(shen.gan, shen.zhi, 2, 'shen')
+  };
+
+  // 当前大运 & 流年（共享）
+  const nowYear = new Date().getFullYear();
+  let curDyIdx = 0;
+  for (let i = daYun.length - 1; i >= 0; i--) {
+    if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; }
+  }
+  const curDy = daYun[curDyIdx];
+  const pDy = pillar(curDy.gan, curDy.zhi, 1);
+  const curLnGz = liuNianJZ(nowYear);
+  const pLn = pillar(curLnGz[0], curLnGz[1], 1);
+
+  // 起运交运文本
+  const joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  const qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
+  function nextJYYear(startY) {
+    const tgs = '己甲';
+    for (let i = 0; i < 20; i++) { const testY = startY + i; if (tgs.includes(TG[(testY - 4) % 10])) return testY; }
+    return startY;
+  }
+  const jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
+
+  // ---- 辅助 ----
+  function td(cls, txt, ext) { return '<td class="' + (cls||'') + '"' + (ext||'') + '>' + (txt||'') + '</td>'; }
+  function th(cls, txt) { return '<th class="' + (cls||'') + '">' + txt + '</th>'; }
+  function rl(lbl) { return '<td class="rl">' + lbl + '</td>'; }
+  function emp(cls) { return '<td class="' + (cls||'') + '"></td>'; }
+  function twinSep() { return '<td class="twin-col-sep"></td>'; }
+
+  const R = [];
+
+  // -- 柱名头 --
+  R.push('<tr class="hd">' +
+    th('rl','盘式') +
+    th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱') +
+    twinSep() +
+    th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱') +
+    th('sep','大运')+th('col-ln','流年') +
+  '</tr>');
+
+  // -- 大宝/小宝表头 --
+  R.push('<tr class="twin-sub-hd">' +
+    td('rl','') +
+    td('twin-header-dabao','<h3>大宝（兄）</h3>','colspan="4"') +
+    twinSep() +
+    td('twin-header-xiaobao','<h3>小宝（弟）</h3>','colspan="4"') +
+    td('sep twin-header-dayun','<h3>共享</h3>','colspan="2"') +
+  '</tr>');
+
+  // -- 主星 --
+  R.push('<tr class="rs">'+rl('主星')+
+    td('',p1.nian.rs)+td('',p1.yue.rs)+td('',p1.ri.rs)+td('',p1.shi.rs)+twinSep()+
+    td('',p2.nian.rs)+td('',p2.yue.rs)+td('',p2.ri.rs)+td('',p2.shi.rs)+
+    td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>');
+  // -- 天干 --
+  R.push('<tr class="rg">'+rl('')+
+    td(p1.nian.wg,p1.nian.gan)+td(p1.yue.wg,p1.yue.gan)+td(p1.ri.wg,p1.ri.gan)+td(p1.shi.wg,p1.shi.gan)+twinSep()+
+    td(p2.nian.wg,p2.nian.gan)+td(p2.yue.wg,p2.yue.gan)+td(p2.ri.wg,p2.ri.gan)+td(p2.shi.wg,p2.shi.gan)+
+    td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>');
+  // -- 地支 --
+  R.push('<tr class="rg">'+rl('')+
+    td(p1.nian.wz,p1.nian.zhi)+td(p1.yue.wz,p1.yue.zhi)+td(p1.ri.wz,p1.ri.zhi)+td(p1.shi.wz,p1.shi.zhi)+twinSep()+
+    td(p2.nian.wz,p2.nian.zhi)+td(p2.yue.wz,p2.yue.zhi)+td(p2.ri.wz,p2.ri.zhi)+td(p2.shi.wz,p2.shi.zhi)+
+    td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>');
+  // -- 藏气 --
+  R.push('<tr class="rh">'+rl('藏气')+
+    td('',p1.nian.cg)+td('',p1.yue.cg)+td('',p1.ri.cg)+td('',p1.shi.cg)+twinSep()+
+    td('',p2.nian.cg)+td('',p2.yue.cg)+td('',p2.ri.cg)+td('',p2.shi.cg)+
+    td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>');
+  // -- 纳音 --
+  R.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+
+    td('',p1.nian.ny)+td('',p1.yue.ny)+td('',p1.ri.ny)+td('',p1.shi.ny)+twinSep()+
+    td('',p2.nian.ny)+td('',p2.yue.ny)+td('',p2.ri.ny)+td('',p2.shi.ny)+
+    td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>');
+  // -- 星运 --
+  R.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+
+    td('',p1.nian.xy)+td('',p1.yue.xy)+td('',p1.ri.xy)+td('',p1.shi.xy)+twinSep()+
+    td('',p2.nian.xy)+td('',p2.yue.xy)+td('',p2.ri.xy)+td('',p2.shi.xy)+
+    td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>');
+  // -- 自坐 --
+  R.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+
+    td('',p1.nian.zz)+td('',p1.yue.zz)+td('',p1.ri.zz)+td('',p1.shi.zz)+twinSep()+
+    td('',p2.nian.zz)+td('',p2.yue.zz)+td('',p2.ri.zz)+td('',p2.shi.zz)+
+    td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>');
+  // -- 空亡 --
+  R.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+
+    td('',p1.nian.kw)+td('',p1.yue.kw)+td('',p1.ri.kw)+td('',p1.shi.kw)+twinSep()+
+    td('',p2.nian.kw)+td('',p2.yue.kw)+td('',p2.ri.kw)+td('',p2.shi.kw)+
+    td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>');
+  // -- 神煞 --
+  R.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+
+    td('',p1.nian.sh)+td('',p1.yue.sh)+td('',p1.ri.sh)+td('',p1.shi.sh)+twinSep()+
+    td('',p2.nian.sh)+td('',p2.yue.sh)+td('',p2.ri.sh)+td('',p2.shi.sh)+
+    td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>');
+
+  // -- 三垣 --
+  R.push('<tr class="hd">'+th('rl','三垣')+emp('')+
+    th('','胎元')+th('','命宫')+th('','身宫')+twinSep()+
+    th('','胎元')+th('','命宫')+th('','身宫')+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rs">'+rl('主星')+emp('')+
+    td('',p1.tai.rs)+td('',p1.ming.rs)+td('',p1.shen.rs)+twinSep()+
+    td('',p2.tai.rs)+td('',p2.ming.rs)+td('',p2.shen.rs)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rg">'+rl('')+emp('')+
+    td(p1.tai.wg,p1.tai.gan)+td(p1.ming.wg,p1.ming.gan)+td(p1.shen.wg,p1.shen.gan)+twinSep()+
+    td(p2.tai.wg,p2.tai.gan)+td(p2.ming.wg,p2.ming.gan)+td(p2.shen.wg,p2.shen.gan)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rg">'+rl('')+emp('')+
+    td(p1.tai.wz,p1.tai.zhi)+td(p1.ming.wz,p1.ming.zhi)+td(p1.shen.wz,p1.shen.zhi)+twinSep()+
+    td(p2.tai.wz,p2.tai.zhi)+td(p2.ming.wz,p2.ming.zhi)+td(p2.shen.wz,p2.shen.zhi)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rh">'+rl('藏气')+emp('')+
+    td('',p1.tai.cg)+td('',p1.ming.cg)+td('',p1.shen.cg)+twinSep()+
+    td('',p2.tai.cg)+td('',p2.ming.cg)+td('',p2.shen.cg)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+emp('')+
+    td('',p1.tai.ny)+td('',p1.ming.ny)+td('',p1.shen.ny)+twinSep()+
+    td('',p2.tai.ny)+td('',p2.ming.ny)+td('',p2.shen.ny)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+emp('')+
+    td('',p1.tai.xy)+td('',p1.ming.xy)+td('',p1.shen.xy)+twinSep()+
+    td('',p2.tai.xy)+td('',p2.ming.xy)+td('',p2.shen.xy)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+emp('')+
+    td('',p1.tai.zz)+td('',p1.ming.zz)+td('',p1.shen.zz)+twinSep()+
+    td('',p2.tai.zz)+td('',p2.ming.zz)+td('',p2.shen.zz)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+emp('')+
+    td('',p1.tai.kw)+td('',p1.ming.kw)+td('',p1.shen.kw)+twinSep()+
+    td('',p2.tai.kw)+td('',p2.ming.kw)+td('',p2.shen.kw)+
+    emp('sep')+emp('col-ln')+'</tr>');
+  R.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+emp('')+
+    td('',p1.tai.sh)+td('',p1.ming.sh)+td('',p1.shen.sh)+twinSep()+
+    td('',p2.tai.sh)+td('',p2.ming.sh)+td('',p2.shen.sh)+
+    emp('sep')+emp('col-ln')+'</tr>');
+
+  // ---- 底部共享大运流年表 ----
+  const luckRows = [];
+  luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  for (let i = 0; i < daYun.length; i++) {
+    const dy = daYun[i];
+    luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>');
+  }
+  luckRows.push('</div>');
+  luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  for (let i = 0; i < daYun.length; i++) {
+    const dy = daYun[i];
+    const ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi);
+    luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'" data-dy="'+i+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>');
+  }
+  luckRows.push('</div>');
+  luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  for (let i = 0; i < daYun.length; i++) {
+    const dy = daYun[i];
+    let lis = '';
+    for (let j = 0; j < 10; j++) {
+      const lnY = dy.startYear + j;
+      const gz = liuNianJZ(lnY);
+      lis += '<span class="li'+(i===curDyIdx&&lnY===nowYear?' cur':'')+'" data-di="'+i+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>';
+    }
+    luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'">'+lis+'</div>');
+  }
+  luckRows.push('</div>');
+
+  // 额外标签
+  let tstTag = '', ryTag = '';
+  if (data.trueSolar) {
+    tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(data.trueSolar.h)+':'+pad(data.trueSolar.mi)+' ('+(data.trueSolar.offsetMin>=0?'+':'')+Math.round(data.trueSolar.offsetMin)+'分)</span>';
+  }
+  if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
+
+  // ---- 组装 ----
+  const nowYearCn = '（当前 ' + nowYear + ' 年）';
+  const html = `
+    <div class="top-bar">
+      <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}</div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+    </div>
+
+    <div class="twin-wrap-main">
+      <div class="chart-wrap">
+      <table class="chart simple">${R.join('\n')}</table>
+      </div>
+    </div>
+
+    <div class="luck-section-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
+          <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>
+        </div>
+        <button class="btn-back" onclick="scrollToNow()" title="定位今年">📍 今年</button>
+      </div>
+      <div class="luck-section">
+        <div class="luck-table">${luckRows.join('\n')}</div>
+      </div>
+    </div>`;
+
+  const container = document.getElementById(targetId);
+  container.innerHTML = html;
+  container._paipanData = data;
+  window._paipanData = data;
+
+  // 精简模式
+  if (window._simpleMode) {
+    container.querySelectorAll('[data-row-type="nayin"],[data-row-type="kongwang"],[data-row-type="shensha"]').forEach(function(r){r.style.display='none';});
+  }
+
+  bindEvents(data, container);
 }
 
 // ============ 入口 ============
@@ -1516,7 +1812,15 @@ function doPaipan() {
     const data = paipan(name, gender, tst ? tst.y : y, tst ? tst.m : m, tst ? tst.d : d, tst ? tst.h : h, tst ? tst.mi : mi);
     data.trueSolar = tst;  // 附加真太阳时信息
     data.renYuan = renYuanSiLing(y, m, d);  // 人元司令
-    renderChart(data);
+    const twin = document.getElementById('inTwin').value;
+    const output = document.getElementById('output');
+    if (twin === '1') {
+      output.innerHTML = '<div class="twin-wrap" id="twinRoot"></div>';
+      renderTwinChart(data, 'twinRoot');
+    } else {
+      output.innerHTML = '';
+      renderChart(data);
+    }
     autoSaveArchive();
   } catch(e) {
     document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">排盘出错：' + e.message + '</div>';
@@ -1536,9 +1840,9 @@ function scrollToNow() {
   }
   const curLi = nowYear - d.daYun[curDyIdx].startYear;
   // 先切高亮
-  hiDy(curDyIdx);
-  hiLn(curDyIdx, curLi);
-  updTopCols(d, curDyIdx, curLi);
+  hiDy(curDyIdx, document);
+  hiLn(curDyIdx, curLi, document);
+  updTopCols(d, curDyIdx, curLi, document);
   // 再滚动
   const sec = document.querySelector('.luck-section');
   const cc = sec && sec.querySelector('.cc');

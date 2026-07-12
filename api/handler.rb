@@ -39,6 +39,19 @@ class BaziPaipanExt < Clacky::ApiExtension
     '酉'=>%w[辛],       '戌'=>%w[戊 辛 丁], '亥'=>%w[壬 甲]
   }.freeze
 
+  # 双胞胎后出者 日/时/命/身 支主气（中余气；独气支取劫气）
+  ZHI_TWIN_MAIN = {
+    '子'=>'壬','丑'=>'癸','寅'=>'丙','卯'=>'甲','辰'=>'乙','巳'=>'庚',
+    '午'=>'己','未'=>'丁','申'=>'壬','酉'=>'庚','戌'=>'辛','亥'=>'甲'
+  }.freeze
+
+  # 双胞胎后出者 日/时/命/身 支藏干
+  ZHI_TWIN_CANG = {
+    '子'=>%w[壬], '丑'=>%w[癸 辛], '寅'=>%w[丙 戊], '卯'=>%w[甲],
+    '辰'=>%w[乙 癸], '巳'=>%w[庚 戊], '午'=>%w[己], '未'=>%w[丁 乙],
+    '申'=>%w[壬 戊], '酉'=>%w[庚], '戌'=>%w[辛 丁], '亥'=>%w[甲]
+  }.freeze
+
   # 空亡（日柱旬）
   KONG_WANG = {
     '甲子'=>'戌亥','乙丑'=>'戌亥','丙寅'=>'戌亥','丁卯'=>'戌亥','戊辰'=>'戌亥',
@@ -303,8 +316,14 @@ class BaziPaipanExt < Clacky::ApiExtension
 
   ZHI_MAIN = {'子'=>'癸','丑'=>'己','寅'=>'甲','卯'=>'乙','辰'=>'戊','巳'=>'丙','午'=>'丁','未'=>'己','申'=>'庚','酉'=>'辛','戌'=>'戊','亥'=>'壬'}.freeze
 
-  def self.zhi_shi_shen(ri_gan, zhi)
-    main_gan = ZHI_MAIN[zhi]
+  TWIN_PILLARS = %i[ri shi ming shen].freeze
+
+  def self.zhi_shi_shen(ri_gan, zhi, twin: 1, pillar_type: nil)
+    main_gan = if twin == 2 && TWIN_PILLARS.include?(pillar_type)
+      ZHI_TWIN_MAIN[zhi] || (ZHI_TWIN_CANG[zhi] ? ZHI_TWIN_CANG[zhi][0] : nil)
+    else
+      ZHI_MAIN[zhi]
+    end
     return '?' unless main_gan
     shi_shen(ri_gan, main_gan)
   end
@@ -540,8 +559,12 @@ class BaziPaipanExt < Clacky::ApiExtension
   end
 
   # ========== 为展示构建柱信息 ==========
-  def self.pillar_info(gan, zhi, ri_gan, ri_zhi, nian_zhi, yue_zhi)
-    cg_list = CANG_GAN[zhi] || []
+  def self.pillar_info(gan, zhi, ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: nil, twin: 1)
+    cg_list = if twin == 2 && TWIN_PILLARS.include?(pillar_type)
+      ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || []
+    else
+      CANG_GAN[zhi] || []
+    end
     cg_text = cg_list.map { |c| "#{c} #{shi_shen(ri_gan, c)}" }.join(' / ')
     kw = if "#{gan}#{zhi}" == "#{ri_gan}#{ri_zhi}"
            KONG_WANG["#{ri_gan}#{ri_zhi}"] || '—'
@@ -559,7 +582,7 @@ class BaziPaipanExt < Clacky::ApiExtension
     {
       gan: gan, zhi: zhi,
       shi_shen: shi_shen(ri_gan, gan),
-      shi_shen_zhi: zhi_shi_shen(ri_gan, zhi),
+      shi_shen_zhi: zhi_shi_shen(ri_gan, zhi, twin: twin, pillar_type: pillar_type),
       nayin: NAYIN["#{gan}#{zhi}"] || '',
       xing_yun: chang_sheng(ri_gan, zhi),
       zi_zuo: chang_sheng(gan, zhi),
@@ -571,21 +594,22 @@ class BaziPaipanExt < Clacky::ApiExtension
 
   # ========== API 端点 ==========
   get "/paipan" do
-    # 参数校验
-    y = (params[:year]  || 1982).to_i
-    m = (params[:month] || 10).to_i
-    d = (params[:day]   || 18).to_i
-    h = (params[:hour]  || 5).to_i
-    mm = (params[:min]  || 0).to_i
+    # 参数校验 — 使用 query (query string 为字符串 key)
+    y = (query["year"]  || 1982).to_i
+    m = (query["month"] || 10).to_i
+    d = (query["day"]   || 18).to_i
+    h = (query["hour"]  || 5).to_i
+    mm = (query["min"]  || 0).to_i
     return json(error: "invalid date") if m < 1 || m > 12 || d < 1 || d > 31
 
     req_params = {
-      name:   params[:name]   || '未命名',
-      gender: params[:gender] || '男',
+      name:   query["name"]   || '未命名',
+      gender: query["gender"] || '男',
       year:   y, month: m, day: d, hour: h, min: mm,
-      lng:    params[:lng]&.to_f
+      lng:    query["lng"]&.to_f
     }
     data = self.class.paipan(req_params)
+    twin = (query["twin"] || 1).to_i
 
     ri_gan  = data[:ri][:gan]
     ri_zhi  = data[:ri][:zhi]
@@ -594,13 +618,13 @@ class BaziPaipanExt < Clacky::ApiExtension
 
     # 构建各柱信息
     pillars = {
-      nian: self.class.pillar_info(data[:nian][:gan], data[:nian][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      yue:  self.class.pillar_info(data[:yue][:gan],  data[:yue][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      ri:   self.class.pillar_info(data[:ri][:gan],   data[:ri][:zhi],   ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      shi:  self.class.pillar_info(data[:shi][:gan],  data[:shi][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      tai:  self.class.pillar_info(data[:tai][:gan],  data[:tai][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      ming: self.class.pillar_info(data[:ming][:gan], data[:ming][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi),
-      shen: self.class.pillar_info(data[:shen][:gan], data[:shen][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi)
+      nian: self.class.pillar_info(data[:nian][:gan], data[:nian][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :nian, twin: twin),
+      yue:  self.class.pillar_info(data[:yue][:gan],  data[:yue][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :yue,  twin: twin),
+      ri:   self.class.pillar_info(data[:ri][:gan],   data[:ri][:zhi],   ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :ri,   twin: twin),
+      shi:  self.class.pillar_info(data[:shi][:gan],  data[:shi][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :shi,  twin: twin),
+      tai:  self.class.pillar_info(data[:tai][:gan],  data[:tai][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :tai,  twin: twin),
+      ming: self.class.pillar_info(data[:ming][:gan], data[:ming][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :ming, twin: twin),
+      shen: self.class.pillar_info(data[:shen][:gan], data[:shen][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :shen, twin: twin)
     }
 
     # 当前大运和流年
