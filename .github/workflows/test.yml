@@ -1,0 +1,63 @@
+# 八字排盘 · 回归测试 CI
+
+# 每次 push 到 main 分支时自动运行，
+# 加载 standalone.html?test=1 并检查测试结果。
+
+name: 回归测试
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装 Puppeteer
+        run: npm install puppeteer
+
+      - name: 启动本地服务器
+        run: python3 -m http.server 8765 &
+        shell: bash
+
+      - name: 运行回归测试
+        run: |
+          node -e "
+          const puppeteer = require('puppeteer');
+          (async () => {
+            const browser = await puppeteer.launch({ headless: 'new' });
+            const page = await browser.newPage();
+            await page.goto('http://localhost:8765/standalone.html?test=1', { waitUntil: 'networkidle0' });
+
+            // 等待测试完成（标题变化）
+            await page.waitForFunction(() => document.title.includes('全部通过') || document.title.includes('失败'), { timeout: 30000 });
+
+            const title = await page.title();
+            console.log('测试结果:', title);
+
+            // 检查摘要
+            const summary = await page.evaluate(() => {
+              const el = document.getElementById('test-summary');
+              return el ? el.textContent : '';
+            });
+            console.log(summary);
+
+            await browser.close();
+
+            if (title.includes('✅')) {
+              console.log('✅ 全部回归测试通过');
+              process.exit(0);
+            } else {
+              console.error('❌ 回归测试失败');
+              process.exit(1);
+            }
+          })();
+          "

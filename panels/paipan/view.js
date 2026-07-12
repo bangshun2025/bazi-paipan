@@ -60,8 +60,8 @@
 .bz-btn { padding:5px 16px; background:#2c2416; color:#f5f0e8; border:none; border-radius:2px; cursor:pointer; font-size:13px; letter-spacing:.1em; font-family:"Songti SC","SimSun",serif; }
 .bz-btn:hover { background:#b5343a; }
 .bz-chart { width:100%; min-width:680px; border-collapse:collapse; }
-.bz-chart th, .bz-chart td { border:0.5px solid #e0d8c8; text-align:center; vertical-align:middle; font-family:"Songti SC","SimSun",serif; padding:3px 5px; }
-.bz-chart td.rl, .bz-chart th.rl { width:48px; background:rgba(201,169,110,.06); font-size:14px; color:#8b7e6a; letter-spacing:.1em; }
+.bz-chart th, .bz-chart td { border:0.5px solid #e0d8c8; text-align:center; vertical-align:middle; font-family:"Songti SC","SimSun",serif; padding:3px 5px; white-space:nowrap; }
+.bz-chart td.rl, .bz-chart th.rl { width:54px; background:rgba(201,169,110,.06); font-size:14px; color:#8b7e6a; letter-spacing:.1em; white-space:nowrap; }
 .bz-chart tr.hd th { font-size:18px; color:#8b7e6a; font-weight:500; background:rgba(201,169,110,.04); padding:6px 3px; }
 .bz-chart .sep { border-left:1.5px solid rgba(181,52,58,.4) !important; }
 .bz-chart .rs td { font-size:18px; color:#2c2416; font-weight:500; }
@@ -108,7 +108,7 @@
 .bz-twin-col h3 { font-family:"Songti SC","SimSun",serif; font-size:18px; color:#2c2416; text-align:center; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid #e0d8c8; letter-spacing:.08em; }
 .bz-twin-col:last-child h3 { color:#b5343a; border-bottom-color:#b5343a; }
 /* 双胞胎对比：单表三栏 */
-.bz-chart .bz-twin-sep { width:4px; min-width:4px; padding:0; background:#e0d8c8; opacity:0.35; }
+.bz-chart .bz-twin-sep { width:2px; min-width:2px; padding:0; background:#e0d8c8; opacity:0.35; }
 .bz-chart .bz-twin-sub-hd td { padding:6px 4px !important; }
 .bz-chart .bz-twin-sub-hd h3 { font-family:"Songti SC","SimSun",serif; font-size:16px; text-align:center; margin:0; padding:2px 0; border-bottom:2px solid #e0d8c8; letter-spacing:.08em; }
 .bz-chart .bz-twin-red { color:#b5343a; border-bottom-color:#b5343a; }
@@ -295,6 +295,11 @@
     return html;
   }
 
+  function fmtCangGanLayer(layer) {
+    if (!layer) return '—';
+    return layer.gan + ' ' + layer.shi_shen;
+  }
+
   function renderTwinHtml(d1, d2) {
     var p1 = d1.pillars, p2 = d2.pillars;
     var cd = d1.cur_da_yun, cl = d1.cur_liu_nian;
@@ -329,11 +334,28 @@
         tc(p1.nian.zhi,WX[p1.nian.zhi])+tc(p1.yue.zhi,WX[p1.yue.zhi])+tc(p1.ri.zhi,WX[p1.ri.zhi])+tc(p1.shi.zhi,WX[p1.shi.zhi])+'<td class="bz-twin-sep"></td>'+
         tc(p2.nian.zhi,WX[p2.nian.zhi])+tc(p2.yue.zhi,WX[p2.yue.zhi])+tc(p2.ri.zhi,WX[p2.ri.zhi])+tc(p2.shi.zhi,WX[p2.shi.zhi])+
         tc(cd.zhi,WX[cd.zhi],'sep')+tc(cl.zhi,WX[cl.zhi])+'</tr>',
-      // 藏气
-      '<tr class="rh">'+tds('藏气','rl')+
-        tds(p1.nian.cang_gan)+tds(p1.yue.cang_gan)+tds(p1.ri.cang_gan)+tds(p1.shi.cang_gan)+'<td class="bz-twin-sep"></td>'+
-        tds(p2.nian.cang_gan)+tds(p2.yue.cang_gan)+tds(p2.ri.cang_gan)+tds(p2.shi.cang_gan)+
-        tds(cd.cang_gan,'sep')+tds(cl.cang_gan)+'</tr>',
+      // 藏气（三层：本气/中气/余气）
+      (function(){
+        var lvls=['本气','中气','余气'], cgr=[];
+        for (var li=0; li<3; li++) {
+          var lv=lvls[li];
+          var row='<tr class="rh">'+tds(lv,'rl');
+          row+=tds(li===0?p1.nian.cang_gan:'—');
+          row+=tds(li===0?p1.yue.cang_gan:'—');
+          row+=tds(fmtCangGanLayer((p1.ri.cang_gan_layers||[])[li]));
+          row+=tds(fmtCangGanLayer((p1.shi.cang_gan_layers||[])[li]));
+          row+='<td class="bz-twin-sep"></td>';
+          row+=tds(li===0?p2.nian.cang_gan:'—');
+          row+=tds(li===0?p2.yue.cang_gan:'—');
+          row+=tds(fmtCangGanLayer((p2.ri.cang_gan_layers||[])[li]));
+          row+=tds(fmtCangGanLayer((p2.shi.cang_gan_layers||[])[li]));
+          row+=tds(li===0?cd.cang_gan:'—','sep');
+          row+=tds(li===0?cl.cang_gan:'—');
+          row+='</tr>';
+          cgr.push(row);
+        }
+        return cgr.join('\n');
+      })(),
       // 纳音
       '<tr class="rn">'+tds('纳音','rl')+
         tds(p1.nian.nayin)+tds(p1.yue.nayin)+tds(p1.ri.nayin)+tds(p1.shi.nayin)+'<td class="bz-twin-sep"></td>'+
@@ -376,11 +398,24 @@
         tc(p1.tai.zhi,WX[p1.tai.zhi])+tc(p1.ming.zhi,WX[p1.ming.zhi])+tc(p1.shen.zhi,WX[p1.shen.zhi])+'<td class="bz-twin-sep"></td>'+
         tc(p2.tai.zhi,WX[p2.tai.zhi])+tc(p2.ming.zhi,WX[p2.ming.zhi])+tc(p2.shen.zhi,WX[p2.shen.zhi])+
         '<td class="sep"></td><td></td></tr>',
-      // 三垣 藏气
-      '<tr class="rh">'+tds('藏气','rl')+'<td></td>'+
-        tds(p1.tai.cang_gan)+tds(p1.ming.cang_gan)+tds(p1.shen.cang_gan)+'<td class="bz-twin-sep"></td>'+
-        tds(p2.tai.cang_gan)+tds(p2.ming.cang_gan)+tds(p2.shen.cang_gan)+
-        '<td class="sep"></td><td></td></tr>'
+      // 三垣 藏气（三层：胎元不分层，命宫/身宫分层）
+      (function(){
+        var lvls=['本气','中气','余气'], cgr=[];
+        for (var li=0; li<3; li++) {
+          var lv=lvls[li];
+          var row='<tr class="rh">'+tds(lv,'rl')+'<td></td>';
+          row+=tds(p1.tai.cang_gan);
+          row+=tds(fmtCangGanLayer((p1.ming.cang_gan_layers||[])[li]));
+          row+=tds(fmtCangGanLayer((p1.shen.cang_gan_layers||[])[li]));
+          row+='<td class="bz-twin-sep"></td>';
+          row+=tds(p2.tai.cang_gan);
+          row+=tds(fmtCangGanLayer((p2.ming.cang_gan_layers||[])[li]));
+          row+=tds(fmtCangGanLayer((p2.shen.cang_gan_layers||[])[li]));
+          row+='<td class="sep"></td><td></td></tr>';
+          cgr.push(row);
+        }
+        return cgr.join('\n');
+      })(),
     ];
 
     // 大运流年表（共享，用 d1 的数据）
@@ -405,7 +440,7 @@
 
     var html = '<div class="bz-page">' +
       '<div class="bz-top-bar"><div class="bz-person"><b>'+d1.name+'</b><span class="sex">'+(d1.gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+d1.gender+' · '+d1.year+'年'+d1.month+'月'+d1.day+'日 '+pad(d1.hour)+':'+pad(d1.min)+'</span>'+tstHtml+ryHtml+'</div><div class="bz-person meta">'+d1.pillars.nian.gan+d1.pillars.nian.zhi+'年 · 属'+d1.sheng_xiao+' （当前'+d1.now_year+'年）</div></div>' +
-      '<div style="overflow-x:auto;"><table class="bz-chart" style="min-width:auto;table-layout:fixed;">'+rows.join('\n')+'</table></div>' +
+      '<div style="overflow-x:auto;"><table class="bz-chart" style="min-width:800px;">'+rows.join('\n')+'</table></div>' +
       '<div style="margin-top:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;color:#8b7e6a;"><span>起运</span> 出生后 '+qy.years+'年'+qy.months+'月'+qy.days+'天 &nbsp; <span>交运</span> 逢己、甲年</div></div>' +
       '<div class="bz-luck-section"><div class="bz-luck-table">'+luckHd+luckGz+luckLn+'</div></div></div></div>';
 

@@ -1,5 +1,8 @@
 # 架构决策记录 (ADR)
 
+> **算法真相源**: 所有排盘规则、常量、公式定义在 [`ALGORITHM.md`](ALGORITHM.md)。
+> 代码实现只是算法的翻译，不得与 ALGORITHM.md 冲突。
+
 ## ADR-1: 单文件 HTML 策略
 
 **决策**: 所有前端代码 + 排盘算法放在 `standalone.html` 一个文件中。
