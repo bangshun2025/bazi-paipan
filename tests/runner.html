@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>八字排盘 · 回归测试</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+  h1 { margin-bottom: 20px; font-size: 22px; }
+  .summary { background: #16213e; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .summary .pass { color: #4caf50; font-weight: bold; }
+  .summary .fail { color: #f44336; font-weight: bold; }
+  .result { margin-bottom: 6px; padding: 8px 12px; border-radius: 4px; font-size: 14px; font-family: monospace; }
+  .result.PASS { background: #1b3a1b; border-left: 3px solid #4caf50; }
+  .result.FAIL { background: #3a1b1b; border-left: 3px solid #f44336; }
+  .result .label { font-weight: bold; margin-right: 8px; }
+  .result .detail { color: #aaa; margin-top: 4px; font-size: 12px; }
+  .status { display: inline-block; padding: 6px 14px; border-radius: 4px; font-weight: bold; }
+  .status.loading { background: #333; color: #aaa; }
+  .status.ready { background: #1b3a1b; color: #4caf50; }
+  .status.error { background: #3a1b1b; color: #f44336; }
+  hr { border: none; border-top: 1px solid #333; margin: 12px 0; }
+  .section-title { color: #ff9800; font-size: 13px; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+  button { margin: 8px 8px 8px 0; padding: 8px 20px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  button.run { background: #4caf50; color: white; }
+  button.run:hover { background: #43a047; }
+  .time { color: #888; font-size: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>🧪 八字排盘 · 回归测试</h1>
+
+<div>
+  <span id="status" class="status loading">⏳ 加载算法模块…</span>
+  <button class="run" onclick="runAll()" id="runBtn" disabled>▶ 运行全部测试</button>
+</div>
+
+<div class="summary" id="summary"></div>
+<div id="results"></div>
+<div class="time" id="time"></div>
+
+<iframe id="engine" src="../standalone" style="display:none" onload="onEngineLoad()"></iframe>
+
+<script>
+let eng = null;
+
+function onEngineLoad() {
+  const iframe = document.getElementById('engine');
+  try {
+    eng = iframe.contentWindow || iframe.contentDocument.defaultView;
+    // 验证关键函数存在
+    if (!eng.paiPan || !eng.shiShen || !eng.changSheng) {
+      throw new Error('算法函数未加载');
+    }
+    document.getElementById('status').className = 'status ready';
+    document.getElementById('status').textContent = '✅ 算法模块就绪';
+    document.getElementById('runBtn').disabled = false;
+  } catch(e) {
+    document.getElementById('status').className = 'status error';
+    document.getElementById('status').textContent = '❌ 加载失败: ' + e.message;
+  }
+}
+
+function assert(label, fn) {
+  try {
+    const r = fn();
+    if (r === true || r === undefined) {
+      return { label, ok: true, detail: r === undefined ? '' : String(r) };
+    }
+    // fn 返回字符串时，当作失败信息
+    return { label, ok: false, detail: r };
+  } catch(e) {
+    return { label, ok: false, detail: e.message };
+  }
+}
+
+function eq(label, actual, expected) {
+  const ok = actual === expected;
+  return { label, ok, detail: ok ? `=${expected}` : `期望 "${expected}", 实际 "${actual}"` };
+}
+
+function runAll() {
+  const start = Date.now();
+  const results = document.getElementById('results');
+  const summary = document.getElementById('summary');
+  document.getElementById('runBtn').disabled = true;
+
+  const tests = [];
+
+  // ==================== 单元测试 ====================
+  tests.push({ section: '十神计算' });
+  tests.push(eq('shiShen("甲","辛") → 官',           eng.shiShen('甲','辛'), '官'));
+  tests.push(eq('shiShen("甲","甲") → 比',           eng.shiShen('甲','甲'), '比'));
+  tests.push(eq('shiShen("丙","壬") → 杀',           eng.shiShen('丙','壬'), '杀'));
+  tests.push(eq('shiShen("癸","乙") → 食',           eng.shiShen('癸','乙'), '食'));
+  tests.push(eq('shiShen("庚","戊") → 印',           eng.shiShen('庚','戊'), '印'));
+  tests.push(eq('shiShen("壬","丁") → 财',           eng.shiShen('壬','丁'), '财'));
+
+  tests.push({ section: '纳音' });
+  tests.push(eq('甲子 → 海中金', eng.NAYIN['甲子'], '海中金'));
+  tests.push(eq('壬戌 → 大海水', eng.NAYIN['壬戌'], '大海水'));
+  tests.push(eq('癸亥 → 大海水', eng.NAYIN['癸亥'], '大海水'));
+
+  tests.push({ section: '十二长生' });
+  tests.push(eq('changSheng("甲","亥") → 长生',     eng.changSheng('甲','亥'), '长生'));
+  tests.push(eq('changSheng("甲","子") → 沐浴',     eng.changSheng('甲','子'), '沐浴'));
+  tests.push(eq('changSheng("甲","丑") → 冠带',     eng.changSheng('甲','丑'), '冠带'));
+  tests.push(eq('changSheng("丙","寅") → 长生',     eng.changSheng('丙','寅'), '长生'));
+  tests.push(eq('changSheng("辛","丑") → 养 阴干',  eng.changSheng('辛','丑'), '养'));
+  tests.push(eq('changSheng("辛","子") → 长生 阴干',eng.changSheng('辛','子'), '长生'));
+
+  tests.push({ section: '流年干支' });
+  tests.push(eq('liuNianJZ(2026) → 丙午',           eng.liuNianJZ(2026), '丙午'));
+  tests.push(eq('liuNianJZ(1982) → 壬戌',           eng.liuNianJZ(1982), '壬戌'));
+  tests.push(eq('liuNianJZ(1984) → 甲子',           eng.liuNianJZ(1984), '甲子'));
+
+  tests.push({ section: '地支序号' });
+  tests.push(eq('dzNum("寅") → 1',                   eng.dzNum('寅'), 1));
+  tests.push(eq('dzNum("子") → 11',                  eng.dzNum('子'), 11));
+  tests.push(eq('numZhi(1) → 寅',                    eng.numZhi(1), '寅'));
+  tests.push(eq('numZhi(11) → 子',                   eng.numZhi(11), '子'));
+
+  // ==================== 回归测试：全盘排盘 ====================
+  tests.push({ section: '全盘排盘 — 邦顺 1982-10-18 05:01 男' });
+  (() => {
+    const p = eng.paipan('邦顺', '男', 1982, 10, 18, 5, 1);
+    tests.push(eq('年柱', p.nianGan + p.nianZhi, '壬戌'));
+    tests.push(eq('月柱', p.yueGan + p.yueZhi, '庚戌'));
+    tests.push(eq('日柱', p.riGan + p.riZhi, '甲戌'));
+    tests.push(eq('时柱', p.shiGan + p.shiZhi, '丁卯'));
+    tests.push(eq('日干', p.riGan, '甲'));
+    tests.push(eq('身宫', (p.shenGong||{}).gan + (p.shenGong||{}).zhi, '壬寅'));
+    tests.push(eq('胎元', (p.taiYuan||{}).gan + (p.taiYuan||{}).zhi, '乙丑'));
+    tests.push(eq('命宫', (p.mingGong||{}).gan + (p.mingGong||{}).zhi, '癸丑'));
+    tests.push(eq('大运数', p.daYun.length, 10));
+    tests.push(eq('第一大运', p.daYun[0].gan + p.daYun[0].zhi, '辛亥'));
+    tests.push(eq('第二大运', p.daYun[1].gan + p.daYun[1].zhi, '壬子'));
+    tests.push(eq('起运年', p.daYun[0].startAge, 0));
+    tests.push(eq('空亡', p.kongWang, '申酉'));
+    tests.push(eq('纳音', p.nayin[p.nayin.length-1].name, '大海水'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 芝晓 1983-05-15 09:45 女' });
+  (() => {
+    const p = eng.paipan('芝晓', '女', 1983, 5, 15, 9, 45);
+    tests.push(eq('年柱', p.nianGan + p.nianZhi, '癸亥'));
+    tests.push(eq('月柱', p.yueGan + p.yueZhi, '丁巳'));
+    tests.push(eq('日柱', p.riGan + p.riZhi, '癸卯'));
+    tests.push(eq('时柱', p.shiGan + p.shiZhi, '丁巳'));
+    tests.push(eq('日干', p.riGan, '癸'));
+    tests.push(eq('身宫', (p.shenGong||{}).gan + (p.shenGong||{}).zhi, '癸巳'));
+    tests.push(eq('第一大运', p.daYun[0].gan + p.daYun[0].zhi, '丙辰'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 素素 1986-01-01 12:00 女' });
+  (() => {
+    const p = eng.paipan('素素', '女', 1986, 1, 1, 12, 0);
+    tests.push(eq('年柱', p.nianGan + p.nianZhi, '乙丑'));
+    tests.push(eq('日柱', p.riGan + p.riZhi, '乙巳'));
+    tests.push(eq('日干', p.riGan, '乙'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 小龙 1985-03-21 14:30 男' });
+  (() => {
+    const p = eng.paipan('小龙', '男', 1985, 3, 21, 14, 30);
+    tests.push(eq('年柱', p.nianGan + p.nianZhi, '乙丑'));
+    tests.push(eq('日柱', p.riGan + p.riZhi, '己未'));
+    tests.push(eq('日干', p.riGan, '己'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 苓菲 1988-07-07 22:15 女' });
+  (() => {
+    const p = eng.paipan('苓菲', '女', 1988, 7, 7, 22, 15);
+    tests.push(eq('日柱', p.riGan + p.riZhi, '癸亥'));
+    tests.push(eq('日干', p.riGan, '癸'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 新善 1989-12-12 07:30 男' });
+  (() => {
+    const p = eng.paipan('新善', '男', 1989, 12, 12, 7, 30);
+    tests.push(eq('日柱', p.riGan + p.riZhi, '丙午'));
+    tests.push(eq('日干', p.riGan, '丙'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 冯际州 2010-02-14 15:00 男' });
+  (() => {
+    const p = eng.paipan('冯际州', '男', 2010, 2, 14, 15, 0);
+    tests.push(eq('日柱', p.riGan + p.riZhi, '乙未'));
+    tests.push(eq('日干', p.riGan, '乙'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 吴星宝 2012-06-08 11:00 男' });
+  (() => {
+    const p = eng.paipan('吴星宝', '男', 2012, 6, 8, 11, 0);
+    tests.push(eq('日柱', p.riGan + p.riZhi, '庚子'));
+    tests.push(eq('日干', p.riGan, '庚'));
+  })();
+
+  tests.push({ section: '全盘排盘 — 邵凡语 2014-09-19 18:30 女' });
+  (() => {
+    const p = eng.paipan('邵凡语', '女', 2014, 9, 19, 18, 30);
+    tests.push(eq('日柱', p.riGan + p.riZhi, '癸巳'));
+    tests.push(eq('日干', p.riGan, '癸'));
+  })();
+
+  // ==================== 渲染 ====================
+  let html = '';
+  let passed = 0, failed = 0;
+  let currentSection = '';
+
+  for (const t of tests) {
+    if (t.section) {
+      currentSection = t.section;
+      html += '<div class="section-title">' + currentSection + '</div>';
+      continue;
+    }
+    if (t.ok) {
+      passed++;
+      html += '<div class="result PASS"><span class="label">✅</span> ' + t.label + (t.detail ? ' <span class="detail">' + t.detail + '</span>' : '') + '</div>';
+    } else {
+      failed++;
+      html += '<div class="result FAIL"><span class="label">❌</span> ' + t.label + ' <span class="detail">' + t.detail + '</span></div>';
+    }
+  }
+
+  const elapsed = Date.now() - start;
+  const total = passed + failed;
+
+  summary.innerHTML = total + ' 条断言，<span class="' + (failed === 0 ? 'pass' : 'fail') + '">'
+    + passed + ' 通过</span>'
+    + (failed > 0 ? '，<span class="fail">' + failed + ' 失败</span>' : '')
+    + ' · ' + elapsed + 'ms';
+
+  results.innerHTML = html;
+  document.getElementById('time').textContent = new Date().toLocaleString();
+  document.getElementById('runBtn').disabled = false;
+}
+</script>
+</body>
+</html>
