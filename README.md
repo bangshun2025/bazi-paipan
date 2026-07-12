@@ -22,7 +22,7 @@
 ```
 bazi-paipan/
 ├── ext.yml                  # Clacky 扩展清单
-├── standalone.html          # 独立页面（前端 + 排盘算法内嵌）
+├── standalone.html          # 独立页面（前端 + 排盘算法实现）
 ├── api/handler.rb           # Rails API 后端
 ├── panels/
 │   ├── launcher/view.js     # 侧边栏启动面板
@@ -30,6 +30,7 @@ bazi-paipan/
 ├── archives.json            # 本地档案数据
 ├── CHANGELOG.md             # 版本历史
 └── docs/
+    ├── ALGORITHM.md         # ⚠️ 算法宪法 — 全部规则/常量/公式（不可与代码冲突）
     ├── ARCHITECTURE.md      # 技术决策记录
     ├── ROADMAP.md           # 需求演化与路线图
     ├── TEST.md              # 测试用例与回归基准

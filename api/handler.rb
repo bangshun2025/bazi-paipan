@@ -553,6 +553,7 @@ class BaziPaipanExt < Clacky::ApiExtension
       sheng_xiao: sx,
       da_yun: dy_result[:da_yun],
       qi_yun: dy_result[:qi_yun],
+      shun: dy_result[:shun],
       ren_yuan: ry,
       true_solar: tst
     }
@@ -566,6 +567,19 @@ class BaziPaipanExt < Clacky::ApiExtension
       CANG_GAN[zhi] || []
     end
     cg_text = cg_list.map { |c| "#{c} #{shi_shen(ri_gan, c)}" }.join(' / ')
+
+    # v0.4.0 藏干分层（日/时/命/身）
+    cang_gan_layers = nil
+    if [:ri, :shi, :ming, :shen].include?(pillar_type)
+      layers = []
+      # 大宝/小宝同一套索引映射：0→本气 1→中气 2→余气
+      # twin==2 时 cg_list 来自 ZHI_TWIN_CANG，twin==1 来自 CANG_GAN
+      layers[0] = cg_list[0] ? { gan: cg_list[0], shi_shen: shi_shen(ri_gan, cg_list[0]), level: '本气' } : nil
+      layers[1] = cg_list[1] ? { gan: cg_list[1], shi_shen: shi_shen(ri_gan, cg_list[1]), level: '中气' } : nil
+      layers[2] = cg_list[2] ? { gan: cg_list[2], shi_shen: shi_shen(ri_gan, cg_list[2]), level: '余气' } : nil
+      cang_gan_layers = layers
+    end
+
     kw = if "#{gan}#{zhi}" == "#{ri_gan}#{ri_zhi}"
            KONG_WANG["#{ri_gan}#{ri_zhi}"] || '—'
          else
@@ -587,9 +601,9 @@ class BaziPaipanExt < Clacky::ApiExtension
       xing_yun: chang_sheng(ri_gan, zhi),
       zi_zuo: chang_sheng(gan, zhi),
       kong_wang: kw,
-      cang_gan: cg_text,
-      shen_sha: sh
-    }
+    cang_gan: cg_text,
+    cang_gan_layers: cang_gan_layers,
+    shen_sha: sh    }
   end
 
   # ========== API 端点 ==========
