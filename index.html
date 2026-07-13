@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- 八字排盘 · 从真版 v0.6.7 | 2026-07-12 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -8,6 +9,9 @@
   :root {
     --c-wood: #2e8b3d; --c-fire: #c83a3a; --c-earth: #c8961f; --c-metal: #d97817; --c-water: #2a6ec0;
     --c-ink: #2c2416; --c-gray: #8b7e6a; --c-line: #e0d8c8; --c-paper: #f5f0e8; --c-red: #b5343a;
+    --bz-accent-twin1: #c8961f; --bz-accent-twin2: #4a7fb5;
+    --bz-card-bg: #ffffff; --bz-card-border: #e8e4dc; --bz-shared-bg: #f5f2ec;
+    --bz-card-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
     --font-display: "Songti SC","SimSun","Noto Serif CJK SC","STSong","KaiTi",serif;
     --font-body: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   }
@@ -43,6 +47,126 @@
   .ai-dialog .btn-cancel:hover { background:var(--c-line); }
   .ai-dialog .parse-result { font-size:12px; color:var(--c-gray); margin-top:8px; min-height:18px; }
 
+  /* 双胞胎对比：三栏布局 — 盘式+大宝 | 小宝 | 大运流年 */
+  .twin-wrap { display:block; overflow-x:hidden; }
+  .twin-wrap .chart-wrap { margin-bottom:4px; }
+  .twin-wrap .chart { width:100%; min-width:auto; table-layout:fixed; }
+  .twin-wrap .chart th, .twin-wrap .chart td { padding:2px 3px; font-size:13px; }
+  .twin-wrap .chart .rl { width:54px; min-width:54px; white-space:nowrap; }
+  .twin-wrap .chart .twin-col-sep { width:3px; min-width:3px; padding:0; background:var(--c-line); opacity:0.35; }
+  .twin-wrap .chart .sep { border-left:2px solid var(--c-red); }
+  .twin-wrap .chart .col-ln { border-left:1px solid var(--c-line); }
+  .twin-wrap h3 { font-family:var(--font-display); font-size:15px; text-align:center; margin:0; padding:1px 0; border-bottom:2px solid var(--c-line); letter-spacing:.08em; }
+  .twin-wrap .twin-header-dabao h3 { color:var(--c-ink); }
+  .twin-wrap .twin-header-xiaobao h3 { color:var(--c-red); border-bottom-color:var(--c-red); }
+  .twin-wrap .twin-header-dayun h3 { color:var(--c-gray); }
+  .twin-wrap .twin-sub-hd td { padding:3px 3px !important; }
+  .twin-wrap .luck-section-wrap { margin-top:4px; }
+
+  /* ===== v0.5.0 双胞胎卡片式版面 ===== */
+  /* CSS 变量已在 :root 定义：--bz-accent-twin1/2, --bz-card-bg, --bz-card-border, --bz-shared-bg, --bz-card-shadow */
+
+  /* 卡片容器 */
+  .bz-twin-cards { display:flex; gap:24px; align-items:flex-start; margin-bottom:16px; }
+  .bz-twin-card { flex:1; min-width:360px; background:var(--bz-card-bg); border:1px solid var(--bz-card-border);
+    border-radius:4px; box-shadow:var(--bz-card-shadow); overflow:hidden; }
+
+  /* 标识色条 */
+  .bz-twin-card .bz-card-accent { height:6px; }
+  .bz-twin-card.twin-1 .bz-card-accent { background:var(--bz-accent-twin1); }
+  .bz-twin-card.twin-2 .bz-card-accent { background:var(--bz-accent-twin2); }
+
+  /* 卡片标题 */
+  .bz-twin-card .bz-card-title { padding:10px 16px 8px; font-family:var(--font-body); font-size:16px;
+    font-weight:500; letter-spacing:.08em; }
+  .bz-twin-card.twin-1 .bz-card-title { color:var(--bz-accent-twin1); }
+  .bz-twin-card.twin-2 .bz-card-title { color:var(--bz-accent-twin2); }
+
+  /* 卡片辅助信息行 */
+  .bz-twin-card .bz-card-meta { padding:0 16px 8px; font-size:13px; color:#8b7e6a; font-family:var(--font-body); }
+
+  /* 卡片内表格 */
+  .bz-twin-card .chart { min-width:auto; }
+  .bz-twin-card .chart th, .bz-twin-card .chart td { padding:3px 4px; }
+
+  /* 差异高亮 */
+  .bz-twin-card.twin-1 .bz-diff { background:rgba(200,150,31,.06); }
+  .bz-twin-card.twin-2 .bz-diff { background:rgba(74,127,181,.06); }
+
+  /* 共享区 */
+  .bz-twin-shared { margin-top:4px; background:var(--bz-shared-bg); border-radius:4px;
+    border-left:3px solid #d0c9b8; padding:14px 18px; }
+
+  /* 共享区大运流年当前高亮 → 暖金色 */
+  .bz-twin-shared .cell.cc { background:rgba(200,150,31,.08); }
+  .bz-twin-shared .luck-row.hd .cell.cc { background:rgba(200,150,31,.12); }
+
+  /* ===== v0.6.0 卡片内独立大运区 ===== */
+  .bz-card-luck { border-top:1px solid #e8e4dc; background:#fafaf6; padding:12px 14px; }
+  .bz-card-luck-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .bz-card-luck-label { font-family:"PingFang SC",sans-serif; font-size:13px; color:#8b7e6a; }
+  .bz-card-luck-info { font-family:"PingFang SC",sans-serif; font-size:12px; color:#b0a590; }
+
+  /* 大运导航 pills */
+  .bz-dayun-nav-wrapper { position:relative; }
+  .bz-dayun-nav-wrapper::after { content:''; position:absolute; right:0; top:0; bottom:0; width:24px; background:linear-gradient(to right, transparent, #fafaf6); pointer-events:none; }
+  .bz-dayun-nav { display:flex; gap:6px; overflow-x:auto; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#d0c8b8 transparent; padding:6px 0; }
+  .bz-dayun-pill { flex-shrink:0; min-width:58px; padding:6px 8px; text-align:center; font-family:"Songti SC","SimSun",serif; font-size:18px; font-weight:700; color:#2c2416; border:1px solid #e0d8c8; border-radius:4px; background:#fff; cursor:pointer; transition:background .15s; }
+  .bz-dayun-pill:hover { background:#f5f2ec; }
+  .bz-dayun-pill .pill-age { display:block; font-size:12px; font-weight:400; color:#8b7e6a; margin-top:2px; }
+  .bz-twin-card.twin-1 .bz-dayun-pill.selected { background:#c8961f; color:#fff; border-color:#c8961f; }
+  .bz-twin-card.twin-1 .bz-dayun-pill.selected .pill-age { color:rgba(255,255,255,.7); }
+  .bz-twin-card.twin-2 .bz-dayun-pill.selected { background:#4a7fb5; color:#fff; border-color:#4a7fb5; }
+  .bz-twin-card.twin-2 .bz-dayun-pill.selected .pill-age { color:rgba(255,255,255,.7); }
+
+  /* 选中大运详情 */
+  .bz-dayun-detail { margin-top:10px; padding:8px 10px; background:#fff; border-radius:4px; border:1px solid #e8e4dc; }
+  .bz-dy-main { font-family:"Songti SC","SimSun",serif; font-size:22px; font-weight:700; margin-bottom:4px; }
+  .bz-dy-main .bz-dy-na-yin { font-size:13px; font-weight:400; color:#8b7e6a; margin-left:8px; font-family:"PingFang SC",sans-serif; }
+  .bz-dy-shishen { font-size:14px; color:#2c2416; margin-bottom:10px; display:flex; gap:12px; align-items:center; }
+  .bz-dy-shishen .bz-dy-age { color:#8b7e6a; font-size:12px; font-family:"PingFang SC",sans-serif; }
+
+  /* 流年网格 */
+  .bz-liunian-grid { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .bz-liunian-item { padding:3px 8px; font-size:14px; font-family:"Songti SC",serif; cursor:pointer; border-radius:3px; }
+  .bz-liunian-item:hover { background:#f5f2ec; }
+
+  /* 流年展开详情 */
+  .bz-liunian-detail { margin-top:6px; min-height:18px; }
+  .bz-ln-expand { font-size:13px; color:#8b7e6a; font-family:"PingFang SC",sans-serif; padding:4px 8px; background:rgba(201,169,110,.06); border-radius:3px; }
+
+  /* 模式切换 tab */
+  .bz-twin-tabs { display:flex; gap:0; margin-bottom:18px; }
+  .bz-twin-tab { padding:6px 16px; font-size:13px; cursor:pointer; background:none;
+    border:1px solid #e0d8c8; color:#8b7e6a; font-family:var(--font-body); }
+  .bz-twin-tab:first-child { border-radius:3px 0 0 3px; }
+  .bz-twin-tab:last-child { border-radius:0 3px 3px 0; border-left:none; }
+  .bz-twin-tab.active { background:#2c2416; color:#f5f0e8; border-color:#2c2416; }
+
+  /* 三模式切换 — 纯 CSS */
+  .bz-twin-cards .bz-twin-card.twin-2 { display:block; }
+  .bz-twin-cards.mode-twin1 .bz-twin-card.twin-2 { display:none; }
+  .bz-twin-cards.mode-twin1 { justify-content:center; }
+  .bz-twin-cards.mode-twin1 .bz-twin-card.twin-1 { flex:0 1 55%; max-width:480px; }
+  .bz-twin-cards.mode-twin2 .bz-twin-card.twin-1 { display:none; }
+  .bz-twin-cards.mode-twin2 { justify-content:center; }
+  .bz-twin-cards.mode-twin2 .bz-twin-card.twin-2 { flex:0 1 55%; max-width:480px; }
+
+  /* 三垣折叠 */
+  .bz-twin-card .bz-sanyuan-toggle { font-size:13px; color:#8b7e6a; cursor:pointer;
+    padding:6px 16px; border-top:1px solid var(--bz-card-border);
+    font-family:var(--font-body); user-select:none; }
+  .bz-twin-card .bz-sanyuan-toggle:hover { color:var(--c-ink); }
+  .bz-twin-card .bz-sanyuan-area.collapsed { display:none; }
+
+  /* 窄屏响应式 */
+  @media (max-width:900px) {
+    .bz-twin-cards { flex-direction:column; }
+    .bz-twin-cards .bz-twin-card { flex:1 1 auto; min-width:auto; }
+    .bz-twin-cards.mode-twin1 .bz-twin-card.twin-1,
+    .bz-twin-cards.mode-twin2 .bz-twin-card.twin-2 { flex:1 1 auto; max-width:none; }
+  }
+
   /* 顶部 */
   .top-bar { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; border-bottom:1px solid var(--c-line); padding-bottom:12px; }
   .person-info { font-family:var(--font-display); font-size:22px; color:var(--c-ink); letter-spacing:.08em; }
@@ -54,7 +178,7 @@
   .chart-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:12px; }
   .chart { width:100%; min-width:680px; border-collapse:collapse; table-layout:auto; }
   .chart th, .chart td { border:0.5px solid var(--c-line); text-align:center; vertical-align:middle; font-family:var(--font-display); padding:3px 5px; }
-  .chart td.rl, .chart th.rl { width:48px; min-width:48px; background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; font-weight:500; padding:3px 2px; }
+  .chart td.rl, .chart th.rl { width:54px; min-width:54px; background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; font-weight:500; padding:3px 2px; white-space:nowrap; }
   .chart tr.hd th { font-size:18px; color:var(--c-gray); font-weight:500; background:rgba(201,169,110,.04); padding:6px 3px; }
   .chart .sep { border-left:1.5px solid rgba(181,52,58,.4) !important; }
   .chart .rs td { font-size:18px; color:var(--c-ink); font-weight:500; }
@@ -144,7 +268,8 @@
   <div class="input-section">
     <div class="input-row">
       <label>姓名</label><input type="text" id="inName" value="邦顺" style="width:80px;">
-      <label>性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
+      <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
+      <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
       <label>年</label><input type="number" id="inYear" value="1982" min="1900" max="2100" style="width:62px;">
       <label>月</label><input type="number" id="inMonth" value="10" min="1" max="12" style="width:48px;">
       <label>日</label><input type="number" id="inDay" value="18" min="1" max="31" style="width:48px;">
@@ -162,6 +287,7 @@
       <button class="btn-arch" onclick="saveArchive()" title="保存">💾</button>
       <button class="btn-arch" onclick="delArchive()" title="移到回收站">🗑</button>
       <button class="btn-arch" onclick="showTrash()" title="回收站">♻️</button>
+      <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="showAiInput()">🤖 AI录入</button>
     </div>
   </div>
@@ -642,6 +768,31 @@ function toggleSolar() {
   else document.getElementById('liveSolar').textContent = '';
 }
 
+// 双胞类型切换：显隐第二性别 + label替换
+function setupTwinTypeChange() {
+  var sel = document.getElementById('inTwin');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    var type = sel.value;
+    var g2Group = document.getElementById('inGender2Group');
+    var gLabel = document.getElementById('inGenderLabel');
+    var g1 = document.getElementById('inGender');
+    var g2 = document.getElementById('inGender2');
+    if (type === '2') {
+      gLabel.textContent = '老大';
+      g2Group.style.display = '';
+      // 不强制性别——用户自由选择老大老二各为男/女
+    } else if (type === '1') {
+      gLabel.textContent = '性别';
+      g2Group.style.display = 'none';
+      g2.value = g1.value;
+    } else {
+      gLabel.textContent = '性别';
+      g2Group.style.display = 'none';
+    }
+  });
+}
+
 function updateSolarPreview() {
   const solarGroup = document.getElementById('solarGroup');
   if (solarGroup.style.display === 'none') { document.getElementById('liveSolar').textContent=''; return; }
@@ -740,6 +891,18 @@ const CANG_GAN = {
   '辰':['戊','乙','癸'],'巳':['丙','庚','戊'],'午':['丁','己'],'未':['己','丁','乙'],
   '申':['庚','壬','戊'],'酉':['辛'],'戌':['戊','辛','丁'],'亥':['壬','甲']
 };
+
+// 双胞胎后出者 日/时/命/身 支主气 & 藏干
+const ZHI_TWIN_MAIN = {
+  '子':'壬','丑':'癸','寅':'丙','卯':'甲','辰':'乙','巳':'庚',
+  '午':'己','未':'丁','申':'壬','酉':'庚','戌':'辛','亥':'甲'
+};
+const ZHI_TWIN_CANG = {
+  '子':['壬'],'丑':['癸','辛'],'寅':['丙','戊'],'卯':['甲'],
+  '辰':['乙','癸'],'巳':['庚','戊'],'午':['己'],'未':['丁','乙'],
+  '申':['壬','戊'],'酉':['庚'],'戌':['辛','丁'],'亥':['甲']
+};
+const TWIN_PILLARS = ['ri','shi','ming','shen'];
 
 // 十二长生表
 const CS12_MAP = {
@@ -942,8 +1105,13 @@ function shiShen(riGan, gan, short) {
 const ZHI_WX = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
 const ZHI_MAIN = { '子':'癸','丑':'己','寅':'甲','卯':'乙','辰':'戊','巳':'丙','午':'丁','未':'己','申':'庚','酉':'辛','戌':'戊','亥':'壬' };
 
-function zhiShiShen(riGan, zhi) {
-  const mainGan = ZHI_MAIN[zhi];
+function zhiShiShen(riGan, zhi, twin, pillarType) {
+  let mainGan;
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
+    mainGan = ZHI_TWIN_MAIN[zhi] || (ZHI_TWIN_CANG[zhi] ? ZHI_TWIN_CANG[zhi][0] : '');
+  } else {
+    mainGan = ZHI_MAIN[zhi];
+  }
   if (!mainGan) return '?';
   return shiShen(riGan, mainGan);
 }
@@ -959,10 +1127,73 @@ function changSheng(gan, zhi) {
 }
 
 // ============ 藏干文本 ============
-function cangGanText(zhi, riGan) {
-  const cg = CANG_GAN[zhi] || [];
+function cangGanAt(zhi, riGan, twin, pillarType, level) {
+  let cg;
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
+    cg = ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || [];
+  } else {
+    cg = CANG_GAN[zhi] || [];
+  }
+  const c = cg[level];
+  return c ? '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c) : '';
+}
+
+function cangGanText(zhi, riGan, twin, pillarType) {
+  let cg;
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
+    cg = ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || [];
+  } else {
+    cg = CANG_GAN[zhi] || [];
+  }
   return cg.map(c => '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c)).join('<br>');
 }
+
+// v0.4.1 藏干分层（日/时/命/身 vs 年/月/大运/流年）
+// v0.4.1 patch: 不再使用 ZHI_TWIN_CANG，统一用 CANG_GAN
+// 老大(twin=1)：只显示本气，中气/余气留空；老二(twin=2)：只显示中气+余气，本气留空
+// 独气支（子卯酉 cg.length===1）：老二中气用劫财（同五行反阴阳）填充
+function jieCai(gan) {
+  const i = TG.indexOf(gan);
+  return i >= 0 ? TG[i ^ 1] : null; // 异或翻转阴阳位：甲↔乙 丙↔丁 戊↔己 庚↔辛 壬↔癸
+}
+function cangGanLayers(zhi, riGan, twin, pillarType) {
+  const cg = CANG_GAN[zhi] || [];
+  const layers = [];
+
+  if (TWIN_PILLARS.includes(pillarType)) {
+    // 双胞胎柱：老大/老二拆分本气与中余气
+    if (twin === 1) {
+      // 老大：只显示标准 CANG_GAN 的本气 (cg[0])
+      layers[0] = cg[0] ? { gan: cg[0], shiShen: shiShen(riGan, cg[0]), level: '本气' } : null;
+      layers[1] = null;
+      layers[2] = null;
+    } else if (twin === 2) {
+      // 老二：只显示标准 CANG_GAN 的中气 (cg[1]) 和余气 (cg[2])
+      // 独气支（子卯酉 cg.length===1）：中气用劫财填充
+      layers[0] = null;
+      if (cg.length === 1) {
+        const jc = jieCai(cg[0]);
+        layers[1] = jc ? { gan: jc, shiShen: shiShen(riGan, jc), level: '中气' } : null;
+      } else {
+        layers[1] = cg[1] ? { gan: cg[1], shiShen: shiShen(riGan, cg[1]), level: '中气' } : null;
+      }
+      layers[2] = cg[2] ? { gan: cg[2], shiShen: shiShen(riGan, cg[2]), level: '余气' } : null;
+    } else {
+      // fallback：三层正常填充
+      for (let i = 0; i < 3; i++) {
+        layers[i] = cg[i] ? { gan: cg[i], shiShen: shiShen(riGan, cg[i]), level: ['本气','中气','余气'][i] } : null;
+      }
+    }
+  } else {
+    // 年月大运流年：三层正常填充
+    for (let i = 0; i < 3; i++) {
+      layers[i] = cg[i] ? { gan: cg[i], shiShen: shiShen(riGan, cg[i]), level: ['本气','中气','余气'][i] } : null;
+    }
+  }
+
+  return layers;
+}
+function fmtCGLayer(l) { return l ? '<span class="'+wxClass(l.gan)+'">'+l.gan+'</span> ' + l.shiShen : ''; }
 
 // ============ 空亡 ============
 function kongWang(riGan, riZhi) {
@@ -1010,7 +1241,7 @@ function shenSha(riGan, riZhi, nianZhi, yueZhi) {
   const gyMap = { '甲':'未','乙':'申','丙':'酉','丁':'戌','戊':'亥','己':'子','庚':'丑','辛':'寅','壬':'卯','癸':'辰' };
   if (gyMap[riGan] === riZhi) a.push('国印贵');
 
-  return a.length > 0 ? a.slice(0, 3).join('<br>') : '—';
+  return a.length > 0 ? a.slice(0, 3).join('<br>') : '';
 }
 
 // ============ 胎元 ============
@@ -1182,7 +1413,8 @@ function paipan(name, gender, y, m, d, h, mi) {
   const shen = shenGong(yue.zhi, shi.zhi, nian.gan);
 
   // 8. 大运
-  const { daYun, qiYun } = computeDaYun(gender, nian.gan, yue.gan, yue.zhi, birth);
+  const { daYun, qiYun, shun } = computeDaYun(gender, nian.gan, yue.gan, yue.zhi, birth);
+  qiYun.shun = shun;  // 附加顺/逆排标记
 
   // 9. 生肖
   const shengXiao = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
@@ -1203,6 +1435,15 @@ function fmtDate(y,m,d) {
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
+// 顺逆排标签（v0.6.2）
+function buildShunLabel(shun, gender, nianGan) {
+  if (shun === undefined) return '';
+  var yangGan = /^[甲丙戊庚壬]$/.test(nianGan);
+  var yinYang = yangGan ? '阳' : '阴';
+  var shunNi = shun ? '顺排' : '逆排';
+  return '<span class="meta-tag">' + yinYang + '年' + gender + ' · ' + shunNi + '</span>';
+}
+
 function toggleSimple() {
   const tables = document.querySelectorAll('.chart');
   const btn = document.querySelector('.btn-simple');
@@ -1210,12 +1451,94 @@ function toggleSimple() {
   tables.forEach(t => t.classList.toggle('simple', active));
 }
 
-function renderChart(data) {
+// ============ buildPillarRows：抽取四柱+三垣行生成逻辑 ============
+// 返回 { main: [string], sanyuan: [string] }，每行 5 列（盘式+四柱）
+// diffMap: { 'nian.gan':true, ... } — 差异高亮标记
+// includeSanyuan: 是否包含三垣行（默认 true）
+function buildPillarRows(p, options) {
+  options = options || {};
+  var diffMap = options.diffMap || {};
+
+  function td(cls, txt, ext) { return '<td class="' + (cls||'') + '"' + (ext||'') + '>' + (txt||'') + '</td>'; }
+  function rl(lbl) { return '<td class="rl">' + lbl + '</td>'; }
+  function emp(cls) { return '<td class="' + (cls||'') + '"></td>'; }
+  function th(cls, txt) { return '<th class="' + (cls||'') + '">' + txt + '</th>'; }
+  function dm(key, cls) {
+    return (diffMap[key] ? (cls ? cls + ' bz-diff' : 'bz-diff') : (cls || ''));
+  }
+
+  var main = [], sanyuan = [];
+  var cols = ['nian','yue','ri','shi'];
+
+  // === 四柱区 ===
+  // 主星
+  main.push('<tr class="rs">' + rl('主星') +
+    cols.map(function(k){return td(dm(k+'.rs'), p[k].rs);}).join('') + '</tr>');
+  // 天干
+  main.push('<tr class="rg">' + rl('') +
+    cols.map(function(k){return td(dm(k+'.gan', p[k].wg), p[k].gan);}).join('') + '</tr>');
+  // 地支
+  main.push('<tr class="rg">' + rl('') +
+    cols.map(function(k){return td(dm(k+'.zhi', p[k].wz), p[k].zhi);}).join('') + '</tr>');
+  // 藏干三层
+  ['本气','中气','余气'].forEach(function(lv, li) {
+    main.push('<tr class="rh">' + rl(lv) +
+      cols.map(function(k){return td(dm(k+'.cg.'+li), fmtCGLayer((p[k].ly||[])[li]));}).join('') + '</tr>');
+  });
+  // 纳音
+  main.push('<tr class="rn" data-row-type="nayin">' + rl('纳音') +
+    cols.map(function(k){return td(dm(k+'.ny'), p[k].ny);}).join('') + '</tr>');
+  // 星运
+  main.push('<tr class="rm" data-row-type="xingyun">' + rl('星运') +
+    cols.map(function(k){return td(dm(k+'.xy'), p[k].xy);}).join('') + '</tr>');
+  // 自坐
+  main.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') +
+    cols.map(function(k){return td(dm(k+'.zz'), p[k].zz);}).join('') + '</tr>');
+  // 空亡
+  main.push('<tr class="rm" data-row-type="kongwang">' + rl('空亡') +
+    cols.map(function(k){return td(dm(k+'.kw'), p[k].kw);}).join('') + '</tr>');
+  // 神煞
+  main.push('<tr class="rm" data-row-type="shensha">' + rl('神煞') +
+    cols.map(function(k){return td(dm(k+'.sh'), p[k].sh);}).join('') + '</tr>');
+
+  // === 三垣区 ===
+  if (options.includeSanyuan !== false) {
+    var syCols = ['tai','ming','shen'];
+    sanyuan.push('<tr class="hd">' + th('rl','三垣') + emp('') +
+      syCols.map(function(k){return th('', {tai:'胎元',ming:'命宫',shen:'身宫'}[k]);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rs">' + rl('主星') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.rs'), p[k].rs);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rg">' + rl('') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.gan', p[k].wg), p[k].gan);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rg">' + rl('') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.zhi', p[k].wz), p[k].zhi);}).join('') + '</tr>');
+    ['本气','中气','余气'].forEach(function(lv, li) {
+      sanyuan.push('<tr class="rh">' + rl(lv) + emp('') +
+        syCols.map(function(k){return td(dm(k+'.cg.'+li), fmtCGLayer((p[k].ly||[])[li]));}).join('') + '</tr>');
+    });
+    sanyuan.push('<tr class="rn" data-row-type="nayin">' + rl('纳音') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.ny'), p[k].ny);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rm" data-row-type="xingyun">' + rl('星运') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.xy'), p[k].xy);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.zz'), p[k].zz);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rm" data-row-type="kongwang">' + rl('空亡') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.kw'), p[k].kw);}).join('') + '</tr>');
+    sanyuan.push('<tr class="rm" data-row-type="shensha">' + rl('神煞') + emp('') +
+      syCols.map(function(k){return td(dm(k+'.sh'), p[k].sh);}).join('') + '</tr>');
+  }
+
+  return { main: main, sanyuan: sanyuan };
+}
+
+function renderChart(data, twin, targetId) {
+  twin = twin || 1;
+  targetId = targetId || 'output';
   const { name, gender, y, m, d, h, mi, nian, yue, ri, shi, tai, ming, shen, shengXiao, daYun, qiYun, renYuan } = data;
   const riGan = ri.gan, riZhi = ri.zhi;
 
   // 各柱的完整解析
-  function pillar(gan, zhi) {
+  function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
       rs: shiShen(riGan, gan),
@@ -1224,18 +1547,18 @@ function renderChart(data) {
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
       kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
-      cg: cangGanText(zhi, riGan),
-      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, yue.zhi) : '—'
+      cg: cangGanText(zhi, riGan, twin, type),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, yue.zhi) : ''
     };
   }
 
-  const pNian = pillar(nian.gan, nian.zhi);
-  const pYue = pillar(yue.gan, yue.zhi);
-  const pRi = pillar(ri.gan, ri.zhi);
-  const pShi = pillar(shi.gan, shi.zhi);
-  const pTai = pillar(tai.gan, tai.zhi);
-  const pMing = pillar(ming.gan, ming.zhi);
-  const pShen = pillar(shen.gan, shen.zhi);
+  const pNian = pillar(nian.gan, nian.zhi, 'nian');
+  const pYue = pillar(yue.gan, yue.zhi, 'yue');
+  const pRi = pillar(ri.gan, ri.zhi, 'ri');
+  const pShi = pillar(shi.gan, shi.zhi, 'shi');
+  const pTai = pillar(tai.gan, tai.zhi, 'tai');
+  const pMing = pillar(ming.gan, ming.zhi, 'ming');
+  const pShen = pillar(shen.gan, shen.zhi, 'shen');
 
   // 当前大运索引（找覆盖当前年份的大运）
   const nowYear = new Date().getFullYear();
@@ -1276,37 +1599,62 @@ function renderChart(data) {
   function emp(cls) { return '<td class="'+cls+'"></td>'; }
 
   const chartRows = [];
-  // 柱名
+  // 柱名头
   chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep','大运')+th('col-ln','流年')+'</tr>');
-  // 主星
-  chartRows.push('<tr class="rs">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>');
-  // 天干
-  chartRows.push('<tr class="rg">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>');
-  // 地支
-  chartRows.push('<tr class="rg">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>');
-  // 藏气
-  chartRows.push('<tr class="rh">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>');
-  // 纳音
-  chartRows.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>');
+
+  // 生成四柱行（5列），再拼接大运/流年列
+  var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen });
+  var suffixMain = td('sep col-dy', '') + td('col-ln', '');
+  var suffixSy = emp('sep') + emp('col-ln');
+
+  // 辅助：将 suffix 插入每行的 </tr> 之前
+  function insSuffix(rowHtml, suffix) {
+    return rowHtml.replace('</tr>', suffix + '</tr>');
+  }
+
+  // 主星行特殊处理：大运流年需要真实数据
+  var mainRows = bp.main.slice();
+  // 主星行(0)：用 pDy.rs / pLn.rs 替换占位
+  mainRows[0] = '<tr class="rs">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
+  // 天干行(1)
+  mainRows[1] = '<tr class="rg">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+  // 地支行(2)
+  mainRows[2] = '<tr class="rg">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+  // 藏气: 单行合并（用 cg 而非 ly），删中气余气
+  mainRows[3] = '<tr class="rh">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
+  mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
+  // 纳音 — splice 后索引从 6 偏移至 4
+  mainRows[4] = '<tr class="rn" data-row-type="nayin">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
   // 星运
-  chartRows.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>');
+  mainRows[5] = '<tr class="rm" data-row-type="xingyun">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
   // 自坐
-  chartRows.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>');
+  mainRows[6] = '<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
   // 空亡
-  chartRows.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>');
+  mainRows[7] = '<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
   // 神煞
-  chartRows.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>');
+  mainRows[8] = '<tr class="rm" data-row-type="shensha">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+  // 其他行（藏干4,5 等）使用 buildPillarRows 的 + suffix
+  for (var fixI = 0; fixI < mainRows.length; fixI++) {
+    if (mainRows[fixI] && mainRows[fixI].indexOf('sep col-dy') === -1) {
+      mainRows[fixI] = insSuffix(mainRows[fixI], suffixMain);
+    }
+  }
+  chartRows.push.apply(chartRows, mainRows);
+
   // 三垣行
-  chartRows.push('<tr class="hd">'+th('rl','三垣')+emp('')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rs">'+rl('主星')+emp('')+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rg">'+rl('')+emp('')+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rg">'+rl('')+emp('')+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rh">'+rl('藏气')+emp('')+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+emp('')+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+emp('')+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+emp('')+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+emp('')+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
-  chartRows.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+emp('')+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
+  var syRows = [];
+  syRows.push('<tr class="hd">'+th('rl','三垣')+emp('')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
+  // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
+  syRows.push('<tr class="rs">'+rl('主星')+emp('')+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg">'+rl('')+emp('')+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg">'+rl('')+emp('')+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rh">'+rl('藏气')+emp('')+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+emp('')+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+emp('')+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+emp('')+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+emp('')+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+emp('')+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
+  chartRows.push.apply(chartRows, syRows);
 
   // ---- 大运流年表 HTML ----
   const luckRows = [];
@@ -1358,9 +1706,10 @@ function renderChart(data) {
 
   // ---- 组装完整 HTML ----
   const nowYearCn = '（当前 ' + nowYear + ' 年）';
+  const shunLabel = data.qiYun ? buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan) : '';
   const html = `
     <div class="top-bar">
-      <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}</div>
+      <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>
 
@@ -1385,58 +1734,70 @@ function renderChart(data) {
     </div>`;
 
   // 存储数据用于交互
-  document.getElementById('output').innerHTML = html;
-  window._paipanData = data;
+  const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
+  container.innerHTML = html;
+  container._paipanData = data;
+  if (targetId === 'output' || (typeof targetId === 'object' && targetId.id === 'output')) {
+    window._paipanData = data;
+  }
   window._getSolarTerm = getSolarTerm;
 
   // 绑定交互
-  bindEvents(data);
+  container._paipanData = data;
+  bindEvents(data, container);
 }
 
-function bindEvents(data) {
+function bindEvents(data, container) {
   const { daYun, ri, y } = data;
   const riGan = ri.gan;
+  container = container || document;
 
   // 大运点击
-  document.querySelectorAll('[data-dy]').forEach(c => {
+  container.querySelectorAll('[data-dy]').forEach(c => {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
-      const dy = daYun[i];
-      hiDy(i);
-      hiLn(i, 0);  // 重置流年到大运首年
-      updTopCols(data, i, 0);
+      var cardEl = c.closest('.bz-twin-card');
+      var daYunSrc = (cardEl && cardEl._cardData) ? cardEl._cardData.daYun : daYun;
+      const dy = daYunSrc[i];
+      var scope = c.closest('.bz-card-luck') || container;
+      hiDy(i, scope);
+      hiLn(i, 0, scope);
+      updateCardDyLnColumns(container, c, i, 0);
     });
   });
 
   // 流年点击
-  document.querySelectorAll('.liu-row .li').forEach(li => {
+  container.querySelectorAll('.liu-row .li').forEach(li => {
     li.addEventListener('click', e => {
       e.stopPropagation();
       const di = parseInt(li.dataset.di);
       const liIdx = parseInt(li.dataset.li);
-      hiDy(di); hiLn(di, liIdx);
-      updTopCols(data, di, liIdx);
+      var cardEl2 = li.closest('.bz-twin-card');
+      var daYunSrc2 = (cardEl2 && cardEl2._cardData) ? cardEl2._cardData.daYun : daYun;
+      var scope2 = li.closest('.bz-card-luck') || container;
+      hiDy(di, scope2); hiLn(di, liIdx, scope2);
+      updateCardDyLnColumns(container, li, di, liIdx);
     });
   });
 }
 
-function hiDy(i) {
-  document.querySelectorAll('[data-dy]').forEach(c => c.classList.remove('cc'));
-  const t = document.querySelector('[data-dy="'+i+'"]');
+function hiDy(i, scope) {
+  scope.querySelectorAll('[data-dy]').forEach(c => c.classList.remove('cc'));
+  const t = scope.querySelector('[data-dy="'+i+'"]');
   if (t) t.classList.add('cc');
   // 高亮年龄头行
-  const hd = document.querySelectorAll('.luck-row.hd .cell');
+  const hd = scope.querySelectorAll('.luck-row.hd .cell');
   hd.forEach(c => c.classList.remove('cc'));
   if (hd[i + 1]) hd[i + 1].classList.add('cc');
   // 高亮流年列
-  const lc = document.querySelectorAll('.liu-row .cell');
+  const lc = scope.querySelectorAll('.liu-row .cell');
   lc.forEach(c => c.classList.remove('cc'));
   if (lc[i + 1]) lc[i + 1].classList.add('cc');
 }
 
-function hiLn(di, li) {
-  document.querySelectorAll('.liu-row .li').forEach(c => c.classList.remove('cur'));
-  const cells = document.querySelectorAll('.liu-row .cell');
+function hiLn(di, li, scope) {
+  scope.querySelectorAll('.liu-row .li').forEach(c => c.classList.remove('cur'));
+  const cells = scope.querySelectorAll('.liu-row .cell');
   const col = cells[di + 1];
   if (col) {
     const lis = col.querySelectorAll('.li');
@@ -1444,49 +1805,466 @@ function hiLn(di, li) {
   }
 }
 
-function updTopCols(data, dyIdx, lnIdx) {
-  const { daYun, ri } = data;
-  const riGan = ri.gan;
-  const dy = daYun[dyIdx];
-  const lnY = dy.startYear + lnIdx;
-  const lnGz = liuNianJZ(lnY);
+// ============ v0.6.7 卡片大运流年列互动更新 ============
+// 点击流年时同步更新卡片图表中的大运/流年列
+function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
+  // 确定用哪个卡的数据：从点击元素向上找 .bz-twin-card
+  var card = clickedEl.closest('.bz-twin-card');
+  var cardData;
+  if (card && card._cardData) {
+    cardData = card._cardData;
+  } else {
+    cardData = container._paipanData;
+  }
+  if (!cardData || !cardData.daYun) return;
+  var daYun = cardData.daYun;
+  var dy = daYun[dyIdx];
+  if (!dy) return;
+  var lnYear = dy.startYear + lnIdx;
+  var lnGz = liuNianJZ(lnYear);
+  var riGan = cardData.ri.gan, riZhi = cardData.ri.zhi;
+  var nianZhi = cardData.nian.zhi, yueZhi = cardData.yue.zhi;
 
-  function p(gan, zhi) {
+  function pill(gan, zhi) {
+    var cgLayers = cangGanLayers(zhi, riGan, 1, 'dayun');
     return {
-      gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
       rs: shiShen(riGan, gan),
-      cg: cangGanText(zhi, riGan),
-      ny: NAYIN[gan+zhi]||'',
+      wg: wxClass(gan), wz: wxClass(zhi),
+      gan: gan, zhi: zhi,
+      ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
-      kw: kongWang(gan, zhi),
-      sh: '—'
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      ly: cgLayers,
+      cg: cangGanText(zhi, riGan, 1, 'dayun'),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nianZhi, yueZhi) : ''
     };
   }
-  const pd = p(dy.gan, dy.zhi), pl = p(lnGz[0], lnGz[1]);
 
-  const rows = document.querySelectorAll('.chart tr');
-  function set(r, c, txt, cls) { rows[r].children[c].textContent = txt; if (cls !== undefined) rows[r].children[c].className = cls; }
-  // 大运列 (col 5)
-  set(1, 5, pd.rs, 'sep col-dy');
-  set(2, 5, pd.gan, 'sep '+pd.wg+' col-dy');
-  set(3, 5, pd.zhi, 'sep '+pd.wz+' col-dy');
-  rows[4].children[5].innerHTML = pd.cg; rows[4].children[5].className = 'sep col-dy';
-  set(5, 5, pd.ny, 'sep col-dy');
-  set(6, 5, pd.xy, 'sep col-dy');
-  set(7, 5, pd.zz, 'sep col-dy');
-  set(8, 5, pd.kw, 'sep col-dy');
-  set(9, 5, pd.sh, 'sep col-dy');
-  // 流年列 (col 6)
-  set(1, 6, pl.rs, 'col-ln');
-  set(2, 6, pl.gan, pl.wg+' col-ln');
-  set(3, 6, pl.zhi, pl.wz+' col-ln');
-  rows[4].children[6].innerHTML = pl.cg; rows[4].children[6].className = 'col-ln';
-  set(5, 6, pl.ny, 'col-ln');
-  set(6, 6, pl.xy, 'col-ln');
-  set(7, 6, pl.zz, 'col-ln');
-  set(8, 6, pl.kw, 'col-ln');
-  set(9, 6, pl.sh, 'col-ln');
+  var pDy = pill(dy.gan, dy.zhi);
+  var pLn = pill(lnGz[0], lnGz[1]);
+
+  // 更新目标卡片：如果点击来自具体卡片，只更新该卡片；否则更新所有卡片
+  var cards = card ? [card] : Array.from(container.querySelectorAll('.bz-twin-card'));
+
+  // v0.6.6: 单人模式回退 —— 无 .bz-twin-card 时直接更新主 chart 表格
+  if (cards.length === 0) {
+    var mainChart = container.querySelector('table.chart');
+    if (mainChart) _applyDLUpdates(mainChart, pDy, pLn, true);
+    return;
+  }
+
+  cards.forEach(function(c) {
+    var ct = c.querySelector('.chart-wrap table.chart');
+    if (ct) _applyDLUpdates(ct, pDy, pLn, false);
+  });
+}
+
+
+
+// ============ v0.6.6 通用大运/流年列更新函数 ============
+// 双模式行映射：isSingle=true → 9行（藏气合并），isSingle=false → 11行（藏干分层）
+function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
+  var rows = tableEl.querySelectorAll('tr');
+  var updates;
+
+  if (isSingle) {
+    // 单人模式：9 行（藏气合并，索引 [1-9]）
+    updates = [
+      [1, pDy.rs, pLn.rs],
+      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [4, pDy.cg, pLn.cg],
+      [5, pDy.ny, pLn.ny],
+      [6, pDy.xy, pLn.xy],
+      [7, pDy.zz, pLn.zz],
+      [8, pDy.kw, pLn.kw],
+      [9, pDy.sh, pLn.sh]
+    ];
+  } else {
+    // 双胞胎模式：11 行（藏干分层，索引 [1-11]）—— 从 v0.6.7 实际代码直接复制
+    updates = [
+      [1, pDy.rs, pLn.rs],
+      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [4, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
+      [5, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
+      [6, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
+      [7, pDy.ny, pLn.ny],
+      [8, pDy.xy, pLn.xy],
+      [9, pDy.zz, pLn.zz],
+      [10, pDy.kw, pLn.kw],
+      [11, pDy.sh, pLn.sh]
+    ];
+  }
+
+  updates.forEach(function(u) {
+    var row = rows[u[0]];
+    if (!row) return;
+    var tds = row.querySelectorAll('td');
+    if (tds.length < 7) return;
+    if (u[3] !== undefined) {
+      tds[5].className = 'sep col-dy ' + u[3];
+      tds[6].className = 'col-ln ' + u[4];
+    }
+    tds[5].innerHTML = u[1] || '';
+    tds[6].innerHTML = u[2] || '';
+  });
+}
+
+
+// ============ v0.5.0 差异高亮 ============
+// 逐 cell 比对双胞胎两个盘式的同字段，返回 diffMap
+function buildDiffMap(p1, p2) {
+  var map = {};
+  var fields = ['rs','gan','zhi','na_yin','xing_yun','zi_zuo','kong_wang','shen_sha'];
+  // 这些字段被 pillar() 映射为：rs, gan, zhi, ny, xy, zz, kw, sh
+  var mapped = ['rs','gan','zhi','ny','xy','zz','kw','sh'];
+  var pillars = ['nian','yue','ri','shi','tai','ming','shen'];
+
+  pillars.forEach(function(p) {
+    mapped.forEach(function(f, i) {
+      var v1 = p1[p] ? p1[p][f] : undefined;
+      var v2 = p2[p] ? p2[p][f] : undefined;
+      if (v1 !== v2) {
+        map[p + '.' + f] = true;
+      }
+    });
+    // 藏干分层逐层比对
+    var ly1 = p1[p] ? p1[p].ly : [];
+    var ly2 = p2[p] ? p2[p].ly : [];
+    [0,1,2].forEach(function(li) {
+      var l1 = ly1[li], l2 = ly2[li];
+      var g1 = l1 ? l1.gan : '', g2 = l2 ? l2.gan : '';
+      if (g1 !== g2) {
+        map[p + '.cg.' + li] = true;
+      }
+    });
+  });
+
+  return map;
+}
+
+// ============ v0.6.0 抽取：单张卡片骨架 builder ============
+// 返回完整卡片 HTML（含四柱+三垣，可选大运尾缀）
+// options: { twin, label, relation, identClass, diffMap, luckHTML? }
+function buildCardHTML(data, options) {
+  options = options || {};
+  var twin = options.twin || 1;
+  var label = options.label || '老大';
+  var relation = options.relation || '';
+  var identClass = options.identClass || 'twin-1';
+  var diffMap = options.diffMap || {};
+  var luckHTML = options.luckHTML || '';
+  var includeLuckCols = options.includeLuckCols || false;
+  var curDaYun = options.curDaYun;
+  var curLiuNian = options.curLiuNian;
+  var meta = options.meta || '';
+
+  var riGan = data.ri.gan, riZhi = data.ri.zhi;
+  var nian = data.nian, yue = data.yue, ri = data.ri, shi = data.shi;
+  var tai = data.tai, ming = data.ming, shen = data.shen;
+
+  function pillar(gan, zhi, type) {
+    return {
+      gan: gan, zhi: zhi,
+      wg: wxClass(gan), wz: wxClass(zhi),
+      rs: shiShen(riGan, gan),
+      ny: NAYIN[gan + zhi] || '',
+      xy: changSheng(riGan, zhi),
+      zz: changSheng(gan, zhi),
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      ly: cangGanLayers(zhi, riGan, twin, type),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, yue.zhi) : ''
+    };
+  }
+  var p = {
+    nian: pillar(nian.gan, nian.zhi, 'nian'),
+    yue:  pillar(yue.gan,  yue.zhi,  'yue'),
+    ri:   pillar(ri.gan,   ri.zhi,   'ri'),
+    shi:  pillar(shi.gan,  shi.zhi,  'shi'),
+    tai:  pillar(tai.gan,  tai.zhi,  'tai'),
+    ming: pillar(ming.gan, ming.zhi, 'ming'),
+    shen: pillar(shen.gan, shen.zhi, 'shen')
+  };
+
+  // 行内辅助
+  function td(cls, txt, ext) { return '<td class="'+(cls||'')+'"'+(ext||'')+'>'+(txt||'')+'</td>'; }
+  function rl(lbl) { return '<td class="rl">'+lbl+'</td>'; }
+  function emp(cls) { return '<td class="'+(cls||'')+'"></td>'; }
+  function dm(key, cls) { return diffMap[key] ? (cls ? cls+' bz-diff' : 'bz-diff') : (cls||''); }
+
+  var rows = buildPillarRows(p, { diffMap: diffMap });
+  var hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th></tr>';
+
+  // v0.6.1: 龙凤胎卡片四柱表扩展7列（+大运+流年）
+  if (includeLuckCols && curDaYun && curLiuNian) {
+    var pDy = pillar(curDaYun.gan, curDaYun.zhi, 'dayun');
+    var pLn = pillar(curLiuNian.gan, curLiuNian.zhi, 'liunian');
+    hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep">大运</th><th class="col-ln">流年</th></tr>';
+    // 主星(0)
+    rows.main[0] = '<tr class="rs">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
+    // 天干(1)
+    rows.main[1] = '<tr class="rg">'+rl('')+td(dm('nian.gan',p.nian.wg),p.nian.gan)+td(dm('yue.gan',p.yue.wg),p.yue.gan)+td(dm('ri.gan',p.ri.wg),p.ri.gan)+td(dm('shi.gan',p.shi.wg),p.shi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+    // 地支(2)
+    rows.main[2] = '<tr class="rg">'+rl('')+td(dm('nian.zhi',p.nian.wz),p.nian.zhi)+td(dm('yue.zhi',p.yue.wz),p.yue.zhi)+td(dm('ri.zhi',p.ri.wz),p.ri.zhi)+td(dm('shi.zhi',p.shi.wz),p.shi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+    // 本气(3)
+    rows.main[3] = '<tr class="rh">'+rl('本气')+td(dm('nian.cg.0'),fmtCGLayer((p.nian.ly||[])[0]))+td(dm('yue.cg.0'),fmtCGLayer((p.yue.ly||[])[0]))+td(dm('ri.cg.0'),fmtCGLayer((p.ri.ly||[])[0]))+td(dm('shi.cg.0'),fmtCGLayer((p.shi.ly||[])[0]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[0]))+td('col-ln',fmtCGLayer((pLn.ly||[])[0]))+'</tr>';
+    // 中气(4)
+    rows.main[4] = '<tr class="rh">'+rl('中气')+td(dm('nian.cg.1'),fmtCGLayer((p.nian.ly||[])[1]))+td(dm('yue.cg.1'),fmtCGLayer((p.yue.ly||[])[1]))+td(dm('ri.cg.1'),fmtCGLayer((p.ri.ly||[])[1]))+td(dm('shi.cg.1'),fmtCGLayer((p.shi.ly||[])[1]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[1]))+td('col-ln',fmtCGLayer((pLn.ly||[])[1]))+'</tr>';
+    // 余气(5)
+    rows.main[5] = '<tr class="rh">'+rl('余气')+td(dm('nian.cg.2'),fmtCGLayer((p.nian.ly||[])[2]))+td(dm('yue.cg.2'),fmtCGLayer((p.yue.ly||[])[2]))+td(dm('ri.cg.2'),fmtCGLayer((p.ri.ly||[])[2]))+td(dm('shi.cg.2'),fmtCGLayer((p.shi.ly||[])[2]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[2]))+td('col-ln',fmtCGLayer((pLn.ly||[])[2]))+'</tr>';
+    // 纳音(6)
+    rows.main[6] = '<tr class="rn" data-row-type="nayin">'+rl('纳音')+td(dm('nian.ny'),p.nian.ny)+td(dm('yue.ny'),p.yue.ny)+td(dm('ri.ny'),p.ri.ny)+td(dm('shi.ny'),p.shi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
+    // 星运(7)
+    rows.main[7] = '<tr class="rm" data-row-type="xingyun">'+rl('星运')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
+    // 自坐(8)
+    rows.main[8] = '<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td(dm('nian.zz'),p.nian.zz)+td(dm('yue.zz'),p.yue.zz)+td(dm('ri.zz'),p.ri.zz)+td(dm('shi.zz'),p.shi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
+    // 空亡(9)
+    rows.main[9] = '<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
+    // 神煞(10)
+    rows.main[10] = '<tr class="rm" data-row-type="shensha">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+    // 三垣表头(0)和后续行加空列
+    rows.sanyuan[0] = '<tr class="hd">'+rl('三垣')+emp('')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
+    for (var si = 1; si < rows.sanyuan.length; si++) {
+      rows.sanyuan[si] = rows.sanyuan[si].replace('</tr>', emp('sep')+emp('col-ln')+'</tr>');
+    }
+  }
+
+  var titleHtml = relation ? label+'（'+relation+'）' : label;
+  var cardStyle = includeLuckCols ? ' style="min-width:420px"' : '';
+  var metaHtml = meta ? '<div class="bz-card-meta">'+meta+'</div>' : '';
+
+  return '<div class="bz-twin-card '+identClass+'" data-card="'+twin+'"'+cardStyle+'>'
+    + '<div class="bz-card-accent"></div>'
+    + '<div class="bz-card-title">'+titleHtml
+    + '<span class="bz-sanyuan-toggle" onclick="var sa=this.parentElement.parentElement.querySelector(\'.bz-sanyuan-area\');var t=this;sa.classList.toggle(\'collapsed\');t.textContent=sa.classList.contains(\'collapsed\')?\'▼ 三垣\':\'▲ 三垣\';">▲ 三垣</span></div>'
+    + metaHtml
+    + '<div class="chart-wrap"><table class="chart">'+hdr+'\n'+rows.main.join('\n')+'</table></div>'
+    + '<div class="bz-sanyuan-area"><table class="chart" style="margin-top:0;border-top:1px solid var(--bz-card-border);">'+rows.sanyuan.join('\n')+'</table></div>'
+    + luckHTML
+    + '</div>';
+}
+
+// ============ v0.6.1 卡片内大运表（luck-table 样式，替代 v0.6.0 pill）============
+function buildCardLuckHTML(daYun, qiYun, data, options) {
+  options = options || {};
+  var identClass = options.identClass || 'twin-1';
+  var shunLabel = options.shunLabel || '顺排';
+  var riGan = data.ri.gan;
+  var h = data.h, mi = data.mi;
+
+  var nowYear = new Date().getFullYear();
+  var curDyIdx = 0;
+  for (var i = daYun.length - 1; i >= 0; i--) {
+    if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; }
+  }
+
+  var joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
+  var jyText = '';
+  (function() {
+    var y = data.y, startYear = y + joy;
+    for (var j = 0; j < 20; j++) {
+      var tY = startYear + j;
+      if ('己甲'.indexOf(TG[(tY - 4) % 10]) >= 0) { jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天'; return; }
+    }
+  })();
+
+  // luck-table 三行：大运头、干支、流年
+  var luckRows = [];
+  luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  for (var l = 0; l < daYun.length; l++) {
+    var dy = daYun[l], cls = l === curDyIdx ? ' cell cc' : ' cell';
+    luckRows.push('<div class="'+cls+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>');
+  }
+  luckRows.push('</div>');
+
+  luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  for (var l = 0; l < daYun.length; l++) {
+    var dy = daYun[l], cls = l === curDyIdx ? ' cell cc' : ' cell';
+    var ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi);
+    luckRows.push('<div class="'+cls+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>');
+  }
+  luckRows.push('</div>');
+
+  luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  for (var l = 0; l < daYun.length; l++) {
+    var dy = daYun[l], cls = l === curDyIdx ? ' cell cc' : ' cell';
+    var lis = '';
+    for (var j = 0; j < 10; j++) {
+      var lnY = dy.startYear + j;
+      var gz = liuNianJZ(lnY);
+      var curCls = (l === curDyIdx && lnY === nowYear) ? 'li cur' : 'li';
+      lis += '<span class="'+curCls+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>';
+    }
+    luckRows.push('<div class="'+cls+'">'+lis+'</div>');
+  }
+  luckRows.push('</div>');
+
+  return '<div class="bz-card-luck '+identClass+'">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+    + '<div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">'
+    + '<div><span class="label">起运</span>' + qiyunText + ' &nbsp; <span class="label">交运</span>' + jyText + '</div>'
+    + '</div>'
+    + '<button class="btn-back" onclick="scrollToNow()" title="定位今年">📍 今年</button>'
+    + '</div>'
+    + '<div class="luck-section" style="border:none;">'
+    + '<div class="luck-table">'+luckRows.join('\n')+'</div>'
+    + '</div>'
+    + '</div>';
+}
+
+// ============ v0.5.0 双胞胎卡片式版面（同性） ============
+function renderTwinCardsHtml(data, targetId) {
+  targetId = targetId || 'output';
+  var name = data.name, gender = data.gender, y = data.y, m = data.m, d = data.d, h = data.h, mi = data.mi;
+  var nian = data.nian, shengXiao = data.shengXiao, daYun = data.daYun, qiYun = data.qiYun, renYuan = data.renYuan;
+  var nowYear = new Date().getFullYear();
+
+  // Pillar builders for diffMap
+  var riGan = data.ri.gan, riZhi = data.ri.zhi;
+  function pillar(gan, zhi, twin, type) {
+    return { gan: gan, zhi: zhi, wg: wxClass(gan), wz: wxClass(zhi), rs: shiShen(riGan, gan),
+      ny: NAYIN[gan + zhi] || '', xy: changSheng(riGan, zhi), zz: changSheng(gan, zhi),
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      ly: cangGanLayers(zhi, riGan, twin, type),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, data.yue.zhi) : '' };
+  }
+  var p1 = { nian: pillar(nian.gan, nian.zhi, 1, 'nian'), yue: pillar(data.yue.gan, data.yue.zhi, 1, 'yue'), ri: pillar(data.ri.gan, data.ri.zhi, 1, 'ri'), shi: pillar(data.shi.gan, data.shi.zhi, 1, 'shi'), tai: pillar(data.tai.gan, data.tai.zhi, 1, 'tai'), ming: pillar(data.ming.gan, data.ming.zhi, 1, 'ming'), shen: pillar(data.shen.gan, data.shen.zhi, 1, 'shen') };
+  var p2 = { nian: pillar(nian.gan, nian.zhi, 2, 'nian'), yue: pillar(data.yue.gan, data.yue.zhi, 2, 'yue'), ri: pillar(data.ri.gan, data.ri.zhi, 2, 'ri'), shi: pillar(data.shi.gan, data.shi.zhi, 2, 'shi'), tai: pillar(data.tai.gan, data.tai.zhi, 2, 'tai'), ming: pillar(data.ming.gan, data.ming.zhi, 2, 'ming'), shen: pillar(data.shen.gan, data.shen.zhi, 2, 'shen') };
+  var diffMap = buildDiffMap(p1, p2);
+
+  // 使用共享 builder 生成卡片
+  // 先算当前大运流年（供卡片内嵌列使用）
+  var curDyIdx = 0;
+  for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; } }
+  var curLnGz = liuNianJZ(nowYear);
+  var curDaYunData = daYun[curDyIdx];
+  var curLiuNianData = { gan: curLnGz[0], zhi: curLnGz[1] };
+
+  var meta1 = (gender==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan);
+  var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1, includeLuckCols: true, curDaYun: curDaYunData, curLiuNian: curLiuNianData });
+  var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1, includeLuckCols: true, curDaYun: curDaYunData, curLiuNian: curLiuNianData });
+  var joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
+  function nextJYYear(sY) { for (var i = 0; i < 20; i++) { var tY = sY + i; if ('己甲'.includes(TG[(tY - 4) % 10])) return tY; } return sY; }
+  var jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
+
+  var luckRows = [];
+  luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
+  luckRows.push('</div>');
+  luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi); luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
+  luckRows.push('</div>');
+  luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===curDyIdx&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+lis+'</div>'); }
+  luckRows.push('</div>');
+
+  var tstTag = '', ryTag = '';
+  if (data.trueSolar) { tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(data.trueSolar.h)+':'+pad(data.trueSolar.mi)+' ('+(data.trueSolar.offsetMin>=0?'+':'')+Math.round(data.trueSolar.offsetMin)+'分)</span>'; }
+  if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
+  var nowYearCn = '（当前 ' + nowYear + ' 年）';
+
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n    </div>\n'
+    + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow()" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
+
+  var container = document.getElementById(targetId);
+  container.innerHTML = html;
+  container._paipanData = data;
+  window._paipanData = data;
+  window._twinType = 'same';
+
+  if (window._simpleMode) {
+    container.querySelectorAll('[data-row-type="nayin"],[data-row-type="kongwang"],[data-row-type="shensha"]').forEach(function(r){r.style.display='none';});
+  }
+  // 给每张卡片绑定数据，供点击流年时更新大运/流年列
+  container.querySelectorAll('.bz-twin-card').forEach(function(c) { c._cardData = data; });
+  bindEvents(data, container);
+}
+
+// ============ v0.6.0 龙凤胎卡片式版面 ============
+function renderLongFengCardsHtml(d1, d2, targetId) {
+  targetId = targetId || 'output';
+  var name = d1.name, y = d1.y, m = d1.m, d = d1.d, h = d1.h, mi = d1.mi;
+  var g1 = d1.gender, g2 = d2.gender;
+  var nian = d1.nian, shengXiao = d1.shengXiao, renYuan = d1.renYuan;
+  var nowYear = new Date().getFullYear();
+
+  // 使用 d1 的四柱为双胞共享（出生时间相同），twin=1/2 区分藏干
+  var riGan = d1.ri.gan, riZhi = d1.ri.zhi;
+  function pillar(gan, zhi, twin, type) {
+    return { gan: gan, zhi: zhi, wg: wxClass(gan), wz: wxClass(zhi), rs: shiShen(riGan, gan),
+      ny: NAYIN[gan + zhi] || '', xy: changSheng(riGan, zhi), zz: changSheng(gan, zhi),
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      ly: cangGanLayers(zhi, riGan, twin, type),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nian.zhi, d1.yue.zhi) : '' };
+  }
+  var p1 = { nian: pillar(nian.gan, nian.zhi, 1, 'nian'), yue: pillar(d1.yue.gan, d1.yue.zhi, 1, 'yue'), ri: pillar(d1.ri.gan, d1.ri.zhi, 1, 'ri'), shi: pillar(d1.shi.gan, d1.shi.zhi, 1, 'shi'), tai: pillar(d1.tai.gan, d1.tai.zhi, 1, 'tai'), ming: pillar(d1.ming.gan, d1.ming.zhi, 1, 'ming'), shen: pillar(d1.shen.gan, d1.shen.zhi, 1, 'shen') };
+  var p2 = { nian: pillar(nian.gan, nian.zhi, 2, 'nian'), yue: pillar(d1.yue.gan, d1.yue.zhi, 2, 'yue'), ri: pillar(d1.ri.gan, d1.ri.zhi, 2, 'ri'), shi: pillar(d1.shi.gan, d1.shi.zhi, 2, 'shi'), tai: pillar(d1.tai.gan, d1.tai.zhi, 2, 'tai'), ming: pillar(d1.ming.gan, d1.ming.zhi, 2, 'ming'), shen: pillar(d1.shen.gan, d1.shen.zhi, 2, 'shen') };
+  var diffMap = buildDiffMap(p1, p2);
+
+  // 老大卡片
+  var luck1 = buildCardLuckHTML(d1.daYun, d1.qiYun, d1, { identClass: 'twin-1', shunLabel: d1.qiYun.shun ? '顺排' : '逆排' });
+  var meta1 = (g1==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d1.qiYun.shun, d1.gender, d1.nian.gan);
+  var card1 = buildCardHTML(d1, { twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, luckHTML: luck1, includeLuckCols: true, curDaYun: d1.cur_da_yun, curLiuNian: d1.cur_liu_nian, meta: meta1 });
+  // 老二卡片
+  var luck2 = buildCardLuckHTML(d2.daYun, d2.qiYun, d2, { identClass: 'twin-2', shunLabel: d2.qiYun.shun ? '顺排' : '逆排' });
+  var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun.shun, d2.gender, d2.nian.gan);
+  var card2 = buildCardHTML(d2, { twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, luckHTML: luck2, includeLuckCols: true, curDaYun: d2.cur_da_yun, curLiuNian: d2.cur_liu_nian, meta: meta2 });
+
+  var tstTag = '', ryTag = '';
+  if (d1.trueSolar) { tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(d1.trueSolar.h)+':'+pad(d1.trueSolar.mi)+' ('+(d1.trueSolar.offsetMin>=0?'+':'')+Math.round(d1.trueSolar.offsetMin)+'分)</span>'; }
+  if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
+  var yMc = d1.qiYun.shun ? '顺排' : '逆排';
+  var yMc2 = d2.qiYun.shun ? '顺排' : '逆排';
+  var sexTag = (g1==='男'?'乾造':'坤造')+' · '+yMc+' | '+(g2==='男'?'乾造':'坤造')+' · '+yMc2;
+  var nowYearCn = '（当前 ' + nowYear + ' 年）';
+
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n    </div>\n'
+    + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>';
+
+  var container = document.getElementById(targetId);
+  container.innerHTML = html;
+  window._paipanData = d1;
+  window._twinType = 'longfeng';
+
+  if (window._simpleMode) {
+    container.querySelectorAll('[data-row-type="nayin"],[data-row-type="kongwang"],[data-row-type="shensha"]').forEach(function(r){r.style.display='none';});
+  }
+  // 给每张卡片绑定各自数据（大运因性别不同而异）
+  var cards = container.querySelectorAll('.bz-twin-card');
+  if (cards[0]) cards[0]._cardData = d1;
+  if (cards[1]) cards[1]._cardData = d2;
+  bindEvents(d1, container);
+}
+
+// 模式切换 JS（纯 CSS + class 切换）
+function switchTwinMode(tab, mode) {
+  var cards = document.querySelector('.bz-twin-cards');
+  if (!cards) return;
+  cards.className = 'bz-twin-cards mode-' + mode;
+  document.querySelectorAll('.bz-twin-tab').forEach(function(t) { t.classList.remove('active'); });
+  tab.classList.add('active');
+}
+
+// ============ 入口辅助：注入当前大运/流年信息 ============
+function injectCurDaYunLiuNian(data) {
+  var nowYear = new Date().getFullYear();
+  var daYun = data.daYun;
+  if (!daYun || !daYun.length) return;
+  var curDyIdx = 0;
+  for (var i = daYun.length - 1; i >= 0; i--) {
+    if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; }
+  }
+  var curDy = daYun[curDyIdx];
+  data.cur_da_yun = { gan: curDy.gan, zhi: curDy.zhi };
+  var curLnGz = liuNianJZ(nowYear);
+  data.cur_liu_nian = { gan: curLnGz[0], zhi: curLnGz[1] };
 }
 
 // ============ 入口 ============
@@ -1512,11 +2290,39 @@ function doPaipan() {
     tst = lng !== null ? trueSolarTime(y, m, d, h, mi, lng) : null;
   }
 
+  const ey = tst ? tst.y : y, em = tst ? tst.m : m, ed = tst ? tst.d : d, eh = tst ? tst.h : h, emi = tst ? tst.mi : mi;
+
   try {
-    const data = paipan(name, gender, tst ? tst.y : y, tst ? tst.m : m, tst ? tst.d : d, tst ? tst.h : h, tst ? tst.mi : mi);
-    data.trueSolar = tst;  // 附加真太阳时信息
-    data.renYuan = renYuanSiLing(y, m, d);  // 人元司令
-    renderChart(data);
+    const twin = document.getElementById('inTwin').value;
+    const output = document.getElementById('output');
+
+    if (twin === '2') {
+      // 龙凤胎：两次 paipan，不同 gender
+      const g1 = document.getElementById('inGender').value;
+      const g2 = document.getElementById('inGender2').value;
+      const d1 = paipan(name, g1, ey, em, ed, eh, emi);
+      d1.trueSolar = tst;
+      d1.renYuan = renYuanSiLing(y, m, d);
+      injectCurDaYunLiuNian(d1);
+      const d2 = paipan(name, g2, ey, em, ed, eh, emi);
+      d2.trueSolar = tst;
+      d2.renYuan = renYuanSiLing(y, m, d);
+      injectCurDaYunLiuNian(d2);
+      output.innerHTML = '';
+      renderLongFengCardsHtml(d1, d2, 'output');
+    } else if (twin === '1') {
+      const data = paipan(name, gender, ey, em, ed, eh, emi);
+      data.trueSolar = tst;
+      data.renYuan = renYuanSiLing(y, m, d);
+      output.innerHTML = '';
+      renderTwinCardsHtml(data, 'output');
+    } else {
+      const data = paipan(name, gender, ey, em, ed, eh, emi);
+      data.trueSolar = tst;
+      data.renYuan = renYuanSiLing(y, m, d);
+      output.innerHTML = '';
+      renderChart(data);
+    }
     autoSaveArchive();
   } catch(e) {
     document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">排盘出错：' + e.message + '</div>';
@@ -1536,9 +2342,8 @@ function scrollToNow() {
   }
   const curLi = nowYear - d.daYun[curDyIdx].startYear;
   // 先切高亮
-  hiDy(curDyIdx);
-  hiLn(curDyIdx, curLi);
-  updTopCols(d, curDyIdx, curLi);
+  hiDy(curDyIdx, document);
+  hiLn(curDyIdx, curLi, document);
   // 再滚动
   const sec = document.querySelector('.luck-section');
   const cc = sec && sec.querySelector('.cc');
@@ -1551,6 +2356,7 @@ function scrollToNow() {
 // 页面加载时用邦顺默认数据排盘
 window.addEventListener('DOMContentLoaded', () => {
   refreshArchList();
+  setupTwinTypeChange();
   doPaipan();
 });
 
@@ -1565,8 +2371,21 @@ const DEFAULT_ARCHIVES = [{"name":"邦顺","gender":"男","year":1982,"month":10
 function getArchives() {
   try {
     let arr = JSON.parse(localStorage.getItem(ARCH_KEY));
-    if (!arr || arr.length === 0) {
+    if (!arr || !Array.isArray(arr)) {
       arr = JSON.parse(JSON.stringify(DEFAULT_ARCHIVES));
+      localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+      return arr;
+    }
+    // 合并 DEFAULT_ARCHIVES：把 localStorage 缺失的人补回来
+    let changed = false;
+    const names = new Set(arr.map(a => a.name));
+    DEFAULT_ARCHIVES.forEach(def => {
+      if (!names.has(def.name)) {
+        arr.push(JSON.parse(JSON.stringify(def)));
+        changed = true;
+      }
+    });
+    if (changed) {
       localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
     }
     return arr;
@@ -1926,6 +2745,207 @@ function doAiParse() {
 document.addEventListener('click', function(e) {
   if (e.target.id === 'aiOverlay') hideAiInput();
 });
+
+// ===== 回归测试模式（URL 加 ?test=1）=====
+(function() {
+  if (!/[\?&]test=1(&|$)/.test(location.search)) return;
+  document.title = '八字排盘 · 回归测试';
+
+  // 隐藏正常 UI
+  const page = document.querySelector('.page');
+  if (page) page.style.display = 'none';
+
+  // 测试 UI
+  const root = document.createElement('div');
+  root.style.cssText = 'font-family:-apple-system,system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px;min-height:100vh';
+  root.innerHTML = '<h1 style="margin-bottom:8px">🧪 八字排盘 · 回归测试</h1>'
+    + '<div id="test-summary" style="background:#16213e;border-radius:8px;padding:16px;margin-bottom:20px">⏳ 运行中…</div>'
+    + '<div id="test-results"></div>'
+    + '<div id="test-time" style="color:#888;font-size:12px;margin-top:12px"></div>';
+  document.body.appendChild(root);
+
+  function eq(label, actual, expected) {
+    const ok = actual === expected;
+    return { label, ok, detail: ok ? '=' + expected : '期望 "' + expected + '", 实际 "' + actual + '"' };
+  }
+
+  function fail(label, detail) {
+    return { label, ok: false, detail: detail };
+  }
+
+  const start = Date.now();
+  const tests = [];
+
+  // === 十神 ===
+  tests.push({ section:'十神计算' });
+  tests.push(eq('shiShen("甲","辛") → 官',           shiShen('甲','辛'), '官'));
+  tests.push(eq('shiShen("甲","甲") → 比',           shiShen('甲','甲'), '比'));
+  tests.push(eq('shiShen("丙","壬") → 杀',           shiShen('丙','壬'), '杀'));
+  tests.push(eq('shiShen("癸","乙") → 食',           shiShen('癸','乙'), '食'));
+  tests.push(eq('shiShen("庚","戊") → 枭',           shiShen('庚','戊'), '枭'));
+  tests.push(eq('shiShen("壬","丁") → 财',           shiShen('壬','丁'), '财'));
+
+  // === 纳音 ===
+  tests.push({ section:'纳音' });
+  tests.push(eq('甲子→海中金', NAYIN['甲子'], '海中金'));
+  tests.push(eq('壬戌→大海水', NAYIN['壬戌'], '大海水'));
+
+  // === 十二长生 ===
+  tests.push({ section:'十二长生' });
+  tests.push(eq('changSheng("甲","亥")→长生',       changSheng('甲','亥'), '长生'));
+  tests.push(eq('changSheng("甲","子")→沐浴',       changSheng('甲','子'), '沐浴'));
+  tests.push(eq('changSheng("丙","寅")→长生',       changSheng('丙','寅'), '长生'));
+  tests.push(eq('changSheng("辛","丑")→养(阴干)',   changSheng('辛','丑'), '养'));
+  tests.push(eq('changSheng("辛","子")→长生(阴干)', changSheng('辛','子'), '长生'));
+
+  // === 流年 ===
+  tests.push({ section:'流年干支' });
+  tests.push(eq('liuNianJZ(2026)→丙午',            liuNianJZ(2026), '丙午'));
+  tests.push(eq('liuNianJZ(1982)→壬戌',            liuNianJZ(1982), '壬戌'));
+  tests.push(eq('liuNianJZ(1984)→甲子',            liuNianJZ(1984), '甲子'));
+
+  // === 地支序号 ===
+  tests.push({ section:'地支序号' });
+  tests.push(eq('dzNum("寅")→1',                    dzNum('寅'), 1));
+  tests.push(eq('dzNum("子")→11',                   dzNum('子'), 11));
+  tests.push(eq('numZhi(1)→寅',                     numZhi(1), '寅'));
+  tests.push(eq('numZhi(11)→子',                    numZhi(11), '子'));
+
+  // === 全盘回归 ===
+  function testChart(label, name, gender, y, m, d, h, mi, checks) {
+    tests.push({ section:'全盘 — ' + label });
+    const p = paipan(name, gender, y, m, d, h, mi);
+    for (const [k, expected] of Object.entries(checks)) {
+      // 支持复合字段：nianGan+nianZhi → p.nianGan + p.nianZhi
+      let actual;
+      if (k.includes('+')) {
+        const parts = k.split('+');
+        actual = parts.map(pt => {
+          const keys = pt.split('.');
+          let v = p;
+          for (const key of keys) { v = v ? (v[key] !== undefined ? v[key] : (Array.isArray(v) && /^\d+$/.test(key) ? v[parseInt(key)] : undefined)) : undefined; }
+          return v !== undefined ? String(v) : '?';
+        }).join('');
+      }
+      // 支持数组索引：daYun.0.gan+zhi
+      else if (k.includes('.') && !k.includes('[')) {
+        const keys = k.split('.');
+        let v = p;
+        for (const key of keys) {
+          if (!v) break;
+          if (/^\d+$/.test(key)) v = v[parseInt(key)];
+          else v = v[key];
+        }
+        actual = v !== undefined ? String(v) : '?';
+      } else {
+        actual = String(p[k] !== undefined ? p[k] : '?');
+      }
+      tests.push(eq(k, String(actual), expected));
+    }
+  }
+
+  testChart('邦顺', '邦顺', '男', 1982,10,18,5,1, {
+    'nian.gan+nian.zhi': '壬戌', 'yue.gan+yue.zhi': '庚戌',
+    'ri.gan+ri.zhi': '甲戌', 'shi.gan+shi.zhi': '丁卯',
+    'ri.gan': '甲', 'ming.gan+ming.zhi': '甲辰',
+    'daYun.0.gan+daYun.0.zhi': '辛亥', 'daYun.1.gan+daYun.1.zhi': '壬子',
+    'shen.gan+shen.zhi': '壬寅', 'tai.gan+tai.zhi': '辛丑'
+  });
+
+  testChart('芝晓', '芝晓', '女', 1983,5,15,9,45, {
+    'nian.gan+nian.zhi': '癸亥', 'yue.gan+yue.zhi': '丁巳',
+    'ri.gan+ri.zhi': '癸卯', 'shi.gan+shi.zhi': '丁巳',
+    'ri.gan': '癸', 'ming.gan+ming.zhi': '己未', 'tai.gan+tai.zhi': '戊申',
+    'shen.gan+shen.zhi': '癸亥', 'daYun.0.gan+daYun.0.zhi': '戊午'
+  });
+
+  testChart('素素', '素素', '女', 1986,1,1,12,0, {
+    'nian.gan+nian.zhi': '乙丑', 'ri.gan+ri.zhi': '乙巳', 'ri.gan': '乙',
+    'ming.gan+ming.zhi': '丙戌', 'shen.gan+shen.zhi': '甲申', 'tai.gan+tai.zhi': '庚辰'
+  });
+
+  testChart('小龙', '小龙', '男', 1985,3,21,14,30, {
+    'nian.gan+nian.zhi': '乙丑', 'ri.gan+ri.zhi': '己未', 'ri.gan': '己',
+    'ming.gan+ming.zhi': '癸未', 'shen.gan+shen.zhi': '丁亥', 'tai.gan+tai.zhi': '庚午'
+  });
+
+  testChart('苓菲', '苓菲', '女', 1988,7,7,22,15, {
+    'ri.gan+ri.zhi': '癸亥', 'ri.gan': '癸',
+    'ming.gan+ming.zhi': '癸亥', 'shen.gan+shen.zhi': '己未', 'tai.gan+tai.zhi': '庚戌'
+  });
+
+  testChart('新善', '新善', '男', 1989,12,12,7,30, {
+    'ri.gan+ri.zhi': '丙午', 'ri.gan': '丙',
+    'ming.gan+ming.zhi': '丁丑', 'shen.gan+shen.zhi': '己巳', 'tai.gan+tai.zhi': '丁卯'
+  });
+
+  testChart('冯际州', '冯际州', '男', 2010,2,14,15,0, {
+    'ri.gan+ri.zhi': '乙未', 'ri.gan': '乙',
+    'ming.gan+ming.zhi': '癸未', 'shen.gan+shen.zhi': '丁亥', 'tai.gan+tai.zhi': '己巳'
+  });
+
+  testChart('吴星宝', '吴星宝', '男', 2012,6,8,11,0, {
+    'ri.gan+ri.zhi': '庚子', 'ri.gan': '庚',
+    'ming.gan+ming.zhi': '乙巳', 'shen.gan+shen.zhi': '癸丑', 'tai.gan+tai.zhi': '丁酉'
+  });
+
+  testChart('邵凡语', '邵凡语', '女', 2014,9,19,18,30, {
+    'ri.gan+ri.zhi': '癸巳', 'ri.gan': '癸',
+    'ming.gan+ming.zhi': '乙亥', 'shen.gan+shen.zhi': '辛未', 'tai.gan+tai.zhi': '甲子'
+  });
+
+  // ============ 函数级测试: 直接用干支验证 mingGong/shenGong/taiYuan ============
+  (function testFuncs() {
+    tests.push({ section:'函数级 — 命宫/身宫/胎元 干支直入' });
+    const cases = [
+      { label:'邦顺', yg:'庚', yz:'戌', sz:'卯', ng:'壬', mg:'甲辰', sg:'壬寅', ty:'辛丑' },
+      { label:'芝晓', yg:'壬', yz:'辰', sz:'子', ng:'辛', mg:'辛丑', sg:'癸巳', ty:'癸未' },
+      { label:'素素', yg:'戊', yz:'寅', sz:'巳', ng:'庚', mg:'丙戌', sg:'甲申', ty:'己巳' },
+      { label:'小龙', yg:'癸', yz:'酉', sz:'戌', ng:'己', mg:'甲戌', sg:'壬申', ty:'甲子' },
+      { label:'苓菲', yg:'壬', yz:'子', sz:'子', ng:'壬', mg:'乙巳', sg:'癸丑', ty:'癸卯' },
+      { label:'新善', yg:'丁', yz:'酉', sz:'辰', ng:'辛', mg:'壬辰', sg:'庚寅', ty:'戊子' },
+      { label:'冯际州', yg:'己', yz:'亥', sz:'丑', ng:'丙', mg:'癸巳', sg:'辛丑', ty:'庚寅' },
+      { label:'吴星宝', yg:'乙', yz:'巳', sz:'酉', ng:'丁', mg:'癸卯', sg:'癸卯', ty:'丙申' },
+      { label:'邵凡语', yg:'丁', yz:'未', sz:'寅', ng:'丁', mg:'戊申', sg:'庚戌', ty:'戊戌' },
+    ];
+    for (const c of cases) {
+      const ty = taiYuan(c.yg, c.yz); tests.push(eq('胎元:'+c.label, ty.gan+ty.zhi, c.ty));
+      const mg = mingGong(c.yz, c.sz, c.ng); tests.push(eq('命宫:'+c.label, mg.gan+mg.zhi, c.mg));
+      const sg = shenGong(c.yz, c.sz, c.ng); tests.push(eq('身宫:'+c.label, sg.gan+sg.zhi, c.sg));
+    }
+  })();
+
+  // 渲染结果
+  const results = document.getElementById('test-results');
+  const summary = document.getElementById('test-summary');
+  let html = '', passed = 0, failed = 0;
+
+  for (const t of tests) {
+    if (t.section) { html += '<div style="color:#ff9800;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px">' + t.section + '</div>'; continue; }
+    if (t.ok) {
+      passed++;
+      html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#1b3a1b;border-left:3px solid #4caf50"><span style="font-weight:bold;margin-right:8px">✅</span>' + t.label + (t.detail ? ' <span style="color:#aaa;font-size:12px">' + t.detail + '</span>' : '') + '</div>';
+    } else {
+      failed++;
+      html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#3a1b1b;border-left:3px solid #f44336"><span style="font-weight:bold;margin-right:8px">❌</span>' + t.label + ' <span style="color:#f99;font-size:12px">' + t.detail + '</span></div>';
+    }
+  }
+
+  const elapsed = Date.now() - start;
+  const total = passed + failed;
+  summary.innerHTML = total + ' 条断言，<span style="color:' + (failed===0?'#4caf50':'#f44336') + ';font-weight:bold">'
+    + passed + ' 通过</span>'
+    + (failed>0 ? '，<span style="color:#f44336;font-weight:bold">' + failed + ' 失败</span>' : '')
+    + ' · ' + elapsed + 'ms';
+  results.innerHTML = html;
+  document.getElementById('test-time').textContent = new Date().toLocaleString();
+
+  if (failed === 0) {
+    document.title = '✅ 全部通过 — 八字排盘回归测试';
+  } else {
+    document.title = '❌ ' + failed + ' 失败 — 八字排盘回归测试';
+  }
+})();
 </script>
 
 </body>
