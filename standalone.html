@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.9.0 | 2026-07-21 -->
+<!-- 八字排盘 · 从真版 v0.8.1 | 2026-07-15 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -245,62 +245,6 @@
   /* 加载提示 */
   .loading { text-align:center; padding:60px; color:var(--c-gray); font-family:var(--font-display); }
 
-  /* ===== v0.9.0 档案面板 ===== */
-  :root {
-    --bz-nickname: #8b5e3c;
-    --bz-card-hover-shadow: 0 2px 8px rgba(0,0,0,.08), 0 6px 24px rgba(0,0,0,.1);
-  }
-  #archive-search { transition: border-color .2s; }
-  #archive-search:focus { outline: none; border-color: var(--c-ink); }
-  #archive-list { display: flex; flex-direction: column; gap: 8px; }
-  .archive-card {
-    background: var(--bz-card-bg);
-    border: 1px solid var(--bz-card-border);
-    border-radius: 4px;
-    padding: 12px 14px;
-    box-shadow: var(--bz-card-shadow);
-    transition: box-shadow .15s, border-color .15s;
-    cursor: default;
-  }
-  .archive-card:hover {
-    box-shadow: var(--bz-card-hover-shadow);
-    border-color: #d0c8b8;
-  }
-  .archive-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .archive-nickname { font-size: 16px; font-weight: 600; color: var(--bz-nickname); }
-  .archive-name { font-size: 14px; color: var(--c-ink); }
-  .archive-gender { font-size: 14px; font-weight: 600; }
-  .archive-gender.male { color: var(--c-water); }
-  .archive-gender.female { color: var(--c-red); }
-  .archive-bazi-summary {
-    font-family: var(--font-display);
-    font-size: 13px; color: var(--c-gray);
-    margin-bottom: 4px;
-  }
-  .archive-meta { font-size: 12px; color: #b0a590; margin-bottom: 8px; }
-  .archive-actions { display: flex; justify-content: flex-end; gap: 6px; }
-  .archive-btn {
-    font-size: 12px; padding: 3px 8px; border: 1px solid var(--c-line);
-    border-radius: 2px; background: var(--c-paper); cursor: pointer;
-    font-family: var(--font-body); color: var(--c-ink);
-  }
-  .archive-btn:hover { background: var(--c-ink); color: var(--c-paper); }
-  .archive-expanded {
-    display: none;
-    margin-top: 10px;
-    background: var(--bz-shared-bg);
-    border-top: 1px solid var(--c-line);
-    padding: 10px;
-    overflow-x: auto;
-  }
-  .archive-expanded.show { display: block; }
-  .archive-empty {
-    text-align: center;
-    padding: 30px;
-    color: var(--c-gray);
-    font-size: 14px;
-  }
-
   @media (max-width:900px) {
     .page { padding:10px 6px 14px; max-width:100%; }
     .body-cols { flex-direction:column; }
@@ -314,8 +258,6 @@
     .liu-row .cell { min-width:56px; padding:4px 5px; }
     .luck-row .sm, .luck-row .bm { font-size:14px; }
     .input-row { gap:4px; }
-    .archive-card { padding: 10px; }
-    .archive-nickname { font-size: 15px; }
   }
 
   /* ===== v0.7.1 宫位标签行 ===== */
@@ -340,7 +282,6 @@
   <!-- ===== 输入表单 ===== -->
   <div class="input-section">
     <div class="input-row">
-      <label>小名</label><input type="text" id="inNickname" placeholder="小名" style="width:64px;">
       <label>姓名</label><input type="text" id="inName" value="邦顺" style="width:80px;">
       <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
       <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
@@ -397,18 +338,6 @@
     </div>
   </div>
   <div id="output"><div class="loading">输入出生时间，点击「排盘」</div></div>
-
-  <!-- ===== v0.9.0 档案面板 ===== -->
-  <div id="archive-panel" style="margin-top:20px; border-top:1px solid var(--c-line); padding-top:16px;">
-    <div class="archive-panel-title" style="font-family:var(--font-display);font-size:16px;color:var(--c-ink);margin-bottom:10px;">
-      📋 档案 <span id="archive-count" style="font-size:13px;color:var(--c-gray);"></span>
-    </div>
-    <input type="text" id="archive-search" placeholder="🔍 搜索小名或姓名…"
-      style="width:100%;padding:8px 12px;border:1px solid var(--c-line);border-radius:4px;
-      font-family:var(--font-body);font-size:14px;margin-bottom:12px;background:var(--c-paper);"
-      oninput="filterArchives(this.value)">
-    <div id="archive-list"></div>
-  </div>
 
 </div>
 
@@ -2632,21 +2561,18 @@ function doPaipan() {
       injectCurDaYunLiuNian(d2);
       output.innerHTML = '';
       renderLongFengCardsHtml(d1, d2, 'output');
-      setCurrentBaziResult(extractBaziFromPaipan(d1));
     } else if (twin === '1') {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.trueSolar = tst;
       data.renYuan = renYuanSiLing(solarY, solarM, solarD);
       output.innerHTML = '';
       renderTwinCardsHtml(data, 'output');
-      setCurrentBaziResult(extractBaziFromPaipan(data));
     } else {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.trueSolar = tst;
       data.renYuan = renYuanSiLing(solarY, solarM, solarD);
       output.innerHTML = '';
       renderChart(data);
-      setCurrentBaziResult(extractBaziFromPaipan(data));
     }
     autoSaveArchive();
   } catch(e) {
@@ -2679,124 +2605,46 @@ function scrollToNow() {
 }
 
 // 页面加载时用邦顺默认数据排盘
-window.addEventListener('DOMContentLoaded', function() {
-  migrateFromV1();
-  initPresetArchives();
+window.addEventListener('DOMContentLoaded', () => {
   refreshArchList();
-  renderArchivePanel();
   setupTwinTypeChange();
   doPaipan();
 });
 
 // ============================================================
-// 档案存储系统 (localStorage) — v0.9.0 升级
+// 档案存储系统 (localStorage)
 // ============================================================
-const ARCH_KEY = 'bz_archives_v2';
-const TRASH_KEY = 'bz_trash_v2';
-const ARCH_KEY_OLD = 'paipan_archives';
-const TRASH_KEY_OLD = 'paipan_trash';
-const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
+const ARCH_KEY = 'paipan_archives';
+const TRASH_KEY = 'paipan_trash';
 
-// ===== v0.9.0 预置数据（自在班16孩）=====
-const PRESET_ARCHIVES = [
-  {nickname:"六一",name:"杨禹赫",gender:"男",year:2021,month:6,day:1,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子旭",name:"彭子旭",gender:"男",year:2020,month:11,day:10,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子阳",name:"彭子阳",gender:"男",year:2020,month:11,day:10,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"希希",name:"陈彦希",gender:"女",year:2019,month:6,day:6,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"东东",name:"关旭峰",gender:"男",year:2019,month:9,day:23,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"糯米",name:"熊朗翔",gender:"男",year:2020,month:8,day:6,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"想想",name:"李帛锴",gender:"男",year:2019,month:8,day:9,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"NONO",name:"吴不言",gender:"男",year:2019,month:10,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"扬扬",name:"邵开扬",gender:"男",year:2020,month:4,day:14,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"顶顶",name:"韦环骏",gender:"男",year:2020,month:8,day:31,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"KK",name:"吴成溪",gender:"女",year:2019,month:10,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"二哥",name:"何沛润",gender:"男",year:2019,month:8,day:23,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"茂茂",name:"甘志茂",gender:"男",year:2019,month:6,day:26,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"成哥",name:"肖竟成",gender:"男",year:2019,month:9,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"笑笑",name:"谢锦萱",gender:"女",year:2019,month:6,day:30,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"妍语",name:"许妍语",gender:"女",year:2020,month:1,day:20,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null}
-];
+const DEFAULT_ARCHIVES = [{"name":"邦顺","gender":"男","year":1982,"month":10,"day":18,"hour":5,"min":1,"prov":"","city":"","dist":"","useSolar":false,"id":1780918829523,"createdAt":"2026-06-08T11:40:29.523Z","updatedAt":"2026-07-11T09:00:48.611Z"},{"name":"芝晓","gender":"女","year":1981,"month":4,"day":23,"hour":0,"min":17,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478611,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T14:59:29.374Z"},{"name":"素素","gender":"女","year":1990,"month":2,"day":6,"hour":10,"min":2,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478622,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-23T02:56:45.098Z"},{"name":"小龙","gender":"男","year":1989,"month":10,"day":2,"hour":19,"min":48,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478633,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T15:02:43.998Z"},{"name":"苓菲","gender":"女","year":1992,"month":12,"day":31,"hour":0,"min":12,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478644,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T15:02:39.328Z"},{"name":"新善","gender":"男","year":1991,"month":9,"day":15,"hour":7,"min":4,"prov":"","city":"","dist":"","useSolar":false,"id":1780930478655,"createdAt":"2026-06-08T14:54:38.622Z","updatedAt":"2026-06-08T14:59:25.443Z"},{"name":"冯际州","gender":"男","year":2006,"month":11,"day":20,"hour":1,"min":38,"prov":"广西","city":"南宁市","dist":"","useSolar":true,"id":1780931825858,"createdAt":"2026-06-08T15:17:05.858Z","updatedAt":"2026-06-08T15:53:23.438Z"},{"name":"吴星宝","gender":"男","year":2017,"month":5,"day":22,"hour":18,"min":30,"prov":"","city":"","dist":"","useSolar":false,"id":1780964541245,"createdAt":"2026-06-09T00:22:21.245Z","updatedAt":"2026-06-09T00:22:27.745Z"},{"name":"邵凡语","gender":"男","year":2017,"month":7,"day":31,"hour":4,"min":25,"prov":"广西","city":"南宁市","dist":"青秀区","useSolar":true,"id":1783302857280,"createdAt":"2026-07-06T01:54:17.280Z","updatedAt":"2026-07-06T01:58:49.823Z"}];
 
-// ===== v0.9.0 迁移：旧版数据 → v2 =====
-function migrateFromV1() {
-  try {
-    var oldArch = localStorage.getItem(ARCH_KEY_OLD);
-    var newArch = localStorage.getItem(ARCH_KEY);
-    if (oldArch && !newArch) {
-      var oldData = JSON.parse(oldArch);
-      if (Array.isArray(oldData) && oldData.length > 0) {
-        localStorage.setItem(ARCH_BACKUP_KEY, oldArch);
-        var now = new Date().toISOString();
-        var migrated = oldData.map(function(a) {
-          return {
-            id: a.id || Date.now() + Math.random(),
-            nickname: a.nickname || a.name || '',
-            name: a.name || '未命名',
-            gender: a.gender || '男',
-            year: a.year, month: a.month, day: a.day,
-            hour: a.hour || 0, min: a.min || 0,
-            prov: a.prov || '', city: a.city || '', dist: a.dist || '',
-            useSolar: a.useSolar || false,
-            calendarType: a.calendarType || 'solar',
-            isLeap: a.isLeap || false,
-            lunarMonth: a.lunarMonth || null,
-            bazi: null, sanyuan: null, extras: null,
-            gongWeiType: null,
-            createdAt: a.createdAt || now,
-            updatedAt: a.updatedAt || now,
-            isPreset: false
-          };
-        });
-        localStorage.setItem(ARCH_KEY, JSON.stringify(migrated));
-      }
-    }
-    var oldTrash = localStorage.getItem(TRASH_KEY_OLD);
-    var newTrash = localStorage.getItem(TRASH_KEY);
-    if (oldTrash && !newTrash) {
-      localStorage.setItem(TRASH_KEY, oldTrash);
-    }
-  } catch(e) { console.warn('v0.9.0迁移失败:', e); }
-}
-
-// ===== v0.9.0 预置数据初始化 =====
-function initPresetArchives() {
-  var existing = getArchives();
-  if (existing.length === 0) {
-    var now = new Date().toISOString();
-    var presets = PRESET_ARCHIVES.map(function(a, i) {
-      return {
-        id: Date.now() + i,
-        nickname: a.nickname, name: a.name, gender: a.gender,
-        year: a.year, month: a.month, day: a.day,
-        hour: a.hour, min: a.min,
-        prov: a.prov, city: a.city, dist: a.dist,
-        useSolar: a.useSolar,
-        calendarType: a.calendarType,
-        isLeap: a.isLeap, lunarMonth: a.lunarMonth,
-        bazi: null, sanyuan: null, extras: null,
-        gongWeiType: null,
-        createdAt: now, updatedAt: now,
-        isPreset: true
-      };
-    });
-    saveArchivesRaw(presets);
-  }
-}
-
-// ===== v0.9.0 核心读写函数 =====
 function getArchives() {
   try {
-    var arr = JSON.parse(localStorage.getItem(ARCH_KEY));
-    if (!arr || !Array.isArray(arr)) return [];
+    let arr = JSON.parse(localStorage.getItem(ARCH_KEY));
+    if (!arr || !Array.isArray(arr)) {
+      arr = JSON.parse(JSON.stringify(DEFAULT_ARCHIVES));
+      localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+      return arr;
+    }
+    // 合并 DEFAULT_ARCHIVES：把 localStorage 缺失的人补回来
+    let changed = false;
+    const names = new Set(arr.map(a => a.name));
+    DEFAULT_ARCHIVES.forEach(def => {
+      if (!names.has(def.name)) {
+        arr.push(JSON.parse(JSON.stringify(def)));
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+    }
     return arr;
-  } catch(e) { return []; }
+  }
+  catch(e) { return JSON.parse(JSON.stringify(DEFAULT_ARCHIVES)); }
 }
 
 function saveArchives(arr) {
-  localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
-}
-
-function saveArchivesRaw(arr) {
   localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
 }
 
@@ -2810,12 +2658,9 @@ function saveTrash(arr) {
 }
 
 function refreshArchList() {
-  var sel = document.getElementById('archSel');
-  var archives = getArchives();
-  var cur = getFormData();
-  // 更新档案数量
-  var countEl = document.getElementById('archive-count');
-  if (countEl) { countEl.textContent = '(' + archives.length + ')'; }
+  const sel = document.getElementById('archSel');
+  const archives = getArchives();
+  const cur = getFormData();
   sel.innerHTML = '<option value="">—档案—</option>';
   archives.forEach((a, i) => {
     const o = document.createElement('option');
@@ -2833,7 +2678,6 @@ function refreshArchList() {
 function getFormData() {
   var isLunar = (calendarType === 'lunar');
   return {
-    nickname: document.getElementById('inNickname').value || '',
     name: document.getElementById('inName').value || '未命名',
     gender: document.getElementById('inGender').value,
     year: parseInt(document.getElementById('inYear').value),
@@ -2860,7 +2704,6 @@ function setFormData(d) {
   if (calType !== calendarType) {
     toggleCalendar(calType);
   }
-  document.getElementById('inNickname').value = d.nickname || '';
   document.getElementById('inName').value = d.name;
   document.getElementById('inGender').value = d.gender;
   document.getElementById('inYear').value = d.year;
@@ -2887,60 +2730,45 @@ function setFormData(d) {
 }
 
 function autoSaveArchive() {
-  var d = getFormData();
+  const d = getFormData();
   if (!d.name) return;
-  var archives = getArchives();
-  var ts = new Date().toISOString();
-  // 附加当前排盘计算结果
-  var baziData = getCurrentBaziResult();
-  d.bazi = baziData.bazi;
-  d.sanyuan = baziData.sanyuan;
-  d.extras = baziData.extras;
-  d.gongWeiType = baziData.gongWeiType;
-  var existIdx = archives.findIndex(function(a) { return a.name === d.name && a.gender === d.gender; });
+  const archives = getArchives();
+  const ts = new Date().toISOString();
+  const existIdx = archives.findIndex(a => a.name === d.name && a.gender === d.gender);
   if (existIdx >= 0) {
-    archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
+    archives[existIdx] = { ...archives[existIdx], ...d, updatedAt: ts };
   } else {
-    archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
+    archives.push({ ...d, id: Date.now(), createdAt: ts, updatedAt: ts });
   }
   saveArchives(archives);
   refreshArchList();
-  renderArchivePanel();
 }
 
 function saveArchive() {
-  var d = getFormData();
+  const d = getFormData();
   if (!d.name) { alert('请填写姓名'); return; }
-  var archives = getArchives();
-  var ts = new Date().toISOString();
-  // 附加当前排盘计算结果
-  var baziData = getCurrentBaziResult();
-  d.bazi = baziData.bazi;
-  d.sanyuan = baziData.sanyuan;
-  d.extras = baziData.extras;
-  d.gongWeiType = baziData.gongWeiType;
+  const archives = getArchives();
+  const ts = new Date().toISOString();
   // 检查同名同性别是否已存在
-  var existIdx = archives.findIndex(function(a) { return a.name === d.name && a.gender === d.gender; });
+  const existIdx = archives.findIndex(a => a.name === d.name && a.gender === d.gender);
   if (existIdx >= 0) {
     if (!confirm('「' + d.name + '」已存在，覆盖更新？')) return;
-    archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
+    archives[existIdx] = { ...archives[existIdx], ...d, updatedAt: ts };
   } else {
-    archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
+    archives.push({ ...d, id: Date.now(), createdAt: ts, updatedAt: ts });
   }
   saveArchives(archives);
   refreshArchList();
-  renderArchivePanel();
   document.getElementById('archSel').value = existIdx >= 0 ? existIdx : archives.length - 1;
 }
 
 function loadArchive() {
-  var idx = parseInt(document.getElementById('archSel').value);
+  const idx = parseInt(document.getElementById('archSel').value);
   if (isNaN(idx)) return;
-  var archives = getArchives();
+  const archives = getArchives();
   if (!archives[idx]) return;
   setFormData(archives[idx]);
   doPaipan();
-  renderArchivePanel();
 }
 
 function delArchive() {
@@ -3012,345 +2840,6 @@ function emptyTrash() {
   if (!confirm('确定清空回收站？此操作不可恢复。')) return;
   saveTrash([]);
   hideTrash();
-}
-
-// ============================================================
-// v0.9.0 档案管理 — 当前排盘结果存取
-// ============================================================
-var _currentBaziResult = null;
-
-function setCurrentBaziResult(data) {
-  _currentBaziResult = data;
-}
-
-function getCurrentBaziResult() {
-  if (!_currentBaziResult) {
-    return { bazi: null, sanyuan: null, extras: null, gongWeiType: null };
-  }
-  return {
-    bazi: _currentBaziResult.bazi,
-    sanyuan: _currentBaziResult.sanyuan,
-    extras: _currentBaziResult.extras,
-    gongWeiType: _currentBaziResult.gongWeiType || null
-  };
-}
-
-// ============================================================
-// v0.9.0 档案管理 — 展开渲染引擎
-// ============================================================
-
-// 提取 paipan 结果中的关键数据，用于存储
-function extractBaziFromPaipan(p) {
-  return {
-    bazi: {
-      nian: { gan: p.nian.gan, zhi: p.nian.zhi },
-      yue:  { gan: p.yue.gan, zhi: p.yue.zhi },
-      ri:   { gan: p.ri.gan, zhi: p.ri.zhi },
-      shi:  { gan: p.shi.gan, zhi: p.shi.zhi }
-    },
-    sanyuan: {
-      tai:  { gan: p.tai.gan, zhi: p.tai.zhi },
-      ming: { gan: p.ming.gan, zhi: p.ming.zhi },
-      shen: { gan: p.shen.gan, zhi: p.shen.zhi }
-    },
-    extras: {
-      shengXiao: p.shengXiao,
-      qiYun: { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun },
-      daYun: p.daYun.map(function(dy) { return { gan: dy.gan, zhi: dy.zhi, startAge: dy.startAge, endAge: dy.endAge, startYear: dy.startYear }; })
-    },
-    gongWeiType: null
-  };
-}
-
-// 从档案数据构建 renderChart 所需的完整 paipan 数据对象
-function buildChartDataFromArchive(arch) {
-  // 若 bazi 为空，先计算
-  if (!arch.bazi) {
-    var p = paipan(arch.name, arch.gender, arch.year, arch.month, arch.day, arch.hour, arch.min || 0);
-    arch.bazi = {
-      nian: { gan: p.nian.gan, zhi: p.nian.zhi },
-      yue:  { gan: p.yue.gan, zhi: p.yue.zhi },
-      ri:   { gan: p.ri.gan, zhi: p.ri.zhi },
-      shi:  { gan: p.shi.gan, zhi: p.shi.zhi }
-    };
-    arch.sanyuan = {
-      tai:  { gan: p.tai.gan, zhi: p.tai.zhi },
-      ming: { gan: p.ming.gan, zhi: p.ming.zhi },
-      shen: { gan: p.shen.gan, zhi: p.shen.zhi }
-    };
-    arch.extras = {
-      shengXiao: p.shengXiao,
-      qiYun: { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun },
-      daYun: p.daYun.map(function(dy) { return { gan: dy.gan, zhi: dy.zhi, startAge: dy.startAge, endAge: dy.endAge, startYear: dy.startYear }; })
-    };
-    // Save back to localStorage
-    saveArchives(getArchives());
-  }
-  // Rebuild paipan-style data object
-  var p = paipan(arch.name, arch.gender, arch.year, arch.month, arch.day, arch.hour, arch.min || 0);
-  // Ensure bazi fields match (paipan recalculates, but we want consistent results)
-  p.nian.gan = arch.bazi.nian.gan; p.nian.zhi = arch.bazi.nian.zhi;
-  p.yue.gan = arch.bazi.yue.gan; p.yue.zhi = arch.bazi.yue.zhi;
-  p.ri.gan = arch.bazi.ri.gan; p.ri.zhi = arch.bazi.ri.zhi;
-  p.shi.gan = arch.bazi.shi.gan; p.shi.zhi = arch.bazi.shi.zhi;
-  p.tai.gan = arch.sanyuan.tai.gan; p.tai.zhi = arch.sanyuan.tai.zhi;
-  p.ming.gan = arch.sanyuan.ming.gan; p.ming.zhi = arch.sanyuan.ming.zhi;
-  p.shen.gan = arch.sanyuan.shen.gan; p.shen.zhi = arch.sanyuan.shen.zhi;
-  return p;
-}
-
-// 在卡片展开区渲染排盘（复用 renderChart，输出到临时容器）
-function renderExpandedChart(arch, containerEl) {
-  var data = buildChartDataFromArchive(arch);
-  // Create a temporary div, render into it, then move to container
-  var tmpId = 'archive-expanded-tmp';
-  var existingTmp = document.getElementById(tmpId);
-  if (existingTmp) existingTmp.parentNode.removeChild(existingTmp);
-  var tmp = document.createElement('div');
-  tmp.id = tmpId;
-  tmp.style.display = 'none';
-  document.body.appendChild(tmp);
-  // Temporarily set output to tmp
-  var origOutput = document.getElementById('output');
-  tmp.innerHTML = '<div id="output"></div>';
-  // Re-render: simplified approach — build HTML directly
-  try {
-    var html = renderChartToHtml(data, arch);
-    containerEl.innerHTML = html;
-  } catch(e) {
-    containerEl.innerHTML = '<div style="color:var(--c-red);padding:10px;">排盘渲染出错: ' + e.message + '</div>';
-  }
-  if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
-}
-
-// 生成只读排盘HTML（精简版，四柱+三垣）
-function renderChartToHtml(data, arch) {
-  var riGan = data.ri.gan, riZhi = data.ri.zhi;
-  function pillar(gan, zhi) {
-    return {
-      gan: gan, zhi: zhi,
-      wg: wxClass(gan), wz: wxClass(zhi),
-      rs: shiShen(riGan, gan),
-      ny: NAYIN[gan + zhi] || '',
-      xy: changSheng(riGan, zhi),
-      zz: changSheng(gan, zhi),
-      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
-      cg: cangGanText(zhi, riGan, 1),
-      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, data.nian.zhi, data.yue.zhi) : ''
-    };
-  }
-  var pNian = pillar(data.nian.gan, data.nian.zhi);
-  var pYue = pillar(data.yue.gan, data.yue.zhi);
-  var pRi = pillar(data.ri.gan, data.ri.zhi);
-  var pShi = pillar(data.shi.gan, data.shi.zhi);
-  var pTai = pillar(data.tai.gan, data.tai.zhi);
-  var pMing = pillar(data.ming.gan, data.ming.zhi);
-  var pShen = pillar(data.shen.gan, data.shen.zhi);
-
-  function td(cls, txt) { return '<td class="' + (cls||'') + '">' + (txt||'') + '</td>'; }
-  function rl(lbl) { return '<td class="rl">' + lbl + '</td>'; }
-  function emp() { return '<td></td>'; }
-  function th(cls, txt) { return '<th class="' + (cls||'') + '">' + txt + '</th>'; }
-
-  var rows = [];
-  // Header
-  rows.push('<tr class="hd">' + rl('') + th('','年柱') + th('','月柱') + th('','日柱') + th('','时柱') + emp() + th('','胎元') + th('','命宫') + th('','身宫') + '</tr>');
-  // 主星
-  rows.push('<tr class="rs">' + rl('主星') + td('',pNian.rs) + td('',pYue.rs) + td('',pRi.rs) + td('',pShi.rs) + emp() + td('',pTai.rs) + td('',pMing.rs) + td('',pShen.rs) + '</tr>');
-  // 天干
-  rows.push('<tr class="rg">' + rl('') + td(pNian.wg,pNian.gan) + td(pYue.wg,pYue.gan) + td(pRi.wg,pRi.gan) + td(pShi.wg,pShi.gan) + emp() + td(pTai.wg,pTai.gan) + td(pMing.wg,pMing.gan) + td(pShen.wg,pShen.gan) + '</tr>');
-  // 地支
-  rows.push('<tr class="rg">' + rl('') + td(pNian.wz,pNian.zhi) + td(pYue.wz,pYue.zhi) + td(pRi.wz,pRi.zhi) + td(pShi.wz,pShi.zhi) + emp() + td(pTai.wz,pTai.zhi) + td(pMing.wz,pMing.zhi) + td(pShen.wz,pShen.zhi) + '</tr>');
-  // 藏气
-  rows.push('<tr class="rh">' + rl('藏气') + td('',pNian.cg) + td('',pYue.cg) + td('',pRi.cg) + td('',pShi.cg) + emp() + td('',pTai.cg) + td('',pMing.cg) + td('',pShen.cg) + '</tr>');
-  // 纳音
-  rows.push('<tr class="rn">' + rl('纳音') + td('',pNian.ny) + td('',pYue.ny) + td('',pRi.ny) + td('',pShi.ny) + emp() + td('',pTai.ny) + td('',pMing.ny) + td('',pShen.ny) + '</tr>');
-  // 星运
-  rows.push('<tr class="rm">' + rl('星运') + td('',pNian.xy) + td('',pYue.xy) + td('',pRi.xy) + td('',pShi.xy) + emp() + td('',pTai.xy) + td('',pMing.xy) + td('',pShen.xy) + '</tr>');
-  // 自坐
-  rows.push('<tr class="rm">' + rl('自坐') + td('',pNian.zz) + td('',pYue.zz) + td('',pRi.zz) + td('',pShi.zz) + emp() + td('',pTai.zz) + td('',pMing.zz) + td('',pShen.zz) + '</tr>');
-  // 空亡
-  rows.push('<tr class="rm">' + rl('空亡') + td('',pNian.kw) + td('',pYue.kw) + td('',pRi.kw) + td('',pShi.kw) + emp() + td('',pTai.kw) + td('',pMing.kw) + td('',pShen.kw) + '</tr>');
-
-  // Info line
-  var nowYear = new Date().getFullYear();
-  var sx = data.shengXiao;
-  var info = '<div style="font-family:var(--font-display);font-size:14px;color:var(--c-ink);margin-bottom:6px;">'
-    + '<b>' + arch.name + '</b> '
-    + '<span class="sex-tag" style="font-family:var(--font-display);font-size:14px;color:var(--c-red);margin-left:4px;">' + (arch.gender === '男' ? '乾造' : '坤造') + '</span>'
-    + ' <span style="color:var(--c-gray);font-size:13px;">' + arch.gender + ' · ' + arch.year + '年' + arch.month + '月' + arch.day + '日 ' + pad(arch.hour) + ':' + pad(arch.min||0) + '</span>'
-    + ' <span style="color:var(--c-gray);font-size:13px;">' + data.nian.gan + data.nian.zhi + '年生 · 属' + sx + '</span>'
-    + '</div>';
-
-  return info + '<div class="chart-wrap" style="overflow-x:auto;"><table class="chart" style="min-width:640px;width:100%;">' + rows.join('\n') + '</table></div>';
-}
-
-// ============================================================
-// v0.9.0 档案管理 — UI层
-// ============================================================
-
-var _expandedCardIdx = -1;
-
-function renderArchivePanel() {
-  var listEl = document.getElementById('archive-list');
-  var countEl = document.getElementById('archive-count');
-  var archives = getArchives();
-  if (countEl) { countEl.textContent = '(' + archives.length + ')'; }
-  if (!listEl) return;
-
-  if (archives.length === 0) {
-    listEl.innerHTML = '<div class="archive-empty">暂无档案，排盘后点击💾保存即可创建</div>';
-    return;
-  }
-
-  // Sort by updatedAt desc
-  archives.sort(function(a, b) {
-    return (b.updatedAt || '').localeCompare(a.updatedAt || '');
-  });
-  // 持久化排序结果，确保 getArchives() 返回顺序与卡片显示一致
-  saveArchives(archives);
-
-  var html = '';
-  for (var i = 0; i < archives.length; i++) {
-    html += renderArchiveCard(archives[i], i);
-  }
-  listEl.innerHTML = html;
-  _expandedCardIdx = -1;
-}
-
-function renderArchiveCard(a, idx) {
-  var genderIcon = a.gender === '男' ? '♂' : '♀';
-  var genderCls = a.gender === '男' ? 'male' : 'female';
-  var nickname = a.nickname || '';
-  var baziSummary = '';
-  if (a.bazi) {
-    baziSummary = a.bazi.nian.gan + a.bazi.nian.zhi + ' '
-      + a.bazi.yue.gan + a.bazi.yue.zhi + ' '
-      + a.bazi.ri.gan + a.bazi.ri.zhi + ' '
-      + a.bazi.shi.gan + a.bazi.shi.zhi;
-  } else {
-    baziSummary = '点击展开计算八字';
-  }
-  var updatedTime = '';
-  if (a.updatedAt) {
-    try {
-      var d = new Date(a.updatedAt);
-      updatedTime = '保存于 ' + d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
-    } catch(e) { updatedTime = ''; }
-  }
-
-  return '<div class="archive-card" id="archive-card-' + idx + '">'
-    + '<div class="archive-card-header">'
-    + (nickname ? '<span class="archive-nickname">' + escHtml(nickname) + '</span>' : '')
-    + '<span class="archive-name">' + escHtml(a.name) + '</span>'
-    + '<span class="archive-gender ' + genderCls + '">' + genderIcon + '</span>'
-    + '</div>'
-    + '<div class="archive-bazi-summary">' + escHtml(baziSummary) + '</div>'
-    + '<div class="archive-meta">' + escHtml(updatedTime) + '</div>'
-    + '<div class="archive-actions">'
-    + '<button class="archive-btn" onclick="loadFromArchive(' + idx + ')">加载到表单</button>'
-    + '<button class="archive-btn" id="archive-expand-btn-' + idx + '" onclick="toggleCardExpand(' + idx + ')">展开排盘 ▼</button>'
-    + '</div>'
-    + '<div class="archive-expanded" id="archive-expanded-' + idx + '"></div>'
-    + '</div>';
-}
-
-function escHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function toggleCardExpand(idx) {
-  var expandedEl = document.getElementById('archive-expanded-' + idx);
-  var btnEl = document.getElementById('archive-expand-btn-' + idx);
-  if (!expandedEl || !btnEl) return;
-
-  var isOpen = expandedEl.classList.contains('show');
-
-  // Close previously opened
-  if (_expandedCardIdx >= 0 && _expandedCardIdx !== idx) {
-    var prevEl = document.getElementById('archive-expanded-' + _expandedCardIdx);
-    var prevBtn = document.getElementById('archive-expand-btn-' + _expandedCardIdx);
-    if (prevEl) { prevEl.classList.remove('show'); prevEl.innerHTML = ''; }
-    if (prevBtn) { prevBtn.textContent = '展开排盘 ▼'; }
-  }
-
-  if (isOpen) {
-    expandedEl.classList.remove('show');
-    expandedEl.innerHTML = '';
-    btnEl.textContent = '展开排盘 ▼';
-    _expandedCardIdx = -1;
-  } else {
-    var archives = getArchives();
-    if (!archives[idx]) return;
-    var arch = archives[idx];
-    // Render chart
-    try {
-      renderExpandedChart(arch, expandedEl);
-    } catch(e) {
-      expandedEl.innerHTML = '<div style="color:var(--c-red);padding:10px;">渲染出错: ' + e.message + '</div>';
-    }
-    expandedEl.classList.add('show');
-    btnEl.textContent = '收起 ▲';
-    _expandedCardIdx = idx;
-  }
-}
-
-function filterArchives(keyword) {
-  var k = (keyword || '').trim().toLowerCase();
-  var archives = getArchives();
-  var listEl = document.getElementById('archive-list');
-  if (!listEl) return;
-
-  // Collapse any expanded card on search
-  if (_expandedCardIdx >= 0) {
-    toggleCardExpand(_expandedCardIdx);
-  }
-
-  if (!k) {
-    renderArchivePanel();
-    return;
-  }
-
-  var visibleCount = 0;
-  for (var i = 0; i < archives.length; i++) {
-    var a = archives[i];
-    var cardEl = document.getElementById('archive-card-' + i);
-    if (!cardEl) continue;
-    var match = (a.nickname || '').toLowerCase().indexOf(k) >= 0
-      || (a.name || '').toLowerCase().indexOf(k) >= 0;
-    if (match) {
-      cardEl.style.display = '';
-      visibleCount++;
-    } else {
-      cardEl.style.display = 'none';
-    }
-  }
-
-  if (visibleCount === 0) {
-    // Show empty state overlay
-    var emptyEl = document.getElementById('archive-empty-msg');
-    if (!emptyEl) {
-      emptyEl = document.createElement('div');
-      emptyEl.id = 'archive-empty-msg';
-      emptyEl.className = 'archive-empty';
-      emptyEl.textContent = '未找到匹配档案';
-      listEl.appendChild(emptyEl);
-    }
-    emptyEl.style.display = '';
-  } else {
-    var emptyEl = document.getElementById('archive-empty-msg');
-    if (emptyEl) emptyEl.style.display = 'none';
-  }
-}
-
-function loadFromArchive(idx) {
-  var archives = getArchives();
-  if (!archives[idx]) return;
-  setFormData(archives[idx]);
-  doPaipan();
-  // Scroll to top to see form
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ============================================================
