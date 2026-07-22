@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.9.1 | 2026-07-22 -->
+<!-- 八字排盘 · 从真版 v0.9.2 | 2026-07-22 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -249,6 +249,27 @@
   .liu-row .cell.pre-qy { max-height: 290px; overflow-y: auto; }
   .liu-row .cell.pre-qy .li { cursor: default; }
   .liu-row .cell.pre-qy .li:hover { color: inherit; }
+
+  /* 始于 / 止于行 */
+  .luck-row.start-row .cell,
+  .luck-row.end-row .cell {
+    font-size: 15px;
+    color: var(--c-gray);
+    font-family: var(--font-body);
+  }
+  .luck-row.start-row .rtag,
+  .luck-row.end-row .rtag {
+    font-size: 13px;
+    letter-spacing: .08em;
+  }
+  /* 龙凤胎双表标签 */
+  .luck-table-label {
+    font-size: 14px;
+    color: var(--c-gray);
+    margin-bottom: 6px;
+    font-family: var(--font-body);
+    letter-spacing: .04em;
+  }
 
   /* 加载提示 */
   .loading { text-align:center; padding:60px; color:var(--c-gray); font-family:var(--font-display); }
@@ -1938,7 +1959,7 @@ function renderChart(data, twin, targetId) {
   luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
   // 运前列：qyYears > 0 时渲染
   if (qiYun.years > 0) {
-    luckRows.push('<div class="cell pre-qy"><span class="year">运前</span><span class="age">'+qiYun.years+'岁前</span></div>');
+    luckRows.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>');
   }
   for (let i = 0; i < daYun.length; i++) {
     const dy = daYun[i];
@@ -1949,15 +1970,25 @@ function renderChart(data, twin, targetId) {
 
   // 大运干支
   luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
-  // 运前列：--占位，无 data-dy
+  // 运前列：「运/前」，无 data-dy
   if (qiYun.years > 0) {
-    luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">--</div><div class="dy-branch" style="color:var(--c-gray)">--</div></div>');
+    luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>');
   }
   for (let i = 0; i < daYun.length; i++) {
     const dy = daYun[i];
     const ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi);
     const cls = i === curDyIdx ? ' cell cc' : ' cell';
     luckRows.push('<div class="'+cls+'" data-dy="'+i+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>');
+  }
+  luckRows.push('</div>');
+
+  // 始于
+  luckRows.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
+  if (qiYun.years > 0) {
+    luckRows.push('<div class="cell pre-qy">'+y+'</div>');
+  }
+  for (let i = 0; i < daYun.length; i++) {
+    luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'">'+daYun[i].startYear+'</div>');
   }
   luckRows.push('</div>');
 
@@ -1985,6 +2016,16 @@ function renderChart(data, twin, targetId) {
       lis += '<span class="'+curCls+'" data-di="'+i+'" data-li="'+j+'">'+gzCol+'</span>';
     }
     luckRows.push('<div class="'+cls+'">'+lis+'</div>');
+  }
+  luckRows.push('</div>');
+
+  // 止于
+  luckRows.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
+  if (qiYun.years > 0) {
+    luckRows.push('<div class="cell pre-qy">'+(y + qiYun.years - 1)+'</div>');
+  }
+  for (let i = 0; i < daYun.length; i++) {
+    luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'">'+(daYun[i].startYear + 9)+'</div>');
   }
   luckRows.push('</div>');
 
@@ -2460,31 +2501,43 @@ function renderTwinCardsHtml(data, targetId) {
   var p2 = { nian: pillar(nian.gan, nian.zhi, 2, 'nian'), yue: pillar(data.yue.gan, data.yue.zhi, 2, 'yue'), ri: pillar(data.ri.gan, data.ri.zhi, 2, 'ri'), shi: pillar(data.shi.gan, data.shi.zhi, 2, 'shi'), tai: pillar(data.tai.gan, data.tai.zhi, 2, 'tai'), ming: pillar(data.ming.gan, data.ming.zhi, 2, 'ming'), shen: pillar(data.shen.gan, data.shen.zhi, 2, 'shen') };
   var diffMap = buildDiffMap(p1, p2);
 
-  // 使用共享 builder 生成卡片
-  // 先算当前大运流年（供卡片内嵌列使用）
-  var curDyIdx = 0;
-  for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; } }
-  var curLnGz = liuNianJZ(nowYear);
-  var curDaYunData = daYun[curDyIdx];
-  var curLiuNianData = { gan: curLnGz[0], zhi: curLnGz[1] };
-
+  // 使用共享 builder 生成卡片（不再扩展大运/流年列）
   var meta1 = (gender==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan);
-  var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1, includeLuckCols: true, curDaYun: curDaYunData, curLiuNian: curLiuNianData });
-  var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1, includeLuckCols: true, curDaYun: curDaYunData, curLiuNian: curLiuNianData });
+  var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
+  var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 });
   var joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
   var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
   function nextJYYear(sY) { for (var i = 0; i < 20; i++) { var tY = sY + i; if ('己甲'.includes(TG[(tY - 4) % 10])) return tY; } return sY; }
   var jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
 
+  var curDyIdx = 0;
+  for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; } }
+
   var luckRows = [];
+  // 表头：年份/岁数 + 运前列
   luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  if (joy > 0) { luckRows.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
   luckRows.push('</div>');
+  // 大运干支 + 运前列
   luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  if (joy > 0) { luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi); luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
   luckRows.push('</div>');
+  // 始于
+  luckRows.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
+  if (joy > 0) { luckRows.push('<div class="cell pre-qy">'+y+'</div>'); }
+  for (var l = 0; l < daYun.length; l++) { luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+daYun[l].startYear+'</div>'); }
+  luckRows.push('</div>');
+  // 流年 + 运前列
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  if (joy > 0) { var preLis = ''; for (var py = y; py < y + joy; py++) { var gz = liuNianJZ(py); preLis += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell pre-qy">'+preLis+'</div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===curDyIdx&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+lis+'</div>'); }
+  luckRows.push('</div>');
+  // 止于
+  luckRows.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
+  if (joy > 0) { luckRows.push('<div class="cell pre-qy">'+(y + joy - 1)+'</div>'); }
+  for (var l = 0; l < daYun.length; l++) { luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+(daYun[l].startYear + 9)+'</div>'); }
   luckRows.push('</div>');
 
   var tstTag = '', ryTag = '';
@@ -2495,7 +2548,7 @@ function renderTwinCardsHtml(data, targetId) {
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      <select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;margin-left:auto;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select>\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
-    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow()" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
@@ -2532,14 +2585,11 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var p2 = { nian: pillar(nian.gan, nian.zhi, 2, 'nian'), yue: pillar(d1.yue.gan, d1.yue.zhi, 2, 'yue'), ri: pillar(d1.ri.gan, d1.ri.zhi, 2, 'ri'), shi: pillar(d1.shi.gan, d1.shi.zhi, 2, 'shi'), tai: pillar(d1.tai.gan, d1.tai.zhi, 2, 'tai'), ming: pillar(d1.ming.gan, d1.ming.zhi, 2, 'ming'), shen: pillar(d1.shen.gan, d1.shen.zhi, 2, 'shen') };
   var diffMap = buildDiffMap(p1, p2);
 
-  // 老大卡片
-  var luck1 = buildCardLuckHTML(d1.daYun, d1.qiYun, d1, { identClass: 'twin-1', shunLabel: d1.qiYun.shun ? '顺排' : '逆排' });
+  // 老大/老二卡片（不再带内嵌大运表，恢复标准5列四柱表）
   var meta1 = (g1==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d1.qiYun.shun, d1.gender, d1.nian.gan);
-  var card1 = buildCardHTML(d1, { twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, luckHTML: luck1, includeLuckCols: true, curDaYun: d1.cur_da_yun, curLiuNian: d1.cur_liu_nian, meta: meta1 });
-  // 老二卡片
-  var luck2 = buildCardLuckHTML(d2.daYun, d2.qiYun, d2, { identClass: 'twin-2', shunLabel: d2.qiYun.shun ? '顺排' : '逆排' });
+  var card1 = buildCardHTML(d1, { twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
   var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun.shun, d2.gender, d2.nian.gan);
-  var card2 = buildCardHTML(d2, { twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, luckHTML: luck2, includeLuckCols: true, curDaYun: d2.cur_da_yun, curLiuNian: d2.cur_liu_nian, meta: meta2 });
+  var card2 = buildCardHTML(d2, { twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, meta: meta2 });
 
   var tstTag = '', ryTag = '';
   if (d1.trueSolar) { tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(d1.trueSolar.h)+':'+pad(d1.trueSolar.mi)+' ('+(d1.trueSolar.offsetMin>=0?'+':'')+Math.round(d1.trueSolar.offsetMin)+'分)</span>'; }
@@ -2549,9 +2599,68 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var sexTag = (g1==='男'?'乾造':'坤造')+' · '+yMc+' | '+(g2==='男'?'乾造':'坤造')+' · '+yMc2;
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
+  // === 老大 luckRows（六行 + 运前列）===
+  var dy1 = d1.daYun, qy1 = d1.qiYun, rg1 = d1.ri.gan;
+  var cd1 = 0; for (var i = dy1.length - 1; i >= 0; i--) { if (dy1[i].startYear <= nowYear) { cd1 = i; break; } }
+  var lr1 = [];
+  lr1.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
+  for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; lr1.push('<div class="cell'+(l===cd1?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
+  lr1.push('</div>');
+  lr1.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
+  for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; var ss = shiShen(rg1, dy.gan), sb = zhiShiShen(rg1, dy.zhi); lr1.push('<div class="cell'+(l===cd1?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
+  lr1.push('</div>');
+  lr1.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
+  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+y+'</div>'); }
+  for (var l = 0; l < dy1.length; l++) { lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+dy1[l].startYear+'</div>'); }
+  lr1.push('</div>');
+  lr1.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  if (qy1.years > 0) { var pl1 = ''; for (var py = y; py < y + qy1.years; py++) { var gz = liuNianJZ(py); pl1 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell pre-qy">'+pl1+'</div>'); }
+  for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd1&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+lis+'</div>'); }
+  lr1.push('</div>');
+  lr1.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
+  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+(y + qy1.years - 1)+'</div>'); }
+  for (var l = 0; l < dy1.length; l++) { lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+(dy1[l].startYear + 9)+'</div>'); }
+  lr1.push('</div>');
+
+  // === 老二 luckRows（六行 + 运前列）===
+  var dy2 = d2.daYun, qy2 = d2.qiYun, rg2 = d2.ri.gan;
+  var cd2 = 0; for (var i = dy2.length - 1; i >= 0; i--) { if (dy2[i].startYear <= nowYear) { cd2 = i; break; } }
+  var lr2 = [];
+  lr2.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
+  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
+  for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; lr2.push('<div class="cell'+(l===cd2?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
+  lr2.push('</div>');
+  lr2.push('<div class="luck-row"><div class="cell rtag">大运</div>');
+  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
+  for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; var ss = shiShen(rg2, dy.gan), sb = zhiShiShen(rg2, dy.zhi); lr2.push('<div class="cell'+(l===cd2?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
+  lr2.push('</div>');
+  lr2.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
+  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+y+'</div>'); }
+  for (var l = 0; l < dy2.length; l++) { lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+dy2[l].startYear+'</div>'); }
+  lr2.push('</div>');
+  lr2.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
+  if (qy2.years > 0) { var pl2 = ''; for (var py = y; py < y + qy2.years; py++) { var gz = liuNianJZ(py); pl2 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell pre-qy">'+pl2+'</div>'); }
+  for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd2&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+lis+'</div>'); }
+  lr2.push('</div>');
+  lr2.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
+  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+(y + qy2.years - 1)+'</div>'); }
+  for (var l = 0; l < dy2.length; l++) { lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+(dy2[l].startYear + 9)+'</div>'); }
+  lr2.push('</div>');
+
+  // 标签 + 起运文案
+  var joy1 = qy1.years, jom1 = qy1.months, jod1 = qy1.days;
+  var qiyunText1 = '起运（老大）出生后 ' + joy1 + ' 年 ' + jom1 + ' 月 ' + jod1 + ' 天';
+  var joy2 = qy2.years, jom2 = qy2.months, jod2 = qy2.days;
+  var qiyunText2 = '起运（老二）出生后 ' + joy2 + ' 年 ' + jom2 + ' 月 ' + jod2 + ' 天';
+  var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
+  var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
+
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      <select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;margin-left:auto;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select>\n    </div>\n'
-    + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>';
+    + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
@@ -2673,8 +2782,9 @@ function doPaipan() {
 }
 
 // 滚动并定位到当前大运/流年
-function scrollToNow() {
-  const d = window._paipanData;
+function scrollToNow(scope) {
+  scope = scope || document;
+  const d = scope._paipanData || window._paipanData;
   if (!d) return;
   const nowYear = new Date().getFullYear();
   // 找当前大运索引
@@ -2684,10 +2794,10 @@ function scrollToNow() {
   }
   const curLi = nowYear - d.daYun[curDyIdx].startYear;
   // 先切高亮
-  hiDy(curDyIdx, document);
-  hiLn(curDyIdx, curLi, document);
+  hiDy(curDyIdx, scope);
+  hiLn(curDyIdx, curLi, scope);
   // 再滚动
-  const sec = document.querySelector('.luck-section');
+  const sec = scope.querySelector('.luck-section');
   const cc = sec && sec.querySelector('.cc');
   if (cc && sec) {
     const sl = cc.offsetLeft - sec.offsetLeft - 40;
