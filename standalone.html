@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.9.2 | 2026-07-22 -->
+<!-- 八字排盘 · 从真版 v0.9.3 | 2026-07-24 -->
+<!-- v0.9.3 修复: renYuanSiLing() 丑月(小寒)年份偏移Bug → 1月出生者司令返回空字符串；PRESET_ARCHIVES 补全16孩准确时辰 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -1635,7 +1636,11 @@ function renYuanSiLing(y, m, d) {
   const birth = new Date(y, m-1, d);
   for (let mi = 0; mi < 12; mi++) {
     const termIdx = MONTH_TERM[mi];
-    const stY = (termIdx === 0 && mi === 11) ? y + 1 : y;
+    let stY = y;
+    if (termIdx === 0 && mi === 11) {
+      // 丑月（小寒=termIdx 0）：1月出生→小寒在同一年 y；其他月份→小寒在 y+1
+      stY = (m === 1) ? y : y + 1;
+    }
     const st = getSolarTerm(stY, termIdx);
     const stDate = new Date(st.getFullYear(), st.getMonth(), st.getDate());
     const nextMi = (mi + 1) % 12;
@@ -2091,12 +2096,23 @@ function bindEvents(data, container) {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
       var cardEl = c.closest('.bz-twin-card');
+      // 龙凤胎: 大运行在 .bz-card-luck 中, 按 data-card-index 找对应卡片
+      if (!cardEl) {
+        var luckScope2 = c.closest('.bz-card-luck');
+        if (luckScope2) {
+          var cardIdx2 = parseInt(luckScope2.dataset.cardIndex);
+          if (!isNaN(cardIdx2)) {
+            var allCards2 = container.querySelectorAll('.bz-twin-card');
+            cardEl = allCards2[cardIdx2];
+          }
+        }
+      }
       var daYunSrc = (cardEl && cardEl._cardData) ? cardEl._cardData.daYun : daYun;
       const dy = daYunSrc[i];
       var scope = c.closest('.bz-card-luck') || container;
       hiDy(i, scope);
       hiLn(i, 0, scope);
-      updateCardDyLnColumns(container, c, i, 0);
+      updateCardDyLnColumns(container, cardEl || c, i, 0);
     });
   });
 
@@ -2107,10 +2123,22 @@ function bindEvents(data, container) {
       const di = parseInt(li.dataset.di);
       const liIdx = parseInt(li.dataset.li);
       var cardEl2 = li.closest('.bz-twin-card');
+      // 龙凤胎: 流年在 .bz-card-luck 中, 按 data-card-index 找对应卡片
+      if (!cardEl2) {
+        var luckScope = li.closest('.bz-card-luck');
+        if (luckScope) {
+          var cardIdx = parseInt(luckScope.dataset.cardIndex);
+          if (!isNaN(cardIdx)) {
+            var allCards = container.querySelectorAll('.bz-twin-card');
+            cardEl2 = allCards[cardIdx];
+          }
+        }
+      }
       var daYunSrc2 = (cardEl2 && cardEl2._cardData) ? cardEl2._cardData.daYun : daYun;
       var scope2 = li.closest('.bz-card-luck') || container;
       hiDy(di, scope2); hiLn(di, liIdx, scope2);
-      updateCardDyLnColumns(container, li, di, liIdx);
+      // 龙凤胎: 传递卡片元素确保只更新对应卡片的图表列
+      updateCardDyLnColumns(container, cardEl2 || li, di, liIdx);
     });
   });
 }
@@ -2130,6 +2158,14 @@ function hiDy(i, scope) {
   const lc = scope.querySelectorAll('.liu-row .cell');
   lc.forEach(c => c.classList.remove('cc'));
   if (lc[i + off]) lc[i + off].classList.add('cc');
+  // 高亮始于行
+  const sr = scope.querySelectorAll('.start-row .cell');
+  sr.forEach(c => c.classList.remove('cc'));
+  if (sr[i + off]) sr[i + off].classList.add('cc');
+  // 高亮止于行
+  const er = scope.querySelectorAll('.end-row .cell');
+  er.forEach(c => c.classList.remove('cc'));
+  if (er[i + off]) er[i + off].classList.add('cc');
 }
 
 function hiLn(di, li, scope) {
@@ -2209,32 +2245,32 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
   var updates;
 
   if (isSingle) {
-    // 单人模式：9 行（藏气合并，索引 [1-9]）
+    // 单人模式：9 行（藏气合并，索引 [2-10]，offset=2 因为 tr[0]=gzTagsMain(隐藏) tr[1]=hdr表头）
     updates = [
-      [1, pDy.rs, pLn.rs],
-      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [4, pDy.cg, pLn.cg],
-      [5, pDy.ny, pLn.ny],
-      [6, pDy.xy, pLn.xy],
-      [7, pDy.zz, pLn.zz],
-      [8, pDy.kw, pLn.kw],
-      [9, pDy.sh, pLn.sh]
+      [2, pDy.rs, pLn.rs],
+      [3, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [4, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [5, pDy.cg, pLn.cg],
+      [6, pDy.ny, pLn.ny],
+      [7, pDy.xy, pLn.xy],
+      [8, pDy.zz, pLn.zz],
+      [9, pDy.kw, pLn.kw],
+      [10, pDy.sh, pLn.sh]
     ];
   } else {
-    // 双胞胎模式：11 行（藏干分层，索引 [1-11]）—— 从 v0.6.7 实际代码直接复制
+    // 双胞胎模式：11 行（藏干分层，索引 [2-12]，offset=2 同单人模式）
     updates = [
-      [1, pDy.rs, pLn.rs],
-      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [4, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
-      [5, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
-      [6, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
-      [7, pDy.ny, pLn.ny],
-      [8, pDy.xy, pLn.xy],
-      [9, pDy.zz, pLn.zz],
-      [10, pDy.kw, pLn.kw],
-      [11, pDy.sh, pLn.sh]
+      [2, pDy.rs, pLn.rs],
+      [3, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [4, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [5, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
+      [6, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
+      [7, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
+      [8, pDy.ny, pLn.ny],
+      [9, pDy.xy, pLn.xy],
+      [10, pDy.zz, pLn.zz],
+      [11, pDy.kw, pLn.kw],
+      [12, pDy.sh, pLn.sh]
     ];
   }
 
@@ -2660,7 +2696,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      <select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;margin-left:auto;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select>\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
-    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
@@ -2674,6 +2710,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var cards = container.querySelectorAll('.bz-twin-card');
   if (cards[0]) cards[0]._cardData = d1;
   if (cards[1]) cards[1]._cardData = d2;
+  container._paipanData = d1;
   bindEvents(d1, container);
 }
 
@@ -2825,22 +2862,22 @@ const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
 
 // ===== v0.9.0 预置数据（自在班16孩）=====
 const PRESET_ARCHIVES = [
-  {nickname:"六一",name:"杨禹赫",gender:"男",year:2021,month:6,day:1,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子旭",name:"彭子旭",gender:"男",year:2020,month:11,day:10,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子阳",name:"彭子阳",gender:"男",year:2020,month:11,day:10,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"希希",name:"陈彦希",gender:"女",year:2019,month:6,day:6,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"六一",name:"杨禹赫",gender:"男",year:2021,month:6,day:1,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"子旭",name:"彭子旭",gender:"男",year:2020,month:11,day:10,hour:15,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"子阳",name:"彭子阳",gender:"男",year:2020,month:11,day:10,hour:15,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"希希",name:"陈彦希",gender:"女",year:2019,month:6,day:6,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
   {nickname:"东东",name:"关旭峰",gender:"男",year:2019,month:9,day:23,hour:22,min:47,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"糯米",name:"熊朗翔",gender:"男",year:2020,month:8,day:6,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"想想",name:"李帛锴",gender:"男",year:2019,month:8,day:9,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"NONO",name:"吴不言",gender:"男",year:2019,month:10,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"扬扬",name:"邵开扬",gender:"男",year:2020,month:4,day:14,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"顶顶",name:"韦环骏",gender:"男",year:2020,month:8,day:31,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"KK",name:"吴成溪",gender:"女",year:2019,month:10,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"二哥",name:"何沛润",gender:"男",year:2019,month:8,day:23,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"茂茂",name:"甘志茂",gender:"男",year:2019,month:6,day:26,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"成哥",name:"肖竟成",gender:"男",year:2019,month:9,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"笑笑",name:"谢锦萱",gender:"女",year:2019,month:6,day:30,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"妍语",name:"许妍语",gender:"女",year:2020,month:1,day:20,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null}
+  {nickname:"糯米",name:"熊朗翔",gender:"男",year:2020,month:8,day:6,hour:5,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"想想",name:"李帛锴",gender:"男",year:2019,month:8,day:9,hour:13,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"NONO",name:"吴不言",gender:"男",year:2019,month:10,day:18,hour:9,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"扬扬",name:"邵开扬",gender:"男",year:2020,month:4,day:14,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"顶顶",name:"韦环骏",gender:"男",year:2020,month:8,day:31,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"KK",name:"吴成溪",gender:"女",year:2019,month:10,day:18,hour:9,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"二哥",name:"何沛润",gender:"男",year:2019,month:8,day:23,hour:3,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"茂茂",name:"甘志茂",gender:"男",year:2019,month:6,day:26,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"成哥",name:"肖竟成",gender:"男",year:2019,month:9,day:18,hour:23,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"笑笑",name:"谢锦萱",gender:"女",year:2019,month:6,day:30,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"妍语",name:"许妍语",gender:"女",year:2020,month:1,day:20,hour:23,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null}
 ];
 
 // ===== v0.9.0 迁移：旧版数据 → v2 =====
