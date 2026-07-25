@@ -201,9 +201,9 @@
   .chart .rm .rl { font-size:17px; }
 
   /* 精简模式：隐藏纳音/空亡/神煞 */
-  .chart.simple tr[data-row-type="nayin"],
-  .chart.simple tr[data-row-type="kongwang"],
-  .chart.simple tr[data-row-type="shensha"] { display:none; }
+  .chart.simple tr[data-row-type~="nayin"],
+  .chart.simple tr[data-row-type~="kongwang"],
+  .chart.simple tr[data-row-type~="shensha"] { display:none; }
 
   .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
   .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
@@ -2154,24 +2154,24 @@ function renderChart(data, twin, targetId) {
   // 主星行特殊处理：大运流年需要真实数据
   var mainRows = bp.main.slice();
   // 主星行(0)：用 pDy.rs / pLn.rs 替换占位
-  mainRows[0] = '<tr class="rs">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
+  mainRows[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
   // 天干行(1)
-  mainRows[1] = '<tr class="rg">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+  mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
   // 地支行(2)
-  mainRows[2] = '<tr class="rg">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+  mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
-  mainRows[3] = '<tr class="rh">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
+  mainRows[3] = '<tr class="rh" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
   // 纳音 — splice 后索引从 6 偏移至 4
-  mainRows[4] = '<tr class="rn" data-row-type="nayin">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
+  mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
   // 星运
-  mainRows[5] = '<tr class="rm" data-row-type="xingyun">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
+  mainRows[5] = '<tr class="rm" data-row-type="xingyun ln3">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
   // 自坐
-  mainRows[6] = '<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
+  mainRows[6] = '<tr class="rm" data-row-type="zizuo dy4">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
   // 空亡
-  mainRows[7] = '<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
+  mainRows[7] = '<tr class="rm" data-row-type="kongwang ln4">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
   // 神煞
-  mainRows[8] = '<tr class="rm" data-row-type="shensha">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+  mainRows[8] = '<tr class="rm" data-row-type="shensha dy5">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // 其他行（藏干4,5 等）使用 buildPillarRows 的 + suffix
   for (var fixI = 0; fixI < mainRows.length; fixI++) {
     if (mainRows[fixI] && mainRows[fixI].indexOf('sep col-dy') === -1) {
@@ -2480,46 +2480,42 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
 // ============ v0.6.6 通用大运/流年列更新函数 ============
 // 双模式行映射：isSingle=true → 9行（藏气合并），isSingle=false → 11行（藏干分层）
 function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
-  // v0.10.2: 过滤掉宫位标签行，避免索引偏移导致大运流年列错乱
-  var allRows = tableEl.querySelectorAll('tr');
-  var rows = [];
-  for (var ri = 0; ri < allRows.length; ri++) {
-    if (allRows[ri].className.indexOf('gz-tags') === -1) rows.push(allRows[ri]);
-  }
+  // v0.10.4: 语义选择器替代硬编码行索引，宫位标签行不再影响数据定位
+  var getRow = function(type) { return tableEl.querySelector('[data-row-type~="' + type + '"]'); };
   var updates;
 
   if (isSingle) {
-    // 单人模式：9 行（藏气合并，索引 [1-9]）
+    // 单人模式：藏气合并
     updates = [
-      [1, pDy.rs, pLn.rs],
-      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [4, pDy.cg, pLn.cg],
-      [5, pDy.ny, pLn.ny],
-      [6, pDy.xy, pLn.xy],
-      [7, pDy.zz, pLn.zz],
-      [8, pDy.kw, pLn.kw],
-      [9, pDy.sh, pLn.sh]
+      ['dy1', pDy.rs, pLn.rs],
+      ['ln1', pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      ['dy2', pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      ['ln2', pDy.cg, pLn.cg],
+      ['dy3', pDy.ny, pLn.ny],
+      ['ln3', pDy.xy, pLn.xy],
+      ['dy4', pDy.zz, pLn.zz],
+      ['ln4', pDy.kw, pLn.kw],
+      ['dy5', pDy.sh, pLn.sh]
     ];
   } else {
-    // 双胞胎模式：11 行（藏干分层，索引 [1-11]）
+    // 双胞胎模式：藏干分层
     updates = [
-      [1, pDy.rs, pLn.rs],
-      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [4, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
-      [5, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
-      [6, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
-      [7, pDy.ny, pLn.ny],
-      [8, pDy.xy, pLn.xy],
-      [9, pDy.zz, pLn.zz],
-      [10, pDy.kw, pLn.kw],
-      [11, pDy.sh, pLn.sh]
+      ['dy1', pDy.rs, pLn.rs],
+      ['ln1', pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      ['dy2', pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      ['ln2', fmtCGLayer((pDy.ly||[])[0]), fmtCGLayer((pLn.ly||[])[0])],
+      ['dy3', fmtCGLayer((pDy.ly||[])[1]), fmtCGLayer((pLn.ly||[])[1])],
+      ['ln3', fmtCGLayer((pDy.ly||[])[2]), fmtCGLayer((pLn.ly||[])[2])],
+      ['dy4', pDy.ny, pLn.ny],
+      ['ln4', pDy.xy, pLn.xy],
+      ['dy5', pDy.zz, pLn.zz],
+      ['ln5', pDy.kw, pLn.kw],
+      ['dy6', pDy.sh, pLn.sh]
     ];
   }
 
   updates.forEach(function(u) {
-    var row = rows[u[0]];
+    var row = getRow(u[0]);
     if (!row) return;
     var tds = row.querySelectorAll('td');
     if (tds.length < 7) return;
@@ -2626,27 +2622,27 @@ function buildCardHTML(data, options) {
     hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep">大运</th><th class="col-ln">流年</th></tr>';
     // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
     // 主星(0)
-    rows.main[0] = '<tr class="rs">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
+    rows.main[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
     // 天干(1)
-    rows.main[1] = '<tr class="rg">'+rl('')+td(dm('nian.gan',p.nian.wg),p.nian.gan)+td(dm('yue.gan',p.yue.wg),p.yue.gan)+td(dm('ri.gan',p.ri.wg),p.ri.gan)+td(dm('shi.gan',p.shi.wg),p.shi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+    rows.main[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(dm('nian.gan',p.nian.wg),p.nian.gan)+td(dm('yue.gan',p.yue.wg),p.yue.gan)+td(dm('ri.gan',p.ri.wg),p.ri.gan)+td(dm('shi.gan',p.shi.wg),p.shi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
     // 地支(2)
-    rows.main[2] = '<tr class="rg">'+rl('')+td(dm('nian.zhi',p.nian.wz),p.nian.zhi)+td(dm('yue.zhi',p.yue.wz),p.yue.zhi)+td(dm('ri.zhi',p.ri.wz),p.ri.zhi)+td(dm('shi.zhi',p.shi.wz),p.shi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+    rows.main[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(dm('nian.zhi',p.nian.wz),p.nian.zhi)+td(dm('yue.zhi',p.yue.wz),p.yue.zhi)+td(dm('ri.zhi',p.ri.wz),p.ri.zhi)+td(dm('shi.zhi',p.shi.wz),p.shi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
     // 本气(3)
-    rows.main[3] = '<tr class="rh">'+rl('本气')+td(dm('nian.cg.0'),fmtCGLayer((p.nian.ly||[])[0]))+td(dm('yue.cg.0'),fmtCGLayer((p.yue.ly||[])[0]))+td(dm('ri.cg.0'),fmtCGLayer((p.ri.ly||[])[0]))+td(dm('shi.cg.0'),fmtCGLayer((p.shi.ly||[])[0]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[0]))+td('col-ln',fmtCGLayer((pLn.ly||[])[0]))+'</tr>';
+    rows.main[3] = '<tr class="rh" data-row-type="ln2">'+rl('本气')+td(dm('nian.cg.0'),fmtCGLayer((p.nian.ly||[])[0]))+td(dm('yue.cg.0'),fmtCGLayer((p.yue.ly||[])[0]))+td(dm('ri.cg.0'),fmtCGLayer((p.ri.ly||[])[0]))+td(dm('shi.cg.0'),fmtCGLayer((p.shi.ly||[])[0]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[0]))+td('col-ln',fmtCGLayer((pLn.ly||[])[0]))+'</tr>';
     // 中气(4)
-    rows.main[4] = '<tr class="rh">'+rl('中气')+td(dm('nian.cg.1'),fmtCGLayer((p.nian.ly||[])[1]))+td(dm('yue.cg.1'),fmtCGLayer((p.yue.ly||[])[1]))+td(dm('ri.cg.1'),fmtCGLayer((p.ri.ly||[])[1]))+td(dm('shi.cg.1'),fmtCGLayer((p.shi.ly||[])[1]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[1]))+td('col-ln',fmtCGLayer((pLn.ly||[])[1]))+'</tr>';
+    rows.main[4] = '<tr class="rh" data-row-type="dy3">'+rl('中气')+td(dm('nian.cg.1'),fmtCGLayer((p.nian.ly||[])[1]))+td(dm('yue.cg.1'),fmtCGLayer((p.yue.ly||[])[1]))+td(dm('ri.cg.1'),fmtCGLayer((p.ri.ly||[])[1]))+td(dm('shi.cg.1'),fmtCGLayer((p.shi.ly||[])[1]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[1]))+td('col-ln',fmtCGLayer((pLn.ly||[])[1]))+'</tr>';
     // 余气(5)
-    rows.main[5] = '<tr class="rh">'+rl('余气')+td(dm('nian.cg.2'),fmtCGLayer((p.nian.ly||[])[2]))+td(dm('yue.cg.2'),fmtCGLayer((p.yue.ly||[])[2]))+td(dm('ri.cg.2'),fmtCGLayer((p.ri.ly||[])[2]))+td(dm('shi.cg.2'),fmtCGLayer((p.shi.ly||[])[2]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[2]))+td('col-ln',fmtCGLayer((pLn.ly||[])[2]))+'</tr>';
+    rows.main[5] = '<tr class="rh" data-row-type="ln3">'+rl('余气')+td(dm('nian.cg.2'),fmtCGLayer((p.nian.ly||[])[2]))+td(dm('yue.cg.2'),fmtCGLayer((p.yue.ly||[])[2]))+td(dm('ri.cg.2'),fmtCGLayer((p.ri.ly||[])[2]))+td(dm('shi.cg.2'),fmtCGLayer((p.shi.ly||[])[2]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[2]))+td('col-ln',fmtCGLayer((pLn.ly||[])[2]))+'</tr>';
     // 纳音(6)
-    rows.main[6] = '<tr class="rn" data-row-type="nayin">'+rl('纳音')+td(dm('nian.ny'),p.nian.ny)+td(dm('yue.ny'),p.yue.ny)+td(dm('ri.ny'),p.ri.ny)+td(dm('shi.ny'),p.shi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
+    rows.main[6] = '<tr class="rn" data-row-type="nayin dy4">'+rl('纳音')+td(dm('nian.ny'),p.nian.ny)+td(dm('yue.ny'),p.yue.ny)+td(dm('ri.ny'),p.ri.ny)+td(dm('shi.ny'),p.shi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
     // 星运(7)
-    rows.main[7] = '<tr class="rm" data-row-type="xingyun">'+rl('星运')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
+    rows.main[7] = '<tr class="rm" data-row-type="xingyun ln4">'+rl('星运')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
     // 自坐(8)
-    rows.main[8] = '<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td(dm('nian.zz'),p.nian.zz)+td(dm('yue.zz'),p.yue.zz)+td(dm('ri.zz'),p.ri.zz)+td(dm('shi.zz'),p.shi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
+    rows.main[8] = '<tr class="rm" data-row-type="zizuo dy5">'+rl('自坐')+td(dm('nian.zz'),p.nian.zz)+td(dm('yue.zz'),p.yue.zz)+td(dm('ri.zz'),p.ri.zz)+td(dm('shi.zz'),p.shi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
     // 空亡(9)
-    rows.main[9] = '<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
+    rows.main[9] = '<tr class="rm" data-row-type="kongwang ln5">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
     // 神煞(10)
-    rows.main[10] = '<tr class="rm" data-row-type="shensha">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+    rows.main[10] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
     // v0.10.0 三垣扩展列：表头[0]和后续行(从1起)加空列
     rows.sanyuan[0] = '<tr class="hd">'+rl('三垣')+emp('')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
     for (var si = 1; si < rows.sanyuan.length; si++) {
@@ -2831,7 +2827,7 @@ function renderTwinCardsHtml(data, targetId) {
   window._twinType = 'same';
 
   if (window._simpleMode) {
-    container.querySelectorAll('[data-row-type="nayin"],[data-row-type="kongwang"],[data-row-type="shensha"]').forEach(function(r){r.style.display='none';});
+    container.querySelectorAll('[data-row-type~="nayin"],[data-row-type~="kongwang"],[data-row-type~="shensha"]').forEach(function(r){r.style.display='none';});
   }
   // 给每张卡片绑定数据，供点击流年时更新大运/流年列
   container.querySelectorAll('.bz-twin-card').forEach(function(c) { c._cardData = data; });
@@ -2942,7 +2938,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   window._twinType = 'longfeng';
 
   if (window._simpleMode) {
-    container.querySelectorAll('[data-row-type="nayin"],[data-row-type="kongwang"],[data-row-type="shensha"]').forEach(function(r){r.style.display='none';});
+    container.querySelectorAll('[data-row-type~="nayin"],[data-row-type~="kongwang"],[data-row-type~="shensha"]').forEach(function(r){r.style.display='none';});
   }
   // 给每张卡片绑定各自数据（大运因性别不同而异）
   var cards = container.querySelectorAll('.bz-twin-card');
