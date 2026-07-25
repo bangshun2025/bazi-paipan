@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.9.4 | 2026-07-24 -->
-<!-- v0.9.4 修复: 身宫Bug — 命宫/身宫五虎遁改用公历出生年的年干(yearPillar(y).gan)而非节气年界调整后的nian.gan，修复立春前出生者身宫天干偏差（妍语:丙寅→戊寅） -->
+<!-- 八字排盘 · 从真版 v0.10.3-merge | 2026-07-26 -->
+<!-- v0.10.3-merge: 合并宫位多选系统 from v0.10.0 前端开发版 — 14宫位popover多选面板、动态标签行生成、选中状态保存/恢复、gz-tags行过滤 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -15,6 +15,17 @@
     --bz-card-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
     --font-display: "Songti SC","SimSun","Noto Serif CJK SC","STSong","KaiTi",serif;
     --font-body: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+
+    /* v0.10.0 14宫位颜色 */
+    --gz-info:     #4a6fa5; --gz-cognition:#3d7a5c; --gz-function: #a0522d;
+    --gz-zuogong:  #c8782a; --gz-qinyuan:  #b0486a; --gz-interest: #b8962a;
+    --gz-scene:    #4a80a0; --gz-persona:  #7a4a8a; --gz-client:   #c07030;
+    --gz-system:   #6a7a8a; --gz-relation: #c05858; --gz-circle:   #6a7a3a;
+    --gz-physio:   #b04040; --gz-memory:   #3a6a8a;
+    --gz-popover-bg:   var(--c-paper);
+    --gz-popover-border: var(--c-line);
+    --gz-popover-shadow: 0 4px 16px rgba(0,0,0,.12);
+    --gz-tag-row-bg: rgba(201,169,110,.04);
   }
   * { margin:0;padding:0;box-sizing:border-box; }
   body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:12px; font-family:var(--font-body); }
@@ -316,19 +327,68 @@
     .input-row { gap:4px; }
   }
 
-  /* ===== v0.7.1 宫位标签行 ===== */
+  /* ===== v0.10.0 宫位多选 — popover面板 + 多行标签 ===== */
+  /* 面板容器 */
+  .gz-panel-wrapper { position: relative; display: inline-block; }
+  .gz-trigger { font-family: var(--font-body); font-size: 13px; padding: 4px 8px;
+    border: 1px solid var(--c-line); border-radius: 2px; background: var(--c-paper);
+    color: var(--c-ink); cursor: pointer; white-space: nowrap; }
+  .gz-trigger:hover { background: var(--c-ink); color: var(--c-paper); }
+  .gz-trigger .gz-summary { font-size: 11px; color: var(--c-gray); margin-left: 6px; }
+  .gz-trigger:hover .gz-summary { color: var(--c-paper); opacity: 0.8; }
+
+  /* Popover */
+  .gz-popover {
+    display: none; position: absolute; top: 100%; right: 0; z-index: 100;
+    background: var(--gz-popover-bg); border: 1px solid var(--gz-popover-border);
+    border-radius: 4px; box-shadow: var(--gz-popover-shadow);
+    padding: 12px 14px; min-width: 280px; margin-top: 4px;
+  }
+  .gz-popover.open { display: block; }
+
+  /* Checkbox grid */
+  .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+  .gz-cb-item { display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-body); font-size: 13px; color: var(--c-ink);
+    padding: 3px 2px; cursor: pointer; user-select: none; }
+  .gz-cb-item input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; width: 16px; height: 16px;
+    border: 1.5px solid var(--c-line); border-radius: 2px;
+    background: var(--c-paper); cursor: pointer; flex-shrink: 0; position: relative;
+  }
+  .gz-cb-item input[type="checkbox"]:checked {
+    background: var(--c-ink); border-color: var(--c-ink);
+  }
+  .gz-cb-item input[type="checkbox"]:checked::after {
+    content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+    border: solid var(--c-paper); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+  .gz-cb-item.checked { font-weight: 600; }
+  .gz-popover-actions { display: flex; gap: 12px; margin-top: 10px;
+    padding-top: 8px; border-top: 1px solid var(--c-line); }
+  .gz-popover-actions button { font-size: 12px; padding: 3px 12px;
+    border: 1px solid var(--c-line); border-radius: 2px; background: var(--c-paper);
+    color: var(--c-ink); cursor: pointer; font-family: var(--font-body); }
+  .gz-popover-actions button:hover { background: var(--c-ink); color: var(--c-paper); }
+
+  /* 多行标签 */
   .chart .gz-tags td, .chart .gz-tags-sy td {
-    font-family: var(--font-body);
-    font-size: 20px;
-    color: #8b7e6a;
-    background: rgba(201,169,110,.06);
-    padding: 4px 3px;
-    letter-spacing: .04em;
+    font-family: var(--font-body); font-size: 13px;
+    color: var(--c-ink); padding: 3px 4px;
+    background: var(--gz-tag-row-bg);
     border-bottom: 1px dashed var(--c-line);
     white-space: nowrap;
   }
   .gz-tags td.rl, .gz-tags-sy td.rl {
-    background: transparent;
+    font-size: 13px; color: var(--c-gray); background: transparent;
+    padding: 3px 4px;
+  }
+
+  /* 移动端适配 */
+  @media (max-width: 480px) {
+    .gz-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
+      transform: translateY(-50%); max-width: 90vw; }
+    .gz-cb-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -1054,6 +1114,25 @@ const GONGWEI_MAP = {
 // data-gw → 数组索引查找
 const GW_INDEX = { tai: 0, nian: 1, yue: 2, ri: 3, ming: 4, shi: 5, shen: 6 };
 
+// ===== v0.10.0 宫位多选颜色映射 =====
+const GONGWEI_COLORS = {
+  '信息': '#4a6fa5', '认知': '#3d7a5c', '功能': '#a0522d',
+  '做功': '#c8782a', '亲缘': '#b0486a', '兴趣': '#b8962a',
+  '场景': '#4a80a0', '人设': '#7a4a8a', '客户': '#c07030',
+  '系统': '#6a7a8a', '关系': '#c05858', '圈层': '#6a7a3a',
+  '生理': '#b04040', '记忆': '#3a6a8a'
+};
+const GONGWEI_COLOR_KEYS = {
+  '信息': 'info', '认知': 'cognition', '功能': 'function',
+  '做功': 'zuogong', '亲缘': 'qinyuan', '兴趣': 'interest',
+  '场景': 'scene', '人设': 'persona', '客户': 'client',
+  '系统': 'system', '关系': 'relation', '圈层': 'circle',
+  '生理': 'physio', '记忆': 'memory'
+};
+
+// 全局选中状态（唯一真相源）
+let selectedGongWei = [];
+
 // ===== v0.8.0 农历数据表（1900-2100，寿星万年历）=====
 const LUNAR_INFO = [
   // 1900-1909
@@ -1723,24 +1802,185 @@ function buildShunLabel(shun, gender, nianGan) {
   return '<span class="meta-tag">' + yinYang + '年' + gender + ' · ' + shunNi + '</span>';
 }
 
-// ===== v0.7.1 宫位标签更新 =====
-function updateGongWeiTags(type) {
-  var labels = type ? GONGWEI_MAP[type] : null;
+// ===== v0.10.0 宫位多选 — 标签行生成（纯函数） =====
+// area: 'main' | 'sanyuan'
+// colCount: 5 | 7（普通5列 / 含大运流年7列）
+function buildGongWeiTagRows(area, colCount) {
+  if (!selectedGongWei.length) return [];
+  colCount = colCount || 5;
+  var rows = [];
+  var cols = area === 'main' ? ['nian','yue','ri','shi'] : ['tai','ming','shen'];
+  var hasExt = colCount >= 7; // 是否有大运/流年扩展列
 
-  // 批量显隐所有标签行
-  var allTags = document.querySelectorAll('.gz-tags, .gz-tags-sy');
-  for (var i = 0; i < allTags.length; i++) {
-    allTags[i].style.display = labels ? '' : 'none';
+  for (var i = 0; i < selectedGongWei.length; i++) {
+    var gwName = selectedGongWei[i];
+    var labels = GONGWEI_MAP[gwName];
+    var color = GONGWEI_COLORS[gwName] || '#8b7e6a';
+    var cls = area === 'main' ? 'gz-tags' : 'gz-tags-sy';
+    var html = '<tr class="' + cls + '" data-gw-type="' + gwName + '">';
+    // rl 列：显示宫位名称，左边框色
+    html += '<td class="rl" style="border-left:3px solid ' + color + ';padding-left:5px;">' + gwName + '</td>';
+    // area为main时有rl列，area为sanyuan时rl后还需一个空td
+    if (area === 'sanyuan') { html += '<td></td>'; }
+    for (var j = 0; j < cols.length; j++) {
+      var gw = cols[j];
+      var idx = GW_INDEX[gw];
+      html += '<td data-gw="' + gw + '">' + (labels[idx] || '') + '</td>';
+    }
+    if (hasExt) {
+      html += '<td class="sep"></td><td class="col-ln"></td>';
+    }
+    html += '</tr>';
+    rows.push(html);
   }
-  if (!labels) return;
+  return rows;
+}
 
-  // 通过 data-gw 属性定位列并填充文字
-  var cells = document.querySelectorAll('.gz-tags td[data-gw], .gz-tags-sy td[data-gw]');
-  for (var j = 0; j < cells.length; j++) {
-    var gw = cells[j].getAttribute('data-gw');
-    cells[j].textContent = labels[GW_INDEX[gw]] || '';
+// ===== v0.10.0 宫位多选 — 全局标签更新（全量重建） =====
+function updateGongWeiTags() {
+  // 1. 清除所有现有标签行
+  var oldTags = document.querySelectorAll('.gz-tags, .gz-tags-sy');
+  for (var i = 0; i < oldTags.length; i++) {
+    oldTags[i].parentNode && oldTags[i].parentNode.removeChild(oldTags[i]);
+  }
+  if (!selectedGongWei.length) {
+    updateGzTriggerText();
+    return;
+  }
+
+  // 2. 遍历所有 .chart 表格，在每个表格的每个 tr.hd 之前插入标签行
+  var tables = document.querySelectorAll('table.chart');
+  for (var t = 0; t < tables.length; t++) {
+    var table = tables[t];
+    var hdRows = table.querySelectorAll('tr.hd');
+    for (var h = 0; h < hdRows.length; h++) {
+      var hdRow = hdRows[h];
+
+      // 判断该表格是四柱区还是三垣区
+      // 四柱区 hd 的结构: <th class="rl">盘式</th><th>年柱</th>...
+      // 三垣区 hd 的结构: <th class="rl">三垣</th>...
+      var isSanyuan = false;
+      var hdThs = hdRow.querySelectorAll('th');
+      if (hdThs.length > 0 && hdThs[0].textContent === '三垣') {
+        isSanyuan = true;
+      }
+
+      // 计算列数
+      var colCount = hdThs.length;
+
+      // 生成标签行
+      var area = isSanyuan ? 'sanyuan' : 'main';
+      var tagRows = buildGongWeiTagRows(area, colCount);
+      if (!tagRows.length) continue;
+
+      // 在 hd 行之前插入
+      hdRow.insertAdjacentHTML('beforebegin', tagRows.join(''));
+    }
+  }
+
+  // 3. 更新面板按钮文字
+  updateGzTriggerText();
+  // 4. 同步 checkbox 状态
+  syncGzCheckboxes();
+}
+
+// 更新面板按钮文字
+function updateGzTriggerText() {
+  var trigger = document.getElementById('gz-trigger');
+  if (!trigger) return;
+  var count = selectedGongWei.length;
+  var countSpan = trigger.querySelector('.gz-count');
+  var summarySpan = trigger.querySelector('.gz-summary');
+  if (countSpan) {
+    countSpan.textContent = count > 0 ? '(' + count + ')' : '';
+  }
+  if (summarySpan) {
+    if (count === 0) {
+      summarySpan.textContent = '';
+    } else if (count <= 3) {
+      summarySpan.textContent = selectedGongWei.join('·');
+    } else {
+      summarySpan.textContent = selectedGongWei.slice(0, 2).join('·') + ' +' + (count - 2);
+    }
   }
 }
+
+// 同步 popover checkbox 状态
+function syncGzCheckboxes() {
+  var cbs = document.querySelectorAll('.gz-cb-item input[type="checkbox"]');
+  for (var i = 0; i < cbs.length; i++) {
+    var val = cbs[i].value;
+    cbs[i].checked = selectedGongWei.indexOf(val) >= 0;
+    var label = cbs[i].parentElement;
+    if (cbs[i].checked) {
+      label.classList.add('checked');
+    } else {
+      label.classList.remove('checked');
+    }
+  }
+}
+
+// ===== v0.10.0 宫位多选 — Popover 面板生成（纯函数，返回 HTML） =====
+function renderGongWeiPanel() {
+  var gwNames = Object.keys(GONGWEI_MAP);
+  var cbItems = '';
+  for (var i = 0; i < gwNames.length; i++) {
+    var name = gwNames[i];
+    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + name + '" onchange="toggleGongWei(\'' + name + '\', this.checked)"><span>' + name + '宫位</span></label>';
+  }
+  return '<div class="gz-panel-wrapper">'
+    + '<button class="btn-simple gz-trigger" id="gz-trigger" onclick="toggleGzPopover(event)">宫位<span class="gz-count"></span> ▾<span class="gz-summary"></span></button>'
+    + '<div class="gz-popover" id="gz-popover">'
+    + '<div class="gz-cb-grid">' + cbItems + '</div>'
+    + '<div class="gz-popover-actions">'
+    + '<button onclick="selectAllGongWei()">全选</button>'
+    + '<button onclick="clearAllGongWei()">清空</button>'
+    + '</div></div></div>';
+}
+
+// ===== v0.10.0 宫位多选 — 交互函数 =====
+function toggleGongWei(name, checked) {
+  var idx = selectedGongWei.indexOf(name);
+  if (checked && idx < 0) {
+    selectedGongWei.push(name);
+  } else if (!checked && idx >= 0) {
+    selectedGongWei.splice(idx, 1);
+  }
+  updateGongWeiTags();
+}
+
+function selectAllGongWei() {
+  selectedGongWei = Object.keys(GONGWEI_MAP);
+  updateGongWeiTags();
+  closeGzPopover();
+}
+
+function clearAllGongWei() {
+  selectedGongWei = [];
+  updateGongWeiTags();
+  closeGzPopover();
+}
+
+function toggleGzPopover(e) {
+  if (e) e.stopPropagation();
+  var popover = document.getElementById('gz-popover');
+  if (!popover) return;
+  popover.classList.toggle('open');
+}
+
+function closeGzPopover() {
+  var popover = document.getElementById('gz-popover');
+  if (popover) popover.classList.remove('open');
+}
+
+// 全局事件委托：popover 外部点击关闭
+document.addEventListener('click', function(e) {
+  var wrapper = document.querySelector('.gz-panel-wrapper');
+  if (!wrapper) return;
+  if (!wrapper.contains(e.target)) {
+    closeGzPopover();
+  }
+});
 
 function toggleSimple() {
   const tables = document.querySelectorAll('.chart');
@@ -1897,8 +2137,7 @@ function renderChart(data, twin, targetId) {
   function emp(cls) { return '<td class="'+cls+'"></td>'; }
 
   const chartRows = [];
-  // v0.7.1 宫位标签行（初始隐藏）
-  chartRows.push('<tr class="gz-tags" style="display:none"><td class="rl"></td><td data-gw="nian"></td><td data-gw="yue"></td><td data-gw="ri"></td><td data-gw="shi"></td><td class="sep"></td><td class="col-ln"></td></tr>');
+  // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
   // 柱名头
   chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep','大运')+th('col-ln','流年')+'</tr>');
 
@@ -1943,8 +2182,7 @@ function renderChart(data, twin, targetId) {
 
   // 三垣行
   var syRows = [];
-  // v0.7.1 三垣宫位标签行（初始隐藏）
-  syRows.push('<tr class="gz-tags-sy" style="display:none"><td class="rl"></td><td></td><td data-gw="tai"></td><td data-gw="ming"></td><td data-gw="shen"></td><td class="sep"></td><td class="col-ln"></td></tr>');
+  // v0.10.0 三垣宫位标签行由 updateGongWeiTags() 动态生成
   syRows.push('<tr class="hd">'+th('rl','三垣')+emp('')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs">'+rl('主星')+emp('')+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
@@ -2050,7 +2288,7 @@ function renderChart(data, twin, targetId) {
   const html = `
     <div class="top-bar">
       <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select><div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>
 
     <div class="body-cols">
@@ -2242,36 +2480,41 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
 // ============ v0.6.6 通用大运/流年列更新函数 ============
 // 双模式行映射：isSingle=true → 9行（藏气合并），isSingle=false → 11行（藏干分层）
 function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
-  var rows = tableEl.querySelectorAll('tr');
+  // v0.10.2: 过滤掉宫位标签行，避免索引偏移导致大运流年列错乱
+  var allRows = tableEl.querySelectorAll('tr');
+  var rows = [];
+  for (var ri = 0; ri < allRows.length; ri++) {
+    if (allRows[ri].className.indexOf('gz-tags') === -1) rows.push(allRows[ri]);
+  }
   var updates;
 
   if (isSingle) {
-    // 单人模式：9 行（藏气合并，索引 [2-10]，offset=2 因为 tr[0]=gzTagsMain(隐藏) tr[1]=hdr表头）
+    // 单人模式：9 行（藏气合并，索引 [1-9]）
     updates = [
-      [2, pDy.rs, pLn.rs],
-      [3, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [4, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [5, pDy.cg, pLn.cg],
-      [6, pDy.ny, pLn.ny],
-      [7, pDy.xy, pLn.xy],
-      [8, pDy.zz, pLn.zz],
-      [9, pDy.kw, pLn.kw],
-      [10, pDy.sh, pLn.sh]
+      [1, pDy.rs, pLn.rs],
+      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [4, pDy.cg, pLn.cg],
+      [5, pDy.ny, pLn.ny],
+      [6, pDy.xy, pLn.xy],
+      [7, pDy.zz, pLn.zz],
+      [8, pDy.kw, pLn.kw],
+      [9, pDy.sh, pLn.sh]
     ];
   } else {
-    // 双胞胎模式：11 行（藏干分层，索引 [2-12]，offset=2 同单人模式）
+    // 双胞胎模式：11 行（藏干分层，索引 [1-11]）
     updates = [
-      [2, pDy.rs, pLn.rs],
-      [3, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
-      [4, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
-      [5, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
-      [6, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
-      [7, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
-      [8, pDy.ny, pLn.ny],
-      [9, pDy.xy, pLn.xy],
-      [10, pDy.zz, pLn.zz],
-      [11, pDy.kw, pLn.kw],
-      [12, pDy.sh, pLn.sh]
+      [1, pDy.rs, pLn.rs],
+      [2, pDy.gan, pLn.gan, pDy.wg, pLn.wg],
+      [3, pDy.zhi, pLn.zhi, pDy.wz, pLn.wz],
+      [4, fmtCGLayer((pDy.ly || [])[0]), fmtCGLayer((pLn.ly || [])[0])],
+      [5, fmtCGLayer((pDy.ly || [])[1]), fmtCGLayer((pLn.ly || [])[1])],
+      [6, fmtCGLayer((pDy.ly || [])[2]), fmtCGLayer((pLn.ly || [])[2])],
+      [7, pDy.ny, pLn.ny],
+      [8, pDy.xy, pLn.xy],
+      [9, pDy.zz, pLn.zz],
+      [10, pDy.kw, pLn.kw],
+      [11, pDy.sh, pLn.sh]
     ];
   }
 
@@ -2374,19 +2617,14 @@ function buildCardHTML(data, options) {
   var rows = buildPillarRows(p, { diffMap: diffMap });
   var hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th></tr>';
 
-  // v0.7.1 宫位标签行
-  var gzTagsMain = '<tr class="gz-tags" style="display:none"><td class="rl"></td><td data-gw="nian"></td><td data-gw="yue"></td><td data-gw="ri"></td><td data-gw="shi"></td></tr>';
-  var gzTagsSy = '<tr class="gz-tags-sy" style="display:none"><td class="rl"></td><td></td><td data-gw="tai"></td><td data-gw="ming"></td><td data-gw="shen"></td></tr>';
-  // 三垣标签行插入索引0，后续 includeLuckCols 覆盖需偏移索引
-  rows.sanyuan.unshift(gzTagsSy);
+  // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
 
   // v0.6.1: 龙凤胎卡片四柱表扩展7列（+大运+流年）
   if (includeLuckCols && curDaYun && curLiuNian) {
     var pDy = pillar(curDaYun.gan, curDaYun.zhi, 'dayun');
     var pLn = pillar(curLiuNian.gan, curLiuNian.zhi, 'liunian');
     hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep">大运</th><th class="col-ln">流年</th></tr>';
-    // v0.7.1 标签行扩展为7列
-    gzTagsMain = '<tr class="gz-tags" style="display:none"><td class="rl"></td><td data-gw="nian"></td><td data-gw="yue"></td><td data-gw="ri"></td><td data-gw="shi"></td><td class="sep"></td><td class="col-ln"></td></tr>';
+    // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
     // 主星(0)
     rows.main[0] = '<tr class="rs">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
     // 天干(1)
@@ -2409,10 +2647,9 @@ function buildCardHTML(data, options) {
     rows.main[9] = '<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
     // 神煞(10)
     rows.main[10] = '<tr class="rm" data-row-type="shensha">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
-    // 三垣标签行(0)扩展列 + 表头(1→原[0])和后续行(从2起)加空列
-    rows.sanyuan[0] = gzTagsSy.replace('</tr>', '<td class="sep"></td><td class="col-ln"></td></tr>');
-    rows.sanyuan[1] = '<tr class="hd">'+rl('三垣')+emp('')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
-    for (var si = 2; si < rows.sanyuan.length; si++) {
+    // v0.10.0 三垣扩展列：表头[0]和后续行(从1起)加空列
+    rows.sanyuan[0] = '<tr class="hd">'+rl('三垣')+emp('')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
+    for (var si = 1; si < rows.sanyuan.length; si++) {
       rows.sanyuan[si] = rows.sanyuan[si].replace('</tr>', emp('sep')+emp('col-ln')+'</tr>');
     }
   }
@@ -2426,7 +2663,7 @@ function buildCardHTML(data, options) {
     + '<div class="bz-card-title">'+titleHtml
     + '<span class="bz-sanyuan-toggle" onclick="var sa=this.parentElement.parentElement.querySelector(\'.bz-sanyuan-area\');var t=this;sa.classList.toggle(\'collapsed\');t.textContent=sa.classList.contains(\'collapsed\')?\'▼ 三垣\':\'▲ 三垣\';">▲ 三垣</span></div>'
     + metaHtml
-    + '<div class="chart-wrap"><table class="chart">'+gzTagsMain+hdr+'\n'+rows.main.join('\n')+'</table></div>'
+    + '<div class="chart-wrap"><table class="chart">'+hdr+'\n'+rows.main.join('\n')+'</table></div>'
     + '<div class="bz-sanyuan-area"><table class="chart" style="margin-top:0;border-top:1px solid var(--bz-card-border);">'+rows.sanyuan.join('\n')+'</table></div>'
     + luckHTML
     + '</div>';
@@ -2583,7 +2820,7 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      <select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;margin-left:auto;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
 
@@ -2695,7 +2932,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      <select id="gz-select" onchange="updateGongWeiTags(this.value||null)" style="font-family:var(--font-display);font-size:13px;padding:4px 8px;border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;margin-left:auto;"><option value="">无</option><option value="信息">信息宫位</option><option value="认知">认知宫位</option><option value="功能">功能宫位</option><option value="做功">做功宫位</option><option value="亲缘">亲缘宫位</option><option value="兴趣">兴趣宫位</option><option value="场景">场景宫位</option><option value="人设">人设宫位</option><option value="客户">客户宫位</option><option value="系统">系统宫位</option><option value="关系">关系宫位</option><option value="圈层">圈层宫位</option><option value="生理">生理宫位</option><option value="记忆">记忆宫位</option></select>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
 
@@ -2779,6 +3016,8 @@ function doPaipan() {
   const ey = tst ? tst.y : solarY, em = tst ? tst.m : solarM, ed = tst ? tst.d : solarD, eh = tst ? tst.h : h, emi = tst ? tst.mi : mi;
 
   try {
+    // v0.10.0 排盘前保存宫位选中状态
+    var savedGongWei = selectedGongWei.slice();
     const twin = document.getElementById('inTwin').value;
     const output = document.getElementById('output');
 
@@ -2812,6 +3051,9 @@ function doPaipan() {
       renderChart(data);
       setCurrentBaziResult(extractBaziFromPaipan(data));
     }
+    // v0.10.0 恢复宫位选中状态并重新渲染标签行
+    selectedGongWei = savedGongWei;
+    updateGongWeiTags();
     autoSaveArchive();
   } catch(e) {
     document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">排盘出错：' + e.message + '</div>';
