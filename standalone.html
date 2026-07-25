@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.9.3 | 2026-07-24 -->
-<!-- v0.9.3 修复: renYuanSiLing() 丑月(小寒)年份偏移Bug → 1月出生者司令返回空字符串；PRESET_ARCHIVES 补全16孩准确时辰 -->
+<!-- 八字排盘 · 从真版 v0.9.4 | 2026-07-24 -->
+<!-- v0.9.4 修复: 身宫Bug — 命宫/身宫五虎遁改用公历出生年的年干(yearPillar(y).gan)而非节气年界调整后的nian.gan，修复立春前出生者身宫天干偏差（妍语:丙寅→戊寅） -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -1349,7 +1349,8 @@ function hourPillar(dayGan, hour) {
 const SHI_SHEN_SHORT = {
   '比肩':'比','劫财':'劫','食神':'食','伤官':'伤',
   '偏印':'枭','正印':'印','偏财':'才','正财':'财',
-  '七杀':'杀','正官':'官'
+  '七杀':'杀','正官':'官',
+  '枭神':'枭'
 };
 
 function shiShen(riGan, gan, short) {
@@ -1366,7 +1367,7 @@ function shiShen(riGan, gan, short) {
       const sheng = {木:'火',火:'土',土:'金',金:'水',水:'木'};
       const ke = {木:'土',土:'水',水:'火',火:'金',金:'木'};
       if (sheng[dw] === tw) r = yy ? '食神' : '伤官';
-      else if (sheng[tw] === dw) r = yy ? '偏印' : '正印';
+      else if (sheng[tw] === dw) r = yy ? '枭神' : '正印';
       else if (ke[dw] === tw) r = yy ? '偏财' : '正财';
       else if (ke[tw] === dw) r = yy ? '七杀' : '正官';
       else return '?';
@@ -1687,7 +1688,7 @@ function paipan(name, gender, y, m, d, h, mi) {
   // 6. 命宫
   const ming = mingGong(yue.zhi, shi.zhi, nian.gan);
 
-  // 7. 身宫 — 时支对冲
+  // 7. 身宫
   const shen = shenGong(yue.zhi, shi.zhi, nian.gan);
 
   // 8. 大运
@@ -1838,7 +1839,7 @@ function renderChart(data, twin, targetId) {
   function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
-      rs: shiShen(riGan, gan),
+      rs: gan === riGan ? '日主' : shiShen(riGan, gan, false),
       rsCg: CANG_GAN[zhi] ? shiShen(riGan, CANG_GAN[zhi][0]) : '',
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
@@ -2345,7 +2346,7 @@ function buildCardHTML(data, options) {
     return {
       gan: gan, zhi: zhi,
       wg: wxClass(gan), wz: wxClass(zhi),
-      rs: shiShen(riGan, gan),
+      rs: gan === riGan ? '日主' : shiShen(riGan, gan, false),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
@@ -2862,22 +2863,22 @@ const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
 
 // ===== v0.9.0 预置数据（自在班16孩）=====
 const PRESET_ARCHIVES = [
-  {nickname:"六一",name:"杨禹赫",gender:"男",year:2021,month:6,day:1,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子旭",name:"彭子旭",gender:"男",year:2020,month:11,day:10,hour:15,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"子阳",name:"彭子阳",gender:"男",year:2020,month:11,day:10,hour:15,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"希希",name:"陈彦希",gender:"女",year:2019,month:6,day:6,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"六一",name:"杨禹赫",gender:"男",year:2021,month:6,day:1,hour:22,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"子旭",name:"彭子旭",gender:"男",year:2020,month:11,day:10,hour:16,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"子阳",name:"彭子阳",gender:"男",year:2020,month:11,day:10,hour:16,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"希希",name:"陈彦希",gender:"女",year:2019,month:6,day:6,hour:8,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
   {nickname:"东东",name:"关旭峰",gender:"男",year:2019,month:9,day:23,hour:22,min:47,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"糯米",name:"熊朗翔",gender:"男",year:2020,month:8,day:6,hour:5,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"想想",name:"李帛锴",gender:"男",year:2019,month:8,day:9,hour:13,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"NONO",name:"吴不言",gender:"男",year:2019,month:10,day:18,hour:9,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"扬扬",name:"邵开扬",gender:"男",year:2020,month:4,day:14,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"顶顶",name:"韦环骏",gender:"男",year:2020,month:8,day:31,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"KK",name:"吴成溪",gender:"女",year:2019,month:10,day:18,hour:9,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"二哥",name:"何沛润",gender:"男",year:2019,month:8,day:23,hour:3,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"茂茂",name:"甘志茂",gender:"男",year:2019,month:6,day:26,hour:21,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"成哥",name:"肖竟成",gender:"男",year:2019,month:9,day:18,hour:23,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"笑笑",name:"谢锦萱",gender:"女",year:2019,month:6,day:30,hour:7,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
-  {nickname:"妍语",name:"许妍语",gender:"女",year:2020,month:1,day:20,hour:23,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null}
+  {nickname:"糯米",name:"熊朗翔",gender:"男",year:2020,month:8,day:6,hour:6,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"想想",name:"李帛锴",gender:"男",year:2019,month:8,day:9,hour:14,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"NONO",name:"吴不言",gender:"男",year:2019,month:10,day:18,hour:10,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"扬扬",name:"邵开扬",gender:"男",year:2020,month:4,day:14,hour:22,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"顶顶",name:"韦环骏",gender:"男",year:2020,month:8,day:31,hour:8,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"KK",name:"吴成溪",gender:"女",year:2019,month:10,day:18,hour:10,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"二哥",name:"何沛润",gender:"男",year:2019,month:8,day:23,hour:4,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"茂茂",name:"甘志茂",gender:"男",year:2019,month:6,day:26,hour:22,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"成哥",name:"肖竟成",gender:"男",year:2019,month:9,day:18,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"笑笑",name:"谢锦萱",gender:"女",year:2019,month:6,day:30,hour:8,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null},
+  {nickname:"妍语",name:"许妍语",gender:"女",year:2020,month:1,day:20,hour:0,min:0,prov:"",city:"",dist:"",useSolar:false,calendarType:"solar",isLeap:false,lunarMonth:null}
 ];
 
 // ===== v0.9.0 迁移：旧版数据 → v2 =====
@@ -3649,7 +3650,7 @@ document.addEventListener('click', function(e) {
   tests.push(eq('shiShen("甲","甲") → 比',           shiShen('甲','甲'), '比'));
   tests.push(eq('shiShen("丙","壬") → 杀',           shiShen('丙','壬'), '杀'));
   tests.push(eq('shiShen("癸","乙") → 食',           shiShen('癸','乙'), '食'));
-  tests.push(eq('shiShen("庚","戊") → 枭',           shiShen('庚','戊'), '枭'));
+  tests.push(eq('shiShen("庚","戊") → 枭神',         shiShen('庚','戊'), '枭神'));
   tests.push(eq('shiShen("壬","丁") → 财',           shiShen('壬','丁'), '财'));
 
   // === 纳音 ===
