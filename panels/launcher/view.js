@@ -21,7 +21,7 @@
       desc: "与公开版相同引擎，走 Clacky 本地 API，方便调试与迭代。",
       icon: "甲",
       iconColor: "#b5343a",
-      url: "/api/ext/bazi-paipan/standalone"
+      url: "http://localhost:7070/api/ext/bazi-paipan/standalone"
     }
     // 后续扩展在此追加：
     // { id: "xxx", name: "应用名", subtitle: "副标题", desc: "描述", icon: "图", iconColor: "#xxx", url: "/api/ext/xxx/standalone" }
