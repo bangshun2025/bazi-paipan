@@ -4,6 +4,25 @@
 
 ---
 
+## v0.11.1 — 能力排盘架构重构 (2026-07-28)
+
+### 架构
+- 能力排盘从 standalone.html 内嵌改为独立模块 ability-chart.html
+- 跨窗口数据传递：序列化命盘数据 → base64 URL hash → window.open()
+
+### 功能
+- standalone.html：3 处 .top-bar 新增「能力排盘」按钮 + openAbilityChart() 函数
+- ability-chart.html：独立能力排盘页面（元能力卡片 + 组合能力 SVG 关系图）
+
+### 变更量
+- standalone.html：修改（+能力排盘按钮入口）
+- ability-chart.html：新增（独立模块，16,166 bytes）
+
+### 测试
+- QA v3 全量验收通过 ✅（25/25 PASS，含一轮回归）
+
+---
+
 ## v0.11.0 — 能力按钮功能 (2026-07-26)
 
 ### 功能

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.11.0 | 2026-07-26 -->
+<!-- 八字排盘 · 从真版 v0.11.1 | 2026-07-28 -->
+<!-- v0.11.1: 能力排盘架构重构 — ability-chart.html 独立模块化，跨窗口数据传递 -->
 <!-- v0.11.0: 能力按钮功能 — 宫位能力标签交互系统 -->
 <html lang="zh-CN">
 <head>
@@ -208,13 +209,6 @@
   .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
   .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
 
-  /* 能力按钮 */
-  .btn-ability { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; letter-spacing:.08em; }
-  .btn-ability.active { background:var(--c-ink); color:var(--c-paper); }
-
-  /* SVG 连线覆盖层 */
-  .chart-ability-svg { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
-
   .wood { color:var(--c-wood); } .fire { color:var(--c-fire); } .earth { color:var(--c-earth); }
   .metal { color:var(--c-metal); } .water { color:var(--c-water); }
 
@@ -397,6 +391,18 @@
       transform: translateY(-50%); max-width: 90vw; }
     .gz-cb-grid { grid-template-columns: 1fr; }
   }
+
+  /* ===== v0.11.0 能力按钮 ===== */
+  .btn-ability { font-size:13px; padding:4px 12px; border:1px solid #ccc; border-radius:2px; background:#fff; cursor:pointer; font-family:var(--font-body); color:var(--c-ink); margin-left:6px; transition:all .15s; }
+  .btn-ability:hover { border-color:var(--c-red); color:var(--c-red); }
+  .btn-ability.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+
+  /* 组合能力 SVG 覆盖层 */
+  .chart-ability-svg { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+
+  /* 元能力激活态：字号缩小 */
+  .chart.yuan-active .rg td { font-size: 18px; }
+  .chart.yuan-active .rh td { font-size: 11px; }
 </style>
 </head>
 <body>
@@ -1110,6 +1116,45 @@ const WX_TRIPLE_COMBO = { '木火土':'构建力','火土金':'提炼力','土�
 const WX_SHENG_NEXT = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
 // 相克: 木克土, 土克水, 水克火, 火克金, 金克木
 const WX_KE_NEXT = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+
+// v0.11.0 藏干层→综合能力名
+function _computeComboFromLayers(layers) {
+  if (!layers || layers.length === 0) return '';
+  if (layers.length === 1) {
+    return GAN_TO_ABILITY[layers[0]] || '';
+  }
+  var w0 = WU_XING[layers[0]], w1 = WU_XING[layers[1]];
+  if (!w0 || !w1) return '';
+  // 双层
+  if (layers.length === 2) {
+    if (w0 === w1) return WX_SAME_COMBO[w0] || '';
+    if (WX_KE_NEXT[w0] === w1) return WX_KE_COMBO[w0+w1] || '';
+    if (WX_SHENG_NEXT[w0] === w1) return WX_SHENG_COMBO[w0+w1] || '';
+    if (WX_KE_NEXT[w1] === w0) return WX_KE_COMBO[w1+w0] || '';
+    if (WX_SHENG_NEXT[w1] === w0) return WX_SHENG_COMBO[w1+w0] || '';
+    return '';
+  }
+  // 三层+
+  var w2 = WU_XING[layers[2]];
+  if (!w2) return '';
+  if (WX_SHENG_NEXT[w0] === w1 && WX_SHENG_NEXT[w1] === w2) {
+    return WX_TRIPLE_COMBO[w0+w1+w2] || '';
+  }
+  var parts = [];
+  // 本→中
+  if (w0 === w1) parts.push(WX_SAME_COMBO[w0] || '');
+  else if (WX_KE_NEXT[w0] === w1) parts.push(WX_KE_COMBO[w0+w1] || '');
+  else if (WX_SHENG_NEXT[w0] === w1) parts.push(WX_SHENG_COMBO[w0+w1] || '');
+  else if (WX_KE_NEXT[w1] === w0) parts.push(WX_KE_COMBO[w1+w0] || '');
+  else if (WX_SHENG_NEXT[w1] === w0) parts.push(WX_SHENG_COMBO[w1+w0] || '');
+  // 中→余
+  if (w1 === w2) parts.push(WX_SAME_COMBO[w1] || '');
+  else if (WX_KE_NEXT[w1] === w2) parts.push(WX_KE_COMBO[w1+w2] || '');
+  else if (WX_SHENG_NEXT[w1] === w2) parts.push(WX_SHENG_COMBO[w1+w2] || '');
+  else if (WX_KE_NEXT[w2] === w1) parts.push(WX_KE_COMBO[w2+w1] || '');
+  else if (WX_SHENG_NEXT[w2] === w1) parts.push(WX_SHENG_COMBO[w2+w1] || '');
+  return parts.filter(Boolean).join(' / ');
+}
 
 // ===== v0.7.1 宫位映射表 =====
 // 14种宫位 × 7柱，索引顺序：[胎元, 年柱, 月柱, 日柱, 命宫, 时柱, 身宫]
@@ -2012,12 +2057,13 @@ function toggleYuanNengLi(btn) {
   var active = btn.classList.toggle('active');
   var scope = btn.closest('.bz-twin-card') || btn.closest('.page') || document;
 
-  // 收集所有天干 td
   scope.querySelectorAll('table.chart').forEach(function(table) {
-    // 主盘天干行：有 data-row-type~=ln1
+    // 切换 .yuan-active class（字号缩小）
+    table.classList.toggle('yuan-active', active);
+
+    // === 天干行（v1 逻辑） ===
     var mainGanRow = table.querySelector('tr.rg[data-row-type~="ln1"]');
     if (!mainGanRow) {
-      // 双胞胎无大运列时没有 ln1，取第一个 tr.rg（在 hd 之后、rs 之后）
       var allRg = table.querySelectorAll('tr.rg');
       if (allRg.length >= 1) mainGanRow = allRg[0];
     }
@@ -2026,9 +2072,8 @@ function toggleYuanNengLi(btn) {
         toggleGanText(td, active);
       });
     }
-    // 三垣天干行：找到 "三垣" 头行后的第一个 tr.rg
-    var syHd = table.querySelector('tr.hd td.rl, tr.hd th.rl');
-    // 遍历所有 hd 行
+
+    // 三垣天干行
     table.querySelectorAll('tr.hd').forEach(function(hdRow) {
       var rlEl = hdRow.querySelector('td.rl, th.rl');
       if (rlEl && rlEl.textContent.trim() === '三垣') {
@@ -2043,7 +2088,22 @@ function toggleYuanNengLi(btn) {
         }
       }
     });
+
+    // === 藏干行 span 替换（v2 新增） ===
+    table.querySelectorAll('tr.rh').forEach(function(rhRow) {
+      rhRow.querySelectorAll('td:not(.rl)').forEach(function(td) {
+        if (!td.textContent.trim()) return;
+        td.querySelectorAll('span').forEach(function(span) {
+          toggleCangGanSpan(span, active);
+        });
+      });
+    });
   });
+
+  // 如果有激活的组合能力 SVG，更新 L4 标注文字
+  if (scope.querySelector('.chart-ability-svg')) {
+    redrawZuHeSVG(scope);
+  }
 }
 
 function isCellEmpty(td) {
@@ -2101,6 +2161,19 @@ function toggleGanText(td, toAbility) {
   }
 }
 
+// v2.0 藏干 span 替换
+function toggleCangGanSpan(span, toAbility) {
+  var txt = span.textContent.trim();
+  if (!txt) return;
+  if (toAbility) {
+    if (!span.dataset.originalGan) span.dataset.originalGan = txt;
+    var ability = GAN_TO_ABILITY[txt];
+    if (ability) span.textContent = ability;
+  } else {
+    if (span.dataset.originalGan) span.textContent = span.dataset.originalGan;
+  }
+}
+
 // ============ 组合能力按钮 ============
 function toggleZuHeNengLi(btn) {
   var active = btn.classList.toggle('active');
@@ -2127,14 +2200,9 @@ function redrawZuHeSVG(scope) {
 
   removeZuHeSVG(scope);
 
-  // 找到包含天干行的所有 table.chart
   scope.querySelectorAll('table.chart').forEach(function(table) {
     var chartWrap = table.closest('.chart-wrap');
-    if (!chartWrap) {
-      // 可能在 .bz-sanyuan-area 中，向上找
-      chartWrap = table.parentElement;
-    }
-    // 确保 chartWrap 有 position:relative
+    if (!chartWrap) { chartWrap = table.parentElement; }
     if (getComputedStyle(chartWrap).position === 'static') {
       chartWrap.style.position = 'relative';
     }
@@ -2143,188 +2211,373 @@ function redrawZuHeSVG(scope) {
     svg.setAttribute('class','chart-ability-svg');
     chartWrap.appendChild(svg);
 
-    // 收集该表格的天干 cell groups
-    var groups = getGanCellGroups(table);
-    drawAllRelations(svg, table, groups);
+    _buildRelations4Layers(svg, table);
   });
 }
 
-function getGanCellGroups(table) {
-  var groups = [];
-  // 主盘天干行
-  var mainGanRow = table.querySelector('tr.rg[data-row-type~="ln1"]');
-  if (!mainGanRow) {
+// ==== 获取五行（从天干字符） ====
+function _getWx(gan) { return WU_XING[gan] || null; }
+
+// ==== 判定关系 → { color, dash, label } ====
+function _resolveRelation(wxA, wxB, isInverse) {
+  var prefix = isInverse ? '反' : '';
+  if (wxA === wxB) {
+    return { color: 'var(--c-'+WX_S[wxA]+')', dash: '6,3', label: WX_SAME_COMBO[wxA] || '' };
+  }
+  if (WX_KE_NEXT[wxA] === wxB) {
+    return { color: '#c83a3a', dash: '', label: prefix + (WX_KE_COMBO[wxA+wxB] || '') };
+  }
+  if (WX_SHENG_NEXT[wxA] === wxB) {
+    return { color: '#2e8b3d', dash: '', label: prefix + (WX_SHENG_COMBO[wxA+wxB] || '') };
+  }
+  return null;
+}
+
+// ==== 解析 CSS 变量颜色 ====
+function _resolveColor(colorStr) {
+  if (colorStr.startsWith('var(')) {
+    var v = colorStr.replace('var(','').replace(')','');
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+  return colorStr;
+}
+
+// ==== 获得主盘天干行 td 序列 ====
+function _getMainGanCells(table) {
+  var row = table.querySelector('tr.rg[data-row-type~="ln1"]');
+  if (!row) { var all = table.querySelectorAll('tr.rg'); if (all.length >= 1) row = all[0]; }
+  if (!row) return [];
+  var cells = [];
+  row.querySelectorAll('td').forEach(function(td) {
+    if (td.classList.contains('rl')) return;
+    var t = td.textContent.trim();
+    if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+    cells.push(td);
+  });
+  return cells;
+}
+
+// ==== 获得主盘地支行 td 序列 ====
+function _getMainZhiCells(table) {
+  var row = table.querySelector('tr.rg[data-row-type="dy2"]');
+  if (!row) {
     var allRg = table.querySelectorAll('tr.rg');
-    if (allRg.length >= 1) mainGanRow = allRg[0];
+    if (allRg.length >= 2) row = allRg[1];
   }
-  if (mainGanRow) {
-    var mainCells = [];
-    mainGanRow.querySelectorAll('td').forEach(function(td) {
+  if (!row) return [];
+  var cells = [];
+  row.querySelectorAll('td').forEach(function(td) {
+    if (td.classList.contains('rl')) return;
+    var t = td.textContent.trim();
+    if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+    cells.push(td);
+  });
+  return cells;
+}
+
+// ==== 获取三垣区域的 gan/zhi cell 序列 ====
+function _findSanyuanRows(table) {
+  var result = { ganCells: [], zhiCells: [] };
+  var hdRows = table.querySelectorAll('tr.hd');
+  var found = false;
+  hdRows.forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣') { found = true; }
+  });
+  if (!found) return result;
+
+  // 找三垣 hd 行
+  var syHd = null;
+  hdRows.forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣' && !syHd) syHd = hd;
+  });
+  if (!syHd) return result;
+
+  // 收集后续的 tr.rg 行（跳过 hd）
+  var rgRows = [];
+  var next = syHd.nextElementSibling;
+  while (next) {
+    if (next.tagName === 'TR' && next.classList.contains('rg')) {
+      rgRows.push(next);
+    }
+    next = next.nextElementSibling;
+  }
+
+  if (rgRows.length >= 1) {
+    rgRows[0].querySelectorAll('td').forEach(function(td) {
       if (td.classList.contains('rl')) return;
-      if (td.classList.contains('sep')) return;
-      if (td.classList.contains('col-ln')) return;
-      var txt = td.textContent.trim();
-      if (!txt) return;
-      // 只保留含有效天干字符的 td（排除地支行误匹配）
-      if (!/^[\u4e00-\u9fff]/.test(txt)) return;
-      mainCells.push(td);
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      result.ganCells.push(td);
     });
-    if (mainCells.length > 0) groups.push(mainCells);
   }
-  // 三垣天干行
-  table.querySelectorAll('tr.hd').forEach(function(hdRow) {
-    var rlEl = hdRow.querySelector('td.rl, th.rl');
-    if (rlEl && rlEl.textContent.trim() === '三垣') {
-      var next = hdRow.nextElementSibling;
-      while (next && !next.classList.contains('rg')) { next = next.nextElementSibling; }
-      if (next) {
-        var syCells = [];
-        next.querySelectorAll('td').forEach(function(td) {
-          if (td.classList.contains('rl')) return;
-          if (td.classList.contains('sep')) return;
-          if (td.classList.contains('col-ln')) return;
-          var txt = td.textContent.trim();
-          if (!txt) return;
-          if (!/^[\u4e00-\u9fff]/.test(txt)) return;
-          syCells.push(td);
-        });
-        if (syCells.length > 0) groups.push(syCells);
+  if (rgRows.length >= 2) {
+    rgRows[1].querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      result.zhiCells.push(td);
+    });
+  }
+  return result;
+}
+
+// ==== 绘制水平连线（L1/L2 通用） ====
+function _drawHorizontalLines(svg, svgRect, cells, textYOffset) {
+  for (var i = 0; i < cells.length - 1; i++) {
+    var txtA = cells[i].textContent.trim();
+    var txtB = cells[i+1].textContent.trim();
+    var wxA = _getWx(txtA.charAt(0));
+    var wxB = _getWx(txtB.charAt(0));
+    if (!wxA || !wxB) continue;
+
+    var rel = _resolveRelation(wxA, wxB, false) || _resolveRelation(wxB, wxA, false);
+    if (!rel) continue;
+
+    var ra = cells[i].getBoundingClientRect();
+    var rb = cells[i+1].getBoundingClientRect();
+    var x1 = ra.right - svgRect.left;
+    var y1 = ra.top + ra.height/2 - svgRect.top;
+    var x2 = rb.left - svgRect.left;
+    var y2 = rb.top + rb.height/2 - svgRect.top;
+
+    if (Math.abs(x2 - x1) < 6) { var m = (x1+x2)/2; x1 = m-3; x2 = m+3; }
+
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', rel.color);
+    line.setAttribute('stroke-width', wxA===wxB ? '3' : '2.5');
+    if (rel.dash) line.setAttribute('stroke-dasharray', rel.dash);
+    svg.appendChild(line);
+
+    if (rel.label) {
+      var tc = _resolveColor(rel.color);
+      var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', (x1+x2)/2);
+      t.setAttribute('y', y1 + textYOffset);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-size', '12');
+      t.setAttribute('fill', tc);
+      t.setAttribute('font-family', 'PingFang SC, sans-serif');
+      t.textContent = rel.label;
+      svg.appendChild(t);
+    }
+  }
+
+  // 三连检测
+  for (var j = 0; j < cells.length - 2; j++) {
+    var wa = _getWx(cells[j].textContent.trim().charAt(0));
+    var wb = _getWx(cells[j+1].textContent.trim().charAt(0));
+    var wc = _getWx(cells[j+2].textContent.trim().charAt(0));
+    if (!wa || !wb || !wc) continue;
+    if (WX_SHENG_NEXT[wa] === wb && WX_SHENG_NEXT[wb] === wc) {
+      var label = WX_TRIPLE_COMBO[wa+wb+wc];
+      if (!label) continue;
+      var ra2 = cells[j].getBoundingClientRect();
+      var rc2 = cells[j+2].getBoundingClientRect();
+      var xa = ra2.left + ra2.width/2 - svgRect.left;
+      var ya = ra2.top - svgRect.top;
+      var xc = rc2.left + rc2.width/2 - svgRect.left;
+      var yc = rc2.top - svgRect.top;
+      var midX = (xa+xc)/2;
+      var arcTop = Math.min(ya, yc) - 30;
+      var path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', 'M'+xa+','+ya+' Q'+midX+','+arcTop+' '+xc+','+yc);
+      path.setAttribute('stroke', '#c8961f');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-dasharray', '8,4');
+      path.setAttribute('fill', 'none');
+      svg.appendChild(path);
+      var tt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tt.setAttribute('x', midX); tt.setAttribute('y', arcTop - 8);
+      tt.setAttribute('text-anchor', 'middle'); tt.setAttribute('font-size', '13');
+      tt.setAttribute('font-weight', '600'); tt.setAttribute('fill', '#c8961f');
+      tt.setAttribute('font-family', 'PingFang SC, sans-serif');
+      tt.textContent = label; svg.appendChild(tt);
+    }
+  }
+}
+
+// ==== L3: 柱内纵向弧线 ====
+function _drawPillarArcs(svg, svgRect, ganCells, zhiCells) {
+  var len = Math.min(ganCells.length, zhiCells.length);
+  for (var i = 0; i < len; i++) {
+    var gTxt = ganCells[i].textContent.trim();
+    var zTxt = zhiCells[i].textContent.trim();
+    if (!gTxt || !zTxt) continue;
+    var wG = _getWx(gTxt.charAt(0));
+    var wZ = _getWx(zTxt.charAt(0));
+    if (!wG || !wZ) continue;
+
+    // 天干→地支方向判定；支克干加「反」前缀，支生干不加
+    var rel = _resolveRelation(wG, wZ, false);
+    if (!rel) {
+      var isKe = (WX_KE_NEXT[wZ] === wG);
+      rel = _resolveRelation(wZ, wG, isKe);
+    }
+    if (!rel) continue;
+
+    var gr = ganCells[i].getBoundingClientRect();
+    var zr = zhiCells[i].getBoundingClientRect();
+    var x1 = gr.left - svgRect.left;
+    var y1 = gr.top + gr.height/2 - svgRect.top;
+    var x2 = zr.left - svgRect.left;
+    var y2 = zr.top + zr.height/2 - svgRect.top;
+    var ctrlX = x1 - 8;
+    var ctrlY = (y1 + y2) / 2;
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', 'M'+x1+','+y1+' Q'+ctrlX+','+ctrlY+' '+x2+','+y2);
+    path.setAttribute('stroke', rel.color);
+    path.setAttribute('stroke-width', wG===wZ ? '3' : '2');
+    if (rel.dash) path.setAttribute('stroke-dasharray', rel.dash);
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+
+    if (rel.label) {
+      var tc = _resolveColor(rel.color);
+      var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', ctrlX - 6);
+      t.setAttribute('y', ctrlY + 4);
+      t.setAttribute('text-anchor', 'end');
+      t.setAttribute('font-size', '11');
+      t.setAttribute('fill', tc);
+      t.setAttribute('font-family', 'PingFang SC, sans-serif');
+      t.textContent = rel.label;
+      svg.appendChild(t);
+    }
+  }
+}
+
+// ==== L4: 藏干分组标注（9柱位：年/月/日/时/大运/流年/胎/命/身） ====
+function _drawCangGanLabels(svg, svgRect, table) {
+  var pillars = []; // { zhi: '戌', cgCell: td }
+
+  // --- 主盘区域（6柱：年/月/日/时 + 大运 + 流年） ---
+  var zhiRow = table.querySelector('tr.rg[data-row-type="dy2"]');
+  if (!zhiRow) { var allRg = table.querySelectorAll('tr.rg'); if (allRg.length >= 2) zhiRow = allRg[1]; }
+  var cgRow = table.querySelector('tr.rh[data-row-type]');
+  if (!cgRow) {
+    table.querySelectorAll('tr.rh').forEach(function(r) {
+      if (!cgRow && r.getAttribute('data-row-type')) cgRow = r;
+    });
+  }
+
+  if (zhiRow && cgRow) {
+    var zhiChars = [], cgTds = [];
+    zhiRow.querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      zhiChars.push(t);
+    });
+    cgRow.querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      if (!td.textContent.trim()) return;
+      cgTds.push(td);
+    });
+    var n = Math.min(zhiChars.length, cgTds.length);
+    for (var i = 0; i < n; i++) {
+      pillars.push({ zhi: zhiChars[i], cgCell: cgTds[i] });
+    }
+  }
+
+  // --- 三垣区域（3柱：胎/命/身） ---
+  var syHd = null;
+  table.querySelectorAll('tr.hd').forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣' && !syHd) syHd = hd;
+  });
+  if (syHd) {
+    var syRgRows = [], syRhRow = null;
+    var next = syHd.nextElementSibling;
+    while (next && next.tagName === 'TR' && !next.classList.contains('hd')) {
+      if (next.classList.contains('rg')) syRgRows.push(next);
+      if (next.classList.contains('rh') && !syRhRow) syRhRow = next;
+      next = next.nextElementSibling;
+    }
+    if (syRgRows.length >= 2 && syRhRow) {
+      var syZhi = [], syCg = [];
+      syRgRows[1].querySelectorAll('td').forEach(function(td) {
+        if (td.classList.contains('rl')) return;
+        var t = td.textContent.trim();
+        if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+        syZhi.push(t);
+      });
+      syRhRow.querySelectorAll('td').forEach(function(td) {
+        if (td.classList.contains('rl')) return;
+        if (!td.textContent.trim()) return;
+        syCg.push(td);
+      });
+      for (var j = 0; j < Math.min(syZhi.length, syCg.length); j++) {
+        pillars.push({ zhi: syZhi[j], cgCell: syCg[j] });
       }
     }
-  });
-  return groups;
+  }
+
+  // --- 绘制 ---
+  for (var k = 0; k < pillars.length; k++) {
+    var p = pillars[k];
+    var layers = CANG_GAN[p.zhi] || [];
+    if (layers.length === 0) continue;
+    var label = _computeComboFromLayers(layers);
+    if (!label) continue;
+
+    var cr = p.cgCell.getBoundingClientRect();
+    var x = cr.left + cr.width/2 - svgRect.left;
+    var y = cr.bottom + 8 - svgRect.top;
+
+    var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', x);
+    t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('font-size', '11');
+    t.setAttribute('fill', '#8b7e6a');
+    t.setAttribute('font-family', 'PingFang SC, sans-serif');
+    t.textContent = label;
+    svg.appendChild(t);
+  }
 }
 
-function getWxFromTd(td) {
-  var txt = td.textContent.trim();
-  if (!txt) return null;
-  // 取第一个字符（天干）
-  var gan = txt.charAt(0);
-  return WU_XING[gan] || null;
-}
-
-function drawAllRelations(svg, table, groups) {
+// ==== 四层统一绘制入口 ====
+function _buildRelations4Layers(svg, table) {
+  // 等待渲染一帧确保 getBoundingClientRect 准确
   var svgRect = svg.getBoundingClientRect();
+  if (svgRect.width === 0 || svgRect.height === 0) {
+    // SVG 刚创建还不可见，延迟重试
+    requestAnimationFrame(function() { _buildRelations4Layers(svg, table); });
+    return;
+  }
 
-  // 在每个 group 内计算两两关系
-  groups.forEach(function(cells, gi) {
-    for (var i = 0; i < cells.length - 1; i++) {
-      var wxA = getWxFromTd(cells[i]);
-      var wxB = getWxFromTd(cells[i+1]);
-      if (!wxA || !wxB) continue;
+  // 获取数据
+  var ganCells = _getMainGanCells(table);
+  var zhiCells = _getMainZhiCells(table);
+  var sy = _findSanyuanRows(table);
 
-      var rectA = cells[i].getBoundingClientRect();
-      var rectB = cells[i+1].getBoundingClientRect();
+  // z-order: L3 弧线底层 → L1+L2 横线中层 → L4 藏干标注 + 所有文字上层
 
-      // 线从 A 右边缘中点 → B 左边缘中点
-      var x1 = rectA.right - svgRect.left;
-      var y1 = rectA.top + rectA.height/2 - svgRect.top;
-      var x2 = rectB.left - svgRect.left;
-      var y2 = rectB.top + rectB.height/2 - svgRect.top;
+  // --- L3: 柱内纵向弧线（最底层） ---
+  _drawPillarArcs(svg, svgRect, ganCells, zhiCells);
+  if (sy.ganCells.length > 0 && sy.zhiCells.length > 0) {
+    _drawPillarArcs(svg, svgRect, sy.ganCells, sy.zhiCells);
+  }
 
-      // border-collapse 导致相邻格右边缘≈左边缘，确保至少 6px 可见线
-      if (Math.abs(x2 - x1) < 6) {
-        var mid = (x1 + x2) / 2;
-        x1 = mid - 3;
-        x2 = mid + 3;
-      }
+  // --- L1: 天干行横向连线（标注在上方） ---
+  _drawHorizontalLines(svg, svgRect, ganCells, -12);
+  if (sy.ganCells.length > 0) {
+    _drawHorizontalLines(svg, svgRect, sy.ganCells, -12);
+  }
 
-      var color, dash, label;
-      if (wxA === wxB) {
-        color = 'var(--c-'+WX_S[wxA]+')';
-        dash = '6,3';
-        label = WX_SAME_COMBO[wxA] || '';
-      } else if (WX_KE_NEXT[wxA] === wxB) {
-        color = '#c83a3a';
-        dash = '';
-        label = WX_KE_COMBO[wxA+wxB] || '';
-      } else if (WX_SHENG_NEXT[wxA] === wxB) {
-        color = '#2e8b3d';
-        dash = '';
-        label = WX_SHENG_COMBO[wxA+wxB] || '';
-      } else if (WX_KE_NEXT[wxB] === wxA) {
-        // B 克 A（方向从 A 到 B，但标克的关系）
-        color = '#c83a3a';
-        dash = '';
-        label = WX_KE_COMBO[wxB+wxA] || '';
-      } else if (WX_SHENG_NEXT[wxB] === wxA) {
-        color = '#2e8b3d';
-        dash = '';
-        label = WX_SHENG_COMBO[wxB+wxA] || '';
-      } else {
-        continue;
-      }
+  // --- L2: 地支行横向连线（标注在下方） ---
+  _drawHorizontalLines(svg, svgRect, zhiCells, 12);
+  if (sy.zhiCells.length > 0) {
+    _drawHorizontalLines(svg, svgRect, sy.zhiCells, 12);
+  }
 
-      var line = document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1', x1);
-      line.setAttribute('y1', y1);
-      line.setAttribute('x2', x2);
-      line.setAttribute('y2', y2);
-      line.setAttribute('stroke', color);
-      line.setAttribute('stroke-width', wxA===wxB ? '3' : '2.5');
-      if (dash) line.setAttribute('stroke-dasharray', dash);
-      svg.appendChild(line);
-
-      if (label) {
-        // 需要将 CSS 变量转为实际颜色用于 SVG fill
-        var textColor = color;
-        if (color.startsWith('var(')) {
-          var cssVar = color.replace('var(','').replace(')','');
-          textColor = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
-        }
-        var text = document.createElementNS('http://www.w3.org/2000/svg','text');
-        text.setAttribute('x', (x1+x2)/2);
-        text.setAttribute('y', y1 - 12);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('font-size', '12');
-        text.setAttribute('fill', textColor);
-        text.setAttribute('font-family', 'PingFang SC, sans-serif');
-        text.textContent = label;
-        svg.appendChild(text);
-      }
-    }
-
-    // 三连检测
-    for (var j = 0; j < cells.length - 2; j++) {
-      var wa = getWxFromTd(cells[j]);
-      var wb = getWxFromTd(cells[j+1]);
-      var wc = getWxFromTd(cells[j+2]);
-      if (!wa || !wb || !wc) continue;
-      if (WX_SHENG_NEXT[wa] === wb && WX_SHENG_NEXT[wb] === wc) {
-        var tripleLabel = WX_TRIPLE_COMBO[wa+wb+wc];
-        if (!tripleLabel) continue;
-
-        var ra = cells[j].getBoundingClientRect();
-        var rc = cells[j+2].getBoundingClientRect();
-        var xa = ra.left + ra.width/2 - svgRect.left;
-        var ya = ra.top - svgRect.top;
-        var xc = rc.left + rc.width/2 - svgRect.left;
-        var yc = rc.top - svgRect.top;
-        var midX = (xa+xc)/2;
-        var arcTop = Math.min(ya, yc) - 30;
-
-        var path = document.createElementNS('http://www.w3.org/2000/svg','path');
-        var d = 'M'+xa+','+ya+' Q'+midX+','+arcTop+' '+xc+','+yc;
-        path.setAttribute('d', d);
-        path.setAttribute('stroke', '#c8961f');
-        path.setAttribute('stroke-width', '2');
-        path.setAttribute('stroke-dasharray', '8,4');
-        path.setAttribute('fill', 'none');
-        svg.appendChild(path);
-
-        var t = document.createElementNS('http://www.w3.org/2000/svg','text');
-        t.setAttribute('x', midX);
-        t.setAttribute('y', arcTop - 8);
-        t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('font-size', '13');
-        t.setAttribute('font-weight', '600');
-        t.setAttribute('fill', '#c8961f');
-        t.setAttribute('font-family', 'PingFang SC, sans-serif');
-        t.textContent = tripleLabel;
-        svg.appendChild(t);
-      }
-    }
-  });
+  // --- L4: 藏干分组标注（最上层） ---
+  _drawCangGanLabels(svg, svgRect, table);
 }
 
 // ============ buildPillarRows：抽取四柱+三垣行生成逻辑 ============
@@ -2626,7 +2879,7 @@ function renderChart(data, twin, targetId) {
   const html = `
     <div class="top-bar">
       <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>
 
     <div class="body-cols">
@@ -2999,7 +3252,7 @@ function buildCardHTML(data, options) {
     + '<div class="bz-card-title">'+titleHtml
     + '<span class="bz-sanyuan-toggle" onclick="var sa=this.parentElement.parentElement.querySelector(\'.bz-sanyuan-area\');var t=this;sa.classList.toggle(\'collapsed\');t.textContent=sa.classList.contains(\'collapsed\')?\'▼ 三垣\':\'▲ 三垣\';">▲ 三垣</span></div>'
     + metaHtml
-    + '<div class="bz-card-tools" style="padding:0 16px 6px;display:flex;gap:6px;"><button class="btn-ability" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" onclick="toggleZuHeNengLi(this)">组合能力</button></div>'
+    + '<div class="bz-card-tools" style="padding:0 16px 6px;display:flex;gap:6px;"><button class="btn-ability" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button></div>'
     + '<div class="chart-wrap"><table class="chart">'+hdr+'\n'+rows.main.join('\n')+'</table></div>'
     + '<div class="bz-sanyuan-area"><table class="chart" style="margin-top:0;border-top:1px solid var(--bz-card-border);">'+rows.sanyuan.join('\n')+'</table></div>'
     + luckHTML
@@ -3156,7 +3409,7 @@ function renderTwinCardsHtml(data, targetId) {
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
@@ -3268,7 +3521,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
@@ -4410,6 +4663,31 @@ document.addEventListener('click', function(e) {
     }, 200);
   });
 })();
+
+// ==== v3 能力排盘独立模块入口 ====
+function openAbilityChart(btn) {
+  var data;
+  var card = btn.closest('.bz-twin-card');
+  if (card && card._cardData) { data = card._cardData; }
+  else { data = window._paipanData; }
+  if (!data) { alert('请先完成排盘'); return; }
+  // B2: 注入当前流年
+  var nowYear = new Date().getFullYear();
+  var lnGz = liuNianJZ(nowYear);
+  data.liuNian = { gan: lnGz[0], zhi: lnGz[1] };
+  var json = JSON.stringify(data);
+  var encoded;
+  try {
+    encoded = btoa(unescape(encodeURIComponent(json)));
+  } catch(e) { encoded = null; }
+  if (!encoded || encoded.length > 1800) {
+    localStorage.setItem('ability-chart-data', json);
+    window.open('ability-chart.html', '_blank');
+  } else {
+    window.open('ability-chart.html#data=' + encoded, '_blank');
+  }
+}
+
 </script>
 
 </body>

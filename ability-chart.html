@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<!-- 八字排盘 · 能力排盘模块 v0.11.1 | 2026-07-28 -->
+<!-- 独立能力排盘页面：元能力卡片 + 组合能力 SVG 关系图 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>能力排盘</title>
+<style>
+:root{--bg:#f5f0e8;--card-bg:#fff;--text:#3d3226;--muted:#8b7e6a;--wood:#4a8c3f;--fire:#c83a3a;--earth:#b8933c;--metal:#9b8c6c;--water:#3a6a9b;--line-ke:#c83a3a;--line-sheng:#2e8b3d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-width:680px}
+#app{max-width:1200px;margin:0 auto;padding:16px 24px}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #d9cfb0;margin-bottom:20px}
+header .info{text-align:center}
+header .info .name{font-size:20px;font-weight:bold}
+header .info .meta{font-size:13px;color:var(--muted);margin-top:2px}
+.btn-back{font-size:13px;color:var(--muted);text-decoration:none;cursor:pointer;border:1px solid #c4b896;border-radius:4px;padding:4px 12px;background:#fff}
+.btn-back:hover{background:#e8dfcc}
+.mode-switch{display:flex;gap:0;border:1px solid #c4b896;border-radius:4px;overflow:hidden}
+.mode-switch button{padding:6px 16px;font-size:14px;cursor:pointer;border:none;background:#fff;color:var(--muted)}
+.mode-switch button.active{background:var(--text);color:#fff}
+footer{text-align:center;padding:24px 0;font-size:12px;color:var(--muted);border-top:1px solid #d9cfb0;margin-top:20px}
+
+/* 元能力卡片 */
+#yuan-mode{padding:8px 0}
+.pillar-row{display:flex;gap:12px;margin-bottom:16px;justify-content:center}
+.pillar-row.sanyuan{margin-top:8px}
+.pillar-card{flex:1;min-width:90px;max-width:120px;background:var(--card-bg);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;text-align:center}
+.pillar-card .card-hd{font-size:12px;color:var(--muted);padding:4px 0;background:#f8f5ed;border-bottom:1px solid #efeadb}
+.pillar-card .gan-row{padding:8px 6px 2px}
+.pillar-card .gan-row .ability{font-size:20px;font-weight:bold;display:block}
+.pillar-card .gan-row .ss{font-size:12px;color:var(--muted);display:block;margin-top:1px}
+.pillar-card .zhi-row{padding:4px 6px 8px;border-top:1px dashed #efeadb}
+.pillar-card .zhi-row .ability{font-size:20px;font-weight:bold;display:block}
+.pillar-card .zhi-row .ss{font-size:12px;color:var(--muted);display:block;margin-top:1px}
+.pillar-card .cg-row{padding:6px;border-top:1px dashed #efeadb;background:#fdfcf8}
+.pillar-card .cg-row .cg-combo{font-size:15px;font-weight:bold;display:block;margin-bottom:2px}
+.pillar-card .cg-row .cg-detail{font-size:11px;line-height:1.6}
+.c-wood{color:var(--wood)} .c-fire{color:var(--fire)} .c-earth{color:var(--earth)} .c-metal{color:var(--metal)} .c-water{color:var(--water)}
+
+/* 组合能力 SVG */
+#zuhe-mode{padding:8px 0;overflow-x:auto}
+#zuhe-svg{display:block;margin:0 auto}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state p{font-size:16px;margin-bottom:12px}
+.empty-state a{color:var(--water)}
+
+@media print{
+  .btn-back,.mode-switch{display:none}
+  body{background:#fff}
+  #app{padding:0}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <a class="btn-back" href="javascript:window.close()">← 返回排盘</a>
+    <div class="info" id="header-info"></div>
+    <div class="mode-switch">
+      <button id="btn-yuan" class="active" onclick="switchMode('yuan')">元能力</button>
+      <button id="btn-zuhe" onclick="switchMode('zuhe')">组合能力</button>
+    </div>
+  </header>
+  <div id="yuan-mode"></div>
+  <div id="zuhe-mode" style="display:none"><svg id="zuhe-svg"></svg></div>
+  <div id="empty-state" class="empty-state" style="display:none">
+    <p>未收到命盘数据</p>
+    <p>请从<a href="standalone.html">排盘页面</a>打开</p>
+  </div>
+</div>
+<footer>八字排盘 · 能力视图 · v3.0</footer>
+
+<script>
+// ===== 常量映射表 =====
+const TG=['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const DZ=['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+const WU_XING={甲:'木',乙:'木',丙:'火',丁:'火',戊:'土',己:'土',庚:'金',辛:'金',壬:'水',癸:'水',子:'水',丑:'土',寅:'木',卯:'木',辰:'土',巳:'火',午:'火',未:'土',申:'金',酉:'金',戌:'土',亥:'水'};
+const GAN_TO_ABILITY={甲:'联想力',乙:'联想力',丙:'概括力',丁:'概括力',戊:'整合力',己:'整合力',庚:'分析力',辛:'分析力',壬:'推理力',癸:'推理力'};
+const ZHI_TO_ABILITY={子:'推理力',丑:'整合力',寅:'联想力',卯:'联想力',辰:'整合力',巳:'概括力',午:'概括力',未:'整合力',申:'分析力',酉:'分析力',戌:'整合力',亥:'推理力'};
+const WX_KE_COMBO={木土:'破框力',土水:'限流力',水火:'纠错力',火金:'验真力',金木:'辨异力'};
+const WX_SHENG_COMBO={木火:'领悟力',火土:'吸纳力',土金:'理解力',金水:'运用力',水木:'创意力'};
+const WX_SAME_COMBO={木:'强联想力',火:'强概括力',土:'强整合力',金:'强分析力',水:'强推理力'};
+const WX_TRIPLE_COMBO={木火土:'构建力',火土金:'提炼力',土金水:'解决力',金水木:'探究力',水木火:'创想力'};
+const WX_SHENG_NEXT={木:'火',火:'土',土:'金',金:'水',水:'木'};
+const WX_KE_NEXT={木:'土',土:'水',水:'火',火:'金',金:'木'};
+const CANG_GAN={子:['癸'],丑:['己','癸','辛'],寅:['甲','丙','戊'],卯:['乙'],辰:['戊','乙','癸'],巳:['丙','庚','戊'],午:['丁','己'],未:['己','丁','乙'],申:['庚','壬','戊'],酉:['辛'],戌:['戊','辛','丁'],亥:['壬','甲']};
+const SHI_SHEN_SHORT={比肩:'比',劫财:'劫',食神:'食',伤官:'伤',偏印:'枭',正印:'印',偏财:'才',正财:'财',七杀:'杀',正官:'官',枭神:'枭'};
+const WX_COLORS={木:'c-wood',火:'c-fire',土:'c-earth',金:'c-metal',水:'c-water'};
+const WX_HEX={木:'#4a8c3f',火:'#c83a3a',土:'#b8933c',金:'#9b8c6c',水:'#3a6a9b'};
+const PILLAR_LABELS={nian:'年',yue:'月',ri:'日',shi:'时',daYun:'大运',liuNian:'流年',tai:'胎',ming:'命',shen:'身'};
+const MAIN_PILLARS=['nian','yue','ri','shi','daYun','liuNian'];
+const SAN_PILLARS=['tai','ming','shen'];
+
+// ===== 工具函数 =====
+function wxClass(gz){return WU_XING[gz]||''}
+function wxColorCss(gz){return WX_COLORS[WU_XING[gz]]||''}
+function wxColorHex(gz){return WX_HEX[WU_XING[gz]]||'#8b7e6a'}
+
+// ===== 十神计算（移植自 standalone.html） =====
+function shiShen(riGan,gan){
+  if(riGan===gan) return '比肩';
+  var dw=WU_XING[riGan],tw=WU_XING[gan];
+  if(!dw||!tw) return '?';
+  var yy=('甲丙戊庚壬'.indexOf(riGan)>=0)===('甲丙戊庚壬'.indexOf(gan)>=0);
+  if(dw===tw) return yy?'比肩':'劫财';
+  var s={木:'火',火:'土',土:'金',金:'水',水:'木'};
+  var k={木:'土',土:'水',水:'火',火:'金',金:'木'};
+  if(s[dw]===tw) return yy?'食神':'伤官';
+  if(s[tw]===dw) return yy?'枭神':'正印';
+  if(k[dw]===tw) return yy?'偏财':'正财';
+  if(k[tw]===dw) return yy?'七杀':'正官';
+  return '?';
+}
+
+// ===== 藏干综合能力名 =====
+function computeComboFromLayers(layers){
+  if(!layers||layers.length===0) return '';
+  if(layers.length===1) return GAN_TO_ABILITY[layers[0]]||'';
+  var w0=WU_XING[layers[0]],w1=WU_XING[layers[1]];
+  if(!w0||!w1) return '';
+  if(layers.length===2){
+    if(w0===w1) return WX_SAME_COMBO[w0]||'';
+    if(WX_KE_NEXT[w0]===w1) return WX_KE_COMBO[w0+w1]||'';
+    if(WX_SHENG_NEXT[w0]===w1) return WX_SHENG_COMBO[w0+w1]||'';
+    if(WX_KE_NEXT[w1]===w0) return WX_KE_COMBO[w1+w0]||'';
+    if(WX_SHENG_NEXT[w1]===w0) return WX_SHENG_COMBO[w1+w0]||'';
+    return '';
+  }
+  var w2=WU_XING[layers[2]];
+  if(!w2) return '';
+  if(WX_SHENG_NEXT[w0]===w1&&WX_SHENG_NEXT[w1]===w2) return WX_TRIPLE_COMBO[w0+w1+w2]||'';
+  var parts=[];
+  function pair(a,b){if(a===b)return WX_SAME_COMBO[a];if(WX_KE_NEXT[a]===b)return WX_KE_COMBO[a+b];if(WX_SHENG_NEXT[a]===b)return WX_SHENG_COMBO[a+b];if(WX_KE_NEXT[b]===a)return WX_KE_COMBO[b+a];if(WX_SHENG_NEXT[b]===a)return WX_SHENG_COMBO[b+a];return''}
+  parts.push(pair(w0,w1));parts.push(pair(w1,w2));
+  return parts.filter(Boolean).join(' / ');
+}
+
+// ===== 关系判定 =====
+function resolveRelation(wxA,wxB,isInverse){
+  var prefix=isInverse?'反':'';
+  if(wxA===wxB) return (isInverse?'强':'')+(WX_SAME_COMBO[wxA]||'');
+  if(WX_KE_NEXT[wxA]===wxB) return prefix+(WX_KE_COMBO[wxA+wxB]||'');
+  if(WX_SHENG_NEXT[wxA]===wxB) return prefix+(WX_SHENG_COMBO[wxA+wxB]||'');
+  if(WX_KE_NEXT[wxB]===wxA) return prefix+(WX_KE_COMBO[wxB+wxA]||'');
+  if(WX_SHENG_NEXT[wxB]===wxA) return prefix+(WX_SHENG_COMBO[wxB+wxA]||'');
+  return '';
+}
+
+function lineColor(wxA,wxB){
+  if(wxA===wxB) return 'dashed '+WX_HEX[wxA];
+  if(WX_KE_NEXT[wxA]===wxB||WX_KE_NEXT[wxB]===wxA) return WX_HEX['火'];
+  if(WX_SHENG_NEXT[wxA]===wxB||WX_SHENG_NEXT[wxB]===wxA) return WX_HEX['木'];
+  return '#8b7e6a';
+}
+
+function lineDash(wxA,wxB){
+  return (wxA===wxB)?'6,3':'none';
+}
+
+// ===== 数据解析 =====
+var gData=null;
+function parseData(){
+  var hash=window.location.hash;
+  if(hash&&hash.indexOf('#data=')===0){
+    try{ var json=decodeURIComponent(escape(atob(hash.slice(6)))); return JSON.parse(json); }catch(e){}
+  }
+  try{ var ls=localStorage.getItem('ability-chart-data');
+    if(ls){localStorage.removeItem('ability-chart-data');return JSON.parse(ls);}
+  }catch(e){}
+  return null;
+}
+
+// ===== 初始化 =====
+function init(){
+  gData=parseData();
+  if(!gData){document.getElementById('empty-state').style.display='block';return}
+  document.getElementById('empty-state').style.display='none';
+  renderHeader();renderYuanNengLi();
+}
+function switchMode(m){
+  var y=document.getElementById('yuan-mode'),z=document.getElementById('zuhe-mode');
+  var by=document.getElementById('btn-yuan'),bz=document.getElementById('btn-zuhe');
+  if(m==='yuan'){y.style.display='';z.style.display='none';by.classList.add('active');bz.classList.remove('active')}
+  else{y.style.display='none';z.style.display='';by.classList.remove('active');bz.classList.add('active');
+    if(!document.getElementById('zuhe-svg').hasChildNodes()) renderZuHeNengLi();}
+}
+
+function renderHeader(){
+  var d=gData,n=d.name||'',g=d.gender||'';
+  var sl=g==='男'?'乾造':'坤造',rg=d.ri?d.ri.gan:'?';
+  var nn=d.nian?d.nian.gan+d.nian.zhi:'',y=d.y||'',m=d.m||'',dd=d.d||'',h=d.h||'',mi=d.mi||'';
+  function p(n){return n<10?'0'+n:''+n}
+  document.getElementById('header-info').innerHTML=
+    '<div class="name">'+n+' · '+sl+' · '+rg+'日主</div>'+
+    '<div class="meta">'+nn+'年 '+y+'年'+m+'月'+dd+'日 '+p(h)+':'+p(mi)+'</div>';
+}
+
+// ===== 模式一：元能力 =====
+function renderYuanNengLi(){
+  var c=document.getElementById('yuan-mode');c.innerHTML='';
+  var d=gData,rg=d.ri?d.ri.gan:'?';
+  function pd(k){
+    var s=d[k];if(!s)return null;
+    // B3: daYun可能是数组，取当前大运元素
+    if(Array.isArray(s)){
+      var qy=d.qiYun||{},now=new Date().getFullYear();
+      var idx=s.length-1;
+      for(var i=s.length-1;i>=0;i--){if(s[i].startYear<=now){idx=i;break}}
+      if(idx<0)idx=0;
+      s=s[idx]||null;
+      if(!s)return null;
+    }
+    var lg=CANG_GAN[s.zhi]||[],combo=computeComboFromLayers(lg);
+    var det=lg.map(function(g){return '<span class="'+wxColorCss(g)+'">'+g+':'+(GAN_TO_ABILITY[g]||'')+'</span>'}).join('<br>');
+    return{gan:s.gan,zhi:s.zhi,key:k,label:PILLAR_LABELS[k]||k,combo:combo,detail:det};
+  }
+  var all=[];
+  MAIN_PILLARS.forEach(function(k){var p=pd(k);if(p)all.push(p)});
+  SAN_PILLARS.forEach(function(k){var p=pd(k);if(p)all.push(p)});
+  function ch(p){
+    var g=p.gan,z=p.zhi;
+    return '<div class="pillar-card">'+
+      '<div class="card-hd">'+p.label+'</div>'+
+      '<div class="gan-row"><span class="ability '+wxColorCss(g)+'">'+(GAN_TO_ABILITY[g]||'')+'</span><span class="ss">'+shiShen(rg,g)+'</span></div>'+
+      '<div class="zhi-row"><span class="ability '+wxColorCss(z)+'">'+(ZHI_TO_ABILITY[z]||'')+'</span><span class="ss">'+shiShen(rg,z)+'</span></div>'+
+      '<div class="cg-row"><span class="cg-combo '+wxColorCss(z)+'">'+p.combo+'</span><div class="cg-detail">'+p.detail+'</div></div></div>';
+  }
+  var mp=all.filter(function(p){return MAIN_PILLARS.indexOf(p.key)>=0});
+  var sp=all.filter(function(p){return SAN_PILLARS.indexOf(p.key)>=0});
+  var h='<div class="pillar-row">'+mp.map(ch).join('')+'</div>';
+  if(sp.length) h+='<div class="pillar-row sanyuan">'+sp.map(ch).join('')+'</div>';
+  c.innerHTML=h;
+}
+
+// ===== 模式二：组合能力 =====
+function renderZuHeNengLi(){
+  var svg=document.getElementById('zuhe-svg');svg.innerHTML='';
+  var d=gData,W=1100,M=60,cW=60,cH=32;
+  function pk(key){
+    var s=d[key];if(!s)return null;
+    var lg=CANG_GAN[s.zhi]||[];
+    return{gan:s.gan,zhi:s.zhi,wg:WU_XING[s.gan]||'',wz:WU_XING[s.zhi]||'',
+      ga:GAN_TO_ABILITY[s.gan]||'',za:GAN_TO_ABILITY[s.zhi]||'',
+      key:key,cg:computeComboFromLayers(lg)};
+  }
+  var mp=[],sp=[];
+  MAIN_PILLARS.forEach(function(k){var p=pk(k);if(p)mp.push(p)});
+  SAN_PILLARS.forEach(function(k){var p=pk(k);if(p)sp.push(p)});
+  function px(i,n){var s=(W-2*M)/(n-1);return M+s*i}
+
+  var mgY=20,mzY=mgY+cH+28,mcY=mzY+cH+20,mb=mcY+40;
+  var sgY=mb+20,szY=sgY+cH+28,scY=szY+cH+20;
+  var H=Math.max(500,scY+30);
+  var els=[];
+
+  function card(x,y,w,h,t,wx){
+    var rx=6,c=wxColorHex(wx),fill='#fff';
+    return '<rect x="'+(x-w/2)+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+rx+'" fill="'+fill+'" stroke="'+c+'" stroke-width="1.2"/>'+
+      '<text x="'+x+'" y="'+(y+h/2+5)+'" text-anchor="middle" font-size="14" font-weight="bold" fill="'+c+'">'+t+'</text>';
+  }
+
+  function drawAll(pl,yG,yZ,yC){
+    var n=pl.length;if(!n)return;
+    // 天干卡片
+    for(var i=0;i<n;i++){var p=pl[i],x=px(i,n);els.push(card(x,yG,cW,cH,p.ga,p.wg));p._gx=x}
+    // 天干连线
+    for(var i=0;i<n-1;i++){
+      var a=pl[i],b=pl[i+1];
+      var ax=px(i,n)+cW/2,ay=yG+cH/2,bx=px(i+1,n)-cW/2,by=ay;
+      var col=lineColor(a.wg,b.wg),dash=lineDash(a.wg,b.wg);
+      var rel=resolveRelation(a.wg,b.wg,false),mx=(ax+bx)/2;
+      els.push('<line x1="'+ax+'" y1="'+ay+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="'+dash+'"/>');
+      if(rel)els.push('<text x="'+mx+'" y="'+(ay-6)+'" text-anchor="middle" font-size="11" fill="#8b7e6a">'+rel+'</text>');
+    }
+    // 地支卡片
+    for(var i=0;i<n;i++){var p=pl[i],x=px(i,n);els.push(card(x,yZ,cW,cH,p.za,p.wz));p._zx=x}
+    // 地支连线
+    for(var i=0;i<n-1;i++){
+      var a=pl[i],b=pl[i+1];
+      var ax=px(i,n)+cW/2,ay=yZ+cH/2,bx=px(i+1,n)-cW/2,by=ay;
+      var col=lineColor(a.wz,b.wz),dash=lineDash(a.wz,b.wz);
+      var rel=resolveRelation(a.wz,b.wz,false),mx=(ax+bx)/2;
+      els.push('<line x1="'+ax+'" y1="'+ay+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="'+dash+'"/>');
+      if(rel)els.push('<text x="'+mx+'" y="'+(ay-6)+'" text-anchor="middle" font-size="11" fill="#8b7e6a">'+rel+'</text>');
+    }
+    // 柱内弧线
+    for(var i=0;i<n;i++){
+      var p=pl[i],x=px(i,n);
+      var gx=x,gy=yG+cH,zx=x,zy=yZ;
+      var cx=gx-12,cy=(gy+zy)/2;
+      // B4: 柱内弧线先检查支→干方向，支克干加「反」前缀
+      var isKe=WX_KE_NEXT[p.wz]===p.wg;
+      var rel=resolveRelation(p.wz,p.wg,isKe);
+      var col=lineColor(p.wg,p.wz);
+      els.push('<path d="M '+gx+' '+gy+' Q '+cx+' '+cy+' '+zx+' '+zy+'" fill="none" stroke="'+col+'" stroke-width="1.2"/>');
+      if(rel)els.push('<text x="'+(cx-6)+'" y="'+(cy+4)+'" text-anchor="end" font-size="11" fill="#8b7e6a">'+rel+'</text>');
+    }
+    // 藏干标注
+    for(var i=0;i<n;i++){
+      var p=pl[i],x=px(i,n);
+      var cg=p.cg||'',col=p.wz?WX_HEX[p.wz]:'#8b7e6a';
+      els.push('<text x="'+x+'" y="'+(yC+14)+'" text-anchor="middle" font-size="12" font-weight="bold" fill="'+col+'">'+cg+'</text>');
+    }
+  }
+
+  drawAll(mp,mgY,mzY,mcY);
+  drawAll(sp,sgY,szY,scY);
+
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('width','100%');svg.setAttribute('height',H);
+  svg.innerHTML=els.join('\n');
+}
+
+window.addEventListener('DOMContentLoaded',init);
+
+</script>
+</body>
+</html>
