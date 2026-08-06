@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.13.1 | 2026-08-06 -->
-<!-- v0.13.1: 修复 Bug #1 persistGroups参数不匹配 + Bug #2 重名校验无提示 (AC05) -->
-<!-- v0.12.0: 档案编辑功能 — 修改/删除/编辑弹窗/回收站增强 -->
-<!-- v0.12.0: 纳运功能 — 纳音五行十二长生（金→庚/木→甲/水→壬/火→丙/土→壬） -->
+<!-- 八字排盘 · 从真版 v0.11.1 | 2026-07-28 -->
+<!-- v0.11.1: 能力排盘架构重构 — ability-chart.html 独立模块化，跨窗口数据传递 -->
+<!-- v0.11.0: 能力按钮功能 — 宫位能力标签交互系统 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -204,7 +203,6 @@
 
   /* 精简模式：隐藏纳音/空亡/神煞 */
   .chart.simple tr[data-row-type~="nayin"],
-  .chart.simple tr[data-row-type~="nayun"],
   .chart.simple tr[data-row-type~="kongwang"],
   .chart.simple tr[data-row-type~="shensha"] { display:none; }
 
@@ -315,34 +313,6 @@
   .archive-row-btn:hover { opacity:.85; }
   .archive-modal-empty { display:flex; align-items:center; justify-content:center; height:100%; min-height:200px; text-align:center; padding:40px 20px; color:var(--c-gray); font-size:14px; }
 
-  /* v0.12.0 档案行内操作按钮 */
-  .archive-row-actions { display:flex; gap:6px; flex-shrink:0; margin-left:8px; }
-  .archive-row-edit, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
-  .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
-  .archive-row-del:hover { background:var(--c-red); color:#fff; border-color:var(--c-red); }
-
-  /* v0.12.0 编辑弹窗 */
-  .edit-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1000;justify-content:center;align-items:center; }
-  .edit-overlay.show { display:flex; }
-  .edit-dialog { background:var(--c-paper); border:1px solid var(--c-line); border-radius:6px; width:90%;max-width:420px; max-height:85vh; overflow-y:auto; box-shadow:0 4px 24px rgba(0,0,0,.15); }
-  .edit-dialog-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 12px; border-bottom:1px solid var(--c-line); }
-  .edit-dialog-title { font-family:var(--font-display); font-size:18px; color:var(--c-ink); }
-  .edit-dialog-close { background:none; border:none; font-size:20px; color:var(--c-gray); cursor:pointer; padding:0 4px; line-height:1; }
-  .edit-dialog-close:hover { color:var(--c-red); }
-  .edit-dialog-body { padding:16px 20px; }
-  .edit-dialog-body .edit-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-  .edit-dialog-body .edit-row label { font-size:13px; color:var(--c-gray); white-space:nowrap; min-width:36px; }
-  .edit-dialog-body .edit-row input, .edit-dialog-body .edit-row select { font-family:var(--font-display); font-size:14px; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); }
-  .edit-dialog-body .edit-row input[type=number] { width:58px; text-align:center; }
-  .edit-dialog-body .edit-row input[type=text] { flex:1; min-width:120px; }
-  .edit-dialog-body .edit-error { border-color:var(--c-red) !important; background:#fff5f5 !important; }
-  .edit-dialog-footer { display:flex; gap:8px; justify-content:flex-end; padding:12px 20px; border-top:1px solid var(--c-line); }
-  .edit-dialog-footer button { font-size:14px; padding:6px 18px; border-radius:2px; cursor:pointer; font-family:var(--font-display); }
-  .edit-dialog-footer .btn-save { background:var(--c-ink); color:var(--c-paper); border:none; }
-  .edit-dialog-footer .btn-save:hover { background:var(--c-red); }
-  .edit-dialog-footer .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
-  .edit-dialog-footer .btn-cancel:hover { background:var(--c-line); }
-
   @media (max-width:900px) {
     .page { padding:10px 6px 14px; max-width:100%; }
     .body-cols { flex-direction:column; }
@@ -422,126 +392,17 @@
     .gz-cb-grid { grid-template-columns: 1fr; }
   }
 
-  /* ===== v0.13.0 宫位自定义 — 设置弹窗 ===== */
-  .gz-settings-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;
-    background:rgba(0,0,0,.35);z-index:1000;justify-content:center;align-items:center; }
-  .gz-settings-overlay.show { display:flex; }
-  .gz-settings-modal { background:var(--c-paper); border:1px solid var(--c-line);
-    border-radius:4px; width:90%;max-width:560px;max-height:85vh;display:flex;
-    flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,.15); }
-  .gz-settings-header { display:flex;justify-content:space-between;align-items:center;
-    padding:14px 18px 10px;border-bottom:1px solid var(--c-line); }
-  .gz-settings-title { font-family:var(--font-display);font-size:18px;color:var(--c-ink);
-    letter-spacing:.05em; }
-  .gz-settings-close { font-size:18px;cursor:pointer;color:var(--c-gray);background:none;
-    border:none;padding:2px 6px;line-height:1; }
-  .gz-settings-close:hover { color:var(--c-red); }
-  .gz-settings-actions { padding:10px 18px;display:flex;gap:8px;border-bottom:1px solid var(--c-line); }
-  .gz-settings-actions button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
-    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;
-    font-family:var(--font-body); }
-  .gz-settings-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
-  .gz-settings-list { flex:1;overflow-y:auto;padding:8px 18px; }
-  /* 列表项 */
-  .gz-set-item { display:flex;align-items:center;gap:10px;padding:10px 12px;
-    margin-bottom:6px;background:var(--bz-card-bg);border:1px solid var(--bz-card-border);
-    border-radius:4px;transition:box-shadow .15s; }
-  .gz-set-item:hover { box-shadow:0 1px 4px rgba(0,0,0,.08); }
-  .gz-set-item.dragging { opacity:.5; }
-  .gz-set-item.drag-over { border-color:var(--c-ink);background:rgba(201,169,110,.08); }
-  .gz-drag-handle { cursor:grab;color:var(--c-gray);font-size:16px;user-select:none;
-    flex-shrink:0;padding:2px 0; }
-  .gz-drag-handle:active { cursor:grabbing; }
-  .gz-set-info { flex:1;min-width:0; }
-  .gz-set-name { font-size:15px;font-weight:600;color:var(--c-ink);display:flex;
-    align-items:center;gap:6px; }
-  .gz-preset-tag { font-size:11px;padding:1px 6px;border-radius:2px;
-    background:var(--gz-preset-tag-bg,#e8e4dc);color:var(--gz-preset-tag-color,#8b7e6a);
-    font-weight:400; }
-  .gz-set-preview { font-size:13px;color:var(--c-gray);margin-top:3px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-  .gz-set-actions { display:flex;gap:4px;flex-shrink:0;align-items:center; }
-  .gz-set-actions button { font-size:14px;padding:3px 6px;border:1px solid var(--c-line);
-    border-radius:2px;background:var(--c-paper);cursor:pointer;color:var(--c-ink);line-height:1; }
-  .gz-set-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
-  .gz-set-actions button:disabled { opacity:.3;cursor:not-allowed; }
-  .gz-set-actions button:disabled:hover { background:var(--c-paper);color:var(--c-ink); }
-  /* 设置面板底部 */
-  .gz-settings-footer { padding:10px 18px;border-top:1px solid var(--c-line);
-    display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap; }
-  .gz-settings-footer button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
-    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;
-    font-family:var(--font-body); }
-  .gz-settings-footer button:hover { background:var(--c-ink);color:var(--c-paper); }
-  .gz-settings-footer .btn-save-close { background:var(--c-ink);color:var(--c-paper);border:none;
-    font-family:var(--font-display);letter-spacing:.05em; }
-  .gz-settings-footer .btn-save-close:hover { background:var(--c-red); }
-  .gz-settings-footer .btn-reset { color:var(--c-gray);font-size:12px; }
+  /* ===== v0.11.0 能力按钮 ===== */
+  .btn-ability { font-size:13px; padding:4px 12px; border:1px solid #ccc; border-radius:2px; background:#fff; cursor:pointer; font-family:var(--font-body); color:var(--c-ink); margin-left:6px; transition:all .15s; }
+  .btn-ability:hover { border-color:var(--c-red); color:var(--c-red); }
+  .btn-ability.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
 
-  /* ===== v0.13.0 编辑弹窗（新增/修改宫位组）===== */
-  .gz-edit-overlay { display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-    background:rgba(0,0,0,.35);z-index:1001;justify-content:center;align-items:center; }
-  .gz-edit-overlay.show { display:flex; }
-  .gz-edit-dialog { background:var(--c-paper);border:1px solid var(--c-line);
-    border-radius:4px;width:90%;max-width:460px;max-height:85vh;overflow-y:auto;
-    box-shadow:0 4px 24px rgba(0,0,0,.15);padding:0; }
-  .gz-edit-header { display:flex;justify-content:space-between;align-items:center;
-    padding:14px 18px 10px;border-bottom:1px solid var(--c-line); }
-  .gz-edit-title { font-family:var(--font-display);font-size:18px;color:var(--c-ink); }
-  .gz-edit-close { font-size:18px;cursor:pointer;color:var(--c-gray);background:none;
-    border:none;padding:2px 6px;line-height:1; }
-  .gz-edit-close:hover { color:var(--c-red); }
-  .gz-edit-body { padding:14px 18px; }
-  .gz-edit-row { margin-bottom:10px; }
-  .gz-edit-row label { display:block;font-size:13px;color:var(--c-gray);margin-bottom:3px;
-    font-family:var(--font-body); }
-  .gz-edit-row input { width:100%;font-family:var(--font-body);font-size:14px;padding:6px 10px;
-    border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink); }
-  .gz-edit-row input:focus { outline:none;border-color:var(--c-ink); }
-  .gz-edit-row .err-msg { font-size:12px;color:var(--c-red);margin-top:2px;display:none; }
-  .gz-edit-footer { padding:10px 18px 14px;display:flex;justify-content:flex-end;gap:8px;
-    border-top:1px solid var(--c-line); }
-  .gz-edit-footer button { font-size:14px;padding:6px 18px;border-radius:2px;cursor:pointer;
-    font-family:var(--font-display); }
-  .gz-edit-footer .btn-cancel { background:transparent;color:var(--c-gray);border:1px solid var(--c-line); }
-  .gz-edit-footer .btn-cancel:hover { background:var(--c-line); }
-  .gz-edit-footer .btn-save { background:var(--c-ink);color:var(--c-paper);border:none; }
-  .gz-edit-footer .btn-save:hover { background:var(--c-red); }
-  .gz-edit-footer .btn-save:disabled { opacity:.4;cursor:not-allowed; }
-  .gz-edit-footer .btn-save:disabled:hover { background:var(--c-ink); }
+  /* 组合能力 SVG 覆盖层 */
+  .chart-ability-svg { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
 
-  /* ===== v0.13.0 回收站视图 ===== */
-  .gz-trash-list { padding:8px 18px;flex:1;overflow-y:auto; }
-  .gz-trash-item { padding:10px 12px;margin-bottom:6px;background:var(--bz-card-bg);
-    border:1px solid var(--bz-card-border);border-radius:4px;display:flex;
-    align-items:center;gap:10px; }
-  .gz-trash-info { flex:1;min-width:0; }
-  .gz-trash-name { font-size:15px;font-weight:600;color:var(--c-ink); }
-  .gz-trash-preview { font-size:13px;color:var(--c-gray);margin-top:2px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-  .gz-trash-time { font-size:11px;color:var(--c-gray);margin-top:2px; }
-  .gz-trash-empty { text-align:center;color:var(--c-gray);padding:30px 0;
-    font-family:var(--font-display);font-size:15px; }
-  .gz-trash-actions { flex-shrink:0; }
-  .gz-trash-actions button { font-size:13px;padding:4px 12px;border:1px solid var(--c-line);
-    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer; }
-  .gz-trash-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
-  .gz-trash-footer { padding:10px 18px;border-top:1px solid var(--c-line);
-    display:flex;justify-content:space-between; }
-  .gz-trash-footer button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
-    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer; }
-  .gz-trash-footer button:hover { background:var(--c-red);color:var(--c-paper);border-color:var(--c-red); }
-
-  /* 宫位popover中设置按钮 */
-  .gz-popover-actions .gz-settings-btn { margin-left:auto;border-left:1px solid var(--c-line);
-    padding-left:12px; }
-
-  @media (max-width: 480px) {
-    .gz-settings-modal { width:90vw;max-width:none; }
-    .gz-edit-dialog { width:90vw;max-width:none; }
-    .gz-set-actions { flex-direction:column;gap:2px; }
-  }
-
+  /* 元能力激活态：字号缩小 */
+  .chart.yuan-active .rg td { font-size: 18px; }
+  .chart.yuan-active .rh td { font-size: 11px; }
 </style>
 </head>
 <body>
@@ -618,123 +479,6 @@
         <button class="archive-search-btn" onclick="filterArchives(document.getElementById('archive-search-modal').value)">确定</button>
       </div>
       <div class="archive-modal-list" id="archive-modal-list"></div>
-    </div>
-  </div>
-
-  <!-- v0.12.0 编辑档案弹窗 -->
-  <div class="edit-overlay" id="editOverlay">
-    <div class="edit-dialog" onclick="event.stopPropagation()">
-      <div class="edit-dialog-header">
-        <span class="edit-dialog-title">✏️ 编辑档案</span>
-        <button class="edit-dialog-close" onclick="closeEditPanel()">✕</button>
-      </div>
-      <div class="edit-dialog-body">
-        <div class="edit-row">
-          <label>昵称</label>
-          <input type="text" id="editNickname" placeholder="昵称（选填）" style="width:100%;">
-        </div>
-        <div class="edit-row">
-          <label>姓名</label>
-          <input type="text" id="editName" placeholder="姓名（必填）" style="width:100%;">
-        </div>
-        <div class="edit-row">
-          <label>性别</label>
-          <select id="editGender"><option value="男">男</option><option value="女">女</option></select>
-          <span style="margin-left:8px;">
-            <label style="cursor:pointer;font-size:13px;"><input type="radio" name="editCalType" id="editCalSolar" checked onchange="editCalChange()">公历</label>
-            <label style="cursor:pointer;font-size:13px;"><input type="radio" name="editCalType" id="editCalLunar" onchange="editCalChange()">农历</label>
-          </span>
-        </div>
-        <div class="edit-row" id="editDateRow">
-          <label>日期</label>
-          <input type="number" id="editYear" min="1900" max="2100" placeholder="年">
-          <span id="editMonthCell"><input type="number" id="editMonth" min="1" max="12" placeholder="月"></span>
-          <input type="number" id="editDay" min="1" max="31" placeholder="日">
-          <span id="editLeapGroup" style="display:none;"><label style="font-size:12px;"><input type="checkbox" id="editLeap">闰月</label></span>
-        </div>
-        <div class="edit-row">
-          <label>时间</label>
-          <input type="number" id="editHour" min="0" max="23" placeholder="时">
-          <input type="number" id="editMin" min="0" max="59" placeholder="分">
-        </div>
-        <div class="edit-row">
-          <label style="cursor:pointer;user-select:none;"><input type="checkbox" id="editSolar" onchange="editSolarToggle()">真太阳时</label>
-        </div>
-        <div class="edit-row" id="editSolarGroup" style="display:none;">
-          <label>省</label><select id="editProv" onchange="editProvChange()"><option value="">—</option></select>
-          <label>市</label><select id="editCity" onchange="editCityChange()"><option value="">—</option></select>
-          <label>区</label><select id="editDist"><option value="">—</option></select>
-        </div>
-      </div>
-      <div class="edit-dialog-footer">
-        <button class="btn-cancel" onclick="closeEditPanel()">取消</button>
-        <button class="btn-save" onclick="saveEdit()">保存修改</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== v0.13.0 宫位设置弹窗 ===== -->
-  <div class="gz-settings-overlay" id="gzSettingsOverlay" onclick="closeGzSettings()">
-    <div class="gz-settings-modal" onclick="event.stopPropagation()">
-      <!-- 列表视图 -->
-      <div id="gzSettingsListView">
-        <div class="gz-settings-header">
-          <span class="gz-settings-title">⚙ 宫位设置</span>
-          <button class="gz-settings-close" onclick="closeGzSettings()">✕</button>
-        </div>
-        <div class="gz-settings-actions">
-          <button onclick="openGzEdit()">+ 新增宫位组</button>
-        </div>
-        <div class="gz-settings-list" id="gzSettingsList"></div>
-        <div class="gz-settings-footer">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn-reset" onclick="resetGongWeiDefaults()">恢复默认</button>
-            <button onclick="openGzTrash()">♻️ 回收站 <span id="gzTrashCount"></span></button>
-          </div>
-          <button class="btn-save-close" onclick="closeGzSettings()">保存并关闭</button>
-        </div>
-      </div>
-      <!-- 回收站视图 -->
-      <div id="gzSettingsTrashView" style="display:none;flex-direction:column;flex:1;">
-        <div class="gz-settings-header">
-          <button style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--c-gray);" onclick="backToGzList()">← 返回</button>
-          <span class="gz-settings-title">♻️ 回收站</span>
-          <button class="gz-settings-close" onclick="closeGzSettings()">✕</button>
-        </div>
-        <div class="gz-trash-list" id="gzTrashList"></div>
-        <div class="gz-trash-footer">
-          <span></span>
-          <button onclick="emptyGzTrash()">清空回收站</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== v0.13.0 宫位编辑弹窗（新增/修改） ===== -->
-  <div class="gz-edit-overlay" id="gzEditOverlay" onclick="checkCloseGzEdit()">
-    <div class="gz-edit-dialog" onclick="event.stopPropagation()">
-      <div class="gz-edit-header">
-        <span class="gz-edit-title" id="gzEditTitle">新增宫位组</span>
-        <button class="gz-edit-close" onclick="checkCloseGzEdit()">✕</button>
-      </div>
-      <div class="gz-edit-body">
-        <div class="gz-edit-row">
-          <label>组名（必填，≤6字）</label>
-          <input type="text" id="gzEditName" maxlength="6" placeholder="如：教学">
-          <div class="err-msg" id="gzEditNameErr"></div>
-        </div>
-        <div class="gz-edit-row"><label>胎元</label><input type="text" id="gzEditL0" maxlength="12" placeholder="胎元标签"></div>
-        <div class="gz-edit-row"><label>年柱</label><input type="text" id="gzEditL1" maxlength="12" placeholder="年柱标签"></div>
-        <div class="gz-edit-row"><label>月柱</label><input type="text" id="gzEditL2" maxlength="12" placeholder="月柱标签"></div>
-        <div class="gz-edit-row"><label>日柱</label><input type="text" id="gzEditL3" maxlength="12" placeholder="日柱标签"></div>
-        <div class="gz-edit-row"><label>命宫</label><input type="text" id="gzEditL4" maxlength="12" placeholder="命宮标签"></div>
-        <div class="gz-edit-row"><label>时柱</label><input type="text" id="gzEditL5" maxlength="12" placeholder="时柱标签"></div>
-        <div class="gz-edit-row"><label>身宫</label><input type="text" id="gzEditL6" maxlength="12" placeholder="身宫标签"></div>
-      </div>
-      <div class="gz-edit-footer">
-        <button class="btn-cancel" onclick="checkCloseGzEdit()">取消</button>
-        <button class="btn-save" id="gzEditSaveBtn" onclick="saveGzEdit()">保存</button>
-      </div>
     </div>
   </div>
 </div>
@@ -1128,18 +872,12 @@ const LOC_DATA = {
 
 // 初始化省份下拉
 (function initLoc() {
-  var pSel = document.getElementById('inProv');
-  var provinces = Object.keys(LOC_DATA).sort(function(a,b){return a.localeCompare(b,'zh');});
-  provinces.forEach(function(p) { var o=document.createElement('option'); o.value=p; o.textContent=p; pSel.appendChild(o); });
+  const pSel = document.getElementById('inProv');
+  const provinces = Object.keys(LOC_DATA).sort((a,b)=>a.localeCompare(b,'zh'));
+  provinces.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; pSel.appendChild(o); });
   // 默认选广西
   pSel.value = '广西';
   onProvChange();
-  // 编辑弹窗省份下拉也初始化
-  var eSel = document.getElementById('editProv');
-  if (eSel) {
-    eSel.innerHTML = '<option value="">—</option>';
-    provinces.forEach(function(p) { var o=document.createElement('option'); o.value=p; o.textContent=p; eSel.appendChild(o); });
-  }
 })();
 
 function onProvChange() {
@@ -1366,6 +1104,57 @@ const DZ = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','�
 const WU_XING = { '甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水',
   '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
 const WX_CSS = { '木':'wood','火':'fire','土':'earth','金':'metal','水':'water' };
+const WX_S = { '木':'wood','火':'fire','土':'earth','金':'metal','水':'water' };
+
+// ===== 能力按钮映射表 =====
+const GAN_TO_ABILITY = { '甲':'联想力','乙':'联想力','丙':'概括力','丁':'概括力','戊':'整合力','己':'整合力','庚':'分析力','辛':'分析力','壬':'推理力','癸':'推理力' };
+const WX_KE_COMBO  = { '木土':'破框力','土水':'限流力','水火':'纠错力','火金':'验真力','金木':'辨异力' };
+const WX_SHENG_COMBO = { '木火':'领悟力','火土':'吸纳力','土金':'理解力','金水':'运用力','水木':'创意力' };
+const WX_SAME_COMBO  = { '木':'强联想力','火':'强概括力','土':'强整合力','金':'强分析力','水':'强推理力' };
+const WX_TRIPLE_COMBO = { '木火土':'构建力','火土金':'提炼力','土金水':'解决力','金水木':'探究力','水木火':'创想力' };
+// 相生顺序: 木→火→土→金→水→木
+const WX_SHENG_NEXT = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+// 相克: 木克土, 土克水, 水克火, 火克金, 金克木
+const WX_KE_NEXT = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+
+// v0.11.0 藏干层→综合能力名
+function _computeComboFromLayers(layers) {
+  if (!layers || layers.length === 0) return '';
+  if (layers.length === 1) {
+    return GAN_TO_ABILITY[layers[0]] || '';
+  }
+  var w0 = WU_XING[layers[0]], w1 = WU_XING[layers[1]];
+  if (!w0 || !w1) return '';
+  // 双层
+  if (layers.length === 2) {
+    if (w0 === w1) return WX_SAME_COMBO[w0] || '';
+    if (WX_KE_NEXT[w0] === w1) return WX_KE_COMBO[w0+w1] || '';
+    if (WX_SHENG_NEXT[w0] === w1) return WX_SHENG_COMBO[w0+w1] || '';
+    if (WX_KE_NEXT[w1] === w0) return WX_KE_COMBO[w1+w0] || '';
+    if (WX_SHENG_NEXT[w1] === w0) return WX_SHENG_COMBO[w1+w0] || '';
+    return '';
+  }
+  // 三层+
+  var w2 = WU_XING[layers[2]];
+  if (!w2) return '';
+  if (WX_SHENG_NEXT[w0] === w1 && WX_SHENG_NEXT[w1] === w2) {
+    return WX_TRIPLE_COMBO[w0+w1+w2] || '';
+  }
+  var parts = [];
+  // 本→中
+  if (w0 === w1) parts.push(WX_SAME_COMBO[w0] || '');
+  else if (WX_KE_NEXT[w0] === w1) parts.push(WX_KE_COMBO[w0+w1] || '');
+  else if (WX_SHENG_NEXT[w0] === w1) parts.push(WX_SHENG_COMBO[w0+w1] || '');
+  else if (WX_KE_NEXT[w1] === w0) parts.push(WX_KE_COMBO[w1+w0] || '');
+  else if (WX_SHENG_NEXT[w1] === w0) parts.push(WX_SHENG_COMBO[w1+w0] || '');
+  // 中→余
+  if (w1 === w2) parts.push(WX_SAME_COMBO[w1] || '');
+  else if (WX_KE_NEXT[w1] === w2) parts.push(WX_KE_COMBO[w1+w2] || '');
+  else if (WX_SHENG_NEXT[w1] === w2) parts.push(WX_SHENG_COMBO[w1+w2] || '');
+  else if (WX_KE_NEXT[w2] === w1) parts.push(WX_KE_COMBO[w2+w1] || '');
+  else if (WX_SHENG_NEXT[w2] === w1) parts.push(WX_SHENG_COMBO[w2+w1] || '');
+  return parts.filter(Boolean).join(' / ');
+}
 
 // ===== v0.7.1 宫位映射表 =====
 // 14种宫位 × 7柱，索引顺序：[胎元, 年柱, 月柱, 日柱, 命宫, 时柱, 身宫]
@@ -1404,184 +1193,7 @@ const GONGWEI_COLOR_KEYS = {
   '生理': 'physio', '记忆': 'memory'
 };
 
-// ===== v0.13.0 宫位自定义 — 数据层 =====
-// 全局状态变量
-let gongWeiGroups = [];
-let gongWeiTrash = [];
-
-// ===== localStorage 读写 =====
-function loadGroups() {
-  let raw = localStorage.getItem('bz_gongwei_groups');
-  if (!raw) return initGongWeiGroups();
-  try { let g = JSON.parse(raw); if (!Array.isArray(g) || g.length === 0) return initGongWeiGroups(); return g; }
-  catch(e) { return initGongWeiGroups(); }
-}
-function loadTrash() { let raw = localStorage.getItem('bz_gongwei_trash'); return raw ? JSON.parse(raw) : []; }
-function loadSelected() { let raw = localStorage.getItem('bz_gongwei_selected'); return raw ? JSON.parse(raw) : []; }
-function persistGroups() { localStorage.setItem('bz_gongwei_groups', JSON.stringify(gongWeiGroups)); }
-function persistTrash() { localStorage.setItem('bz_gongwei_trash', JSON.stringify(gongWeiTrash)); }
-function persistSelected() { localStorage.setItem('bz_gongwei_selected', JSON.stringify(selectedGongWei)); }
-function nowISO() { return new Date().toISOString(); }
-function generateGwId() { return 'gw_' + Date.now().toString(36); }
-function findGroupByName(name) {
-  var n = name.replace(/宫位$/, '').toLowerCase();
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    if (gongWeiGroups[i].name.replace(/宫位$/, '').toLowerCase() === n) return gongWeiGroups[i];
-  }
-  return null;
-}
-function getGroupColor(name, isPreset) {
-  if (isPreset && GONGWEI_COLORS[name]) return GONGWEI_COLORS[name];
-  return '#8b7e6a';
-}
-
-// ===== 初始化（首次/数据损坏时） =====
-function initGongWeiGroups() {
-  var presetNames = Object.keys(GONGWEI_MAP);
-  var now = nowISO();
-  var groups = presetNames.map(function(name, i) {
-    return {
-      id: 'gw_preset_' + String(i + 1).padStart(2, '0'),
-      name: name, labels: GONGWEI_MAP[name],
-      isPreset: true, color: GONGWEI_COLORS[name] || '#8b7e6a',
-      createdAt: now, updatedAt: now
-    };
-  });
-  gongWeiGroups = groups; persistGroups(); persistTrash([]); persistSelected([]);
-  return groups;
-}
-
-// ===== CRUD =====
-function addGroup(name, labels) {
-  if (!name || name.trim().length === 0) return { ok: false, error: '组名不能为空' };
-  if (name.length > 6) return { ok: false, error: '组名不能超过6个字' };
-  if (findGroupByName(name)) return { ok: false, error: '该名称已存在' };
-  for (var i = 0; i < 7; i++) {
-    if (!labels[i] || labels[i].trim().length === 0) return { ok: false, error: '七柱标签不能为空' };
-    if (labels[i].length > 12) return { ok: false, error: '标签不能超过12个字' };
-  }
-  var now = nowISO();
-  var group = {
-    id: generateGwId(), name: name.trim(),
-    labels: labels.map(function(l) { return l.trim(); }),
-    isPreset: false, color: '#8b7e6a',
-    createdAt: now, updatedAt: now
-  };
-  gongWeiGroups.push(group); persistGroups();
-  return { ok: true, group: group };
-}
-
-function updateGroup(id, newName, newLabels) {
-  var idx = -1;
-  for (var i = 0; i < gongWeiGroups.length; i++) { if (gongWeiGroups[i].id === id) { idx = i; break; } }
-  if (idx === -1) return { ok: false, error: '宫位组不存在' };
-  var group = gongWeiGroups[idx];
-  if (!newName || newName.trim().length === 0) return { ok: false, error: '组名不能为空' };
-  if (newName.length > 6) return { ok: false, error: '组名不能超过6个字' };
-  var conflict = findGroupByName(newName);
-  if (conflict && conflict.id !== id) return { ok: false, error: '该名称已存在' };
-  for (var i = 0; i < 7; i++) {
-    if (!newLabels[i] || newLabels[i].trim().length === 0) return { ok: false, error: '七柱标签不能为空' };
-    if (newLabels[i].length > 12) return { ok: false, error: '标签不能超过12个字' };
-  }
-  var oldName = group.name;
-  group.name = newName.trim();
-  group.labels = newLabels.map(function(l) { return l.trim(); });
-  group.isPreset = false;
-  group.color = getGroupColor(group.name, false);
-  group.updatedAt = nowISO();
-  if (oldName !== group.name) {
-    var si = selectedGongWei.indexOf(oldName);
-    if (si !== -1) selectedGongWei[si] = group.name;
-  }
-  persistGroups(); persistSelected();
-  return { ok: true, group: group };
-}
-
-function deleteGroup(id) {
-  var idx = -1;
-  for (var i = 0; i < gongWeiGroups.length; i++) { if (gongWeiGroups[i].id === id) { idx = i; break; } }
-  if (idx === -1) return { ok: false, error: '宫位组不存在' };
-  var removed = gongWeiGroups.splice(idx, 1)[0];
-  gongWeiTrash.push({ id: removed.id, group: removed, deletedAt: nowISO() });
-  selectedGongWei = selectedGongWei.filter(function(n) { return n !== removed.name; });
-  persistGroups(); persistTrash(); persistSelected();
-  return { ok: true };
-}
-
-function restoreFromTrash(id) {
-  var idx = -1;
-  for (var i = 0; i < gongWeiTrash.length; i++) { if (gongWeiTrash[i].id === id) { idx = i; break; } }
-  if (idx === -1) return { ok: false, error: '回收站中不存在' };
-  var item = gongWeiTrash.splice(idx, 1)[0];
-  if (findGroupByName(item.group.name)) {
-    item.group.name = item.group.name + '(恢复)';
-    item.group.updatedAt = nowISO();
-  }
-  gongWeiGroups.push(item.group);
-  persistGroups(); persistTrash();
-  return { ok: true, group: item.group };
-}
-
-function clearTrash() { gongWeiTrash = []; persistTrash(); return { ok: true }; }
-
-function moveGroup(fromIdx, toIdx) {
-  if (fromIdx < 0 || fromIdx >= gongWeiGroups.length || toIdx < 0 || toIdx >= gongWeiGroups.length || fromIdx === toIdx) return { ok: false };
-  var item = gongWeiGroups.splice(fromIdx, 1)[0];
-  gongWeiGroups.splice(toIdx, 0, item);
-  persistGroups();
-  return { ok: true };
-}
-function moveUp(idx) { if (idx <= 0) return { ok: false }; return moveGroup(idx, idx - 1); }
-function moveDown(idx) { if (idx >= gongWeiGroups.length - 1) return { ok: false }; return moveGroup(idx, idx + 1); }
-
-// ===== 选中状态管理 =====
-function toggleSelect(name) {
-  var idx = selectedGongWei.indexOf(name);
-  if (idx === -1) selectedGongWei.push(name);
-  else selectedGongWei.splice(idx, 1);
-  persistSelected();
-  return selectedGongWei;
-}
-function selectAll() { selectedGongWei = gongWeiGroups.map(function(g) { return g.name; }); persistSelected(); return selectedGongWei; }
-function clearSelection() { selectedGongWei = []; persistSelected(); return selectedGongWei; }
-function isSelected(name) { return selectedGongWei.indexOf(name) >= 0; }
-
-// ===== 恢复默认 =====
-function resetToDefaults() {
-  var presetNames = Object.keys(GONGWEI_MAP);
-  var now = nowISO();
-  presetNames.forEach(function(name, i) {
-    var presetId = 'gw_preset_' + String(i + 1).padStart(2, '0');
-    var ti = -1;
-    for (var j = 0; j < gongWeiTrash.length; j++) { if (gongWeiTrash[j].id === presetId) { ti = j; break; } }
-    if (ti !== -1) {
-      var item = gongWeiTrash.splice(ti, 1)[0];
-      item.group.name = name; item.group.labels = GONGWEI_MAP[name].slice();
-      item.group.isPreset = true; item.group.color = GONGWEI_COLORS[name] || '#8b7e6a';
-      item.group.updatedAt = now;
-      gongWeiGroups.push(item.group);
-      return;
-    }
-    var gi = -1;
-    for (var k = 0; k < gongWeiGroups.length; k++) { if (gongWeiGroups[k].id === presetId) { gi = k; break; } }
-    if (gi !== -1) {
-      gongWeiGroups[gi].name = name; gongWeiGroups[gi].labels = GONGWEI_MAP[name].slice();
-      gongWeiGroups[gi].isPreset = true; gongWeiGroups[gi].color = GONGWEI_COLORS[name] || '#8b7e6a';
-      gongWeiGroups[gi].updatedAt = now;
-      return;
-    }
-    gongWeiGroups.push({
-      id: presetId, name: name, labels: GONGWEI_MAP[name].slice(),
-      isPreset: true, color: GONGWEI_COLORS[name] || '#8b7e6a',
-      createdAt: now, updatedAt: now
-    });
-  });
-  persistGroups(); persistTrash();
-  return { ok: true };
-}
-
-// 全局选中状态（运行时变量，初始化时从 localStorage 恢复）
+// 全局选中状态（唯一真相源）
 let selectedGongWei = [];
 
 // ===== v0.8.0 农历数据表（1900-2100，寿星万年历）=====
@@ -1706,7 +1318,7 @@ const ZHI_TWIN_CANG = {
   '辰':['乙','癸'],'巳':['庚','戊'],'午':['己'],'未':['丁','乙'],
   '申':['壬','戊'],'酉':['庚'],'戌':['辛','丁'],'亥':['甲']
 };
-var twinPillars = ['ri','shi','ming','shen'];
+const TWIN_PILLARS = ['ri','shi','ming','shen'];
 
 // 十二长生表
 const CS12_MAP = {
@@ -1722,9 +1334,6 @@ const CS12_MAP = {
   '癸':['卯','寅','丑','子','亥','戌','酉','申','未','午','巳','辰']
 };
 const CS12_N = ['长生','沐浴','冠带','临官','帝旺','衰','病','死','墓','绝','胎','养'];
-
-// 纳音五行→阳干映射（纳运十二长生查找用）
-const NAYIN_WX_YANG = { '木':'甲','火':'丙','土':'壬','金':'庚','水':'壬' };
 
 // 空亡表（按日柱旬）
 const KONG_WANG = {
@@ -1742,225 +1351,73 @@ const KONG_WANG = {
   '己未':'子丑','庚申':'子丑','辛酉':'子丑','壬戌':'子丑','癸亥':'子丑'
 };
 
-// ============ 节气查表（JPL DE440s，1900-2100） ============
-// 节气数据 1900-2100 (JPL DE440s)
-// packed=daysFrom20000101*86400+seconds
-const SOLAR_TERMS=[
- -3155263008,-3153990501,-3152714955,-3151432772,-3150142734,-3148842105,-3147530885,-3146207619,-3144873933,-3143529829,-3142178509,-3140821258,-3139462235,-3138103477,-3136749010,-3135400855,-3134061847,-3132733234,-3131416056,-3130110328,-3128815261,-3127529574,-3126251093,-3124977551, //1900
- -3123706041,-3122433857,-3121158053,-3119876150,-3118585792,-3117285430,-3115973783,-3114650839,-3113316621,-3111972964,-3110621057,-3109264376,-3107904789,-3106546617,-3105191677,-3103843994,-3102504628,-3101176307,-3099858855,-3098553269,-3097257973,-3095972370,-3094693684,-3093420247,
- -3092148549,-3090876527,-3089600555,-3088318861,-3087028391,-3085728250,-3084416597,-3083093795,-3081759715,-3080416030,-3079064455,-3077707535,-3076348462,-3074989851,-3073635506,-3072287260,-3070948457,-3069619522,-3068302532,-3066996304,-3065701376,-3064415118,-3063136780,-3061862711,
- -3060591419,-3059318830,-3058043365,-3056761194,-3055471309,-3054170755,-3052859688,-3051536523,-3050202919,-3048858940,-3047507614,-3046150546,-3044791445,-3043432916,-3042078292,-3040730346,-3039391100,-3038062620,-3036745138,-3035439458,-3034144038,-3032858356,-3031579522,-3030306015,
- -3029034218,-3027762170,-3026486193,-3025204550,-3023914142,-3022614127,-3021302510,-3019979912,-3018645726,-3017302304,-3015950382,-3014593760,-3013234139,-3011875865,-3010520929,-3009173056,-3007833761,-3006505227,-3005187905,-3003882097,-3002586940,-3001301087,-3000022518,-2998748803,
- -2997477212,-2996204924,-2994929091,-2993647182,-2992356904,-2991056588,-2989745171,-2988422215,-2987088395,-2985744563,-2984393225,-2983036157,-2981677239,-2980318502,-2978964222,-2977615922,-2976277132,-2974948242,-2973631262,-2972325162,-2971030252,-2969744145,-2968465791,-2967191816,
- -2965920431,-2964647843,-2963372205,-2962089970,-2960799872,-2959499270,-2958188001,-2956864887,-2955531130,-2954187342,-2952835903,-2951479130,-2950119922,-2948761685,-2947406943,-2946059226,-2944719864,-2943391538,-2942073943,-2940768354,-2939472823,-2938187206,-2936908271,-2935634840,
- -2934362952,-2933090990,-2931814909,-2930533339,-2929242812,-2927942857,-2926631150,-2925308604,-2923974421,-2922631042,-2921279259,-2919922657,-2918563286,-2917204960,-2915850278,-2914502233,-2913163113,-2911834302,-2910517073,-2909210944,-2907915858,-2906629712,-2905351269,-2904077343,
- -2902805968,-2901533551,-2900258001,-2898976001,-2897686020,-2896385602,-2895074449,-2893751361,-2892417735,-2891073748,-2889722492,-2888365292,-2887006354,-2885647589,-2884293232,-2882945015,-2881606097,-2880277339,-2878960183,-2877654226,-2876359112,-2875073156,-2873794616,-2872520829,
- -2871249320,-2869976978,-2868701282,-2867419333,-2866129186,-2864828857,-2863517469,-2862194569,-2860860584,-2859516941,-2858165197,-2856808501,-2855448996,-2854090806,-2852735885,-2851388221,-2850048838,-2848720563,-2847403045,-2846097482,-2844802050,-2843516418,-2842237543,-2840964045,
- -2839692155,-2838420096,-2837143990,-2835862345,-2834571841,-2833271860,-2831960257,-2830637690,-2829303673,-2827960224,-2826608651,-2825251911,-2823892770,-2822534256,-2821179802,-2819831592,-2818492701,-2817163789,-2815846765,-2814540565,-2813245627,-2811959382,-2810681018,-2809406928, //1910
- -2808135578,-2806862947,-2805587414,-2804305214,-2803015301,-2801714770,-2800403760,-2799080676,-2797747214,-2796403318,-2795052159,-2793695100,-2792336136,-2790977513,-2789622966,-2788274853,-2786935635,-2785606980,-2784289536,-2782983739,-2781688411,-2780402676,-2779123976,-2777850440,
- -2776578781,-2775306683,-2774030818,-2772749095,-2771458770,-2770158670,-2768847135,-2767524489,-2766190407,-2764847004,-2763495180,-2762138618,-2760779027,-2759420809,-2758065797,-2756717950,-2755378489,-2754049950,-2752732426,-2751426629,-2750131310,-2748845540,-2747566895,-2746293349,
- -2745021754,-2743749684,-2742473870,-2741192177,-2739901891,-2738601753,-2737290277,-2735967458,-2734633549,-2733289838,-2731938424,-2730581461,-2729222495,-2727863806,-2726509480,-2725161137,-2723822285,-2722493265,-2721176209,-2719869938,-2718574966,-2717288715,-2716010366,-2714736336,
- -2713465056,-2712192519,-2710917070,-2709634953,-2708345077,-2707044586,-2705733517,-2704410435,-2703076825,-2701732970,-2700381631,-2699024727,-2697665595,-2696307213,-2694952515,-2693604652,-2692265280,-2690936801,-2689619140,-2688313392,-2687017766,-2685732006,-2684453001,-2683179484,
- -2681907610,-2680635656,-2679359701,-2678078243,-2676787931,-2675488152,-2674176672,-2672854300,-2671520262,-2670177002,-2668825219,-2667468666,-2666109161,-2664750844,-2663395964,-2662047926,-2660708600,-2659379800,-2658062373,-2656756247,-2655460968,-2654174819,-2652896192,-2651622281,
- -2650350758,-2649078412,-2647802786,-2646520947,-2645230983,-2643930815,-2642619755,-2641296950,-2639963438,-2638619674,-2637268484,-2635911362,-2634552410,-2633193556,-2631839128,-2630490714,-2629151725,-2627822741,-2626505554,-2625199393,-2623904289,-2622618159,-2621339654,-2620065713,
- -2618794256,-2617521784,-2616246172,-2614964138,-2613674137,-2612373792,-2611062631,-2609739782,-2608406082,-2607062512,-2605711033,-2604354367,-2602995011,-2601636758,-2600281816,-2598934005,-2597594464,-2596266016,-2594948296,-2593642606,-2592347009,-2591061330,-2589782363,-2588508884,
- -2587236958,-2585964951,-2584688837,-2583407263,-2582116767,-2580816888,-2579505311,-2578182901,-2576848932,-2575505696,-2574154164,-2572797648,-2571438494,-2570080140,-2568725578,-2567377396,-2566038296,-2564709286,-2563392005,-2562085658,-2560790491,-2559504141,-2558225632,-2556951535,
- -2555680134,-2554407582,-2553132059,-2551849977,-2550560094,-2549259677,-2547948700,-2546625707,-2545292302,-2543948477,-2542597425,-2541240410,-2539881590,-2538522954,-2537168541,-2535820324,-2534481165,-2533152303,-2531834822,-2530528747,-2529233331,-2527947312,-2526668554,-2525394799,
- -2524123174,-2522850962,-2521575235,-2520293485,-2519003360,-2517703267,-2516391927,-2515069275,-2513735344,-2512391919,-2511040199,-2509683635,-2508324105,-2506965928,-2505610927,-2504263147,-2502923629,-2501595137,-2500277472,-2498971663,-2497676126,-2496390297,-2495111404,-2493837805, //1920
- -2492566000,-2491293942,-2490018009,-2488736424,-2487446113,-2486146162,-2484834699,-2483512086,-2482178163,-2480834619,-2479483134,-2478126284,-2476767226,-2475408606,-2474054216,-2472705914,-2471367042,-2470038038,-2468720984,-2467414685,-2466119691,-2464833352,-2463554935,-2462280777,
- -2461009406,-2459736747,-2458461236,-2457179052,-2455889191,-2454588708,-2453277740,-2451954709,-2450621249,-2449277407,-2447926204,-2446569221,-2445210174,-2443851642,-2442496993,-2441148971,-2439809641,-2438481049,-2437163455,-2435857648,-2434562108,-2433276310,-2431997381,-2430723807,
- -2429451980,-2428179934,-2426904003,-2425622439,-2424332154,-2423032298,-2421720873,-2420398486,-2419064525,-2417721306,-2416369561,-2415013058,-2413653488,-2412295191,-2410940151,-2409592114,-2408252590,-2406923809,-2405606217,-2404300170,-2403004799,-2401718803,-2400440145,-2399166426,
- -2397894886,-2396622720,-2395347047,-2394065344,-2392775287,-2391475215,-2390164032,-2388841307,-2387507680,-2386163995,-2384812728,-2383455660,-2382096654,-2380737771,-2379383285,-2378034745,-2376695688,-2375366526,-2374049290,-2372742957,-2371447867,-2370161637,-2368883239,-2367609294,
- -2366338025,-2365065610,-2363790214,-2362508239,-2361218430,-2359918092,-2358607072,-2357284154,-2355950549,-2354606845,-2353255437,-2351898624,-2350539324,-2349180931,-2347825994,-2346478034,-2345138417,-2343809819,-2342491977,-2341186156,-2339890446,-2338604694,-2337325682,-2336052224,
- -2334780362,-2333508475,-2332232524,-2330951136,-2329660838,-2328361152,-2327049721,-2325727456,-2324393518,-2323050353,-2321698721,-2320342221,-2318982882,-2317624534,-2316269766,-2314921585,-2313582267,-2312253226,-2310935727,-2309629324,-2308333957,-2307047567,-2305768900,-2304494821,
- -2303223342,-2301950911,-2300675417,-2299393565,-2298103802,-2296803677,-2295492853,-2294170121,-2292836836,-2291493151,-2290142134,-2288785091,-2287426223,-2286067418,-2284712934,-2283364494,-2282025293,-2280696206,-2279378714,-2278072421,-2276777005,-2275490783,-2274212040,-2272938113,
- -2271666547,-2270394222,-2269118636,-2267836866,-2266546984,-2265246967,-2263935947,-2262613419,-2261279810,-2259936481,-2258584990,-2257228436,-2255868963,-2254510684,-2253155568,-2251807633,-2250467913,-2249139292,-2247821427,-2246515550,-2245219848,-2243934006,-2242654982,-2241381402,
- -2240109497,-2238837487,-2237561496,-2236280010,-2234989701,-2233689932,-2232378545,-2231056203,-2229722399,-2228379166,-2227027770,-2225671186,-2224312120,-2222953624,-2221599097,-2220250746,-2218911644,-2217582484,-2216265197,-2214958735,-2213663572,-2212377136,-2211098634,-2209824457,
- -2208553066,-2207280442,-2206004951,-2204722833,-2203433025,-2202132637,-2200821776,-2199498874,-2198165599,-2196821900,-2195470936,-2194114052,-2192755239,-2191396703,-2190042201,-2188694041,-2187354716,-2186025866,-2184708171,-2183402062,-2182106408,-2180820354,-2179541382,-2178267649, //1930
- -2176995884,-2175723771,-2174447982,-2173166405,-2171876293,-2170576445,-2169265195,-2167942835,-2166609046,-2165265897,-2163914314,-2162557938,-2161198484,-2159840339,-2158485325,-2157137405,-2155797782,-2154469024,-2153151207,-2151845093,-2150549427,-2149263341,-2147984403,-2146710648,
- -2145438915,-2144166813,-2142891058,-2141609519,-2140319460,-2139019607,-2137708440,-2136385939,-2135052311,-2133708827,-2132357555,-2131000665,-2129641682,-2128282939,-2126928510,-2125580048,-2124241048,-2122911869,-2121594642,-2120288188,-2118993039,-2117706614,-2116428118,-2115153967,
- -2113882619,-2112610060,-2111334663,-2110052644,-2108762935,-2107462636,-2106151790,-2104828926,-2103495515,-2102151815,-2100800580,-2099443713,-2098084561,-2096726096,-2095371288,-2094023280,-2092683773,-2091355154,-2090037386,-2088731537,-2087435840,-2086150015,-2084870954,-2083597372,
- -2082325431,-2081053408,-2079777403,-2078495923,-2077205640,-2075905948,-2074594601,-2073272414,-2071938576,-2070595528,-2069243938,-2067887547,-2066528154,-2065169891,-2063815001,-2062466899,-2061127452,-2059798511,-2058480920,-2057174645,-2055879218,-2054592959,-2053314228,-2052040257,
- -2050768680,-2049496322,-2048220698,-2046938904,-2045649009,-2044348957,-2043038040,-2041715416,-2040382098,-2039038532,-2037687524,-2036330548,-2034971687,-2033612845,-2032258350,-2030909784,-2029570575,-2028241333,-2026923880,-2025617471,-2024322168,-2023035897,-2021757328,-2020483395,
- -2019212022,-2017939685,-2016664264,-2015382439,-2014092673,-2012792552,-2011481616,-2010158956,-2008825430,-2007481976,-2006130580,-2004773925,-2003414522,-2002056149,-2000701029,-1999352990,-1998013186,-1996684464,-1995366475,-1994060537,-1992764741,-1991478919,-1990199885,-1988926421,
- -1987654594,-1986382762,-1985106886,-1983825579,-1982535355,-1981235718,-1979924337,-1978602071,-1977268184,-1975924992,-1974573450,-1973216903,-1971857663,-1970499206,-1969144497,-1967796151,-1966456855,-1965127646,-1963810165,-1962503631,-1961208304,-1959921832,-1958643242,-1957369122,
- -1956097750,-1954825296,-1953549921,-1952268046,-1950978394,-1949678237,-1948367501,-1947044738,-1945711510,-1944367811,-1943016821,-1941659807,-1940300938,-1938942196,-1937587659,-1936239273,-1934899933,-1933570851,-1932253136,-1930946795,-1929651121,-1928364856,-1927085901,-1925812018,
- -1924540348,-1923268179,-1921992593,-1920711066,-1919421249,-1918121514,-1916810576,-1915488314,-1914154756,-1912811621,-1911460120,-1910103656,-1908744119,-1907385823,-1906030612,-1904682551,-1903342697,-1902013855,-1900695822,-1899389670,-1898093807,-1896807710,-1895528597,-1894254863,
- -1892982998,-1891710975,-1890435166,-1889153796,-1887863781,-1886564197,-1885253145,-1883930966,-1882597443,-1881254238,-1879902976,-1878546236,-1877187137,-1875828375,-1874473729,-1873125108,-1871785865,-1870456487,-1869139075,-1867832460,-1866537212,-1865250682,-1863972147,-1862697937, //1940
- -1861426583,-1860154002,-1858878633,-1857596637,-1856307013,-1855006798,-1853696122,-1852373393,-1851040227,-1849696650,-1848345666,-1846988823,-1845629833,-1844271250,-1842916465,-1841568206,-1840228589,-1838899655,-1837581725,-1836275589,-1834979774,-1833693750,-1832414659,-1831140971,
- -1829869080,-1828597010,-1827321104,-1826039611,-1824749458,-1823449782,-1822138588,-1820816471,-1819482807,-1818139899,-1816788465,-1815432245,-1814072911,-1812714774,-1811359800,-1810011726,-1808672050,-1807343032,-1806025115,-1804718709,-1803422950,-1802136596,-1800857610,-1799583646,
- -1798311927,-1797039686,-1795764013,-1794482405,-1793192505,-1791892663,-1790581746,-1789259329,-1787926015,-1786582648,-1785231680,-1783874881,-1782516087,-1781157347,-1779802907,-1778454318,-1777115108,-1775785716,-1774468188,-1773161522,-1771866092,-1770579530,-1769300846,-1768026673,
- -1766755261,-1765482792,-1764207442,-1762925590,-1761635991,-1760335903,-1759025179,-1757702551,-1756369234,-1755025770,-1753674564,-1752317882,-1750958655,-1749600267,-1748245286,-1746897230,-1745557485,-1744228721,-1742910694,-1741604659,-1740308737,-1739022765,-1737743557,-1736469930,
- -1735197950,-1733926001,-1732650054,-1731368725,-1730078536,-1728778986,-1727467709,-1726145605,-1724811820,-1723468804,-1722117292,-1720760895,-1719401609,-1718043293,-1716688512,-1715340300,-1714000928,-1712671832,-1711354267,-1710047802,-1708752365,-1707465906,-1706187156,-1704913004,
- -1703641437,-1702368941,-1701093382,-1699811506,-1698521738,-1697221658,-1695910904,-1694588287,-1693255128,-1691911582,-1690560694,-1689203758,-1687844967,-1686486195,-1685131721,-1683783235,-1682443971,-1681114780,-1679797169,-1678490735,-1677195186,-1675908839,-1674630004,-1673356018,
- -1672084435,-1670812125,-1669536594,-1668254903,-1666965139,-1665665257,-1664354407,-1663032053,-1661698638,-1660355475,-1659004143,-1657647689,-1656288266,-1654929966,-1653574764,-1652226678,-1650886750,-1649557900,-1648239777,-1646933666,-1645637752,-1644351758,-1643072643,-1641799051,
- -1640527201,-1639255312,-1637979494,-1636698215,-1635408142,-1634108610,-1632797455,-1631475325,-1630141682,-1628798559,-1627447194,-1626090582,-1624731405,-1623372765,-1622018036,-1620669464,-1619330116,-1618000715,-1616683199,-1615376537,-1614081222,-1612794686,-1611516156,-1610242021,
- -1608970745,-1607698301,-1606423044,-1605141192,-1603851657,-1602551535,-1601240897,-1599918180,-1598585019,-1597241376,-1595890405,-1594533451,-1593174519,-1591815814,-1590461117,-1589112722,-1587773165,-1586444066,-1585126152,-1583819837,-1582524028,-1581237852,-1579958810,-1578685043,
- -1577413291,-1576141239,-1574865568,-1573584164,-1572294288,-1570994707,-1569683748,-1568361668,-1567028134,-1565685186,-1564333754,-1562977454,-1561618017,-1560259820,-1558904702,-1557556624,-1556216794,-1554887802,-1553569715,-1552263331,-1550967391,-1549681065,-1548401913,-1547128016, //1950
- -1545856190,-1544584091,-1543308407,-1542027036,-1540737213,-1539437673,-1538126855,-1536804732,-1535471459,-1534128292,-1532777261,-1531420526,-1530061582,-1528702776,-1527348167,-1525999449,-1524660123,-1523330604,-1522013031,-1520706254,-1519410817,-1518124150,-1516845474,-1515571211,
- -1514299829,-1513027310,-1511752040,-1510470212,-1509180776,-1507880790,-1506570311,-1505247816,-1503914773,-1502571384,-1501220395,-1499863663,-1498504534,-1497145967,-1495790955,-1494442646,-1493102792,-1491773795,-1490455670,-1489149482,-1487853519,-1486567476,-1485288280,-1484014626,
- -1482742691,-1481470734,-1480194860,-1478913549,-1477623466,-1476323985,-1475012856,-1473690892,-1472357274,-1471014446,-1469663047,-1468306818,-1466947518,-1465589285,-1464234337,-1462886104,-1461546449,-1460217261,-1458899388,-1457592839,-1456297156,-1455010690,-1453731794,-1452457727,
- -1451186095,-1449913751,-1448638171,-1447356475,-1446066701,-1444766810,-1443456064,-1442133642,-1440800524,-1439457170,-1438106363,-1436749572,-1435390862,-1434032118,-1432677668,-1431329060,-1429989741,-1428660298,-1427342575,-1426035833,-1424740180,-1423453562,-1422174702,-1420900553,
- -1419629060,-1418356702,-1417081356,-1415799688,-1414510155,-1413210309,-1411899688,-1410577343,-1409244134,-1407900953,-1406549807,-1405193332,-1403834060,-1402475741,-1401120609,-1399772478,-1398432506,-1397103561,-1395785284,-1394479031,-1393182902,-1391896761,-1390617445,-1389343760,
- -1388071795,-1386799915,-1385524097,-1384242934,-1382952945,-1381653596,-1380342543,-1379020607,-1377687014,-1376344059,-1374992664,-1373636189,-1372276930,-1370918419,-1369563598,-1368215126,-1366875676,-1365546311,-1364228659,-1362921953,-1361626458,-1360339822,-1359061085,-1357786845,
- -1356515387,-1355242896,-1353967534,-1352685734,-1351396205,-1350096225,-1348785683,-1347463140,-1346130109,-1344786588,-1343435727,-1342078782,-1340719921,-1339361122,-1338006488,-1336657959,-1335318480,-1333989249,-1332671413,-1331364960,-1330069209,-1328782870,-1327503854,-1326229896,
- -1324958151,-1323685904,-1322410260,-1321128705,-1319838919,-1318539264,-1317228471,-1315906393,-1314573060,-1313230150,-1311878879,-1310522599,-1309163206,-1307804985,-1306449780,-1305101658,-1303761681,-1302432682,-1301114462,-1299808132,-1298512096,-1297225864,-1295946634,-1294672830,
- -1293400912,-1292128881,-1290853080,-1289571758,-1288281814,-1286982341,-1285671427,-1284349423,-1283016087,-1281673085,-1280322006,-1278965426,-1277606418,-1276247685,-1274892966,-1273544201,-1272204736,-1270875105,-1269557422,-1268250552,-1266955086,-1265668395,-1264389773,-1263115552,
- -1261844263,-1260571810,-1259296622,-1258014834,-1256725444,-1255425452,-1254114997,-1252792458,-1251459456,-1250116000,-1248765096,-1247408274,-1246049251,-1244690565,-1243335625,-1241987147,-1240647287,-1239318080,-1237999890,-1236693500,-1235397488,-1234111308,-1232832145,-1231558455, //1960
- -1230286653,-1229014743,-1227739065,-1226457823,-1225167931,-1223868484,-1222557483,-1221235507,-1219901934,-1218559075,-1217207649,-1215851405,-1214492013,-1213133795,-1211778709,-1210430498,-1209090657,-1207761464,-1206443354,-1205136768,-1203840838,-1202554349,-1201275256,-1200001242,
- -1198729513,-1197457335,-1196181768,-1194900335,-1193610639,-1192311038,-1191000355,-1189678169,-1188345040,-1187001820,-1185650934,-1184294163,-1182935343,-1181576533,-1180221988,-1178873262,-1177533887,-1176204297,-1174886535,-1173579610,-1172283914,-1170997098,-1169718210,-1168443894,
- -1167172422,-1165899977,-1164624744,-1163343094,-1162053779,-1160754029,-1159443689,-1158121441,-1156788491,-1155445321,-1154094343,-1152737768,-1151378552,-1150020057,-1148664884,-1147316557,-1145976498,-1144647399,-1143329035,-1142022680,-1140726470,-1139440247,-1138160852,-1136887096,
- -1135615068,-1134343145,-1133067313,-1131786171,-1130496248,-1129197017,-1127886107,-1126564380,-1125230946,-1123888222,-1122536904,-1121180601,-1119821279,-1118462845,-1117107838,-1115759346,-1114419641,-1113090209,-1111772316,-1110465568,-1109169900,-1107883275,-1106604424,-1105330237,
- -1104058690,-1102786276,-1101510841,-1100229139,-1098939570,-1097639723,-1096329205,-1095006844,-1093673916,-1092330595,-1090979881,-1089623067,-1088264325,-1086905517,-1085550932,-1084202244,-1082862737,-1081533248,-1080215339,-1078908610,-1077612814,-1076326257,-1075047274,-1073773182,
- -1072501545,-1071229227,-1069953737,-1068672138,-1067382525,-1066082833,-1064772218,-1063450117,-1062116980,-1060774085,-1059423029,-1058066805,-1056707586,-1055349415,-1053994269,-1052646144,-1051306083,-1049977019,-1048658601,-1047352161,-1046055890,-1044769561,-1043490140,-1042216317,
- -1040944306,-1039672355,-1038396556,-1037115386,-1035825493,-1034526198,-1033215325,-1031893499,-1030560161,-1029217334,-1027866227,-1026509836,-1025150806,-1023792255,-1022437514,-1021088861,-1019749343,-1018419723,-1017101936,-1015794980,-1014499363,-1013212538,-1011933757,-1010659427,
- -1009388034,-1008115559,-1006840361,-1005558652,-1004269339,-1002969485,-1001659151,-1000336738,-999003857,-997660454,-996309660,-994952809,-993593907,-992235161,-990880373,-989531833,-988192119,-986862834,-985544741,-984238230,-982942247,-981655893,-980376709,-979102819,
- -977830995,-976558913,-975283271,-974001935,-972712170,-971412719,-970101913,-968779992,-967446617,-966103820,-964752514,-963396302,-962036913,-960678714,-959323557,-957975402,-956635479,-955306390,-953988204,-952681741,-951385723,-950099339,-948820125,-947546182,
- -946274302,-945002175,-943726458,-942445096,-941155295,-939855825,-938545098,-937223108,-935889976,-934546964,-933196068,-931839445,-930480570,-929121791,-927767156,-926418371,-925078929,-923749265,-922431510,-921124550,-919828939,-918542130,-917263363,-915989063, //1970
- -914717697,-913445243,-912170078,-910888386,-909599119,-908299314,-906989043,-905666749,-904333915,-902990702,-901639871,-900283227,-898924134,-897565517,-896210389,-894861886,-893521790,-892192509,-890874089,-889567613,-888271406,-886985164,-885705859,-884432167,
- -883160291,-881888462,-880612789,-879331718,-878041916,-876742717,-875431870,-874110154,-872776731,-871434032,-870082682,-868726431,-867367027,-866008651,-864653491,-863305021,-861965095,-860635637,-859317496,-858010714,-856714837,-855428240,-854149277,-852875228,
- -851603683,-850331510,-849056150,-847774733,-846485247,-845185655,-843875169,-842552980,-841220019,-839876772,-838525991,-837169167,-835810360,-834451469,-833096833,-831747993,-830408438,-829078734,-827760766,-826453791,-825157943,-823871160,-822592176,-821317939,
- -820046405,-818774062,-817498796,-816217281,-814927975,-813628405,-812318102,-810996071,-809663169,-808320238,-806969301,-805612945,-804253735,-802895390,-801540171,-800191881,-798851697,-797522496,-796203922,-794897365,-793600923,-792314495,-791034924,-789761044,
- -788488951,-787217027,-785941250,-784660219,-783370455,-782071402,-780760712,-779439169,-778105970,-776763381,-775412280,-774056016,-772696837,-771338297,-769983308,-768634585,-767294804,-765965090,-764647078,-763340040,-762044244,-760757358,-759478431,-758204067,
- -756932559,-755660095,-754384834,-753103207,-751813915,-750514226,-749204014,-747881825,-746549136,-745205936,-743855327,-742498550,-741139750,-739780895,-738426100,-737077306,-735737509,-734407910,-733089718,-731782920,-730486886,-729200311,-727921144,-726647093,
- -725375338,-724103136,-722827597,-721546175,-720256553,-718957065,-717646457,-716324568,-714991441,-713648740,-712297679,-710941576,-709582328,-708224183,-706868987,-705520787,-704180659,-702851447,-701532964,-700226361,-698930051,-697643581,-696364151,-695090212,
- -693818208,-692546162,-691270383,-689989145,-688699309,-687399988,-686089241,-684767430,-683434288,-682091495,-680740615,-679384228,-678025384,-676666786,-675312141,-673963394,-672623857,-671294077,-669976146,-668668972,-667373158,-666086124,-664807198,-663532743,
- -662261308,-660988806,-659713663,-658432009,-657142824,-655843086,-654532924,-653210679,-651877971,-650534770,-649184090,-647827431,-646468524,-645109889,-643754947,-642406397,-641066415,-639737018,-638418598,-637111931,-635815634,-634529155,-633249732,-631975815,
- -630703868,-629431884,-628156233,-626875102,-625585411,-624286220,-622975519,-621653840,-620320532,-618977878,-617626576,-616270380,-614910964,-613552682,-612197490,-610849163,-609509193,-608179880,-606861645,-605554950,-604258906,-602972317,-601693125,-600419036, //1980
- -599147242,-597875042,-596599477,-595318102,-594028493,-592729030,-591418498,-590096488,-588763513,-587420435,-586069642,-584712920,-583354089,-581995219,-580640571,-579291712,-577952208,-576622489,-575304628,-573997630,-572701891,-571415043,-570136126,-568861769,
- -567590246,-566317748,-565042472,-563760810,-562471525,-561171850,-559861640,-558539553,-557206801,-555863827,-554513047,-553156621,-551797527,-550439078,-549083896,-547735488,-546395299,-545066030,-543747473,-542440935,-541144556,-539858203,-538578717,-537304912,
- -536032879,-534760985,-533485219,-532204166,-530914368,-529615276,-528304539,-526982991,-525649751,-524307215,-522956059,-521599880,-520240608,-518882155,-517527024,-516178353,-514838399,-513508705,-512190537,-510883545,-509587669,-508300901,-507021981,-505747806,
- -504476350,-503204099,-501928876,-500647428,-499358122,-498058541,-496748261,-495426116,-494093343,-492750146,-491399484,-490042667,-488683854,-487324908,-485970128,-484621189,-483281412,-481951627,-480633447,-479326462,-478030469,-476743763,-475464717,-474190632,
- -472919096,-471646947,-470371693,-469090358,-467801019,-466501577,-465191186,-463869254,-462536248,-461193425,-459842405,-458486153,-457126885,-455768615,-454413345,-453065060,-451724819,-450395554,-449076928,-447770289,-446473832,-445187355,-443907821,-442633942,
- -441361919,-440090030,-438814339,-437533350,-436243673,-434944640,-433634034,-432312473,-430979365,-429636727,-428285738,-426929403,-425570355,-424211738,-422856864,-421508053,-420168324,-418838469,-417520396,-416213149,-414917231,-413630140,-412351144,-411076673,
- -409805220,-408532778,-407257701,-405976205,-404687184,-403387683,-402077753,-400755749,-399423266,-398080199,-396729662,-395372956,-394014080,-392655238,-391300246,-389951410,-388611353,-387281684,-385963220,-384656349,-383360060,-382073437,-380794067,-379520047,
- -378248191,-376976144,-375700632,-374419494,-373130008,-371830885,-370520457,-369198914,-367865897,-366523400,-365172308,-363816209,-362456826,-361098535,-359743185,-358394758,-357054510,-355725070,-354406532,-353099755,-351803466,-350516882,-349237532,-347963528,
- -346691645,-345419582,-344143971,-342862771,-341573152,-340273906,-338963406,-337641665,-336308765,-334965989,-333615287,-332258820,-330900034,-329541272,-328186567,-326837628,-325497965,-324168024,-322849960,-321542692,-320246788,-318959723,-317680743,-316406280,
- -315134807,-313862308,-312587161,-311305559,-310016444,-308716845,-307406826,-306084809,-304752275,-303409357,-302058822,-300702433,-299343572,-297985110,-296630069,-295281551,-293941353,-292611871,-291293173,-289986364,-288689792,-287403185,-286123551,-284849581, //1990
- -283577514,-282305576,-281029897,-279748902,-278459266,-277160285,-275849719,-274528299,-273195188,-271852786,-270501703,-269145674,-267786420,-266428133,-265072965,-263724431,-262384359,-261054716,-259736333,-258429291,-257133129,-255846256,-254567039,-253292782,
- -252021090,-250748851,-249473504,-248192191,-246902873,-245603518,-244293293,-242971387,-241638680,-240295672,-238945060,-237588351,-236229586,-234870671,-233515958,-232166994,-230827302,-229497435,-228179314,-226872174,-225576179,-224289249,-223010149,-221735807,
- -220464209,-219191832,-217916572,-216635091,-215345849,-214046363,-212736171,-211414261,-210081498,-208738697,-207387887,-206031616,-204672479,-203314151,-201958923,-200610584,-199270334,-197941053,-196622399,-195315773,-194019268,-192732791,-191453172,-190179253,
- -188907114,-187635157,-186359345,-185078302,-183788540,-182489520,-181178894,-179857441,-178524356,-177181893,-175830909,-174474748,-173115640,-171757142,-170402140,-169053376,-167713495,-166383649,-165065458,-163758240,-162462265,-161175243,-159896227,-158621838,
- -157350356,-156077975,-154802830,-153521358,-152232237,-150932736,-149622715,-148300713,-146968197,-145625149,-144274652,-142917938,-141559141,-140200221,-138845297,-137496311,-136156286,-134826421,-133507968,-132200910,-130904664,-129617917,-128338665,-127064593,
- -125792915,-124520852,-123245529,-121964358,-120675024,-119375817,-118065481,-116743808,-115410841,-114068215,-112717154,-111360977,-110001601,-108643279,-107287873,-105939432,-104599057,-103269595,-101950879,-100644079,-99347607,-98061036,-96781560,-95507648,
- -94235733,-92963850,-91688284,-90407312,-89117753,-87818721,-86508224,-85186632,-83853634,-82510928,-81160049,-79803605,-78444638,-77085875,-75731023,-74382050,-73042272,-71712255,-70394091,-69086716,-67790722,-66503548,-65224509,-63949979,
- -62678513,-61406037,-60130990,-58849508,-57560567,-56261129,-54951304,-53629397,-52297011,-50954075,-49603598,-48247046,-46888176,-45529478,-44174411,-42825664,-41485446,-40155769,-38837056,-37530085,-36233498,-34946747,-33667105,-32393013,
- -31120973,-29848961,-28573378,-27292392,-26002939,-24704052,-23393724,-22072442,-20739541,-19397256,-18046254,-16690254,-15330902,-13972554,-12617154,-11268537,-9928202,-8598511,-7279899,-5972868,-4676529,-3389711,-2110353,-836173,
- 435640,1707781,2983222,4264397,5553758,6852914,8163117,9484770,10817409,12160164,13510713,14867262,16226036,17584960,18939779,20288911,21628749,22958855,24277091,25584448,26880483,28167560,29446621,30721045, //2000
- 31992555,33264977,34540129,35821635,37110749,38410242,39720262,41042152,42374689,43717451,45068015,46424263,47783201,49141574,50496740,51845228,53185570,54515068,55833901,57140735,58437412,59724027,61003732,62277689,
- 63549810,64821721,66097445,67378398,68668052,69966968,71277496,72598828,73931836,75274145,76625086,77981064,79340171,80698491,82053558,83402218,84742262,86072123,87390558,88697869,89994108,91281224,92560453,93834862,
- 95106463,96378754,97653919,98935212,100224293,101523585,102833549,104155366,105487829,106830743,108181183,109537827,110896539,112255448,113610258,114959290,116299214,117629209,118947632,120254906,121551191,122838201,124117509,125391828,
- 126663512,127935742,129210972,130492199,131781337,133080518,134390598,135712224,137044947,138387552,139738425,141094612,142453876,143812209,145167575,146515995,147856374,149185790,150504557,151811329,153107913,154394501,155674137,156948096,
- 158220179,159492093,160767782,162048715,163338310,164637205,165947656,167269034,168601970,169944444,171295312,172651567,174010594,175369241,176724202,178073127,179413000,180742990,182061198,183368540,184664547,185951698,187230762,188505296,
- 189776817,191049318,192324436,193605934,194894918,196194333,197504128,198825963,200158237,201501092,202851418,204207950,205566687,206925461,208280447,209629354,210969541,212299402,213618081,214925187,216221689,217508504,218788007,220062125,
- 221334009,222606049,223881492,225162535,226451879,227750844,229061078,230382422,231715223,233057515,234408424,235764385,237123703,238482010,239837474,241186078,242526568,243856273,245175089,246482123,247778641,249065393,250344845,251618868,
- 252890690,254162611,255438024,256718973,258008328,259307297,260617551,261939067,263271805,264614453,265965103,267321561,268680409,270039288,271394170,272743334,274083248,275413469,276731797,278039318,279335433,280622660,281901738,283176225,
- 284447647,285720019,286994987,288276366,289565251,290864617,292174426,293496263,294828649,296171469,297521943,298878331,300237209,301595742,302950868,304299513,305639855,306969514,308288402,309595407,310892174,312178953,313458733,314732807,
- 316004927,317276861,318552470,319833337,321122780,322421531,323731828,325052987,326385840,327728033,329078963,330434904,331794144,333152472,334507748,335856417,337196681,338526541,339845188,341152503,342448949,343736073,345015503,346289907, //2010
- 347561678,348833912,350109176,351390319,352679398,353978443,355288318,356609845,357942193,359284870,360635240,361991790,363350520,364709510,366064406,367413639,368753653,370083878,371402345,372709818,374006095,375293269,376572540,377847002,
- 379118635,380390990,381666143,382947456,384236462,385535665,386845535,388167124,389499580,390842132,392192754,393548929,394908043,396266451,397621832,398970409,400310940,401640538,402959502,404266413,405563157,406849808,408129536,409403496,
- 410675618,411947503,413223205,414504095,415793690,417092514,418402947,419724197,421057090,422399370,423750200,425106237,426465276,427823758,429178821,430527702,431867775,433197848,434516309,435823789,437120033,438407287,439686512,440961060,
- 442232651,443505075,444780196,446061569,447350535,448649825,449959599,451281332,452613566,453956343,455306583,456663074,458021686,459380482,460735349,462084359,463424486,464754544,466073250,467380623,468677200,469964291,471243846,472518181,
- 473790033,475062195,476337508,477618589,478907740,480206709,481516747,482838111,484170755,485513087,486863891,488219875,489579135,490937426,492292883,493641436,494981973,496311632,497630569,498937603,500234318,501521117,502800801,504074876,
- 505346902,506618825,507894362,509175223,510464612,511763411,513073651,514394966,515727713,517070189,518420910,519777251,521136202,522495012,523849982,525199108,526539065,527869267,529187603,530495133,531791262,533078543,534357668,535632250,
- 536903744,538176216,539451243,540732679,542021563,543320917,544630639,545952420,547284662,548627455,549977796,551334248,552693041,554051721,555406799,556755612,558095916,559425707,560744528,562051601,563348269,564635079,565914759,567188876,
- 568460924,569732941,571008509,572289480,573578890,574877727,576187967,577509152,578841922,580184077,581534948,582890837,584250112,585608420,586963840,588312513,589652982,590982845,592301683,593608943,594905506,596192489,597471955,598746164,
- 600017937,601289972,602565259,603846236,605135384,606434305,607744286,609065716,610398165,611740747,613091184,614447654,615806431,617165422,618520383,619869720,621209812,622540210,623858737,625166384,626462662,627749936,629029108,630303566,
- 631575006,632847280,634122199,635403420,636692213,637991377,639301090,640622728,641955083,643297757,644648305,646004620,647363667,648722212,650077571,651426296,652766883,654096639,655415715,656722772,658019635,659306385,660586170,661860140, //2020
- 663132205,664403991,665679527,666960238,668249620,669548248,670858506,672179603,673512430,674854626,676205526,677561529,678920728,680279185,681634438,682983298,684323576,685653665,686972342,688279870,689576325,690863623,692143023,693417558,
- 694689243,695961546,697236647,698517781,699806625,701105604,702415214,703736656,705068757,706411354,707761548,709118031,710476680,711835619,713190549,714539770,715879938,717210222,718528947,719836541,721133129,722420429,723699975,724974493,
- 726246290,727518573,728793753,730074858,731363774,732662666,733972383,735293617,736625925,737968151,739318701,740674669,742033841,743392228,744747773,746096479,747437202,748766999,750086135,751393252,752690135,753976962,755256777,756530841,
- 757802962,759074840,760350427,761631190,762920566,764219184,765529337,766850385,768183005,769525170,770875793,772231859,773590803,774949465,776304556,777653702,778993880,780324219,781642797,782950484,784246804,785534189,786813422,788088034,
- 789359566,790632007,791907028,793188394,794477236,795776488,797086113,798407761,799739831,801082478,802432591,803788935,805147499,806506167,807861094,809210031,810550316,811880360,813199272,814506655,815803442,817090534,818370274,819644585,
- 820916589,822188696,823464127,824745115,826034339,827333157,828643199,829964346,831296923,832639004,833989701,835345470,836704617,838062785,839418164,840766728,842107277,843437113,844756157,846063476,847360324,848647400,849927151,851201414,
- 852473397,853745390,855020778,856301608,857590771,858889481,860199449,861520657,862853111,864195494,865545948,866902250,868261023,869619879,870974806,872324059,873664106,874994503,876313024,877620772,878917113,880204573,881483860,882758529,
- 884030078,885302515,886577474,887858761,889147488,890446628,891756185,893077768,894409930,895752588,897102959,898459320,899818218,901176838,902532069,903880855,905221328,906551118,907870110,909177202,910474035,911760862,913040679,914314779,
- 915586914,916858852,918134446,919415275,920704655,922003318,923313501,924634541,925967264,927309352,928660198,930016097,931375344,932733725,934089104,935437896,936778313,938108310,939427087,940734487,942031005,943318163,944597627,945872046,
- 947143834,948416063,949691308,950972396,952261398,953560325,954870060,956191414,957523578,958866065,960216269,961572678,962931329,964290293,965645239,966994583,968334770,969665213,970983916,972291633,973588124,974875476,976154857,977429377, //2030
- 978700988,979973278,981248298,982529455,983818261,985117258,986426902,987748274,989080511,990422875,991773341,993129428,994488531,995847028,997202576,998551399,999892209,1001222118,1002541377,1003848567,1005145540,1006432357,1007712173,1008986133,
- 1010258166,1011529877,1012805337,1014085933,1015375213,1016673713,1017983856,1019304848,1020637552,1021979699,1023330479,1024686526,1026045654,1027404285,1028759563,1030108700,1031449074,1032779453,1034098223,1035405974,1036702456,1037989871,1039269200,1040543756,
- 1041815287,1043087567,1044362495,1045643629,1046932340,1048231363,1049540887,1050862387,1052194426,1053537058,1054887206,1056243668,1057602297,1058961169,1060316145,1061665311,1063005621,1064335900,1065654836,1066962457,1068259265,1069546570,1070826296,1072100760,
- 1073372671,1074644838,1075920070,1077201012,1078489944,1079788650,1081098375,1082419424,1083751749,1085093814,1086444401,1087800252,1089159458,1090517781,1091873346,1093222066,1094562840,1095892775,1097212027,1098519387,1099816420,1101103498,1102383410,1103657640,
- 1104929743,1106201656,1107477094,1108757770,1110046899,1111345364,1112655232,1113976140,1115308497,1116650608,1118001050,1119357188,1120716070,1122074922,1123430062,1124779451,1126119750,1127450336,1128769061,1130076970,1131373431,1132660993,1133940331,1135215053,
- 1136486611,1137759063,1139033996,1140315258,1141603910,1142902971,1144212377,1145533830,1146865764,1148208293,1149558421,1150914734,1152273453,1153632161,1154987336,1156336345,1157676899,1159007000,1160326138,1161633531,1162930480,1164217519,1165497362,1166771573,
- 1168043644,1169315625,1170591098,1171871936,1173161172,1174459816,1175769843,1177090820,1178423369,1179765329,1181116012,1182471747,1183830910,1185189157,1186544584,1187893322,1189233936,1190563986,1191883071,1193190594,1194487446,1195774704,1197054439,1198328865,
- 1199600809,1200872933,1202148229,1203429129,1204718131,1206016839,1207326569,1208647713,1209979873,1211322163,1212672340,1214028565,1215387153,1216745996,1218100880,1219450210,1220790379,1222120938,1223439696,1224747643,1226044253,1227331881,1228611384,1229886141,
- 1231157801,1232430222,1233705176,1234986346,1236274984,1237573924,1238883349,1240204669,1241536690,1242879055,1244229331,1245585447,1246944370,1248302892,1249658288,1251007121,1252347845,1253677778,1254997039,1256304305,1257601376,1258888333,1260168307,1261442437,
- 1262714618,1263986464,1265261995,1266542631,1267831875,1269130303,1270440333,1271761175,1273093763,1274435745,1275786484,1277142385,1278501556,1279860052,1281215405,1282564402,1283904848,1285235097,1286553933,1287861586,1289158160,1290445532,1291725004,1292999573, //2040
- 1294271289,1295543600,1296818711,1298099839,1299388672,1300687611,1301997158,1303318498,1304650472,1305992933,1307342988,1308699354,1310057912,1311416803,1312771724,1314120978,1315461217,1316791596,1318110421,1319418120,1320714789,1322002161,1323281750,1324556302,
- 1325828111,1327100406,1328375574,1329656672,1330945550,1332244401,1333554041,1334875189,1336207373,1337549478,1338899896,1340255753,1341614840,1342973183,1344328731,1345677491,1347018331,1348348296,1349667637,1350974977,1352272062,1353559046,1354838957,1356113047,
- 1357385124,1358656898,1359932329,1361212903,1362502070,1363800471,1365110419,1366431270,1367763727,1369105752,1370456293,1371812306,1373171274,1374530011,1375885250,1377234591,1378575015,1379905620,1381224467,1382532412,1383828954,1385116507,1386395846,1387670478,
- 1388941955,1390214250,1391489061,1392770152,1394058699,1395357637,1396666988,1397988407,1399320332,1400662917,1402013044,1403369472,1404728159,1406087006,1407442120,1408791284,1410131795,1411462076,1412781201,1414088782,1415385723,1416672922,1417952716,1419227020,
- 1420498955,1421770937,1423046182,1424326946,1425615906,1426914462,1428224241,1429545176,1430877575,1432219564,1433570226,1434926039,1436285290,1437643613,1438999186,1440347955,1441688733,1443018781,1444338044,1445645556,1446942596,1448229836,1449509739,1450784112,
- 1452056165,1453328159,1454603470,1455884143,1457173072,1458471477,1459781102,1461101940,1462434046,1463776115,1465126340,1466482485,1467841223,1469200128,1470555206,1471904678,1473245003,1474575710,1475894550,1477202619,1478499255,1479786982,1481066484,1482341315,
- 1483612949,1484885404,1486160288,1487441429,1488729924,1490028766,1491337968,1492659158,1493990918,1495333201,1496683259,1498039416,1499398236,1500756936,1502112360,1503461460,1504802297,1506132492,1507451869,1508759320,1510056448,1511343503,1512623469,1513897641,
- 1515169770,1516441634,1517717084,1518997717,1520286854,1521585237,1522895123,1524215854,1525548277,1526890090,1528240705,1529596443,1530955616,1532314025,1533669539,1535018558,1536359293,1537689646,1539008811,1540316572,1541613418,1542900818,1544180457,1545454944,
- 1546726731,1547998881,1549274011,1550554945,1551843784,1553142525,1554452071,1555773216,1557105167,1558447437,1559797433,1561153648,1562512138,1563870987,1565225884,1566575249,1567915541,1569246166,1570565110,1571873121,1573169914,1574457567,1575737208,1577011939,
- 1578283682,1579556038,1580831035,1582112114,1583400770,1584699584,1586009001,1587330141,1588662127,1590004260,1591354499,1592710391,1594069323,1595427694,1596783160,1598131971,1599472849,1600802921,1602122419,1603429921,1604727231,1606014390,1607294518,1608568733, //2050
- 1609840943,1611112738,1612388178,1613668658,1614957734,1616255962,1617565792,1618886450,1620218838,1621560696,1622911254,1624267131,1625626179,1626984789,1628340122,1629689361,1631029891,1632360454,1633679440,1634987418,1636284141,1637571783,1638851331,1640126060,
- 1641397725,1642670066,1643944990,1645226031,1646514585,1647813379,1649122651,1650443890,1651775701,1653118153,1654468181,1655824586,1657183212,1658542145,1659897208,1661246503,1662586942,1663917356,1665236403,1666544125,1667841006,1669128374,1670408144,1671682647,
- 1672954581,1674226768,1675501997,1676782928,1678071812,1679370458,1680680084,1682001030,1683333229,1684675188,1686025673,1687381463,1688740643,1690098988,1691454615,1692803430,1694144334,1695474394,1696793781,1698101250,1699398385,1700685543,1701965528,1703239812,
- 1704511953,1705783876,1707059292,1708339911,1709628948,1710927285,1712237000,1713557722,1714889887,1716231796,1717582065,1718938048,1720296844,1721655655,1723010835,1724360324,1725700791,1727031588,1728350550,1729658709,1730955395,1732243151,1733522623,1734797416,
- 1736068972,1737341359,1738616167,1739897257,1741185705,1742484537,1743793713,1745114931,1746446650,1747788991,1749138972,1750495212,1751853933,1753212742,1754568082,1755917333,1757258152,1758588546,1759907962,1761215619,1762512784,1763799990,1765079928,1766354157,
- 1767626160,1768897996,1770173249,1771453818,1772742748,1774041086,1775350820,1776671548,1778003898,1779345738,1780696360,1782052115,1783411362,1784769756,1786125385,1787474366,1788815260,1790145593,1791464967,1792772743,1794069821,1795357236,1796637076,1797911520,
- 1799183425,1800455431,1801730573,1803011266,1804300042,1805598498,1806907979,1808228873,1809560821,1810902936,1812253001,1813609168,1814967768,1816326665,1817681658,1819031125,1820371468,1821702221,1823021193,1824329364,1825626191,1826914026,1828193702,1829468596,
- 1830740336,1832012786,1833287693,1834568763,1835857216,1837155926,1838465062,1839786077,1841117783,1842459869,1843809908,1845165869,1846524716,1847883254,1849238740,1850587751,1851928705,1853258931,1854578497,1855886090,1857183451,1858470672,1859750850,1861025125,
- 1862297377,1863569219,1864844663,1866125139,1867414150,1868712282,1870021973,1871342441,1872674664,1874016300,1875366762,1876722464,1878081556,1879440082,1880795590,1882144838,1883485621,1884816240,1886135464,1887443474,1888740366,1890027983,1891307643,1892582305,
- 1893854058,1895126315,1896401318,1897682263,1898970872,1900269539,1901578810,1902899869,1904231594,1905573838,1906923721,1908279967,1909638464,1910997374,1912352377,1913701801,1915042266,1916372921,1917692039,1919000034,1920296961,1921584547,1922864282,1924138916, //2060
- 1925410735,1926682986,1927958052,1929239020,1930527729,1931826406,1933135852,1934456821,1935788818,1937130766,1938481028,1939836765,1941195756,1942554052,1943909601,1945258418,1946599383,1947929515,1949249077,1950556665,1951854023,1953141282,1954421453,1955695762,
- 1956967993,1958239843,1959515253,1960795728,1962084714,1963382882,1964692557,1966013110,1967345276,1968687018,1970037318,1971393116,1972751937,1974110563,1975465768,1976815131,1978155657,1979486428,1980805505,1982113734,1983410584,1984698461,1985978101,1987252994,
- 1988524666,1989797071,1991071903,1992352912,1993641296,1994939985,1996249048,1997570133,1998901732,2000244011,2001593888,2002950150,2004308761,2005667636,2007022840,2008372164,2009712845,2011043328,2012362647,2013670433,2014967559,2016254937,2017534879,2018809302,
- 2020081311,2021353318,2022628524,2023909195,2025197997,2026496354,2027805895,2029126587,2030458745,2031800541,2033151043,2034506777,2035866013,2037224399,2038580096,2039929037,2041270018,2042600260,2043919714,2045227373,2046524534,2047811842,2049091793,2050366164,
- 2051638209,2052910169,2054185456,2055466093,2056754984,2058053329,2059362872,2060683590,2062015561,2063357480,2064707568,2066063588,2067422248,2068781103,2070136195,2071485720,2072826154,2074156995,2075475993,2076784220,2078080994,2079368834,2080648411,2081923285,
- 2083194925,2084467365,2085742199,2087023282,2088311685,2089610429,2090919503,2092240556,2093572159,2094914287,2096264192,2097620225,2098978953,2100337618,2101693056,2103042251,2104383240,2105713662,2107033291,2108341024,2109638395,2110925656,2112205749,2113479973,
- 2114752064,2116023815,2117299079,2118579482,2119868351,2121166459,2122476077,2123796558,2125128772,2126470417,2127820921,2129176603,2130535790,2131894280,2133249947,2134599177,2135940179,2137270822,2138590298,2139898349,2141195468,2142483079,2143762878,2145037429,
- 2146309208,2147581241,2148856184,2150136846,2151425377,2152723783,2154033025,2155353906,2156685678,2158027844,2159377817,2160734071,2162092656,2163451645,2164806712,2166156279,2167496794,2168827651,2170146828,2171455062,2172752048,2174039864,2175319614,2176594405,
- 2177866142,2179138432,2180413293,2181694186,2182982597,2184281149,2185590283,2186911169,2188242927,2189584907,2190935044,2192290924,2193649903,2195008388,2196364006,2197713003,2199054082,2200384359,2201704065,2203011776,2204309294,2205596664,2206876986,2208151370,
- 2209423698,2210695547,2211970955,2213251320,2214540191,2215838141,2217147633,2218467918,2219799934,2221141445,2222491728,2223847403,2225206372,2226564988,2227920444,2229269876,2230610676,2231941538,2233260850,2234569150,2235866181,2237154104,2238433893,2239708808, //2070
- 2240980603,2242252993,2243527898,2244808829,2246097203,2247395730,2248704684,2250025542,2251356962,2252699028,2254048727,2255404899,2256763416,2258122384,2259477598,2260827163,2262167925,2263498715,2264818127,2266126201,2267423371,2268710973,2269990896,2271265483,
- 2272537427,2273809559,2275084670,2276365436,2277654106,2278952514,2280261872,2281582550,2282914473,2284256189,2285606447,2286962079,2288321161,2289679500,2291035211,2292384201,2293725360,2295055722,2296375449,2297683243,2298980682,2300268078,2301548240,2302822613,
- 2304094783,2305366671,2306642017,2307922538,2309211455,2310509653,2311819208,2313139746,2314471720,2315813422,2317163492,2318519274,2319877904,2321236567,2322591667,2323941128,2325281651,2326612572,2327931731,2329240137,2330537100,2331825142,2333104878,2334379896,
- 2335651618,2336924103,2338198931,2339479977,2340768312,2342066986,2343375963,2344696958,2346028445,2347370554,2348720316,2350076363,2351434915,2352793600,2354148850,2355498090,2356838953,2358169484,2359489091,2360797005,2362094439,2363381929,2364662121,2365936571,
- 2367208728,2368480647,2369755892,2371036377,2372325138,2373623252,2374932717,2376253162,2377585238,2378926833,2380277259,2381632883,2382992066,2384350467,2385706160,2387055252,2388396294,2389726788,2391046345,2392354295,2393651555,2394939130,2396219126,2397493683,
- 2398765682,2400037719,2401312852,2402593464,2403882114,2405180390,2406489680,2407810376,2409142162,2410484148,2411834133,2413190266,2414548884,2415907841,2417262934,2418612522,2419953002,2421283875,2422602954,2423911201,2425208071,2426495924,2427775591,2429050464,
- 2430322170,2431594585,2432869447,2434150476,2435438871,2436737527,2438046585,2439367527,2440699145,2442041162,2443391135,2444747070,2446105915,2447464494,2448820053,2450169172,2451510252,2452840614,2454160309,2455468024,2456765479,2458052785,2459333010,2460607313,
- 2461879551,2463151347,2464426705,2465707070,2466995938,2468293914,2469603431,2470923717,2472255762,2473597226,2474947550,2476303141,2477662193,2479020722,2480376314,2481725699,2483066684,2484397536,2485717026,2487025295,2488322429,2489610238,2490890032,2492164743,
- 2493436476,2494708621,2495983457,2497264169,2498552525,2499850907,2501159910,2502480701,2503812204,2505154259,2506504022,2507860226,2509218771,2510577820,2511933029,2513282730,2514623485,2515954458,2517273873,2518582146,2519879294,2521167048,2522446870,2523721509,
- 2524993245,2526265327,2527540146,2528820813,2530109178,2531407516,2532716631,2534037329,2535369108,2536710935,2538061136,2539416915,2540776008,2542134482,2543490257,2544839348,2546180618,2547511056,2548830931,2550138791,2551436389,2552723821,2554004102,2555278440, //2080
- 2556550632,2557822377,2559097627,2560377898,2561666634,2562964527,2564273905,2565594164,2566926068,2568267589,2569617742,2570973456,2572332284,2573690962,2575046295,2576395817,2577736549,2579067542,2580386865,2581695345,2582992439,2584280546,2585560380,2586835424,
- 2588107190,2589379621,2590654406,2591935295,2593223483,2594521911,2595830663,2597151397,2598482652,2599824600,2601174204,2602530272,2603888781,2605247658,2606602955,2607952483,2609293430,2610624253,2611943925,2613252079,2614549530,2615837202,2617117369,2618391956,
- 2619664046,2620936056,2622211178,2623491690,2624780249,2626078307,2627387493,2628707804,2630039572,2631381007,2632731195,2634086710,2635445826,2636804222,2638160047,2639509232,2640850547,2642181176,2643501046,2644809098,2646106620,2647394215,2648674387,2649948880,
- 2651220980,2652492894,2653768077,2655048523,2656337182,2657635247,2658944506,2660264939,2661596655,2662938344,2664288244,2665644114,2667002689,2668361514,2669716661,2671066306,2672406941,2673738027,2675057314,2676365836,2677662893,2678950982,2680230752,2681505757,
- 2682777459,2684049899,2685324673,2686605655,2687893910,2689192494,2690501379,2691822250,2693153663,2694495621,2695845358,2697201253,2698559863,2699918451,2701273849,2702623068,2703964130,2705294693,2706614509,2707922493,2709220139,2710507716,2711788107,2713062608,
- 2714334904,2715606781,2716882069,2718162405,2719451117,2720749001,2722058341,2723378516,2724710419,2726051764,2727402004,2728757462,2730116490,2731474866,2732830492,2734179739,2735520832,2736851619,2738171310,2739479615,2740777028,2742064939,2743345039,2744619847,
- 2745891841,2747164001,2748438997,2749719606,2751008005,2752306187,2753615157,2754935715,2756267170,2757609028,2758958758,2760314847,2761673367,2763032384,2764387548,2765737269,2767077949,2768408989,2769728339,2771036743,2772333880,2773621839,2774901709,2776176600,
- 2777448404,2778720727,2779995576,2781276411,2782564711,2783863113,2785172056,2786492743,2787824293,2789166102,2790516091,2791871894,2793230847,2794589384,2795945106,2797294263,2798635527,2799965989,2801285870,2802593715,2803891332,2805178755,2806459093,2807733464,
- 2809005763,2810277585,2811552968,2812833322,2814122169,2815420090,2816729515,2818049704,2819381601,2820722972,2822073122,2823428673,2824787559,2826146114,2827501572,2828851040,2830191932,2831522911,2832842371,2834150815,2835447981,2836736010,2838015870,2839290818,
- 2840562614,2841834973,2843109828,2844390688,2845678983,2846977412,2848286265,2849606997,2850938296,2852280221,2853629791,2854985852,2856344289,2857703226,2859058461,2860408128,2861749045,2863080060,2864399719,2865708058,2867005456,2868293249,2869573284,2870847914, //2090
- 2872119811,2873391824,2874666743,2875947275,2877235674,2878533813,2879842903,2881163353,2882495080,2883836660,2885186824,2886542438,2887901549,2889259992,2890615865,2891965077,2893306502,2894637153,2895957182,2897265252,2898562939,2899850520,2901130808,2902405215,
- 2903677344,2904949089,2906224226,2907504457,2908793055,2910090917,2911400172,2912720461,2914052274,2915393891,2916743962,2918099802,2919458554,2920817366,2922172659,2923522321,2924863071,2926194213,2927513599,2928822208,2930119351,2931407534,2932687363,2933962419,
- 2935234122,2936506525,2937781214,2939062069,2940350164,2941648577,2942957274,2944278015,2945609279,2946951228,2948300895,2949656930,2951015539,2952374348,2953729764,2955079211,2956420284,2957751041,2959070862,2960379003,2961676648,2962964360,2964244739,2965519352,
- 2966791601,2968063546,2969338725,2970619064,2971907588,2973205401,2974514503,2975834559,2977166246,2978507483,2979857620,2981213047,2982572144,2983930569,2985286401,2986635724,2987977068,2989307902,2990627823,2991936119,2993233707,2994521561,2995801790,2997076508,
- 2998348608,2999620653,3000895730,3002176189,3003464626,3004762606,3006071559,3007391864,3008723260,3010064859,3011414529,3012770441,3014128966,3015487965,3016843226,3018193089,3019533915,3020865177,3022184656,3023493274,3024790465,3026078570,3027358403,3028633360,
- 3029905064,3031177401,3032452119,3033732948,3035021098,3036319486,3037628252,3038948911,3040280247,3041622022,3042971773,3044327559,3045686305,3047044879,3048400513,3049749804,3051091128,3052421795,3053741830,3055049888,3056347661,3057635239,3058915659,3060190084,
- 3061462363,3062734144,3064009429,3065289689,3066578409,3067876216,3069185524,3070505590,3071837402,3073178632,3074528734,3075884115,3077242996,3078601372,3079956886,3081306240,3082647284,3083978263,3085297967,3086606500,3087903945,3089192076,3090472178,3091747158,
- 3093019099,3094291370,3095566252,3096846916,3098135153,3099433339,3100742109,3102062618,3103393845,3104735609,3106085116,3107441092,3108799454,3110158372,3111513505,3112863214,3114204035,3115535167,3116854790,3118163328,3119460754,3120748801,3122028888,3123303763,
- 3124575671,3125847853,3127122685,3128403273,3129691472,3130989577,3132298400,3133618792,3134950258,3136291814,3137641781,3138997413,3140356416,3141714891,3143070728,3144419941,3145761366,3147091980,3148412048,3149720090,3151017874,3152305472,3153585912,3154860376,
- 3156132673,3157404470,3158679733,3159959953,3161248589,3162546338,3163855545,3165175629,3166507373,3167848754,3169198804,3170554449,3171913261,3173271954,3174627363,3175976976,3177317836,3178648946,3179968390,3181276960,3182574123,3183862271,3185142125,3186417171 //2100
-];
-
+// ============ 节气计算（天文算法） ============
 const S_TERM_NAME = ['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
 
+const S_TERM_INFO = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+
+const J2000 = 2451545.0;       // Julian day of J2000.0 (2000-01-01 12:00 UTC)
+const D2R = Math.PI / 180;
+
+// 太阳视黄经 (Meeus 低精度公式，误差 ~1')
+function sunLng(jd) {
+  const T = (jd - J2000) / 36525;
+  const M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T * T;  // 平近点角
+  const L0 = 280.46645 + 36000.76983 * T + 0.0003032 * T * T;     // 平黄经
+  const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(M * D2R)
+          + (0.019993 - 0.000101 * T) * Math.sin(2 * M * D2R)
+          + 0.000289 * Math.sin(3 * M * D2R);                      // 中心差
+  const Omega = 125.04 - 1934.136 * T;
+  const L = L0 + C - 0.00569 - 0.00478 * Math.sin(Omega * D2R);   // 真黄经 + 光行差 + 章动
+  return ((L % 360) + 360) % 360;
+}
+
+// JD → UTC Date
+function jd2utc(jd) {
+  const ms = (jd - 2440587.5) * 86400000;
+  return new Date(ms);
+}
+
+// UTC Date → JD
+function utc2jd(d) {
+  return d.getTime() / 86400000 + 2440587.5;
+}
+
 function getSolarTerm(y, n) {
-  // n: 0=小寒 ... 23=冬至
-  // 查表返回"BJT as UTC"——与qiYunDays的Date.UTC对齐
-  const idx = (y - 1900) * 24 + n;
-  const packed = SOLAR_TERMS[idx];
-  let days = Math.trunc(packed / 86400);
-  let secs = packed % 86400;
-  if (secs < 0) { secs += 86400; days -= 1; }
-  const ms2000 = Date.UTC(2000, 0, 1);
-  return new Date(ms2000 + days * 86400000 + secs * 1000 + 288e5);
+  // n: 0=小寒(285°) ... 23=冬至(270°)
+  const targetDeg = (n * 15 + 285) % 360;
+
+  // 初值：用旧 sTermInfo 公式估算（误差通常 < 12h）
+  const baseMs = Date.UTC(1900, 0, 6, 2, 5, 0);
+  const tropMs = 31556925974.7;
+  const estUtcMs = baseMs + tropMs * (y - 1900) + S_TERM_INFO[n] * 60000;
+  const estJD = utc2jd(new Date(estUtcMs));
+
+  // 二分法搜索 ±1 天窗口
+  let lo = estJD - 1;
+  let hi = estJD + 1;
+
+  // 计算端点处太阳经度（确保目标在范围内，处理 0° 跨越）
+  let lngLo = sunLng(lo), lngHi = sunLng(hi);
+  if (lngHi < lngLo) lngHi += 360;
+  let adjTarget = targetDeg;
+  if (adjTarget < lngLo) adjTarget += 360;
+  if (adjTarget > lngHi) adjTarget -= 360;
+
+  for (let i = 0; i < 32; i++) {
+    const mid = (lo + hi) / 2;
+    let lngMid = sunLng(mid);
+    if (lngMid < lngLo) lngMid += 360;
+
+    if (lngMid < adjTarget) { lo = mid; lngLo = lngMid; }
+    else { hi = mid; }
+
+    if (hi - lo < 1e-9) break; // ~0.1ms
+  }
+
+  const jdFinal = (lo + hi) / 2;
+  // 返回北京时间 (UTC+8)
+  return new Date((jdFinal - 2440587.5) * 86400000 + 8 * 3600000);
 }
 
 // 月节气：正月建寅（立春开始），每月对应一个节气起点
@@ -1968,7 +1425,6 @@ function getSolarTerm(y, n) {
 // solar term index: 立春=2, 惊蛰=4, 清明=6, 立夏=8, 芒种=10, 小暑=12,
 //   立秋=14, 白露=16, 寒露=18, 立冬=20, 大雪=22, 小寒=0
 const MONTH_TERM = [2,4,6,8,10,12,14,16,18,20,22,0]; // 寅月=立春(2) ... 丑月=小寒(0)
-
 
 // ============ 年柱 ============
 function yearPillar(y) {
@@ -2068,7 +1524,7 @@ const ZHI_MAIN = { '子':'癸','丑':'己','寅':'甲','卯':'乙','辰':'戊','
 
 function zhiShiShen(riGan, zhi, twin, pillarType) {
   let mainGan;
-  if (twin === 2 && twinPillars.includes(pillarType)) {
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
     mainGan = ZHI_TWIN_MAIN[zhi] || (ZHI_TWIN_CANG[zhi] ? ZHI_TWIN_CANG[zhi][0] : '');
   } else {
     mainGan = ZHI_MAIN[zhi];
@@ -2087,19 +1543,10 @@ function changSheng(gan, zhi) {
   return i >= 0 ? CS12_N[i] : '?';
 }
 
-// 纳音五行十二长生（纳音末字→五行→阳干→查月令位置）
-function nayunChangSheng(nayinName, yueZhi) {
-  if (!nayinName || !yueZhi) return '';
-  const wx = nayinName[nayinName.length - 1];
-  const yangGan = NAYIN_WX_YANG[wx];
-  if (!yangGan) return '';
-  return changSheng(yangGan, yueZhi);
-}
-
 // ============ 藏干文本 ============
 function cangGanAt(zhi, riGan, twin, pillarType, level) {
   let cg;
-  if (twin === 2 && twinPillars.includes(pillarType)) {
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
     cg = ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || [];
   } else {
     cg = CANG_GAN[zhi] || [];
@@ -2110,7 +1557,7 @@ function cangGanAt(zhi, riGan, twin, pillarType, level) {
 
 function cangGanText(zhi, riGan, twin, pillarType) {
   let cg;
-  if (twin === 2 && twinPillars.includes(pillarType)) {
+  if (twin === 2 && TWIN_PILLARS.includes(pillarType)) {
     cg = ZHI_TWIN_CANG[zhi] || CANG_GAN[zhi] || [];
   } else {
     cg = CANG_GAN[zhi] || [];
@@ -2130,7 +1577,7 @@ function cangGanLayers(zhi, riGan, twin, pillarType) {
   const cg = CANG_GAN[zhi] || [];
   const layers = [];
 
-  if (twinPillars.includes(pillarType)) {
+  if (TWIN_PILLARS.includes(pillarType)) {
     // 双胞胎柱：老大/老二拆分本气与中余气
     if (twin === 1) {
       // 老大：只显示标准 CANG_GAN 的本气 (cg[0])
@@ -2254,9 +1701,8 @@ function shenGong(yueZhi, shiZhi, nianGan) {
 // ============ 大运 & 起运 ============
 function qiYunDays(birth, monthZhi, shun) {
   // 精确到小时的出生到上/下一个节气的天数
-  // 使用 Date.UTC 对齐 getSolarTerm 的 "BJT as UTC" 约定
   const y = birth.getFullYear(), mo = birth.getMonth() + 1, d = birth.getDate();
-  const birthMs = Date.UTC(y, mo - 1, d, birth.getHours(), birth.getMinutes());
+  const birthMs = birth.getTime();
 
   // 找到出生月对应的节气索引
   const monthIdx = (DZ.indexOf(monthZhi) + 10) % 12; // 寅月=0
@@ -2284,11 +1730,7 @@ function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
   const totalMonths = days / 3 * 12; // 3天=1年=12个月
   const qyYears = Math.floor(totalMonths / 12);
   const qyMonths = Math.floor(totalMonths % 12);
-  const fractionalMonth = totalMonths - Math.floor(totalMonths);
-  const fractionalDays = fractionalMonth * 30;
-  const qyDays = Math.floor(fractionalDays);
-  let qyHours = Math.round((fractionalDays - qyDays) * 24);
-  const qyDaysFinal = qyDays;
+  const qyDays = Math.round((totalMonths - Math.floor(totalMonths)) * 30);
 
   const yGIdx = TG.indexOf(yueGan);
   const yZIdx = DZ.indexOf(yueZhi);
@@ -2300,12 +1742,12 @@ function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
     let zIdx = (yZIdx + off) % 12;
     if (gIdx < 0) gIdx += 10;
     if (zIdx < 0) zIdx += 12;
-    const startAge = Math.round(totalMonths / 12) + 1 + i * 10;
-    const startYear = birth.getFullYear() + startAge - 1;
+    const startAge = qyYears + i * 10;
+    const startYear = birth.getFullYear() + startAge;
     daYun.push({ gan: TG[gIdx], zhi: DZ[zIdx], startAge, startYear });
   }
 
-  return { daYun, qiYun: { years: qyYears, months: qyMonths, days: qyDaysFinal, hours: qyHours, totalMonths }, shun };
+  return { daYun, qiYun: { years: qyYears, months: qyMonths, days: qyDays }, shun };
 }
 
 // ============ 流年干支 ============
@@ -2343,23 +1785,22 @@ function renYuanSiLing(y, m, d) {
       stY = (m === 1) ? y : y + 1;
     }
     const st = getSolarTerm(stY, termIdx);
-    const stDate = new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate());
+    const stDate = new Date(st.getFullYear(), st.getMonth(), st.getDate());
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
     let nextY = y;
     if (nextTerm <= termIdx) nextY = y + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate());
+    const nextDate = new Date(nextSt.getFullYear(), nextSt.getMonth(), nextSt.getDate());
     if (birth >= stDate && birth < nextDate) {
-      const daysAfter = Math.floor((birth - stDate) / 86400000);
+      const daysAfter = Math.floor((birth - stDate) / 86400000) + 1;
       const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
-      const termName = S_TERM_NAME[termIdx];
       const ry = REN_YUAN[monthZhi];
       if (!ry) return '';
       for (const [maxDay, gan] of ry) {
-        if (daysAfter <= maxDay) return '人元司令：' + gan + '（' + termName + '后 ' + daysAfter + ' 日）';
+        if (daysAfter <= maxDay) return gan + '（' + monthZhi + '月，节后 ' + daysAfter + ' 日）';
       }
-      return '人元司令：' + ry[ry.length-1][1] + '（' + termName + '后 ' + daysAfter + ' 日）';
+      return ry[ry.length-1][1] + '（' + monthZhi + '月，节后 ' + daysAfter + ' 日）';
     }
   }
   return '';
@@ -2436,13 +1877,8 @@ function buildGongWeiTagRows(area, colCount) {
 
   for (var i = 0; i < selectedGongWei.length; i++) {
     var gwName = selectedGongWei[i];
-    var group = null;
-    for (var jj = 0; jj < gongWeiGroups.length; jj++) {
-      if (gongWeiGroups[jj].name === gwName) { group = gongWeiGroups[jj]; break; }
-    }
-    if (!group) continue;
-    var labels = group.labels;
-    var color = group.color || '#8b7e6a';
+    var labels = GONGWEI_MAP[gwName];
+    var color = GONGWEI_COLORS[gwName] || '#8b7e6a';
     var cls = area === 'main' ? 'gz-tags' : 'gz-tags-sy';
     var html = '<tr class="' + cls + '" data-gw-type="' + gwName + '">';
     // rl 列：显示宫位名称，左边框色
@@ -2547,12 +1983,13 @@ function syncGzCheckboxes() {
   }
 }
 
-// ===== v0.10.0/v0.13.0 宫位多选 — Popover 面板生成 =====
+// ===== v0.10.0 宫位多选 — Popover 面板生成（纯函数，返回 HTML） =====
 function renderGongWeiPanel() {
+  var gwNames = Object.keys(GONGWEI_MAP);
   var cbItems = '';
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    var group = gongWeiGroups[i];
-    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + group.name + '" onchange="toggleGongWei(\'' + group.name + '\', this.checked)"><span>' + group.name + '宫位</span></label>';
+  for (var i = 0; i < gwNames.length; i++) {
+    var name = gwNames[i];
+    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + name + '" onchange="toggleGongWei(\'' + name + '\', this.checked)"><span>' + name + '宫位</span></label>';
   }
   return '<div class="gz-panel-wrapper">'
     + '<button class="btn-simple gz-trigger" id="gz-trigger" onclick="toggleGzPopover(event)">宫位<span class="gz-count"></span> ▾<span class="gz-summary"></span></button>'
@@ -2561,11 +1998,10 @@ function renderGongWeiPanel() {
     + '<div class="gz-popover-actions">'
     + '<button onclick="selectAllGongWei()">全选</button>'
     + '<button onclick="clearAllGongWei()">清空</button>'
-    + '<button class="gz-settings-btn" onclick="closeGzPopover();openGzSettings();">⚙ 宫位设置</button>'
     + '</div></div></div>';
 }
 
-// ===== v0.10.0/v0.13.0 宫位多选 — 交互函数 =====
+// ===== v0.10.0 宫位多选 — 交互函数 =====
 function toggleGongWei(name, checked) {
   var idx = selectedGongWei.indexOf(name);
   if (checked && idx < 0) {
@@ -2573,20 +2009,17 @@ function toggleGongWei(name, checked) {
   } else if (!checked && idx >= 0) {
     selectedGongWei.splice(idx, 1);
   }
-  persistSelected();
   updateGongWeiTags();
 }
 
 function selectAllGongWei() {
-  selectedGongWei = gongWeiGroups.map(function(g) { return g.name; });
-  persistSelected();
+  selectedGongWei = Object.keys(GONGWEI_MAP);
   updateGongWeiTags();
   closeGzPopover();
 }
 
 function clearAllGongWei() {
   selectedGongWei = [];
-  persistSelected();
   updateGongWeiTags();
   closeGzPopover();
 }
@@ -2595,8 +2028,6 @@ function toggleGzPopover(e) {
   if (e) e.stopPropagation();
   var popover = document.getElementById('gz-popover');
   if (!popover) return;
-  // 每次打开前同步 checkbox（数据可能已在设置面板中变化）
-  syncGzCheckboxes();
   popover.classList.toggle('open');
 }
 
@@ -2612,336 +2043,541 @@ document.addEventListener('click', function(e) {
   if (!wrapper.contains(e.target)) {
     closeGzPopover();
   }
-  // 分气 popover 外部点击关闭
-  var tpWrapper = document.querySelector('#tp-popover');
-  if (tpWrapper) {
-    var tpPanel = tpWrapper.closest('.gz-panel-wrapper');
-    if (tpPanel && !tpPanel.contains(e.target)) {
-      closeTpPopover();
-    }
-  }
 });
-
-// ===== v0.13.0 宫位设置面板渲染 =====
-var gzSettingsView = 'list'; // 'list' | 'trash'
-var gzEditingId = null;     // 正在编辑的宫位组 id，null=新增
-
-function openGzSettings() {
-  gzSettingsView = 'list';
-  document.getElementById('gzSettingsTrashView').style.display = 'none';
-  document.getElementById('gzSettingsListView').style.display = '';
-  document.getElementById('gzSettingsOverlay').classList.add('show');
-  renderGzSettingsList();
-}
-
-function closeGzSettings() {
-  document.getElementById('gzSettingsOverlay').classList.remove('show');
-  // 关闭后刷新 popover 面板和标签行
-  syncGzCheckboxes();
-  updateGongWeiTags();
-}
-
-function renderGzSettingsList() {
-  var list = document.getElementById('gzSettingsList');
-  var countEl = document.getElementById('gzTrashCount');
-  countEl.textContent = gongWeiTrash.length > 0 ? '(' + gongWeiTrash.length + ')' : '';
-
-  if (gongWeiGroups.length === 0) {
-    list.innerHTML = '<div style="text-align:center;color:var(--c-gray);padding:30px 0;font-family:var(--font-display);font-size:15px;">暂无宫位组，点击「新增」创建</div>';
-    return;
-  }
-
-  var html = '';
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    var g = gongWeiGroups[i];
-    var preview = g.labels.join('·');
-    if (preview.length > 40) preview = preview.substr(0, 40) + '…';
-    var upDisabled = i === 0 ? ' disabled' : '';
-    var downDisabled = i === gongWeiGroups.length - 1 ? ' disabled' : '';
-
-    html += '<div class="gz-set-item" draggable="true" data-idx="' + i + '"'
-      + ' ondragstart="gzDragStart(event,' + i + ')"'
-      + ' ondragover="gzDragOver(event)"'
-      + ' ondragleave="gzDragLeave(event)"'
-      + ' ondrop="gzDrop(event,' + i + ')"'
-      + ' ondragend="gzDragEnd(event)">'
-      + '<span class="gz-drag-handle" title="拖拽排序">⠿</span>'
-      + '<div class="gz-set-info">'
-      + '<div class="gz-set-name">' + g.name + (g.isPreset ? '<span class="gz-preset-tag">预置</span>' : '') + '</div>'
-      + '<div class="gz-set-preview">' + preview + '</div>'
-      + '</div>'
-      + '<div class="gz-set-actions">'
-      + '<button onclick="openGzEdit(\'' + g.id + '\')" title="编辑">✎</button>'
-      + '<button onclick="confirmDeleteGroup(\'' + g.id + '\',\'' + g.name + '\')" title="删除">🗑</button>'
-      + '<button onclick="moveUp(' + i + ');renderGzSettingsList();updateGongWeiTags();"' + upDisabled + ' title="上移">↑</button>'
-      + '<button onclick="moveDown(' + i + ');renderGzSettingsList();updateGongWeiTags();"' + downDisabled + ' title="下移">↓</button>'
-      + '</div></div>';
-  }
-  list.innerHTML = html;
-}
-
-// ===== v0.13.0 拖拽排序 =====
-function gzDragStart(e, idx) {
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', String(idx));
-  e.target.classList.add('dragging');
-}
-function gzDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  var item = e.target.closest('.gz-set-item');
-  if (item) item.classList.add('drag-over');
-}
-function gzDragLeave(e) {
-  var item = e.target.closest('.gz-set-item');
-  if (item) item.classList.remove('drag-over');
-}
-function gzDrop(e, toIdx) {
-  e.preventDefault();
-  var fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
-  if (isNaN(fromIdx) || fromIdx === toIdx) return;
-  moveGroup(fromIdx, toIdx);
-  renderGzSettingsList();
-  updateGongWeiTags();
-}
-function gzDragEnd(e) {
-  e.target.classList.remove('dragging');
-  var items = document.querySelectorAll('.gz-set-item');
-  for (var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
-}
-
-// ===== v0.13.0 删除确认 =====
-function confirmDeleteGroup(id, name) {
-  if (!confirm('确定删除「' + name + '宫位」？\n删除后可从回收站恢复。')) return;
-  deleteGroup(id);
-  renderGzSettingsList();
-  updateGongWeiTags();
-}
-
-// ===== v0.13.0 编辑弹窗 =====
-function openGzEdit(id) {
-  gzEditingId = id || null;
-  var titleEl = document.getElementById('gzEditTitle');
-  var nameEl = document.getElementById('gzEditName');
-  var errEl = document.getElementById('gzEditNameErr');
-  errEl.style.display = 'none';
-  errEl.textContent = '';
-
-  if (id) {
-    var group = null;
-    for (var i = 0; i < gongWeiGroups.length; i++) {
-      if (gongWeiGroups[i].id === id) { group = gongWeiGroups[i]; break; }
-    }
-    if (!group) return;
-    titleEl.textContent = '编辑「' + group.name + '宫位」';
-    nameEl.value = group.name;
-    for (var j = 0; j < 7; j++) {
-      document.getElementById('gzEditL' + j).value = group.labels[j] || '';
-    }
-  } else {
-    titleEl.textContent = '新增宫位组';
-    nameEl.value = '';
-    for (var k = 0; k < 7; k++) {
-      document.getElementById('gzEditL' + k).value = '';
-    }
-  }
-  checkGzEditValid();
-  document.getElementById('gzEditOverlay').classList.add('show');
-  setTimeout(function() { nameEl.focus(); }, 100);
-}
-
-function closeGzEdit() {
-  document.getElementById('gzEditOverlay').classList.remove('show');
-  gzEditingId = null;
-}
-
-function checkCloseGzEdit() {
-  // 简单策略：直接关闭（未保存的内容丢失提示由 product 保持一致）
-  closeGzEdit();
-}
-
-function checkGzEditValid() {
-  var btn = document.getElementById('gzEditSaveBtn');
-  var name = document.getElementById('gzEditName').value.trim();
-  var allFilled = name.length > 0;
-  for (var i = 0; i < 7; i++) {
-    if (!document.getElementById('gzEditL' + i).value.trim()) { allFilled = false; break; }
-  }
-  btn.disabled = !allFilled;
-}
-
-// 监听输入变化以启用/禁用保存按钮
-(function() {
-  var inputs = [document.getElementById('gzEditName')];
-  for (var i = 0; i < 7; i++) inputs.push(document.getElementById('gzEditL' + i));
-  for (var j = 0; j < inputs.length; j++) {
-    inputs[j].addEventListener('input', checkGzEditValid);
-  }
-})();
-
-function saveGzEdit() {
-  var name = document.getElementById('gzEditName').value.trim();
-  var labels = [];
-  for (var i = 0; i < 7; i++) {
-    labels.push(document.getElementById('gzEditL' + i).value.trim());
-  }
-
-  var result;
-  if (gzEditingId) {
-    result = updateGroup(gzEditingId, name, labels);
-  } else {
-    result = addGroup(name, labels);
-  }
-
-  if (!result.ok) {
-    var errEl = document.getElementById('gzEditNameErr');
-    errEl.textContent = result.error;
-    errEl.style.display = 'block';
-    return;
-  }
-
-  closeGzEdit();
-  renderGzSettingsList();
-  updateGongWeiTags();
-}
-
-// ===== v0.13.0 回收站面板 =====
-function openGzTrash() {
-  gzSettingsView = 'trash';
-  document.getElementById('gzSettingsListView').style.display = 'none';
-  document.getElementById('gzSettingsTrashView').style.display = 'flex';
-  renderGzTrashList();
-}
-
-function backToGzList() {
-  gzSettingsView = 'list';
-  document.getElementById('gzSettingsTrashView').style.display = 'none';
-  document.getElementById('gzSettingsListView').style.display = '';
-  renderGzSettingsList();
-}
-
-function renderGzTrashList() {
-  var list = document.getElementById('gzTrashList');
-  if (gongWeiTrash.length === 0) {
-    list.innerHTML = '<div class="gz-trash-empty">回收站为空</div>';
-    return;
-  }
-  var html = '';
-  for (var i = 0; i < gongWeiTrash.length; i++) {
-    var t = gongWeiTrash[i];
-    var g = t.group;
-    var preview = g.labels.join('·');
-    if (preview.length > 40) preview = preview.substr(0, 40) + '…';
-    var dt = new Date(t.deletedAt);
-    var timeStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-'
-      + String(dt.getDate()).padStart(2,'0') + ' ' + String(dt.getHours()).padStart(2,'0')
-      + ':' + String(dt.getMinutes()).padStart(2,'0');
-
-    html += '<div class="gz-trash-item">'
-      + '<div class="gz-trash-info">'
-      + '<div class="gz-trash-name">' + g.name + '宫位</div>'
-      + '<div class="gz-trash-preview">' + preview + '</div>'
-      + '<div class="gz-trash-time">删除于 ' + timeStr + '</div>'
-      + '</div>'
-      + '<div class="gz-trash-actions">'
-      + '<button onclick="restoreFromTrash(\'' + t.id + '\');renderGzTrashList();renderGzSettingsList();updateGongWeiTags();">恢复</button>'
-      + '</div></div>';
-  }
-  list.innerHTML = html;
-}
-
-function emptyGzTrash() {
-  if (!confirm('确定清空回收站？此操作不可恢复。')) return;
-  clearTrash();
-  renderGzTrashList();
-  renderGzSettingsList();
-}
-
-// ===== v0.13.0 恢复默认 =====
-function resetGongWeiDefaults() {
-  if (!confirm('将恢复 14 种预置宫位组的原始名称和标签。\n您自定义的宫位组不受影响。\n确定继续？')) return;
-  resetToDefaults();
-  renderGzSettingsList();
-  updateGongWeiTags();
-}
-
-// ===== 分气多选面板 =====
-function renderTwinPillarPanel() {
-  var pillarLabels = { nian:'年', yue:'月', ri:'日', shi:'时', tai:'胎', shen:'身', ming:'命' };
-  var row1 = ['nian','yue','ri','shi'];
-  var row2 = ['','tai','ming','shen'];
-  function buildRow(keys) {
-    var items = '';
-    for (var i = 0; i < keys.length; i++) {
-      if (keys[i] === '') {
-        items += '<span></span>';
-        continue;
-      }
-      var p = keys[i];
-      var checked = twinPillars.indexOf(p) >= 0 ? ' checked' : '';
-      items += '<label class="gz-cb-item"><input type="checkbox" value="' + p + '"' + checked + ' onchange="onTwinPillarChange()"><span>' + pillarLabels[p] + '</span></label>';
-    }
-    return items;
-  }
-  var row1Html = buildRow(row1);
-  var row2Html = buildRow(row2);
-  return '<div class="gz-panel-wrapper">'
-    + '<button class="btn-simple gz-trigger" onclick="toggleTpPopover(event)">分气<span class="gz-count"></span> ▾</button>'
-    + '<div class="gz-popover" id="tp-popover">'
-    + '<div class="tp-cb-grid" style="display:grid;grid-template-columns:repeat(4, 1fr);gap:4px 16px;">' + row1Html + row2Html + '</div>'
-    + '<div class="gz-popover-actions">'
-    + '<button onclick="selectAllTwinPillars()">全选</button>'
-    + '<button onclick="clearAllTwinPillars()">清空</button>'
-    + '</div></div></div>';
-}
-
-function onTwinPillarChange() {
-  var cbs = document.querySelectorAll('#tp-popover input[type=checkbox]');
-  twinPillars = [];
-  for (var i = 0; i < cbs.length; i++) {
-    if (cbs[i].checked) twinPillars.push(cbs[i].value);
-  }
-  var twinType = window._twinType;
-  if (twinType === 'longfeng') {
-    var d1 = window._paipanData, d2 = window._paipanData2;
-    if (d1 && d2) renderLongFengCardsHtml(d1, d2, 'output');
-  } else if (twinType === 'same') {
-    var d = window._paipanData;
-    if (d) renderTwinCardsHtml(d, 'output');
-  }
-}
-
-function toggleTpPopover(e) {
-  if (e) e.stopPropagation();
-  var popover = document.getElementById('tp-popover');
-  if (!popover) return;
-  popover.classList.toggle('open');
-}
-
-function closeTpPopover() {
-  var popover = document.getElementById('tp-popover');
-  if (popover) popover.classList.remove('open');
-}
-
-function selectAllTwinPillars() {
-  var cbs = document.querySelectorAll('#tp-popover input[type=checkbox]');
-  for (var i = 0; i < cbs.length; i++) cbs[i].checked = true;
-  onTwinPillarChange();
-  closeTpPopover();
-}
-
-function clearAllTwinPillars() {
-  var cbs = document.querySelectorAll('#tp-popover input[type=checkbox]');
-  for (var i = 0; i < cbs.length; i++) cbs[i].checked = false;
-  onTwinPillarChange();
-  closeTpPopover();
-}
 
 function toggleSimple() {
   const tables = document.querySelectorAll('.chart');
   const btn = document.querySelector('.btn-simple');
   const active = btn.classList.toggle('active');
   tables.forEach(t => t.classList.toggle('simple', active));
+}
+
+// ============ 元能力按钮 ============
+function toggleYuanNengLi(btn) {
+  var active = btn.classList.toggle('active');
+  var scope = btn.closest('.bz-twin-card') || btn.closest('.page') || document;
+
+  scope.querySelectorAll('table.chart').forEach(function(table) {
+    // 切换 .yuan-active class（字号缩小）
+    table.classList.toggle('yuan-active', active);
+
+    // === 天干行（v1 逻辑） ===
+    var mainGanRow = table.querySelector('tr.rg[data-row-type~="ln1"]');
+    if (!mainGanRow) {
+      var allRg = table.querySelectorAll('tr.rg');
+      if (allRg.length >= 1) mainGanRow = allRg[0];
+    }
+    if (mainGanRow) {
+      mainGanRow.querySelectorAll('td:not(.rl)').forEach(function(td) {
+        toggleGanText(td, active);
+      });
+    }
+
+    // 三垣天干行
+    table.querySelectorAll('tr.hd').forEach(function(hdRow) {
+      var rlEl = hdRow.querySelector('td.rl, th.rl');
+      if (rlEl && rlEl.textContent.trim() === '三垣') {
+        var next = hdRow.nextElementSibling;
+        while (next && !next.classList.contains('rg')) { next = next.nextElementSibling; }
+        if (next) {
+          next.querySelectorAll('td:not(.rl)').forEach(function(td) {
+            if (td.textContent.trim() && !isCellEmpty(td)) {
+              toggleGanText(td, active);
+            }
+          });
+        }
+      }
+    });
+
+    // === 藏干行 span 替换（v2 新增） ===
+    table.querySelectorAll('tr.rh').forEach(function(rhRow) {
+      rhRow.querySelectorAll('td:not(.rl)').forEach(function(td) {
+        if (!td.textContent.trim()) return;
+        td.querySelectorAll('span').forEach(function(span) {
+          toggleCangGanSpan(span, active);
+        });
+      });
+    });
+  });
+
+  // 如果有激活的组合能力 SVG，更新 L4 标注文字
+  if (scope.querySelector('.chart-ability-svg')) {
+    redrawZuHeSVG(scope);
+  }
+}
+
+function isCellEmpty(td) {
+  return td.classList.contains('sep') || td.classList.contains('col-ln') || td.textContent.trim() === '';
+}
+
+function toggleGanText(td, toAbility) {
+  var txt = td.textContent.trim();
+  if (!txt) return;
+  if (toAbility) {
+    // 缓存原始天干
+    if (!td.dataset.originalGan) {
+      // textContent 可能包含 span 等子元素（大运/流年列有十神 span）
+      // 取第一个文本节点
+      var firstChar = '';
+      for (var i = 0; i < td.childNodes.length; i++) {
+        if (td.childNodes[i].nodeType === 3) { // Text node
+          firstChar = td.childNodes[i].textContent.trim();
+          if (firstChar) break;
+        }
+      }
+      if (!firstChar) firstChar = txt.charAt(0);
+      td.dataset.originalGan = firstChar;
+    }
+    var gan = td.dataset.originalGan;
+    var ability = GAN_TO_ABILITY[gan];
+    if (ability) {
+      // 替换文本节点内容，保留子元素（十神 span 等）
+      var childNodes = Array.from(td.childNodes);
+      for (var j = 0; j < childNodes.length; j++) {
+        if (childNodes[j].nodeType === 3) {
+          childNodes[j].textContent = childNodes[j].textContent.replace(gan, ability);
+        }
+      }
+      if (td.childNodes.length === 1 && td.childNodes[0].nodeType === 3) {
+        td.textContent = ability;
+      }
+    }
+  } else {
+    if (td.dataset.originalGan) {
+      var gan = td.dataset.originalGan;
+      var ability = GAN_TO_ABILITY[gan];
+      if (ability) {
+        var cn = Array.from(td.childNodes);
+        for (var k = 0; k < cn.length; k++) {
+          if (cn[k].nodeType === 3) {
+            cn[k].textContent = cn[k].textContent.replace(ability, gan);
+          }
+        }
+        if (td.childNodes.length === 1 && td.childNodes[0].nodeType === 3) {
+          td.textContent = gan;
+        }
+      }
+    }
+  }
+}
+
+// v2.0 藏干 span 替换
+function toggleCangGanSpan(span, toAbility) {
+  var txt = span.textContent.trim();
+  if (!txt) return;
+  if (toAbility) {
+    if (!span.dataset.originalGan) span.dataset.originalGan = txt;
+    var ability = GAN_TO_ABILITY[txt];
+    if (ability) span.textContent = ability;
+  } else {
+    if (span.dataset.originalGan) span.textContent = span.dataset.originalGan;
+  }
+}
+
+// ============ 组合能力按钮 ============
+function toggleZuHeNengLi(btn) {
+  var active = btn.classList.toggle('active');
+  var scope = btn.closest('.bz-twin-card') || btn.closest('.page') || document;
+  if (active) {
+    redrawZuHeSVG(scope);
+  } else {
+    removeZuHeSVG(scope);
+  }
+}
+
+function removeZuHeSVG(scope) {
+  scope.querySelectorAll('.chart-ability-svg').forEach(function(svg) { svg.remove(); });
+}
+
+function redrawZuHeSVG(scope) {
+  scope = scope || document;
+  // 只在组合能力激活状态下重绘
+  var anyActive = false;
+  scope.querySelectorAll('.btn-ability').forEach(function(b) {
+    if (b.textContent.trim() === '组合能力' && b.classList.contains('active')) anyActive = true;
+  });
+  if (!anyActive) { removeZuHeSVG(scope); return; }
+
+  removeZuHeSVG(scope);
+
+  scope.querySelectorAll('table.chart').forEach(function(table) {
+    var chartWrap = table.closest('.chart-wrap');
+    if (!chartWrap) { chartWrap = table.parentElement; }
+    if (getComputedStyle(chartWrap).position === 'static') {
+      chartWrap.style.position = 'relative';
+    }
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('class','chart-ability-svg');
+    chartWrap.appendChild(svg);
+
+    _buildRelations4Layers(svg, table);
+  });
+}
+
+// ==== 获取五行（从天干字符） ====
+function _getWx(gan) { return WU_XING[gan] || null; }
+
+// ==== 判定关系 → { color, dash, label } ====
+function _resolveRelation(wxA, wxB, isInverse) {
+  var prefix = isInverse ? '反' : '';
+  if (wxA === wxB) {
+    return { color: 'var(--c-'+WX_S[wxA]+')', dash: '6,3', label: WX_SAME_COMBO[wxA] || '' };
+  }
+  if (WX_KE_NEXT[wxA] === wxB) {
+    return { color: '#c83a3a', dash: '', label: prefix + (WX_KE_COMBO[wxA+wxB] || '') };
+  }
+  if (WX_SHENG_NEXT[wxA] === wxB) {
+    return { color: '#2e8b3d', dash: '', label: prefix + (WX_SHENG_COMBO[wxA+wxB] || '') };
+  }
+  return null;
+}
+
+// ==== 解析 CSS 变量颜色 ====
+function _resolveColor(colorStr) {
+  if (colorStr.startsWith('var(')) {
+    var v = colorStr.replace('var(','').replace(')','');
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+  return colorStr;
+}
+
+// ==== 获得主盘天干行 td 序列 ====
+function _getMainGanCells(table) {
+  var row = table.querySelector('tr.rg[data-row-type~="ln1"]');
+  if (!row) { var all = table.querySelectorAll('tr.rg'); if (all.length >= 1) row = all[0]; }
+  if (!row) return [];
+  var cells = [];
+  row.querySelectorAll('td').forEach(function(td) {
+    if (td.classList.contains('rl')) return;
+    var t = td.textContent.trim();
+    if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+    cells.push(td);
+  });
+  return cells;
+}
+
+// ==== 获得主盘地支行 td 序列 ====
+function _getMainZhiCells(table) {
+  var row = table.querySelector('tr.rg[data-row-type="dy2"]');
+  if (!row) {
+    var allRg = table.querySelectorAll('tr.rg');
+    if (allRg.length >= 2) row = allRg[1];
+  }
+  if (!row) return [];
+  var cells = [];
+  row.querySelectorAll('td').forEach(function(td) {
+    if (td.classList.contains('rl')) return;
+    var t = td.textContent.trim();
+    if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+    cells.push(td);
+  });
+  return cells;
+}
+
+// ==== 获取三垣区域的 gan/zhi cell 序列 ====
+function _findSanyuanRows(table) {
+  var result = { ganCells: [], zhiCells: [] };
+  var hdRows = table.querySelectorAll('tr.hd');
+  var found = false;
+  hdRows.forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣') { found = true; }
+  });
+  if (!found) return result;
+
+  // 找三垣 hd 行
+  var syHd = null;
+  hdRows.forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣' && !syHd) syHd = hd;
+  });
+  if (!syHd) return result;
+
+  // 收集后续的 tr.rg 行（跳过 hd）
+  var rgRows = [];
+  var next = syHd.nextElementSibling;
+  while (next) {
+    if (next.tagName === 'TR' && next.classList.contains('rg')) {
+      rgRows.push(next);
+    }
+    next = next.nextElementSibling;
+  }
+
+  if (rgRows.length >= 1) {
+    rgRows[0].querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      result.ganCells.push(td);
+    });
+  }
+  if (rgRows.length >= 2) {
+    rgRows[1].querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      result.zhiCells.push(td);
+    });
+  }
+  return result;
+}
+
+// ==== 绘制水平连线（L1/L2 通用） ====
+function _drawHorizontalLines(svg, svgRect, cells, textYOffset) {
+  for (var i = 0; i < cells.length - 1; i++) {
+    var txtA = cells[i].textContent.trim();
+    var txtB = cells[i+1].textContent.trim();
+    var wxA = _getWx(txtA.charAt(0));
+    var wxB = _getWx(txtB.charAt(0));
+    if (!wxA || !wxB) continue;
+
+    var rel = _resolveRelation(wxA, wxB, false) || _resolveRelation(wxB, wxA, false);
+    if (!rel) continue;
+
+    var ra = cells[i].getBoundingClientRect();
+    var rb = cells[i+1].getBoundingClientRect();
+    var x1 = ra.right - svgRect.left;
+    var y1 = ra.top + ra.height/2 - svgRect.top;
+    var x2 = rb.left - svgRect.left;
+    var y2 = rb.top + rb.height/2 - svgRect.top;
+
+    if (Math.abs(x2 - x1) < 6) { var m = (x1+x2)/2; x1 = m-3; x2 = m+3; }
+
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', rel.color);
+    line.setAttribute('stroke-width', wxA===wxB ? '3' : '2.5');
+    if (rel.dash) line.setAttribute('stroke-dasharray', rel.dash);
+    svg.appendChild(line);
+
+    if (rel.label) {
+      var tc = _resolveColor(rel.color);
+      var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', (x1+x2)/2);
+      t.setAttribute('y', y1 + textYOffset);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-size', '12');
+      t.setAttribute('fill', tc);
+      t.setAttribute('font-family', 'PingFang SC, sans-serif');
+      t.textContent = rel.label;
+      svg.appendChild(t);
+    }
+  }
+
+  // 三连检测
+  for (var j = 0; j < cells.length - 2; j++) {
+    var wa = _getWx(cells[j].textContent.trim().charAt(0));
+    var wb = _getWx(cells[j+1].textContent.trim().charAt(0));
+    var wc = _getWx(cells[j+2].textContent.trim().charAt(0));
+    if (!wa || !wb || !wc) continue;
+    if (WX_SHENG_NEXT[wa] === wb && WX_SHENG_NEXT[wb] === wc) {
+      var label = WX_TRIPLE_COMBO[wa+wb+wc];
+      if (!label) continue;
+      var ra2 = cells[j].getBoundingClientRect();
+      var rc2 = cells[j+2].getBoundingClientRect();
+      var xa = ra2.left + ra2.width/2 - svgRect.left;
+      var ya = ra2.top - svgRect.top;
+      var xc = rc2.left + rc2.width/2 - svgRect.left;
+      var yc = rc2.top - svgRect.top;
+      var midX = (xa+xc)/2;
+      var arcTop = Math.min(ya, yc) - 30;
+      var path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', 'M'+xa+','+ya+' Q'+midX+','+arcTop+' '+xc+','+yc);
+      path.setAttribute('stroke', '#c8961f');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-dasharray', '8,4');
+      path.setAttribute('fill', 'none');
+      svg.appendChild(path);
+      var tt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tt.setAttribute('x', midX); tt.setAttribute('y', arcTop - 8);
+      tt.setAttribute('text-anchor', 'middle'); tt.setAttribute('font-size', '13');
+      tt.setAttribute('font-weight', '600'); tt.setAttribute('fill', '#c8961f');
+      tt.setAttribute('font-family', 'PingFang SC, sans-serif');
+      tt.textContent = label; svg.appendChild(tt);
+    }
+  }
+}
+
+// ==== L3: 柱内纵向弧线 ====
+function _drawPillarArcs(svg, svgRect, ganCells, zhiCells) {
+  var len = Math.min(ganCells.length, zhiCells.length);
+  for (var i = 0; i < len; i++) {
+    var gTxt = ganCells[i].textContent.trim();
+    var zTxt = zhiCells[i].textContent.trim();
+    if (!gTxt || !zTxt) continue;
+    var wG = _getWx(gTxt.charAt(0));
+    var wZ = _getWx(zTxt.charAt(0));
+    if (!wG || !wZ) continue;
+
+    // 天干→地支方向判定；支克干加「反」前缀，支生干不加
+    var rel = _resolveRelation(wG, wZ, false);
+    if (!rel) {
+      var isKe = (WX_KE_NEXT[wZ] === wG);
+      rel = _resolveRelation(wZ, wG, isKe);
+    }
+    if (!rel) continue;
+
+    var gr = ganCells[i].getBoundingClientRect();
+    var zr = zhiCells[i].getBoundingClientRect();
+    var x1 = gr.left - svgRect.left;
+    var y1 = gr.top + gr.height/2 - svgRect.top;
+    var x2 = zr.left - svgRect.left;
+    var y2 = zr.top + zr.height/2 - svgRect.top;
+    var ctrlX = x1 - 8;
+    var ctrlY = (y1 + y2) / 2;
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', 'M'+x1+','+y1+' Q'+ctrlX+','+ctrlY+' '+x2+','+y2);
+    path.setAttribute('stroke', rel.color);
+    path.setAttribute('stroke-width', wG===wZ ? '3' : '2');
+    if (rel.dash) path.setAttribute('stroke-dasharray', rel.dash);
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+
+    if (rel.label) {
+      var tc = _resolveColor(rel.color);
+      var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', ctrlX - 6);
+      t.setAttribute('y', ctrlY + 4);
+      t.setAttribute('text-anchor', 'end');
+      t.setAttribute('font-size', '11');
+      t.setAttribute('fill', tc);
+      t.setAttribute('font-family', 'PingFang SC, sans-serif');
+      t.textContent = rel.label;
+      svg.appendChild(t);
+    }
+  }
+}
+
+// ==== L4: 藏干分组标注（9柱位：年/月/日/时/大运/流年/胎/命/身） ====
+function _drawCangGanLabels(svg, svgRect, table) {
+  var pillars = []; // { zhi: '戌', cgCell: td }
+
+  // --- 主盘区域（6柱：年/月/日/时 + 大运 + 流年） ---
+  var zhiRow = table.querySelector('tr.rg[data-row-type="dy2"]');
+  if (!zhiRow) { var allRg = table.querySelectorAll('tr.rg'); if (allRg.length >= 2) zhiRow = allRg[1]; }
+  var cgRow = table.querySelector('tr.rh[data-row-type]');
+  if (!cgRow) {
+    table.querySelectorAll('tr.rh').forEach(function(r) {
+      if (!cgRow && r.getAttribute('data-row-type')) cgRow = r;
+    });
+  }
+
+  if (zhiRow && cgRow) {
+    var zhiChars = [], cgTds = [];
+    zhiRow.querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      var t = td.textContent.trim();
+      if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+      zhiChars.push(t);
+    });
+    cgRow.querySelectorAll('td').forEach(function(td) {
+      if (td.classList.contains('rl')) return;
+      if (!td.textContent.trim()) return;
+      cgTds.push(td);
+    });
+    var n = Math.min(zhiChars.length, cgTds.length);
+    for (var i = 0; i < n; i++) {
+      pillars.push({ zhi: zhiChars[i], cgCell: cgTds[i] });
+    }
+  }
+
+  // --- 三垣区域（3柱：胎/命/身） ---
+  var syHd = null;
+  table.querySelectorAll('tr.hd').forEach(function(hd) {
+    var rl = hd.querySelector('td.rl, th.rl');
+    if (rl && rl.textContent.trim() === '三垣' && !syHd) syHd = hd;
+  });
+  if (syHd) {
+    var syRgRows = [], syRhRow = null;
+    var next = syHd.nextElementSibling;
+    while (next && next.tagName === 'TR' && !next.classList.contains('hd')) {
+      if (next.classList.contains('rg')) syRgRows.push(next);
+      if (next.classList.contains('rh') && !syRhRow) syRhRow = next;
+      next = next.nextElementSibling;
+    }
+    if (syRgRows.length >= 2 && syRhRow) {
+      var syZhi = [], syCg = [];
+      syRgRows[1].querySelectorAll('td').forEach(function(td) {
+        if (td.classList.contains('rl')) return;
+        var t = td.textContent.trim();
+        if (!t || !/^[\u4e00-\u9fff]/.test(t)) return;
+        syZhi.push(t);
+      });
+      syRhRow.querySelectorAll('td').forEach(function(td) {
+        if (td.classList.contains('rl')) return;
+        if (!td.textContent.trim()) return;
+        syCg.push(td);
+      });
+      for (var j = 0; j < Math.min(syZhi.length, syCg.length); j++) {
+        pillars.push({ zhi: syZhi[j], cgCell: syCg[j] });
+      }
+    }
+  }
+
+  // --- 绘制 ---
+  for (var k = 0; k < pillars.length; k++) {
+    var p = pillars[k];
+    var layers = CANG_GAN[p.zhi] || [];
+    if (layers.length === 0) continue;
+    var label = _computeComboFromLayers(layers);
+    if (!label) continue;
+
+    var cr = p.cgCell.getBoundingClientRect();
+    var x = cr.left + cr.width/2 - svgRect.left;
+    var y = cr.bottom + 8 - svgRect.top;
+
+    var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', x);
+    t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('font-size', '11');
+    t.setAttribute('fill', '#8b7e6a');
+    t.setAttribute('font-family', 'PingFang SC, sans-serif');
+    t.textContent = label;
+    svg.appendChild(t);
+  }
+}
+
+// ==== 四层统一绘制入口 ====
+function _buildRelations4Layers(svg, table) {
+  // 等待渲染一帧确保 getBoundingClientRect 准确
+  var svgRect = svg.getBoundingClientRect();
+  if (svgRect.width === 0 || svgRect.height === 0) {
+    // SVG 刚创建还不可见，延迟重试
+    requestAnimationFrame(function() { _buildRelations4Layers(svg, table); });
+    return;
+  }
+
+  // 获取数据
+  var ganCells = _getMainGanCells(table);
+  var zhiCells = _getMainZhiCells(table);
+  var sy = _findSanyuanRows(table);
+
+  // z-order: L3 弧线底层 → L1+L2 横线中层 → L4 藏干标注 + 所有文字上层
+
+  // --- L3: 柱内纵向弧线（最底层） ---
+  _drawPillarArcs(svg, svgRect, ganCells, zhiCells);
+  if (sy.ganCells.length > 0 && sy.zhiCells.length > 0) {
+    _drawPillarArcs(svg, svgRect, sy.ganCells, sy.zhiCells);
+  }
+
+  // --- L1: 天干行横向连线（标注在上方） ---
+  _drawHorizontalLines(svg, svgRect, ganCells, -12);
+  if (sy.ganCells.length > 0) {
+    _drawHorizontalLines(svg, svgRect, sy.ganCells, -12);
+  }
+
+  // --- L2: 地支行横向连线（标注在下方） ---
+  _drawHorizontalLines(svg, svgRect, zhiCells, 12);
+  if (sy.zhiCells.length > 0) {
+    _drawHorizontalLines(svg, svgRect, sy.zhiCells, 12);
+  }
+
+  // --- L4: 藏干分组标注（最上层） ---
+  _drawCangGanLabels(svg, svgRect, table);
 }
 
 // ============ buildPillarRows：抽取四柱+三垣行生成逻辑 ============
@@ -2987,9 +2623,6 @@ function buildPillarRows(p, options) {
   // 自坐
   main.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') +
     cols.map(function(k){return td(dm(k+'.zz'), p[k].zz);}).join('') + '</tr>');
-  // 纳运
-  main.push('<tr class="rm" data-row-type="nayun">' + rl('纳运') +
-    cols.map(function(k){return td(dm(k+'.nayun'), p[k].nayun);}).join('') + '</tr>');
   // 空亡
   main.push('<tr class="rm" data-row-type="kongwang">' + rl('空亡') +
     cols.map(function(k){return td(dm(k+'.kw'), p[k].kw);}).join('') + '</tr>');
@@ -3018,8 +2651,6 @@ function buildPillarRows(p, options) {
       syCols.map(function(k){return td(dm(k+'.xy'), p[k].xy);}).join('') + '</tr>');
     sanyuan.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') + emp('') +
       syCols.map(function(k){return td(dm(k+'.zz'), p[k].zz);}).join('') + '</tr>');
-    sanyuan.push('<tr class="rm" data-row-type="nayun">' + rl('纳运') + emp('') +
-      syCols.map(function(k){return td(dm(k+'.nayun'), p[k].nayun);}).join('') + '</tr>');
     sanyuan.push('<tr class="rm" data-row-type="kongwang">' + rl('空亡') + emp('') +
       syCols.map(function(k){return td(dm(k+'.kw'), p[k].kw);}).join('') + '</tr>');
     sanyuan.push('<tr class="rm" data-row-type="shensha">' + rl('神煞') + emp('') +
@@ -3039,10 +2670,9 @@ function renderChart(data, twin, targetId) {
   function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
-      rs: (gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      rs: gan === riGan ? '日主' : shiShen(riGan, gan, false),
       rsCg: CANG_GAN[zhi] ? shiShen(riGan, CANG_GAN[zhi][0]) : '',
       ny: NAYIN[gan + zhi] || '',
-      nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
       kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
@@ -3076,43 +2706,20 @@ function renderChart(data, twin, targetId) {
   const lunarInfo = ''; // 可选：农历日期
 
   // ---- 起运交运文本 ----
-  const joy = qiYun.years, jom = qiYun.months, jod = qiYun.days, joh = qiYun.hours || 0;
-  const qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + joh + ' 小时';
-  const preQyYears = Math.ceil((qiYun.totalMonths || (qiYun.years * 12 + qiYun.months + qiYun.days / 30)) / 12);
-  const WUHE = {甲:'己',己:'甲',乙:'庚',庚:'乙',丙:'辛',辛:'丙',丁:'壬',壬:'丁',戊:'癸',癸:'戊'};
-  // 起运准确日期
-  const qyStartDate = new Date(y, m-1, d, h || 0, mi || 0);
-  qyStartDate.setFullYear(qyStartDate.getFullYear() + joy);
-  qyStartDate.setMonth(qyStartDate.getMonth() + jom);
-  qyStartDate.setDate(qyStartDate.getDate() + jod);
-  qyStartDate.setHours(qyStartDate.getHours() + joh);
-  // 交运年天干对：起运年天干 → 找五合配对
-  const jyYearGanIdx = (qyStartDate.getFullYear() - 4) % 10;
-  const jyNextGan = TG[jyYearGanIdx];
-  const jyHePair = jyNextGan + WUHE[jyNextGan];
-  // 交运节气：按起运日期直接查找所在节气月
-  let jyTermName = '', daysAfterJY = 0;
-  const qyY = qyStartDate.getFullYear();
-  for (let mi = 0; mi < 12; mi++) {
-    const tIdx = MONTH_TERM[mi];
-    let stY = qyY;
-    if (tIdx === 0 && mi === 11) stY = (qyStartDate.getMonth() === 0) ? qyY : qyY + 1;
-    const st = getSolarTerm(stY, tIdx);
-    const stDate = new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate());
-    const nextMi = (mi + 1) % 12;
-    const nextTerm = MONTH_TERM[nextMi];
-    let nextY = qyY;
-    if (nextTerm <= tIdx) nextY = qyY + 1;
-    const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate());
-    if (qyStartDate >= stDate && qyStartDate < nextDate) {
-      jyTermName = S_TERM_NAME[tIdx];
-      const qyDay2 = new Date(qyStartDate.getFullYear(), qyStartDate.getMonth(), qyStartDate.getDate());
-      daysAfterJY = Math.round((qyDay2 - stDate) / 86400000);
-      break;
+  const joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  const joyH = h, joyMi = mi;
+  const qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + joyH + ' 小时 ' + joyMi + ' 分';
+  // 交运年：找下一个己/甲年
+  function nextJYYear(startY) {
+    const tgs = '己甲';
+    for (let i = 0; i < 20; i++) {
+      const testY = startY + i;
+      if (tgs.includes(TG[(testY - 4) % 10])) return testY;
     }
+    return startY;
   }
-  const jyText = '逢' + jyHePair[0] + '、' + jyHePair[1] + '年' + jyTermName + '后 ' + daysAfterJY + ' 天';
+  const jyYear = nextJYYear(y + joy);
+  const jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
 
   // ---- 上盘 HTML ----
   function td(cls, txt, ext='') { return '<td class="'+cls+'"'+ext+'>'+txt+'</td>'; }
@@ -3152,12 +2759,10 @@ function renderChart(data, twin, targetId) {
   mainRows[5] = '<tr class="rm" data-row-type="xingyun ln3">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
   // 自坐
   mainRows[6] = '<tr class="rm" data-row-type="zizuo dy4">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
-  // 纳运
-  mainRows[7] = '<tr class="rm" data-row-type="nayun dy5">'+rl('纳运')+td('',pNian.nayun)+td('',pYue.nayun)+td('',pRi.nayun)+td('',pShi.nayun)+td('sep col-dy',pDy.nayun)+td('col-ln',pLn.nayun)+'</tr>';
   // 空亡
-  mainRows[8] = '<tr class="rm" data-row-type="kongwang ln4">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
+  mainRows[7] = '<tr class="rm" data-row-type="kongwang ln4">'+rl('空亡')+td('',pNian.kw)+td('',pYue.kw)+td('',pRi.kw)+td('',pShi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
   // 神煞
-  mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+  mainRows[8] = '<tr class="rm" data-row-type="shensha dy5">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // 其他行（藏干4,5 等）使用 buildPillarRows 的 + suffix
   for (var fixI = 0; fixI < mainRows.length; fixI++) {
     if (mainRows[fixI] && mainRows[fixI].indexOf('sep col-dy') === -1) {
@@ -3178,7 +2783,6 @@ function renderChart(data, twin, targetId) {
   syRows.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+emp('')+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+emp('')+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+emp('')+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="nayun">'+rl('纳运')+emp('')+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+emp('')+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+emp('')+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
   chartRows.push.apply(chartRows, syRows);
@@ -3189,20 +2793,20 @@ function renderChart(data, twin, targetId) {
   // 表头：年份/岁数
   luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
   // 运前列：qyYears > 0 时渲染
-  if (preQyYears > 0) {
+  if (qiYun.years > 0) {
     luckRows.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>');
   }
   for (let i = 0; i < daYun.length; i++) {
     const dy = daYun[i];
     const cls = i === curDyIdx ? ' cell cc' : ' cell';
-    luckRows.push('<div class="'+cls+'"><span class="year">'+dy.startYear+'</span><span class="age">'+dy.startAge+'岁</span></div>');
+    luckRows.push('<div class="'+cls+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>');
   }
   luckRows.push('</div>');
 
   // 大运干支
   luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
   // 运前列：「运/前」，无 data-dy
-  if (preQyYears > 0) {
+  if (qiYun.years > 0) {
     luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>');
   }
   for (let i = 0; i < daYun.length; i++) {
@@ -3215,7 +2819,7 @@ function renderChart(data, twin, targetId) {
 
   // 始于
   luckRows.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
-  if (preQyYears > 0) {
+  if (qiYun.years > 0) {
     luckRows.push('<div class="cell pre-qy">'+y+'</div>');
   }
   for (let i = 0; i < daYun.length; i++) {
@@ -3226,9 +2830,9 @@ function renderChart(data, twin, targetId) {
   // 流年
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
   // 运前列：出生年至起运前一年的流年干支（无 data-di/data-li）
-  if (preQyYears > 0) {
+  if (qiYun.years > 0) {
     let preLis = '';
-    for (let py = y; py < y + preQyYears; py++) {
+    for (let py = y; py < y + qiYun.years; py++) {
       const gz = liuNianJZ(py);
       const gzCol = '<span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span>';
       preLis += '<span class="li">'+gzCol+'</span>';
@@ -3252,8 +2856,8 @@ function renderChart(data, twin, targetId) {
 
   // 止于
   luckRows.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
-  if (preQyYears > 0) {
-    luckRows.push('<div class="cell pre-qy">'+(y + preQyYears - 1)+'</div>');
+  if (qiYun.years > 0) {
+    luckRows.push('<div class="cell pre-qy">'+(y + qiYun.years - 1)+'</div>');
   }
   for (let i = 0; i < daYun.length; i++) {
     luckRows.push('<div class="cell'+(i===curDyIdx?' cc':'')+'">'+(daYun[i].startYear + 9)+'</div>');
@@ -3275,7 +2879,7 @@ function renderChart(data, twin, targetId) {
   const html = `
     <div class="top-bar">
       <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>
 
     <div class="body-cols">
@@ -3483,9 +3087,8 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
       ['dy3', pDy.ny, pLn.ny],
       ['ln3', pDy.xy, pLn.xy],
       ['dy4', pDy.zz, pLn.zz],
-      ['dy5', pDy.nayun, pLn.nayun],
       ['ln4', pDy.kw, pLn.kw],
-      ['dy6', pDy.sh, pLn.sh]
+      ['dy5', pDy.sh, pLn.sh]
     ];
   } else {
     // 双胞胎模式：藏干分层
@@ -3499,9 +3102,8 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
       ['dy4', pDy.ny, pLn.ny],
       ['ln4', pDy.xy, pLn.xy],
       ['dy5', pDy.zz, pLn.zz],
-      ['dy6', pDy.nayun, pLn.nayun],
       ['ln5', pDy.kw, pLn.kw],
-      ['dy7', pDy.sh, pLn.sh]
+      ['dy6', pDy.sh, pLn.sh]
     ];
   }
 
@@ -3576,9 +3178,8 @@ function buildCardHTML(data, options) {
     return {
       gan: gan, zhi: zhi,
       wg: wxClass(gan), wz: wxClass(zhi),
-      rs: (gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      rs: gan === riGan ? '日主' : shiShen(riGan, gan, false),
       ny: NAYIN[gan + zhi] || '',
-      nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
       kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
@@ -3631,12 +3232,10 @@ function buildCardHTML(data, options) {
     rows.main[7] = '<tr class="rm" data-row-type="xingyun ln4">'+rl('星运')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
     // 自坐(8)
     rows.main[8] = '<tr class="rm" data-row-type="zizuo dy5">'+rl('自坐')+td(dm('nian.zz'),p.nian.zz)+td(dm('yue.zz'),p.yue.zz)+td(dm('ri.zz'),p.ri.zz)+td(dm('shi.zz'),p.shi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
-    // 纳运(9)
-    rows.main[9] = '<tr class="rm" data-row-type="nayun dy6">'+rl('纳运')+td(dm('nian.nayun'),p.nian.nayun)+td(dm('yue.nayun'),p.yue.nayun)+td(dm('ri.nayun'),p.ri.nayun)+td(dm('shi.nayun'),p.shi.nayun)+td('sep col-dy',pDy.nayun)+td('col-ln',pLn.nayun)+'</tr>';
-    // 空亡(10)
-    rows.main[10] = '<tr class="rm" data-row-type="kongwang ln5">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
-    // 神煞(11)
-    rows.main[11] = '<tr class="rm" data-row-type="shensha dy7">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
+    // 空亡(9)
+    rows.main[9] = '<tr class="rm" data-row-type="kongwang ln5">'+rl('空亡')+td(dm('nian.kw'),p.nian.kw)+td(dm('yue.kw'),p.yue.kw)+td(dm('ri.kw'),p.ri.kw)+td(dm('shi.kw'),p.shi.kw)+td('sep col-dy',pDy.kw)+td('col-ln',pLn.kw)+'</tr>';
+    // 神煞(10)
+    rows.main[10] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td(dm('nian.sh'),p.nian.sh)+td(dm('yue.sh'),p.yue.sh)+td(dm('ri.sh'),p.ri.sh)+td(dm('shi.sh'),p.shi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
     // v0.10.0 三垣扩展列：表头[0]和后续行(从1起)加空列
     rows.sanyuan[0] = '<tr class="hd">'+rl('三垣')+emp('')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
     for (var si = 1; si < rows.sanyuan.length; si++) {
@@ -3653,7 +3252,7 @@ function buildCardHTML(data, options) {
     + '<div class="bz-card-title">'+titleHtml
     + '<span class="bz-sanyuan-toggle" onclick="var sa=this.parentElement.parentElement.querySelector(\'.bz-sanyuan-area\');var t=this;sa.classList.toggle(\'collapsed\');t.textContent=sa.classList.contains(\'collapsed\')?\'▼ 三垣\':\'▲ 三垣\';">▲ 三垣</span></div>'
     + metaHtml
-    + '<div class="bz-card-tools" style="padding:0 16px 6px;display:flex;gap:6px;"></div>'
+    + '<div class="bz-card-tools" style="padding:0 16px 6px;display:flex;gap:6px;"><button class="btn-ability" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button></div>'
     + '<div class="chart-wrap"><table class="chart">'+hdr+'\n'+rows.main.join('\n')+'</table></div>'
     + '<div class="bz-sanyuan-area"><table class="chart" style="margin-top:0;border-top:1px solid var(--bz-card-border);">'+rows.sanyuan.join('\n')+'</table></div>'
     + luckHTML
@@ -3694,7 +3293,7 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
   }
   for (var l = 0; l < daYun.length; l++) {
     var dy = daYun[l], cls = l === curDyIdx ? ' cell cc' : ' cell';
-    luckRows.push('<div class="'+cls+'"><span class="year">'+dy.startYear+'</span><span class="age">'+dy.startAge+'岁</span></div>');
+    luckRows.push('<div class="'+cls+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>');
   }
   luckRows.push('</div>');
 
@@ -3810,8 +3409,8 @@ function renderTwinCardsHtml(data, targetId) {
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
 
@@ -3922,15 +3521,14 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-ability" id="btn-yuan" onclick="toggleYuanNengLi(this)">元能力</button><button class="btn-ability" id="btn-zuhe" onclick="toggleZuHeNengLi(this)">组合能力</button><button class="btn-ability" onclick="openAbilityChart(this)">能力排盘</button><button class="btn-simple" onclick="toggleSimple()" title="精简显示（隐藏纳音/空亡/神煞）">简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
   window._paipanData = d1;
-  window._paipanData2 = d2;
   window._twinType = 'longfeng';
 
   if (window._simpleMode) {
@@ -4094,21 +3692,6 @@ const TRASH_KEY = 'bz_trash_v2';
 const ARCH_KEY_OLD = 'paipan_archives';
 const TRASH_KEY_OLD = 'paipan_trash';
 const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
-
-// ===== v0.13.0 宫位数据初始化 =====
-(function initGongWeiData() {
-  gongWeiGroups = loadGroups();
-  gongWeiTrash = loadTrash();
-  selectedGongWei = loadSelected();
-  // 清理无效选中（已删除的宫位组名称）
-  selectedGongWei = selectedGongWei.filter(function(name) {
-    for (var i = 0; i < gongWeiGroups.length; i++) {
-      if (gongWeiGroups[i].name === name) return true;
-    }
-    return false;
-  });
-  persistSelected();
-})();
 
 // ===== v0.9.0 预置数据（自在班16孩）=====
 const PRESET_ARCHIVES = [
@@ -4349,286 +3932,6 @@ function delArchive() {
   alert('请在档案弹窗中操作。如需删除，请联系开发者。');
 }
 
-// v0.12.0 软删除：移入回收站
-function moveToTrash(idx) {
-  var archives = getArchives();
-  if (!archives[idx]) return;
-  var a = archives[idx];
-  var extraMsg = a.isPreset ? '\n⚠ 这是预置档案，删除后可在回收站恢复。' : '';
-  if (!confirm('确定删除「' + a.name + '」的档案？可在回收站恢复。' + extraMsg)) return;
-  var ts = new Date().toISOString();
-  var trashItem = Object.assign({}, a, {deletedAt: ts});
-  var trash = getTrash();
-  trash.push(trashItem);
-  saveTrash(trash);
-  archives.splice(idx, 1);
-  saveArchives(archives);
-  refreshArchiveModalIfOpen();
-}
-
-// ============================================================
-// v0.12.0 编辑弹窗
-// ============================================================
-var _editOriginal = null; // 编辑前的档案快照，用于检测未保存修改
-var _editIdx = -1;
-
-function openEditPanel(idx) {
-  var archives = getArchives();
-  if (!archives[idx]) return;
-  var a = archives[idx];
-  _editIdx = idx;
-  _editOriginal = JSON.parse(JSON.stringify(a));
-
-  document.getElementById('editNickname').value = a.nickname || '';
-  document.getElementById('editName').value = a.name || '';
-  document.getElementById('editGender').value = a.gender;
-  var isLunar = a.calendarType === 'lunar';
-  if (isLunar) {
-    document.getElementById('editCalLunar').checked = true;
-  } else {
-    document.getElementById('editCalSolar').checked = true;
-  }
-  editCalChange(); // 切换月控件
-  document.getElementById('editYear').value = a.year;
-  if (isLunar) {
-    var ms = document.getElementById('editMonthSelect');
-    if (ms) ms.value = a.lunarMonth || a.month;
-    document.getElementById('editLeap').checked = !!a.isLeap;
-  } else {
-    document.getElementById('editMonth').value = a.month;
-  }
-  document.getElementById('editDay').value = a.day;
-  document.getElementById('editHour').value = a.hour;
-  document.getElementById('editMin').value = a.min || 0;
-  document.getElementById('editSolar').checked = a.useSolar;
-  editSolarToggle();
-  if (a.useSolar) {
-    if (a.prov) { document.getElementById('editProv').value = a.prov; editProvChange(); }
-    setTimeout(function() {
-      if (a.city) { document.getElementById('editCity').value = a.city; editCityChange(); }
-      setTimeout(function() {
-        if (a.dist) document.getElementById('editDist').value = a.dist;
-      }, 80);
-    }, 80);
-  }
-  document.getElementById('editOverlay').classList.add('show');
-  // 清除错误标记
-  document.getElementById('editName').classList.remove('edit-error');
-  document.getElementById('editYear').classList.remove('edit-error');
-  document.getElementById('editMonth').classList.remove('edit-error');
-  document.getElementById('editDay').classList.remove('edit-error');
-  document.getElementById('editHour').classList.remove('edit-error');
-  document.getElementById('editMin').classList.remove('edit-error');
-}
-
-function closeEditPanel() {
-  var edited = getEditFormData();
-  var changed = _editOriginal && (
-    edited.name !== _editOriginal.name ||
-    edited.nickname !== _editOriginal.nickname ||
-    edited.gender !== _editOriginal.gender ||
-    edited.year !== _editOriginal.year ||
-    edited.month !== _editOriginal.month ||
-    edited.day !== _editOriginal.day ||
-    edited.hour !== _editOriginal.hour ||
-    edited.min !== _editOriginal.min ||
-    edited.useSolar !== _editOriginal.useSolar ||
-    edited.calendarType !== _editOriginal.calendarType ||
-    edited.isLeap !== _editOriginal.isLeap ||
-    edited.lunarMonth !== _editOriginal.lunarMonth ||
-    edited.prov !== _editOriginal.prov ||
-    edited.city !== _editOriginal.city ||
-    edited.dist !== _editOriginal.dist
-  );
-  if (changed && !confirm('有未保存的修改，确定关闭？')) return;
-  document.getElementById('editOverlay').classList.remove('show');
-  _editOriginal = null;
-  _editIdx = -1;
-}
-
-function getEditFormData() {
-  var isLunar = document.getElementById('editCalLunar').checked;
-  var monthVal;
-  if (isLunar) {
-    var ms = document.getElementById('editMonthSelect');
-    monthVal = ms ? parseInt(ms.value) : 1;
-  } else {
-    monthVal = parseInt(document.getElementById('editMonth').value);
-  }
-  return {
-    nickname: document.getElementById('editNickname').value || '',
-    name: document.getElementById('editName').value || '',
-    gender: document.getElementById('editGender').value,
-    year: parseInt(document.getElementById('editYear').value) || 0,
-    month: monthVal || 0,
-    day: parseInt(document.getElementById('editDay').value) || 0,
-    hour: parseInt(document.getElementById('editHour').value) || 0,
-    min: parseInt(document.getElementById('editMin').value) || 0,
-    calendarType: isLunar ? 'lunar' : 'solar',
-    isLeap: isLunar ? document.getElementById('editLeap').checked : false,
-    lunarMonth: isLunar ? monthVal : null,
-    useSolar: document.getElementById('editSolar').checked,
-    prov: document.getElementById('editSolar').checked ? document.getElementById('editProv').value : '',
-    city: document.getElementById('editSolar').checked ? document.getElementById('editCity').value : '',
-    dist: document.getElementById('editSolar').checked ? document.getElementById('editDist').value : ''
-  };
-}
-
-function isBirthFieldChanged(oldData, newData) {
-  var keys = ['year','month','day','hour','min','gender','calendarType','isLeap','lunarMonth','useSolar'];
-  if (newData.useSolar) keys.push('prov', 'city', 'dist');
-  for (var i = 0; i < keys.length; i++) {
-    if (oldData[keys[i]] !== newData[keys[i]]) return true;
-  }
-  return false;
-}
-
-function saveEdit() {
-  var edited = getEditFormData();
-  // 校验
-  var valid = true;
-  if (!edited.name || edited.name.trim() === '') {
-    document.getElementById('editName').classList.add('edit-error');
-    valid = false;
-  }
-  if (/[<>&\"]/.test(edited.name)) {
-    document.getElementById('editName').classList.add('edit-error');
-    alert('姓名包含非法字符（< > & "）');
-    valid = false;
-  }
-  if (!edited.year || edited.year < 1900 || edited.year > 2100) {
-    document.getElementById('editYear').classList.add('edit-error');
-    valid = false;
-  }
-  if (!edited.month || edited.month < 1 || edited.month > 12) {
-    var mel = document.getElementById('editMonth') || document.getElementById('editMonthSelect');
-    if (mel) mel.classList.add('edit-error');
-    valid = false;
-  }
-  if (!edited.day || edited.day < 1 || edited.day > 31) {
-    document.getElementById('editDay').classList.add('edit-error');
-    valid = false;
-  }
-  if (edited.hour < 0 || edited.hour > 23 || edited.hour === undefined) {
-    document.getElementById('editHour').classList.add('edit-error');
-    valid = false;
-  }
-  if (edited.min < 0 || edited.min > 59) {
-    document.getElementById('editMin').classList.add('edit-error');
-    valid = false;
-  }
-  if (!valid) {
-    if (!document.getElementById('editName').classList.contains('edit-error')) {
-      alert('请检查红色标注的字段');
-    }
-    return;
-  }
-
-  // 从 localStorage 重新读取，避免并发覆盖
-  var archives = getArchives();
-  var old = archives[_editIdx];
-  if (!old) { alert('档案已被删除'); closeEditPanel(); return; }
-
-  // 出生字段变更 → 清除排盘缓存
-  if (isBirthFieldChanged(old, edited)) {
-    edited.bazi = null;
-    edited.sanyuan = null;
-    edited.extras = null;
-  } else {
-    edited.bazi = old.bazi;
-    edited.sanyuan = old.sanyuan;
-    edited.extras = old.extras;
-    edited.gongWeiType = old.gongWeiType;
-  }
-
-  // 同名同性别冲突检查（排除自身）
-  var conflictIdx = -1;
-  for (var c = 0; c < archives.length; c++) {
-    if (c === _editIdx) continue;
-    if (archives[c].name === edited.name && archives[c].gender === edited.gender) {
-      conflictIdx = c;
-      break;
-    }
-  }
-  if (conflictIdx >= 0) {
-    if (!confirm('「' + edited.name + '」已存在，覆盖更新？')) return;
-    // 删除冲突项，保留当前编辑项
-    archives.splice(conflictIdx, 1);
-    if (conflictIdx < _editIdx) _editIdx--;
-  }
-
-  edited.updatedAt = new Date().toISOString();
-  if (old.isPreset) edited.isPreset = false;
-  else edited.isPreset = old.isPreset;
-
-  // 合并到原对象
-  archives[_editIdx] = Object.assign({}, old, edited);
-  saveArchives(archives);
-  // 直接关闭弹窗（不经过 closeEditPanel，避免"未保存修改"确认）
-  document.getElementById('editOverlay').classList.remove('show');
-  _editOriginal = null;
-  _editIdx = -1;
-  refreshArchiveModalIfOpen();
-}
-
-// 编辑弹窗 — 历法切换
-function editCalChange() {
-  var isLunar = document.getElementById('editCalLunar').checked;
-  var mc = document.getElementById('editMonthCell');
-  var lg = document.getElementById('editLeapGroup');
-  if (isLunar) {
-    mc.innerHTML = '<select id="editMonthSelect" style="width:60px;">'
-      + '<option value="1">正月</option><option value="2">二月</option><option value="3">三月</option>'
-      + '<option value="4">四月</option><option value="5">五月</option><option value="6">六月</option>'
-      + '<option value="7">七月</option><option value="8">八月</option><option value="9">九月</option>'
-      + '<option value="10">十月</option><option value="11">冬月</option><option value="12">腊月</option>'
-      + '</select>';
-    lg.style.display = 'inline';
-  } else {
-    mc.innerHTML = '<input type="number" id="editMonth" min="1" max="12" placeholder="月" style="width:48px;">';
-    lg.style.display = 'none';
-  }
-}
-
-// 编辑弹窗 — 真太阳时切换
-function editSolarToggle() {
-  var checked = document.getElementById('editSolar').checked;
-  document.getElementById('editSolarGroup').style.display = checked ? 'flex' : 'none';
-  if (!checked) {
-    document.getElementById('editProv').value = '';
-    document.getElementById('editCity').innerHTML = '<option value="">—</option>';
-    document.getElementById('editDist').innerHTML = '<option value="">—</option>';
-  }
-}
-
-// 编辑弹窗 — 省市区联动
-function editProvChange() {
-  var prov = document.getElementById('editProv').value;
-  var citySel = document.getElementById('editCity');
-  var distSel = document.getElementById('editDist');
-  citySel.innerHTML = '<option value="">—</option>';
-  distSel.innerHTML = '<option value="">—</option>';
-  if (!prov || !LOC_DATA[prov]) return;
-  var cities = LOC_DATA[prov].cities;
-  var names = Object.keys(cities).sort();
-  for (var i = 0; i < names.length; i++) {
-    citySel.innerHTML += '<option value="' + names[i] + '">' + names[i] + '</option>';
-  }
-}
-
-function editCityChange() {
-  var prov = document.getElementById('editProv').value;
-  var city = document.getElementById('editCity').value;
-  var distSel = document.getElementById('editDist');
-  distSel.innerHTML = '<option value="">—</option>';
-  if (!prov || !city || !LOC_DATA[prov] || !LOC_DATA[prov].cities[city]) return;
-  var dists = LOC_DATA[prov].cities[city].dist;
-  if (!dists) return;
-  for (var i = 0; i < dists.length; i++) {
-    distSel.innerHTML += '<option value="' + dists[i] + '">' + dists[i] + '</option>';
-  }
-}
-
 // ---- 回收站 ----
 function showTrash() {
   renderTrash();
@@ -4648,16 +3951,9 @@ function renderTrash() {
   }
   list.innerHTML = trash.map((a, i) => {
     const solar = a.useSolar ? '☀' : '';
-    var delTime = a.deletedAt ? new Date(a.deletedAt).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\//g,'-') : '';
-    return `<div style="display:flex;flex-direction:column;padding:8px 8px;border-bottom:1px solid rgba(128,128,128,.15);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span>${a.name} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
-        <div style="display:flex;gap:6px;">
-          <button class="archive-row-edit" onclick="restoreFromTrash(${i})" title="恢复">↩️ 恢复</button>
-          <button class="archive-row-del" onclick="permanentDelete(${i})" title="彻底删除">🗑️ 彻底删除</button>
-        </div>
-      </div>
-      ${delTime ? '<div style="font-size:11px;color:var(--c-gray);margin-top:2px;">删除于: ' + delTime + '</div>' : ''}
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(128,128,128,.15);">
+      <span>${a.name} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
+      <button class="btn-arch" onclick="restoreFromTrash(${i})" title="恢复">↩️</button>
     </div>`;
   }).join('');
 }
@@ -4667,15 +3963,13 @@ function restoreFromTrash(idx) {
   if (!trash[idx]) return;
   const item = trash[idx];
   const { deletedAt, ...arch } = item;
-  // 恢复后预置标记置为false（PRD E1）
-  const restored = Object.assign({}, arch, { isPreset: false, updatedAt: new Date().toISOString() });
   const archives = getArchives();
-  const existIdx = archives.findIndex(a => a.name === restored.name && a.gender === restored.gender);
+  const existIdx = archives.findIndex(a => a.name === arch.name && a.gender === arch.gender);
   if (existIdx >= 0) {
-    if (!confirm('「' + restored.name + '」已存在，覆盖恢复？')) return;
-    archives[existIdx] = restored;
+    if (!confirm('「' + arch.name + '」已存在，覆盖恢复？')) return;
+    archives[existIdx] = { ...arch, updatedAt: new Date().toISOString() };
   } else {
-    archives.push(restored);
+    archives.push({ ...arch, updatedAt: new Date().toISOString() });
   }
   saveArchives(archives);
   trash.splice(idx, 1);
@@ -4684,20 +3978,10 @@ function restoreFromTrash(idx) {
   renderTrash();
 }
 
-// v0.12.0 彻底删除单条
-function permanentDelete(idx) {
-  const trash = getTrash();
-  if (!trash[idx]) return;
-  if (!confirm('确定彻底删除「' + trash[idx].name + '」？此操作不可恢复。')) return;
-  trash.splice(idx, 1);
-  saveTrash(trash);
-  renderTrash();
-}
-
 function emptyTrash() {
   const trash = getTrash();
   if (!trash.length) return;
-  if (!confirm('确定清空回收站？所有档案将被永久删除。')) return;
+  if (!confirm('确定清空回收站？此操作不可恢复。')) return;
   saveTrash([]);
   hideTrash();
 }
@@ -4922,11 +4206,7 @@ function renderArchiveModal() {
       + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
       + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
       + '</div>'
-      + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="openEditPanel(' + i + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="moveToTrash(' + i + ')">🗑️ 删除</button>'
       + '<button class="archive-row-btn" onclick="loadFromArchive(' + i + ')">排盘</button>'
-      + '</div>'
       + '</div>';
   }
   listEl.innerHTML = html;
@@ -4977,11 +4257,7 @@ function filterArchives(keyword) {
       + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
       + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
       + '</div>'
-      + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="openEditPanel(' + idx + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="moveToTrash(' + idx + ')">🗑️ 删除</button>'
       + '<button class="archive-row-btn" onclick="loadFromArchive(' + idx + ')">排盘</button>'
-      + '</div>'
       + '</div>';
   }
   listEl.innerHTML = html;
@@ -5370,6 +4646,47 @@ document.addEventListener('click', function(e) {
     document.title = '❌ ' + failed + ' 失败 — 八字排盘回归测试';
   }
 })();
+
+// ===== 组合能力 SVG resize 监听 =====
+(function(){
+  var resizeTimer;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      // 所有激活的组合能力按钮所在 scope 重绘
+      document.querySelectorAll('.btn-ability.active').forEach(function(btn){
+        if (btn.textContent.trim() === '组合能力') {
+          var scope = btn.closest('.bz-twin-card') || btn.closest('.page') || document;
+          redrawZuHeSVG(scope);
+        }
+      });
+    }, 200);
+  });
+})();
+
+// ==== v3 能力排盘独立模块入口 ====
+function openAbilityChart(btn) {
+  var data;
+  var card = btn.closest('.bz-twin-card');
+  if (card && card._cardData) { data = card._cardData; }
+  else { data = window._paipanData; }
+  if (!data) { alert('请先完成排盘'); return; }
+  // B2: 注入当前流年
+  var nowYear = new Date().getFullYear();
+  var lnGz = liuNianJZ(nowYear);
+  data.liuNian = { gan: lnGz[0], zhi: lnGz[1] };
+  var json = JSON.stringify(data);
+  var encoded;
+  try {
+    encoded = btoa(unescape(encodeURIComponent(json)));
+  } catch(e) { encoded = null; }
+  if (!encoded || encoded.length > 1800) {
+    localStorage.setItem('ability-chart-data', json);
+    window.open('ability-chart.html', '_blank');
+  } else {
+    window.open('ability-chart.html#data=' + encoded, '_blank');
+  }
+}
 
 </script>
 
