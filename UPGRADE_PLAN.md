@@ -195,14 +195,14 @@
 
 ```
 运行/
-├── standalone.html          ← 精简为 HTML 骨架 + CSS（~500行）
-├── js/
-│   ├── constants.js         ← 天干地支、五行、宫位映射、农历数据（~1200行）
-│   ├── algorithm.js         ← 排盘核心：四柱/十神/十二长生/纳音/神煞（~800行）
-│   ├── gongwei.js           ← 宫位自定义数据层（~400行）
-│   ├── render.js            ← UI 渲染：表格/标签行/Popover/大运流年（~1200行）
-│   ├── archive.js           ← 档案管理（~600行）
-│   └── main.js              ← 入口/初始化/事件绑定（~200行）
+├── standalone.html          ← HTML 骨架 + CSS（754行）
+├── constants.js             ← 天干地支、五行、宫位映射、农历数据（857行）
+├── algorithm.js             ← 排盘核心：四柱/十神/十二长生/纳音/神煞（672行）
+├── archive.js               ← 档案管理（866行）
+├── gongwei.js               ← 宫位自定义数据层（860行）
+├── render.js                ← UI 渲染：表格/标签行/Popover/大运流年（1513行）
+├── main.js                  ← 入口/初始化/事件绑定/回归测试（873行）
+├── build_modules.py         ← 构建脚本：将 JS 模块内联回 standalone.html
 ├── index.html
 ├── ability-chart.html
 └── ...
@@ -211,12 +211,12 @@
 **加载顺序**（`standalone.html` 底部）：
 
 ```html
-<script src="js/constants.js"></script>
-<script src="js/algorithm.js"></script>
-<script src="js/gongwei.js"></script>
-<script src="js/render.js"></script>
-<script src="js/archive.js"></script>
-<script src="js/main.js"></script>
+<script src="constants.js"></script>
+<script src="algorithm.js"></script>
+<script src="archive.js"></script>
+<script src="gongwei.js"></script>
+<script src="render.js"></script>
+<script src="main.js"></script>
 ```
 
 **风险控制**：
@@ -225,12 +225,13 @@
 - 每一步拆分后独立提交 + 打 tag，方便回滚
 
 **验收标准**：
-- [ ] `?test=1` 全量回归 0 FAIL
-- [ ] 双胞胎模式正常
-- [ ] 精简模式正常
-- [ ] 宫位自定义 CRUD 正常
-- [ ] 档案管理搜索/展开/回收站正常
-- [ ] standalone.html 体积从 5384 行降到 ~500 行
+- [x] `?test=1` 全量回归 199 断言 0 FAIL
+- [x] 双胞胎模式正常
+- [x] 精简模式正常
+- [x] 宫位自定义 CRUD 正常
+- [x] 档案管理搜索/展开/回收站正常
+- [x] standalone.html 体积从 5384 行降到 754 行
+- [x] 6 模块语法检查全部通过（node -c）
 
 ---
 

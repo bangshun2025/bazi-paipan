@@ -1,15 +1,15 @@
 # 开发者速查 · 八字排盘 · 从真版
 
 > **给 AI 的第一眼**：新 session 读完本文即可了解项目全貌、快速定位代码、避开已知坑。
-> 最后更新：2026-08-06（v0.13.5）
+> 最后更新：2026-08-06（v0.16.0）
 
 ---
 
 ## 一、项目概览
 
-单文件 HTML 八字排盘应用，零构建步骤，GitHub Pages 直接托管。Clacky 面板通过 iframe 嵌入。
+模块化 HTML 八字排盘应用，零构建步骤，`<script>` 标签直接加载，GitHub Pages 原生兼容。Clacky 面板通过 iframe 嵌入。
 
-- **主文件**：`standalone.html`（5384 行，v0.13.5）
+- **主文件**：`standalone.html`（754 行 HTML/CSS 骨架）+ 6 个 JS 模块（共 5641 行，v0.16.0）
 - **仓库**：[bangshun2025/bazi-paipan](https://github.com/bangshun2025/bazi-paipan)
 - **部署**：`/Users/feng/.clacky/ext/local/bazi-paipan/`（与 `运行/` 通过硬链接共享同一份物理文件）
 
@@ -21,7 +21,15 @@
 
 | 文件 | 用途 | 操作 |
 |------|------|------|
-| `standalone.html` | **主文件**，全部排盘逻辑 + UI | 改功能改这个 |
+| `standalone.html` | **HTML/CSS 骨架**（754行），含输入表单、弹窗、样式 | 改 UI 结构/样式改这个 |
+| `constants.js` | 常量/数据表（857行）：天干地支、五行、宫位映射、农历数据、节气表 | 加常量改这个 |
+| `algorithm.js` | 排盘核心（672行）：四柱/十神/长生/纳音/纳运/神煞/三垣/真太阳时 | ⭐ 改算法必改 |
+| `archive.js` | 档案管理（866行）：卡片列表/搜索/展开/回收站/预置数据 | 改档案改这个 |
+| `gongwei.js` | 宫位自定义（860行）：数据层 CRUD/回收站/排序/导入导出 | 改宫位改这个 |
+| `render.js` | UI 渲染（1513行）：表格/标签行/Popover/大运流年/双胞胎卡片 | 改渲染改这个 |
+| `main.js` | 入口/事件（873行）：初始化/事件绑定/回归测试(?test=1) | 改入口逻辑改这个 |
+| `build_modules.py` | 构建脚本：将 JS 模块内联回 standalone.html | 单文件部署用 |
+| `debug_all.html` | 调试页面：8 iframe 同时加载所有组合验证 | 调试用 |
 | `index.html` | 独立页面入口（iframe standalone） | 一般不改 |
 | `ability-chart.html` | 能力排盘独立模块 | 改能力图改这个 |
 | `CHANGELOG.md` | 版本历史，每个版本的功能/技术/测试摘要 | 查历史第一站 |
@@ -35,7 +43,6 @@
 | `tests/` | 测试文件 | 查测试 |
 | `panels/` | Clacky 面板定义（launcher + paipan） | 改面板UI |
 | `.github/` | GitHub Actions 配置 | CI/CD |
-| `发布师/` | ❌ 已删除（v0.13.5 清理） | — |
 
 ### docs/ 历史文档
 
@@ -57,80 +64,104 @@
 
 ---
 
-## 三、standalone.html 代码段索引（5497 行）
+## 三、模块代码段索引（v0.16.0 拆分后）
 
-### HTML 结构（1-745）
-
-| 行号 | 内容 |
-|------|------|
-| 1-745 | HTML 骨架：top-bar、输入面板、排盘表格、弹窗、归档模态框 |
-
-### 地理位置 & 真太阳时（746-1221）
+### standalone.html（754 行）— HTML/CSS
 
 | 行号 | 内容 |
 |------|------|
-| 746-750 | 中国省市县经度数据（`LOC_DATA`） |
-| 1133-1190 | `initLoc()`、`onProvChange()`、`onCityChange()` |
-| 1191-1221 | 日期输入：`toggleSolar()`、`setupTwinTypeChange()` |
+| 1-754 | 完整 HTML 骨架：输入表单、排盘区、宫位弹窗、档案模态框、所有 CSS 样式 |
+| 741-751 | 模块加载（`<script src="constants.js">` 等 6 行，按加载顺序） |
 
-### 农历转换（1223-1365）
-
-| 行号 | 内容 |
-|------|------|
-| 1223-1365 | 农历辅助函数：`lunarToSolar()`、`toggleCalendar()`、`updateSolarPreview()` |
-| 1315-1365 | 真太阳时计算：`getLng()`、`dayOfYear()`、`equationOfTime()`、`trueSolarTime()` |
-
-### 基础常量 & 宫位映射（1367-1587）
+### constants.js（857 行）— 常量与数据表
 
 | 行号 | 内容 |
 |------|------|
-| 1367-1372 | 天干地支常量（`TG`、`DZ`）、五行映射（`WU_XING`、`WX_CSS`） |
-| 1373-1393 | 宫位映射表（`GONGWEI_MAP`、`GW_INDEX`） |
-| 1394-1409 | 宫位多选颜色映射（`GONGWEI_COLORS`、`GONGWEI_COLOR_KEYS`） |
-| 1410-1587 | **宫位自定义数据层**：`loadGroups()`、`addGroup()`、`updateGroup()`、`deleteGroup()`、`resetDefault()`、回收站、选中状态管理、排序、导入导出 |
+| 1-385 | 中国省市县经度数据（`LOC_DATA`） |
+| 386-420 | 天干地支常量（`TG`、`DZ`）、五行映射（`WU_XING`、`WX_CSS`）、宫位映射（`GONGWEI_MAP`、`GW_INDEX`） |
+| 421-440 | 宫位多选颜色映射（`GONGWEI_COLORS`、`GONGWEI_COLOR_KEYS`） |
+| 441-480 | 纳音（`NAYIN`）、藏干（`CANG_GAN`）、双胞胎藏干替换表 |
+| 481-510 | 十二长生映射（`CS12_MAP`、`CS12_N`）、空亡（`KONG_WANG`） |
+| 511-540 | 节气数据表（`SOLAR_TERMS`、`S_TERM_NAME`、`MONTH_TERM`） |
+| 541-580 | 五虎遁（`WU_HU_DUN`）、五鼠遁（`WU_SHU_DUN`）、纳运五行阳干（`NAYIN_WX_YANG`） |
+| 581-820 | 农历数据表（1900-2100，寿星万年历）、`LUNAR_NEW_YEAR`、`LUNAR_MONTH_OPTIONS` |
+| 821-857 | `window.CONST` 命名空间导出 |
 
-### 农历数据 & 节气（1588-1973）
-
-| 行号 | 内容 |
-|------|------|
-| 1588-1745 | 农历数据表（1900-2100，寿星万年历） |
-| 1746-1973 | 节气查表（JPL DE440s，1900-2100）、`getSolarTerm()` |
-
-### 核心排盘算法（1974-2408）⭐ 改算法必看
+### algorithm.js（672 行）— ⭐ 排盘核心算法
 
 | 行号 | 内容 |
 |------|------|
-| 1974-1981 | **年柱**：`yearPillar()` |
-| 1982-2013 | **月柱**：五虎遁 `WU_HU_DUN`、`monthPillar()` |
-| 2014-2023 | **日柱**：`dayPillar()` |
-| 2024-2034 | **时柱**：五鼠遁 `WU_SHU_DUN`、`hourPillar()` |
-| 2035-2083 | **十神**：`SHI_SHEN_SHORT`、`shiShen()`、`zhiShiShen()` |
-| 2084-2099 | **十二长生**：长生位计算 |
-| 2100-2168 | **藏干文本**：`ZHI_CANG`、双胞胎藏干替换 |
-| 2169-2173 | **空亡** |
-| 2174-2217 | **神煞** |
-| 2218-2229 | **胎元**：`taiYuan()` |
-| 2230-2241 | **命宫**：`mingGong()` |
-| 2242-2254 | **身宫**：`shenGong()` |
-| 2255-2311 | **大运 & 起运** |
-| 2312-2317 | **流年干支** |
-| 2318-2368 | **人元司令** |
-| 2369-2408 | **主计算函数**：`calc()` |
+| 1-30 | 别名声明（从 CONST 引用的常量） |
+| 31-105 | 农历转换：`lunarToSolar()`、`toggleCalendar()`、`updateSolarPreview()` |
+| 106-160 | 真太阳时：`getLng()`、`dayOfYear()`、`equationOfTime()`、`trueSolarTime()` |
+| 161-195 | 节气查询：`getSolarTerm()` |
+| 196-235 | **四柱计算**：`yearPillar()`、`monthPillar()`（五虎遁）、`dayPillar()`、`hourPillar()`（五鼠遁） |
+| 236-280 | **十神**：`shiShen()`、`zhiShiShen()` |
+| 281-320 | **十二长生**：长生位计算 |
+| 321-365 | **藏干**：`ZHI_CANG` 查表、双胞胎藏干替换 |
+| 366-395 | 空亡、神煞 |
+| 396-430 | **三垣**：`taiYuan()`、`mingGong()`、`shenGong()` |
+| 431-490 | **大运 & 起运**：顺逆排、起运年龄、大运干支 |
+| 491-520 | 流年干支 |
+| 521-565 | **人元司令**：`renYuanSiLing()` |
+| 566-600 | **纳运**：`nayunChangSheng()` |
+| 601-629 | **主计算**：`calc()`（排盘主入口） |
+| 630-672 | `window.ALGO` 命名空间导出（20 个函数） |
 
-### UI 渲染（2409-3977）
-
-| 行号 | 内容 |
-|------|------|
-| 2409-4375 | 渲染管线：排盘表格生成、宫位标签行、Popover勾选面板、大运流年互动（`hiDy`/`hiLn`/`_applyDLUpdates`）、`renderChartToHtml()` |
-| 4376-4715 | 档案管理：卡片列表、搜索、展开、回收站（`renderTrash()`） |
-| 4716-5009 | 归档模态框：`renderArchiveModal()` |
-
-### 入口 & 初始化（3978-5384）
+### archive.js（866 行）— 档案管理
 
 | 行号 | 内容 |
 |------|------|
-| 3978-4095 | 入口逻辑、事件绑定、初始化 |
-| 5180-5497 | 回归测试模式（`?test=1`）：全量自动断言，含 199 条测试覆盖十神/纳音/长生/全盘快照/边界幂等 |
+| 1-84 | 别名声明（从 CONST 引用的常量） |
+| 85-104 | **预置档案数据**（`PRESET_ARCHIVES`：自在班 16 孩） |
+| 105-174 | 数据迁移：`migrateFromV1()` |
+| 175-270 | 档案 CRUD：`getArchives()`、`saveArchives()`、`deleteArchive()`、`restoreArchive()` |
+| 271-400 | 档案搜索/过滤/排序 |
+| 401-500 | 档案卡片渲染：卡片列表 |
+| 501-612 | 档案展开排盘（手风琴模式）、加载到表单 |
+| 613-700 | 回收站：`renderTrash()` |
+| 701-750 | 档案面板：`openArchivePanel()`、`closeArchivePanel()` |
+| 751-823 | 归档模态框：`renderArchiveModal()` |
+| 824-866 | `window.ARCHIVE` 命名空间导出（20 个函数） |
+
+### gongwei.js（860 行）— 宫位自定义数据层
+
+| 行号 | 内容 |
+|------|------|
+| 1-87 | 别名声明（从 CONST 引用的常量） |
+| 88-129 | `loadGroups()`：从 localStorage 加载宫位组 |
+| 130-250 | CRUD：`addGroup()`、`updateGroup()`、`deleteGroup()`、`resetDefault()` |
+| 251-400 | 回收站管理 |
+| 401-550 | 选中状态管理、排序、导入导出 |
+| 551-700 | 宫位设置面板渲染、Popover 勾选 |
+| 701-820 | 宫位编辑弹窗：`checkCloseGzEdit()`、`saveGzEdit()` |
+| 821-860 | `window.GONGWEI` 命名空间导出（30+ 函数） |
+
+### render.js（1513 行）— UI 渲染
+
+| 行号 | 内容 |
+|------|------|
+| 1-100 | 别名声明（从 CONST/ALGO/ARCHIVE/GONGWEI 引用） |
+| 101-250 | 排盘表格渲染：`renderChart()`、`renderChartToHtml()` |
+| 251-400 | 精简模式：`toggleSimple()` |
+| 401-650 | 宫位标签行注入、Popover 渲染 |
+| 651-900 | 大运流年渲染与交互：`hiDy()`、`hiLn()`、`_applyDLUpdates()` |
+| 901-1100 | 双胞胎卡片：`renderTwinCardsHtml()`、差异高亮 |
+| 1101-1300 | 龙凤胎独立双卡、三模式切换、三垣折叠 |
+| 1301-1450 | 能力排盘按钮：`openAbilityChart()`、`scrollToNow()` |
+| 1451-1513 | `window.RENDER` 命名空间导出（30+ 函数） |
+
+### main.js（873 行）— 入口/事件/测试
+
+| 行号 | 内容 |
+|------|------|
+| 1-100 | 别名声明（从 CONST/ALGO/ARCHIVE/GONGWEI/RENDER 引用） |
+| 101-226 | 地理位置初始化：`initLoc()`、`toggleSolar()`、`setupTwinTypeChange()` |
+| 227-300 | 省市选择：`onProvChange()`、`onCityChange()` |
+| 301-450 | 排盘入口：`doPaipan()`、事件绑定 |
+| 451-600 | 全局事件监听、键盘快捷键 |
+| 601-750 | 初始化脚本：DOM Ready 后依次初始化 |
+| 751-873 | **回归测试**（`?test=1`）：199 条自动断言，含全量快照/十神/纳音/长生/边界幂等 |
 
 ---
 
@@ -187,14 +218,16 @@
 ## 六、版本回滚速查
 
 ```sh
-git checkout v0.13.5   # 当前最新
+git checkout v0.16.0   # 当前最新（P2架构升级）
+git checkout v0.15.0   # P1效率基建
+git checkout v0.14.0   # P0安全加固
 git checkout v0.11.1   # 能力排盘架构重构
 git checkout v0.11.0   # 能力按钮
 git checkout v0.10.4   # 宫位多选
 git checkout v0.1.0    # 最初版本
 ```
 
-所有标签：`v0.1.0` `v0.3.0` `v0.6.7` `v0.10.3-merge` `v0.10.4` `v0.11.0` `v0.13.5`
+所有标签：`v0.1.0` `v0.3.0` `v0.6.7` `v0.10.3-merge` `v0.10.4` `v0.11.0` `v0.13.5` `v0.14.0` `v0.15.0` `v0.16.0`
 
 ---
 

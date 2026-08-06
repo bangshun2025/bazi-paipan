@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Debug All</title></head>
+<body><pre id="log"></pre>
+<script>
+var LOG=[];function L(m){LOG.push(m);document.getElementById('log').textContent=LOG.join('\n');}
+window.onerror=function(m,src,line,col,err){L('ERR:'+m+' @'+src+':'+line);if(err)L('  '+err.stack);return false;};
+</script>
+<script src="constants.js"></script>
+<script>L('C:'+Object.keys(CONST).length);</script>
+<script src="algorithm.js"></script>
+<script>L('A:'+Object.keys(ALGO).length);</script>
+<script src="archive.js"></script>
+<script>L('AR:'+Object.keys(ARCHIVE).length);</script>
+<script src="gongwei.js"></script>
+<script>L('G:'+Object.keys(GONGWEI).length);</script>
+<script src="render.js"></script>
+<script>L('R:'+Object.keys(RENDER).length);</script>
+<script src="main.js"></script>
+<script>L('M:'+Object.keys(MAIN||{}).length);</script>
+</body></html>

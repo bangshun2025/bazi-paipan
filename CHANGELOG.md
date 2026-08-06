@@ -4,6 +4,33 @@
 
 ---
 
+## v0.16.0 — P2 架构升级 (2026-08-06)
+
+### 架构
+- standalone.html 从 5384 行单体文件拆分为 HTML 骨架（754行）+ 6 个 JS 模块
+- 模块划分：constants.js（857行，常量/数据表）、algorithm.js（672行，排盘核心）、archive.js（866行，档案管理）、gongwei.js（860行，宫位自定义）、render.js（1513行，UI渲染）、main.js（873行，入口/事件/测试）
+- 加载顺序：constants → algorithm → archive → gongwei → render → main
+- 命名空间：window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
+- 零构建步骤，`<script>` 标签直接加载，GitHub Pages 原生兼容
+- 新增 build_modules.py 构建脚本，支持将 JS 模块内联回 standalone.html
+
+### 技术
+- HTML onclick/onchange 全部替换为命名空间前缀（如 APP.doPaipan()、RENDER.toggleSimple()）
+- 每个模块通过 window.CONST 引用常量，解除循环依赖
+- debug_all.html 调试页面：8 iframe 同时加载所有组合验证
+
+### 测试
+- 199 条断言全绿（0 FAIL）
+- 6 模块 node -c 语法检查全通过
+- UI 功能验证全部正常（双胞胎/精简/宫位Popover/档案/龙凤胎）
+- 跨模块引用全部就绪，零 JS 错误
+
+### 文档
+- UPGRADE_PLAN.md 加载顺序与 ADR 对齐（archive↔gongwei 对调）
+- DEVELOPER_QUICKSTART.md 代码段索引改为模块化索引
+
+---
+
 ## v0.15.0 — P1 效率基建 (2026-08-06)
 
 ### 文档统一
