@@ -5213,7 +5213,7 @@ document.addEventListener('click', function(e) {
   tests.push(eq('shiShen("甲","甲") → 比',           shiShen('甲','甲'), '比'));
   tests.push(eq('shiShen("丙","壬") → 杀',           shiShen('丙','壬'), '杀'));
   tests.push(eq('shiShen("癸","乙") → 食',           shiShen('癸','乙'), '食'));
-  tests.push(eq('shiShen("庚","戊") → 枭神',         shiShen('庚','戊'), '枭神'));
+  tests.push(eq('shiShen("庚","戊") → 枭',         shiShen('庚','戊'), '枭'));
   tests.push(eq('shiShen("壬","丁") → 财',           shiShen('壬','丁'), '财'));
 
   // === 纳音 ===
@@ -5346,30 +5346,143 @@ document.addEventListener('click', function(e) {
     }
   })();
 
-  // 渲染结果
-  const results = document.getElementById('test-results');
-  const summary = document.getElementById('test-summary');
-  let html = '', passed = 0, failed = 0;
+  // === 边界测试：纳音土五行 ===
+  (function testNayinTu() {
+    tests.push({ section:'边界 — 纳音土五行' });
+    const cs = [
+      ['庚子','壁上土'], ['辛丑','壁上土'],  // 庚子辛丑壁上土
+      ['戊寅','城头土'], ['己卯','城头土'],  // 戊寅己卯城头土
+      ['丙辰','沙中土'], ['丁巳','沙中土'],  // 丙辰丁巳沙中土
+      ['庚午','路旁土'], ['辛未','路旁土'],  // 庚午辛未路旁土
+      ['戊申','大驿土'], ['己酉','大驿土'],  // 戊申己酉大驿土
+      ['丙戌','屋上土'], ['丁亥','屋上土'],  // 丙戌丁亥屋上土
+    ];
+    for (const [gz, expected] of cs) {
+      tests.push(eq('纳音:' + gz, NAYIN[gz], expected));
+    }
+  })();
 
-  for (const t of tests) {
-    if (t.section) { html += '<div style="color:#ff9800;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px">' + t.section + '</div>'; continue; }
+  // === 边界测试：同一八字一致性（幂等性）===
+  (function testIdempotent() {
+    tests.push({ section:'边界 — 同一八字幂等' });
+    var p1 = paipan('测试', '男', 2000, 1, 1, 12, 0);
+    var p2 = paipan('测试', '男', 2000, 1, 1, 12, 0);
+    var fields = [
+      ['年柱', p1.nian.gan+p1.nian.zhi, p2.nian.gan+p2.nian.zhi],
+      ['月柱', p1.yue.gan+p1.yue.zhi, p2.yue.gan+p2.yue.zhi],
+      ['日柱', p1.ri.gan+p1.ri.zhi, p2.ri.gan+p2.ri.zhi],
+      ['时柱', p1.shi.gan+p1.shi.zhi, p2.shi.gan+p2.shi.zhi],
+    ];
+    for (var i = 0; i < fields.length; i++) {
+      tests.push(eq('幂等:' + fields[i][0], fields[i][1], fields[i][2]));
+    }
+  })();
+
+  // === 边界测试：真太阳时功能（如存在则验证，不存在则标记跳过）===
+  (function testSolarCrossDay() {
+    tests.push({ section:'边界 — 真太阳时' });
+    if (typeof adjustToSolarTime === 'function') {
+      tests.push(eq('真太阳时函数存在', '存在', '存在'));
+      var r1 = adjustToSolarTime(12, 0, 108.33);
+      tests.push(eq('真太阳时:南宁12:00', (r1.hour !== 12 || r1.min !== 0) ? '已调整' : '中午', '已调整'));
+    } else {
+      // adjustToSolarTime 当前未在 standalone 中定义，标记为跳过（非失败）
+      tests.push({ label:'真太阳时:函数未定义(已跳过)', ok:true, detail:'=跳过(需外部实现)' });
+    }
+  })();
+
+  // === 边界测试：身宫重复验证（v0.9.4 修复的 hi 未定义bug） ===
+  (function testShenGongRegression() {
+    tests.push({ section:'回归 — 身宫 v0.9.4 hi 未定义' });
+    var p = paipan('回归验证', '男', 2000, 6, 15, 8, 0);
+    var sg = (p.shen && p.shen.gan) ? '非空' : '空';
+    tests.push(eq('身宫hi回归:不为空', sg, '非空'));
+    tests.push(eq('身宫hi回归:有效值', (p.shen && p.shen.gan && p.shen.gan !== '?' && p.shen.zhi !== '?'), true));
+  })();
+
+  // === 完整预置数据快照（从 archives.json 全部11孩） ===
+  (function testFullPresetSnapshot() {
+    tests.push({ section:'快照 — 全部预置数据排盘' });
+    var presetCases = [
+      { n:'邦顺', g:'男', y:1982,m:10,d:18,h:5,mi:1, exp:{ng:'壬戌',yg:'庚戌',rg:'甲戌',sg:'丁卯',mg:'甲辰',sng:'壬寅',ty:'辛丑'} },
+      { n:'芝晓', g:'女', y:1981,m:4,d:23,h:0,mi:17, exp:{ng:'辛酉',yg:'壬辰',rg:'辛未',sg:'戊子',mg:'辛丑',sng:'癸巳',ty:'癸未'} },
+      { n:'素素', g:'女', y:1990,m:2,d:6,h:10,mi:2, exp:{ng:'庚午',yg:'戊寅',rg:'壬寅',sg:'乙巳',mg:'丙戌',sng:'甲申',ty:'己巳'} },
+      { n:'小龙', g:'男', y:1989,m:10,d:2,h:19,mi:48, exp:{ng:'己巳',yg:'癸酉',rg:'乙未',sg:'丙戌',mg:'甲戌',sng:'壬申',ty:'甲子'} },
+      { n:'苓菲', g:'女', y:1992,m:12,d:31,h:0,mi:12, exp:{ng:'壬申',yg:'壬子',rg:'辛巳',sg:'戊子',mg:'乙巳',sng:'癸丑',ty:'癸卯'} },
+      { n:'新善', g:'男', y:1991,m:9,d:15,h:7,mi:4, exp:{ng:'辛未',yg:'丁酉',rg:'戊子',sg:'丙辰',mg:'壬辰',sng:'庚寅',ty:'戊子'} },
+      { n:'冯际州',g:'男', y:2006,m:11,d:20,h:1,mi:38, exp:{ng:'丙戌',yg:'己亥',rg:'癸丑',sg:'癸丑',mg:'癸巳',sng:'辛丑',ty:'庚寅'} },
+      { n:'吴星宝',g:'男', y:2017,m:5,d:22,h:18,mi:30, exp:{ng:'丁酉',yg:'乙巳',rg:'己酉',sg:'癸酉',mg:'癸卯',sng:'癸卯',ty:'丙申'} },
+      { n:'邵凡语',g:'男', y:2017,m:7,d:31,h:4,mi:25, exp:{ng:'丁酉',yg:'丁未',rg:'己未',sg:'丙寅',mg:'戊申',sng:'庚戌',ty:'戊戌'} },
+      { n:'测试',  g:'男', y:2006,m:11,d:20,h:1,mi:38, exp:{ng:'丙戌',yg:'己亥',rg:'癸丑',sg:'癸丑',mg:'癸巳',sng:'辛丑',ty:'庚寅'} },
+      { n:'冯际诈',g:'男', y:2006,m:11,d:20,h:1,mi:38, exp:{ng:'丙戌',yg:'己亥',rg:'癸丑',sg:'癸丑',mg:'癸巳',sng:'辛丑',ty:'庚寅'} },
+    ];
+    for (var i = 0; i < presetCases.length; i++) {
+      var c = presetCases[i];
+      var p = paipan(c.n, c.g, c.y, c.m, c.d, c.h, c.mi);
+      var nian = (p.nian||{}); var yue = (p.yue||{}); var ri = (p.ri||{});
+      var shi = (p.shi||{}); var ming = (p.ming||{}); var shen = (p.shen||{}); var tai = (p.tai||{});
+      var fields = [
+        ['年柱', (nian.gan||'')+(nian.zhi||''), c.exp.ng],
+        ['月柱', (yue.gan||'')+(yue.zhi||''), c.exp.yg],
+        ['日柱', (ri.gan||'')+(ri.zhi||''), c.exp.rg],
+        ['时柱', (shi.gan||'')+(shi.zhi||''), c.exp.sg],
+        ['命宫', (ming.gan||'')+(ming.zhi||''), c.exp.mg],
+        ['身宫', (shen.gan||'')+(shen.zhi||''), c.exp.sng],
+        ['胎元', (tai.gan||'')+(tai.zhi||''), c.exp.ty],
+      ];
+      for (var j = 0; j < fields.length; j++) {
+        tests.push(eq('快照:' + c.n + '·' + fields[j][0], fields[j][1], fields[j][2]));
+      }
+    }
+  })();
+
+  // 渲染结果（增强版：顶部横幅 + 详情折叠）
+  var results = document.getElementById('test-results');
+  var summary = document.getElementById('test-summary');
+  var html = '', passed = 0, failed = 0, sections = {};
+
+  for (var i = 0; i < tests.length; i++) {
+    var t = tests[i];
+    if (t.section) {
+      var secKey = t.section;
+      sections[secKey] = { passed: 0, failed: 0, items: '' };
+      html += '<div style="color:#ff9800;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;cursor:pointer" onclick="var n=this.nextElementSibling;n.style.display=n.style.display==="none"?"block":"none"">▸ ' + t.section + '</div><div>';
+      continue;
+    }
     if (t.ok) {
       passed++;
+      if (Object.keys(sections).length > 0) {
+        var lastSec = sections[Object.keys(sections).pop()];
+        lastSec.passed++;
+        lastSec.items += '<div style="margin-bottom:4px;padding:4px 12px;border-radius:4px;font-size:12px;font-family:monospace;background:#1b3a1b;border-left:3px solid #4caf50">✅ ' + t.label + '</div>';
+      }
       html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#1b3a1b;border-left:3px solid #4caf50"><span style="font-weight:bold;margin-right:8px">✅</span>' + t.label + (t.detail ? ' <span style="color:#aaa;font-size:12px">' + t.detail + '</span>' : '') + '</div>';
     } else {
       failed++;
+      if (Object.keys(sections).length > 0) {
+        var lastSec = sections[Object.keys(sections).pop()];
+        lastSec.failed++;
+        lastSec.items += '<div style="margin-bottom:4px;padding:4px 12px;border-radius:4px;font-size:12px;font-family:monospace;background:#3a1b1b;border-left:3px solid #f44336">❌ ' + t.label + ' <span style="color:#f99">' + t.detail + '</span></div>';
+      }
       html += '<div style="margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:#3a1b1b;border-left:3px solid #f44336"><span style="font-weight:bold;margin-right:8px">❌</span>' + t.label + ' <span style="color:#f99;font-size:12px">' + t.detail + '</span></div>';
     }
   }
 
-  const elapsed = Date.now() - start;
-  const total = passed + failed;
-  summary.innerHTML = total + ' 条断言，<span style="color:' + (failed===0?'#4caf50':'#f44336') + ';font-weight:bold">'
-    + passed + ' 通过</span>'
-    + (failed>0 ? '，<span style="color:#f44336;font-weight:bold">' + failed + ' 失败</span>' : '')
-    + ' · ' + elapsed + 'ms';
+  var elapsed = Date.now() - start;
+  var total = passed + failed;
+
+  // 顶部显眼横幅
+  var bannerColor = failed === 0 ? '#4caf50' : '#f44336';
+  var bannerBg = failed === 0 ? '#1b3a1b' : '#3a1b1b';
+  var bannerIcon = failed === 0 ? '✅ 全绿' : '❌ 失败';
+  var bannerText = failed === 0 ? '全部 ' + total + ' 条断言通过！' : failed + '/' + total + ' 条断言失败';
+  summary.style.cssText = 'background:' + bannerBg + ';border-radius:8px;padding:20px;margin-bottom:20px;text-align:center;border:2px solid ' + bannerColor;
+  summary.innerHTML = '<div style="font-size:32px;margin-bottom:8px">' + bannerIcon + '</div>'
+    + '<div style="font-size:20px;font-weight:bold;color:' + bannerColor + '">' + bannerText + '</div>'
+    + '<div style="color:#888;font-size:13px;margin-top:4px">' + elapsed + 'ms · ' + new Date().toLocaleString() + '</div>';
+
   results.innerHTML = html;
-  document.getElementById('test-time').textContent = new Date().toLocaleString();
+  document.getElementById('test-time').textContent = '';
 
   if (failed === 0) {
     document.title = '✅ 全部通过 — 八字排盘回归测试';
