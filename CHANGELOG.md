@@ -4,6 +4,21 @@
 
 ---
 
+## v0.15.0 — P1 效率基建 (2026-08-06)
+
+### 文档统一
+- 删除 6 个冗余/过期文档：ROADMAP.md, BUGS.md, CONTRIBUTING.md, DEVELOPMENT.md, RELEASE.md, TEST.md
+- docs/ 精简为 25 个核心文档：算法真相源 + 架构决策 + 版本配套 PRD/ADR/TEST/RETRO + 历史记录
+
+### 新功能模板
+- 新增 `docs/_TEMPLATE/`：PRD / ADR / 变更记录 / QA / 流程记录 / 发布报告 六合一
+- 开发新功能时复制模板目录 → 填写即可，不再每轮重造文档结构
+
+### 文档
+- QUICKSTART 文件地图同步更新，新增 RELEASE_CHECKLIST 和 UPGRADE_PLAN 条目
+
+---
+
 ## v0.14.0 — P0 开发体系安全加固 (2026-08-06)
 
 ### 回归测试增强

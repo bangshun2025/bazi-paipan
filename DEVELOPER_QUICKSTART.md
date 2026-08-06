@@ -25,6 +25,8 @@
 | `index.html` | 独立页面入口（iframe standalone） | 一般不改 |
 | `ability-chart.html` | 能力排盘独立模块 | 改能力图改这个 |
 | `CHANGELOG.md` | 版本历史，每个版本的功能/技术/测试摘要 | 查历史第一站 |
+| `RELEASE_CHECKLIST.md` | 发布前检查清单（代码/回归/UI/文档/发布） | 每次发布必查 |
+| `UPGRADE_PLAN.md` | 开发体系升级三阶段规划 | 了解长期演进方向 |
 | `README.md` | 项目介绍 | 理解背景 |
 | `ext.yml` | Clacky 扩展配置（面板注册、API路由） | 改面板配置 |
 | `archives.json` | 预置档案数据（自在班16孩） | 改预置数据 |
@@ -41,14 +43,13 @@
 |------|------|
 | `ALGORITHM.md` | **算法真相源**，所有排盘规则权威定义，代码实现必须以此为准 |
 | `ARCHITECTURE.md` | 架构决策记录（ADR），单文件策略/双胞布局/面板设计 |
-| `CHANGELOG.md` | → 已提升到根目录，docs/ 内无副本 |
 | `PRD_vX.Y.Z_*.md` | 产品需求文档（按版本+功能命名） |
 | `ADR_vX.Y.Z_*.md` | 架构决策记录（按版本+功能命名） |
 | `TEST_vX.Y.Z_*.md` | 测试报告（按版本+功能命名） |
 | `RETRO_vX.Y.Z_*.md` | 复盘报告，含根因分析 |
-| `BUGS.md` / `BUG_*.md` | Bug 记录与根因分析 |
-| `ROADMAP.md` | ⚠️ 已过期（仍写 v0.3.0），以 CHANGELOG 为准 |
-| `RELEASE*.md` | 发布记录 |
+| `BUG_v*.md` | Bug 根因分析 |
+| `_TEMPLATE/` | **新功能开发模板**（PRD/ADR/变更记录/QA/流程/发布），复制即用 |
+| `PIPELINE_*.md` / `GIT_*.md` | 流水线与 Git 操作记录 |
 | `*_v0.9.*` | 档案管理系统（卡片列表/搜索/展开/预置数据） |
 | `*_v0.7.0_宫位*` | 宫位标签基础功能 |
 | `*_v0.12.0_纳运*` | 纳音五行十二长生（纳运） |
