@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 能力排盘模块 v0.11.1 | 2026-07-28 -->
-<!-- 独立能力排盘页面：元能力卡片 + 组合能力 SVG 关系图 -->
+<!-- 八字排盘 · 能力排盘模块 v4.0 | 2026-07-28 -->
+<!-- 模式一：元能力卡片（v3保留） | 模式二：HTML表格+SVG三层连线（v4重写） -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -37,11 +37,46 @@ footer{text-align:center;padding:24px 0;font-size:12px;color:var(--muted);border
 .pillar-card .cg-row{padding:6px;border-top:1px dashed #efeadb;background:#fdfcf8}
 .pillar-card .cg-row .cg-combo{font-size:15px;font-weight:bold;display:block;margin-bottom:2px}
 .pillar-card .cg-row .cg-detail{font-size:11px;line-height:1.6}
+
+/* 五行色文字 */
 .c-wood{color:var(--wood)} .c-fire{color:var(--fire)} .c-earth{color:var(--earth)} .c-metal{color:var(--metal)} .c-water{color:var(--water)}
 
-/* 组合能力 SVG */
+/* ===== 模式二：表格 + SVG 覆盖（v4 新增） ===== */
 #zuhe-mode{padding:8px 0;overflow-x:auto}
-#zuhe-svg{display:block;margin:0 auto}
+.chart-container{position:relative;display:inline-block;min-width:100%}
+
+/* 表格骨架 */
+.ability-table{border-collapse:collapse;margin:0 auto;position:relative;z-index:1}
+.ability-table td{text-align:center;vertical-align:middle;padding:8px 12px;min-width:100px;border:1px solid #e0d8c0}
+.ability-table td:first-child{border-left:2px solid #c4b896}
+.ability-table td:last-child{border-right:2px solid #c4b896}
+
+/* R1: 生命域 */
+.row-domain td{font-size:13px;color:var(--muted);padding:6px 12px;background:#faf8f2;border-bottom:1px dashed #d9cfb0}
+
+/* R2: 十神 */
+.row-shishen td{font-size:14px;color:#333;padding:10px 12px;border-bottom:1px solid #e0d8c0}
+
+/* R3: 天干 */
+.row-tiangan td{padding:14px 12px 6px;border-bottom:1px solid #e0d8c0}
+.tg-char{font-size:28px;font-weight:bold;line-height:1.2;display:block}
+.tg-ability{font-size:13px;margin-top:2px;display:block}
+.ri-zhu .tg-char{border:2px solid #c83a3a;border-radius:50%;width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;margin:0 auto;line-height:1}
+
+/* R4: 地支 */
+.row-dizhi td{padding:10px 12px 6px;border-bottom:1px solid #e0d8c0}
+.dz-char{font-size:28px;font-weight:bold;line-height:1.2;display:block}
+.dz-ability{font-size:13px;margin-top:2px;display:block}
+
+/* R5: 藏干 */
+.row-canggan td{font-size:12px;padding:10px 12px;line-height:1.7;border-bottom:2px solid #c4b896;background:#fdfcf8}
+.row-canggan td:first-child{border-left:2px solid #c4b896}
+.row-canggan td:last-child{border-right:2px solid #c4b896}
+
+/* SVG 连线层 */
+.lines-overlay{position:absolute;top:0;left:0;pointer-events:none;z-index:2;width:100%;height:100%}
+
+/* 空状态 */
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty-state p{font-size:16px;margin-bottom:12px}
 .empty-state a{color:var(--water)}
@@ -64,13 +99,13 @@ footer{text-align:center;padding:24px 0;font-size:12px;color:var(--muted);border
     </div>
   </header>
   <div id="yuan-mode"></div>
-  <div id="zuhe-mode" style="display:none"><svg id="zuhe-svg"></svg></div>
+  <div id="zuhe-mode" style="display:none"></div>
   <div id="empty-state" class="empty-state" style="display:none">
     <p>未收到命盘数据</p>
     <p>请从<a href="standalone.html">排盘页面</a>打开</p>
   </div>
 </div>
-<footer>八字排盘 · 能力视图 · v3.0</footer>
+<footer>八字排盘 · 能力视图 · v4.0</footer>
 
 <script>
 // ===== 常量映射表 =====
@@ -93,12 +128,16 @@ const PILLAR_LABELS={nian:'年',yue:'月',ri:'日',shi:'时',daYun:'大运',liuN
 const MAIN_PILLARS=['nian','yue','ri','shi','daYun','liuNian'];
 const SAN_PILLARS=['tai','ming','shen'];
 
+// v4 新增：生命域静态映射
+const PILLAR_TO_DOMAIN={nian:'公共/观摩',yue:'学校/协作',ri:'独处/自由',shi:'日常/独创'};
+
 // ===== 工具函数 =====
 function wxClass(gz){return WU_XING[gz]||''}
 function wxColorCss(gz){return WX_COLORS[WU_XING[gz]]||''}
 function wxColorHex(gz){return WX_HEX[WU_XING[gz]]||'#8b7e6a'}
+function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms)}}
 
-// ===== 十神计算（移植自 standalone.html） =====
+// ===== 十神计算 =====
 function shiShen(riGan,gan){
   if(riGan===gan) return '比肩';
   var dw=WU_XING[riGan],tw=WU_XING[gan];
@@ -132,7 +171,14 @@ function computeComboFromLayers(layers){
   if(!w2) return '';
   if(WX_SHENG_NEXT[w0]===w1&&WX_SHENG_NEXT[w1]===w2) return WX_TRIPLE_COMBO[w0+w1+w2]||'';
   var parts=[];
-  function pair(a,b){if(a===b)return WX_SAME_COMBO[a];if(WX_KE_NEXT[a]===b)return WX_KE_COMBO[a+b];if(WX_SHENG_NEXT[a]===b)return WX_SHENG_COMBO[a+b];if(WX_KE_NEXT[b]===a)return WX_KE_COMBO[b+a];if(WX_SHENG_NEXT[b]===a)return WX_SHENG_COMBO[b+a];return''}
+  function pair(a,b){
+    if(a===b) return WX_SAME_COMBO[a];
+    if(WX_KE_NEXT[a]===b) return WX_KE_COMBO[a+b];
+    if(WX_SHENG_NEXT[a]===b) return WX_SHENG_COMBO[a+b];
+    if(WX_KE_NEXT[b]===a) return WX_KE_COMBO[b+a];
+    if(WX_SHENG_NEXT[b]===a) return WX_SHENG_COMBO[b+a];
+    return'';
+  }
   parts.push(pair(w0,w1));parts.push(pair(w1,w2));
   return parts.filter(Boolean).join(' / ');
 }
@@ -149,9 +195,9 @@ function resolveRelation(wxA,wxB,isInverse){
 }
 
 function lineColor(wxA,wxB){
-  if(wxA===wxB) return 'dashed '+WX_HEX[wxA];
-  if(WX_KE_NEXT[wxA]===wxB||WX_KE_NEXT[wxB]===wxA) return WX_HEX['火'];
-  if(WX_SHENG_NEXT[wxA]===wxB||WX_SHENG_NEXT[wxB]===wxA) return WX_HEX['木'];
+  if(wxA===wxB) return WX_HEX[wxA];
+  if(WX_KE_NEXT[wxA]===wxB||WX_KE_NEXT[wxB]===wxA) return '#c83a3a';
+  if(WX_SHENG_NEXT[wxA]===wxB||WX_SHENG_NEXT[wxB]===wxA) return '#2e8b3d';
   return '#8b7e6a';
 }
 
@@ -159,8 +205,42 @@ function lineDash(wxA,wxB){
   return (wxA===wxB)?'6,3':'none';
 }
 
+// ===== 箭头 marker 生成 =====
+function createLineMarkers(svg){
+  var defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+  var markers=[
+    {id:'arrow-red',color:'#c83a3a'},
+    {id:'arrow-green',color:'#2e8b3d'},
+    {id:'arrow-gray',color:'#9b8c6c'}
+  ];
+  markers.forEach(function(m){
+    var mk=document.createElementNS('http://www.w3.org/2000/svg','marker');
+    mk.setAttribute('id',m.id);
+    mk.setAttribute('viewBox','0 0 6 6');
+    mk.setAttribute('refX','6');
+    mk.setAttribute('refY','3');
+    mk.setAttribute('markerWidth','6');
+    mk.setAttribute('markerHeight','6');
+    mk.setAttribute('orient','auto');
+    var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d','M0,0 L6,3 L0,6 Z');
+    p.setAttribute('fill',m.color);
+    mk.appendChild(p);
+    defs.appendChild(mk);
+  });
+  svg.appendChild(defs);
+}
+
+function arrowId(col){
+  if(col==='#c83a3a') return 'url(#arrow-red)';
+  if(col==='#2e8b3d') return 'url(#arrow-green)';
+  return 'url(#arrow-gray)';
+}
+
 // ===== 数据解析 =====
 var gData=null;
+var gIsZuHeRendered=false;
+
 function parseData(){
   var hash=window.location.hash;
   if(hash&&hash.indexOf('#data=')===0){
@@ -172,19 +252,34 @@ function parseData(){
   return null;
 }
 
+// ===== 获取有效数据（处理双胞胎主盘） =====
+function getActiveData(){
+  if(!gData) return null;
+  if(gData.twin&&gData.main) return gData.main;
+  return gData;
+}
+
 // ===== 初始化 =====
 function init(){
   gData=parseData();
   if(!gData){document.getElementById('empty-state').style.display='block';return}
   document.getElementById('empty-state').style.display='none';
-  renderHeader();renderYuanNengLi();
+  renderHeader();
+  renderYuanNengLi();
 }
+
 function switchMode(m){
   var y=document.getElementById('yuan-mode'),z=document.getElementById('zuhe-mode');
   var by=document.getElementById('btn-yuan'),bz=document.getElementById('btn-zuhe');
-  if(m==='yuan'){y.style.display='';z.style.display='none';by.classList.add('active');bz.classList.remove('active')}
-  else{y.style.display='none';z.style.display='';by.classList.remove('active');bz.classList.add('active');
-    if(!document.getElementById('zuhe-svg').hasChildNodes()) renderZuHeNengLi();}
+  if(m==='yuan'){
+    y.style.display='';z.style.display='none';
+    by.classList.add('active');bz.classList.remove('active');
+  }else{
+    y.style.display='none';z.style.display='';
+    by.classList.remove('active');bz.classList.add('active');
+    if(!gIsZuHeRendered){renderZuHeNengLi();gIsZuHeRendered=true}
+    else{redrawAllLines()}
+  }
 }
 
 function renderHeader(){
@@ -197,13 +292,12 @@ function renderHeader(){
     '<div class="meta">'+nn+'年 '+y+'年'+m+'月'+dd+'日 '+p(h)+':'+p(mi)+'</div>';
 }
 
-// ===== 模式一：元能力 =====
+// ===== 模式一：元能力（v3 保持不变） =====
 function renderYuanNengLi(){
   var c=document.getElementById('yuan-mode');c.innerHTML='';
   var d=gData,rg=d.ri?d.ri.gan:'?';
   function pd(k){
     var s=d[k];if(!s)return null;
-    // B3: daYun可能是数组，取当前大运元素
     if(Array.isArray(s)){
       var qy=d.qiYun||{},now=new Date().getFullYear();
       var idx=s.length-1;
@@ -234,84 +328,221 @@ function renderYuanNengLi(){
   c.innerHTML=h;
 }
 
-// ===== 模式二：组合能力 =====
+// ===== 模式二：组合能力（v4 重写 - 表格骨架 + SVG 覆盖） =====
+
 function renderZuHeNengLi(){
-  var svg=document.getElementById('zuhe-svg');svg.innerHTML='';
-  var d=gData,W=1100,M=60,cW=60,cH=32;
-  function pk(key){
-    var s=d[key];if(!s)return null;
-    var lg=CANG_GAN[s.zhi]||[];
-    return{gan:s.gan,zhi:s.zhi,wg:WU_XING[s.gan]||'',wz:WU_XING[s.zhi]||'',
-      ga:GAN_TO_ABILITY[s.gan]||'',za:GAN_TO_ABILITY[s.zhi]||'',
-      key:key,cg:computeComboFromLayers(lg)};
-  }
-  var mp=[],sp=[];
-  MAIN_PILLARS.forEach(function(k){var p=pk(k);if(p)mp.push(p)});
-  SAN_PILLARS.forEach(function(k){var p=pk(k);if(p)sp.push(p)});
-  function px(i,n){var s=(W-2*M)/(n-1);return M+s*i}
+  var d=getActiveData();
+  if(!d) return;
+  var container=document.getElementById('zuhe-mode');
+  var riGan=d.ri?d.ri.gan:'?';
+  var pillars=['nian','yue','ri','shi'];
+  var cols=pillars.map(function(key){
+    var col=d[key];
+    if(!col) return null;
+    var cg=CANG_GAN[col.zhi]||[];
+    return{
+      gan:col.gan,zhi:col.zhi,key:key,
+      wg:WU_XING[col.gan]||'',wz:WU_XING[col.zhi]||'',
+      ga:GAN_TO_ABILITY[col.gan]||'',za:ZHI_TO_ABILITY[col.zhi]||'',
+      ssGan:shiShen(riGan,col.gan),ssZhi:shiShen(riGan,col.zhi),
+      cg:cg,combo:computeComboFromLayers(cg),
+      isRi:(key==='ri')
+    };
+  });
 
-  var mgY=20,mzY=mgY+cH+28,mcY=mzY+cH+20,mb=mcY+40;
-  var sgY=mb+20,szY=sgY+cH+28,scY=szY+cH+20;
-  var H=Math.max(500,scY+30);
-  var els=[];
+  // 构建表格 HTML
+  var h='<div class="chart-container" id="chart-container">';
+  h+='<table class="ability-table" id="ability-table">';
 
-  function card(x,y,w,h,t,wx){
-    var rx=6,c=wxColorHex(wx),fill='#fff';
-    return '<rect x="'+(x-w/2)+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+rx+'" fill="'+fill+'" stroke="'+c+'" stroke-width="1.2"/>'+
-      '<text x="'+x+'" y="'+(y+h/2+5)+'" text-anchor="middle" font-size="14" font-weight="bold" fill="'+c+'">'+t+'</text>';
-  }
+  // R1: 生命域
+  h+='<tr class="row-domain">';
+  pillars.forEach(function(key){h+='<td>'+PILLAR_TO_DOMAIN[key]+'</td>'});
+  h+='</tr>';
 
-  function drawAll(pl,yG,yZ,yC){
-    var n=pl.length;if(!n)return;
-    // 天干卡片
-    for(var i=0;i<n;i++){var p=pl[i],x=px(i,n);els.push(card(x,yG,cW,cH,p.ga,p.wg));p._gx=x}
-    // 天干连线
-    for(var i=0;i<n-1;i++){
-      var a=pl[i],b=pl[i+1];
-      var ax=px(i,n)+cW/2,ay=yG+cH/2,bx=px(i+1,n)-cW/2,by=ay;
-      var col=lineColor(a.wg,b.wg),dash=lineDash(a.wg,b.wg);
-      var rel=resolveRelation(a.wg,b.wg,false),mx=(ax+bx)/2;
-      els.push('<line x1="'+ax+'" y1="'+ay+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="'+dash+'"/>');
-      if(rel)els.push('<text x="'+mx+'" y="'+(ay-6)+'" text-anchor="middle" font-size="11" fill="#8b7e6a">'+rel+'</text>');
-    }
-    // 地支卡片
-    for(var i=0;i<n;i++){var p=pl[i],x=px(i,n);els.push(card(x,yZ,cW,cH,p.za,p.wz));p._zx=x}
-    // 地支连线
-    for(var i=0;i<n-1;i++){
-      var a=pl[i],b=pl[i+1];
-      var ax=px(i,n)+cW/2,ay=yZ+cH/2,bx=px(i+1,n)-cW/2,by=ay;
-      var col=lineColor(a.wz,b.wz),dash=lineDash(a.wz,b.wz);
-      var rel=resolveRelation(a.wz,b.wz,false),mx=(ax+bx)/2;
-      els.push('<line x1="'+ax+'" y1="'+ay+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="'+dash+'"/>');
-      if(rel)els.push('<text x="'+mx+'" y="'+(ay-6)+'" text-anchor="middle" font-size="11" fill="#8b7e6a">'+rel+'</text>');
-    }
-    // 柱内弧线
-    for(var i=0;i<n;i++){
-      var p=pl[i],x=px(i,n);
-      var gx=x,gy=yG+cH,zx=x,zy=yZ;
-      var cx=gx-12,cy=(gy+zy)/2;
-      // B4: 柱内弧线先检查支→干方向，支克干加「反」前缀
-      var isKe=WX_KE_NEXT[p.wz]===p.wg;
-      var rel=resolveRelation(p.wz,p.wg,isKe);
-      var col=lineColor(p.wg,p.wz);
-      els.push('<path d="M '+gx+' '+gy+' Q '+cx+' '+cy+' '+zx+' '+zy+'" fill="none" stroke="'+col+'" stroke-width="1.2"/>');
-      if(rel)els.push('<text x="'+(cx-6)+'" y="'+(cy+4)+'" text-anchor="end" font-size="11" fill="#8b7e6a">'+rel+'</text>');
-    }
-    // 藏干标注
-    for(var i=0;i<n;i++){
-      var p=pl[i],x=px(i,n);
-      var cg=p.cg||'',col=p.wz?WX_HEX[p.wz]:'#8b7e6a';
-      els.push('<text x="'+x+'" y="'+(yC+14)+'" text-anchor="middle" font-size="12" font-weight="bold" fill="'+col+'">'+cg+'</text>');
-    }
-  }
+  // R2: 十神
+  h+='<tr class="row-shishen">';
+  cols.forEach(function(c){
+    if(!c){h+='<td></td>';return}
+    if(c.isRi){h+='<td>日主◎</td>'}
+    else{h+='<td>'+c.ssGan+'</td>'}
+  });
+  h+='</tr>';
 
-  drawAll(mp,mgY,mzY,mcY);
-  drawAll(sp,sgY,szY,scY);
+  // R3: 天干
+  h+='<tr class="row-tiangan">';
+  cols.forEach(function(c){
+    if(!c){h+='<td></td>';return}
+    var cls=c.isRi?' ri-zhu':'';
+    h+='<td class="tg-cell'+cls+'"><span class="tg-char '+wxColorCss(c.gan)+'">'+c.gan+'</span><span class="tg-ability '+wxColorCss(c.gan)+'">'+c.ga+'</span></td>';
+  });
+  h+='</tr>';
 
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('width','100%');svg.setAttribute('height',H);
-  svg.innerHTML=els.join('\n');
+  // R4: 地支
+  h+='<tr class="row-dizhi">';
+  cols.forEach(function(c){
+    if(!c){h+='<td></td>';return}
+    h+='<td class="dz-cell"><span class="dz-char '+wxColorCss(c.zhi)+'">'+c.zhi+'</span><span class="dz-ability '+wxColorCss(c.zhi)+'">'+c.za+'</span></td>';
+  });
+  h+='</tr>';
+
+  // R5: 藏干
+  h+='<tr class="row-canggan">';
+  cols.forEach(function(c){
+    if(!c){h+='<td></td>';return}
+    h+='<td>';
+    var cg=c.cg;
+    cg.forEach(function(g){
+      var ss=shiShen(riGan,g);
+      var ab=GAN_TO_ABILITY[g]||'';
+      h+='<div class="'+wxColorCss(g)+'">'+g+SHI_SHEN_SHORT[ss]+'→'+ab+'</div>';
+    });
+    h+='<div><strong class="'+wxColorCss(c.zhi)+'">→ '+c.combo+'</strong></div>';
+    h+='</td>';
+  });
+  h+='</tr>';
+
+  h+='</table>';
+  h+='<svg class="lines-overlay" id="lines-overlay"></svg>';
+  h+='</div>';
+
+  container.innerHTML=h;
+
+  // 等待布局完成，计算坐标并绘制连线
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      drawAllLines(cols);
+    });
+  });
 }
+
+function drawAllLines(cols){
+  var chart=document.getElementById('chart-container');
+  var table=document.getElementById('ability-table');
+  var svg=document.getElementById('lines-overlay');
+  if(!chart||!table||!svg) return;
+
+  var chartRect=chart.getBoundingClientRect();
+  var W=chartRect.width,H=chartRect.height;
+
+  // 设置 SVG 尺寸
+  svg.setAttribute('width',W);
+  svg.setAttribute('height',H);
+  svg.style.width=W+'px';
+  svg.style.height=H+'px';
+  svg.innerHTML='';
+
+  // 创建箭头 marker
+  createLineMarkers(svg);
+
+  // 读取各单元格坐标
+  var tgCells=table.querySelectorAll('.row-tiangan td');
+  var dzCells=table.querySelectorAll('.row-dizhi td');
+
+  if(tgCells.length<4||dzCells.length<4) return;
+
+  var tgRects=[],dzRects=[];
+  for(var i=0;i<4;i++){
+    tgRects.push(tgCells[i].getBoundingClientRect());
+    dzRects.push(dzCells[i].getBoundingClientRect());
+  }
+
+  function rx(r){return r.left-chartRect.left}
+  function ry(r){return r.top-chartRect.top}
+  function cx(r){return r.left-chartRect.left+r.width/2}
+  function cy(r){return r.top-chartRect.top+r.height/2}
+
+  var el=[];
+
+  // ===== L1: 天干间横箭头 (3条: 指向克方/生方→被克方/被生方) =====
+  var l1Y=ry(tgRects[0])-28;
+  for(var i=0;i<3;i++){
+    var a=cols[i],b=cols[i+1];
+    if(!a||!b) continue;
+    // 判断方向：箭头从克方/生方出发。若克方/生方在右，画右→左
+    var aToB=true;
+    if(WX_KE_NEXT[b.wg]===a.wg) aToB=false;
+    else if(WX_SHENG_NEXT[b.wg]===a.wg) aToB=false;
+    var x1=aToB?cx(tgRects[i]):cx(tgRects[i+1]);
+    var x2=aToB?cx(tgRects[i+1]):cx(tgRects[i]);
+    var col=lineColor(a.wg,b.wg),dash=lineDash(a.wg,b.wg);
+    var rel=resolveRelation(a.wg,b.wg,false);
+    if(a.wg===b.wg){col=WX_HEX[a.wg]}
+    el.push('<line x1="'+x1+'" y1="'+l1Y+'" x2="'+x2+'" y2="'+l1Y+'" stroke="'+col+'" stroke-width="2" stroke-dasharray="'+dash+'" marker-end="'+arrowId(col)+'"/>');
+    if(rel){
+      var mx=(cx(tgRects[i])+cx(tgRects[i+1]))/2;
+      el.push('<text x="'+mx+'" y="'+(l1Y-4)+'" text-anchor="middle" font-size="12" fill="#8b7e6a">'+rel+'</text>');
+    }
+  }
+
+  // ===== L2: 地支间横箭头 (3条: 指向克方/生方→被克方/被生方) =====
+  var l2Y=ry(dzRects[0])-12;
+  for(var i=0;i<3;i++){
+    var a=cols[i],b=cols[i+1];
+    if(!a||!b) continue;
+    // 判断方向：箭头从克方/生方出发。若克方/生方在右，画右→左
+    var aToB=true;
+    if(WX_KE_NEXT[b.wz]===a.wz) aToB=false;
+    else if(WX_SHENG_NEXT[b.wz]===a.wz) aToB=false;
+    var x1=aToB?cx(dzRects[i]):cx(dzRects[i+1]);
+    var x2=aToB?cx(dzRects[i+1]):cx(dzRects[i]);
+    var col=lineColor(a.wz,b.wz),dash=lineDash(a.wz,b.wz);
+    var rel=resolveRelation(a.wz,b.wz,false);
+    if(a.wz===b.wz){col=WX_HEX[a.wz]}
+    el.push('<line x1="'+x1+'" y1="'+l2Y+'" x2="'+x2+'" y2="'+l2Y+'" stroke="'+col+'" stroke-width="2" stroke-dasharray="'+dash+'" marker-end="'+arrowId(col)+'"/>');
+    if(rel){
+      var mx=(cx(dzRects[i])+cx(dzRects[i+1]))/2;
+      el.push('<text x="'+mx+'" y="'+(l2Y+16)+'" text-anchor="middle" font-size="11" fill="#8b7e6a">'+rel+'</text>');
+    }
+  }
+
+  // ===== L3: 柱内纵向贝塞尔弧线 (4条) =====
+  for(var i=0;i<4;i++){
+    var c=cols[i];
+    if(!c) continue;
+    var tgy=cy(tgRects[i]),dzY=cy(dzRects[i]);
+    var arcX=rx(tgRects[i])-4; // 柱左边缘-4px
+    var ctrlX=arcX-18;         // 控制点左偏18px
+    var ctrlY=(tgy+dzY)/2;
+
+    // 反前缀：仅支克干加反
+    var isKe=WX_KE_NEXT[c.wz]===c.wg;
+    var rel=resolveRelation(c.wz,c.wg,isKe);
+    var col=lineColor(c.wg,c.wz);
+    if(c.wg===c.wz){col=WX_HEX[c.wg]}
+
+    el.push('<path d="M '+arcX+' '+tgy+' Q '+ctrlX+' '+ctrlY+' '+arcX+' '+dzY+'" fill="none" stroke="'+col+'" stroke-width="2.5"/>');
+    if(rel){
+      el.push('<text x="'+(ctrlX-6)+'" y="'+(ctrlY+5)+'" text-anchor="end" font-size="13" font-weight="bold" fill="'+col+'">'+rel+'</text>');
+    }
+  }
+
+  svg.innerHTML=el.join('\n');
+}
+
+function redrawAllLines(){
+  if(!gIsZuHeRendered) return;
+  var d=getActiveData();
+  if(!d) return;
+  var riGan=d.ri?d.ri.gan:'?';
+  var pillars=['nian','yue','ri','shi'];
+  var cols=pillars.map(function(key){
+    var col=d[key];
+    if(!col) return null;
+    var cg=CANG_GAN[col.zhi]||[];
+    return{
+      gan:col.gan,zhi:col.zhi,key:key,
+      wg:WU_XING[col.gan]||'',wz:WU_XING[col.zhi]||'',
+      ga:GAN_TO_ABILITY[col.gan]||'',za:ZHI_TO_ABILITY[col.zhi]||'',
+      ssGan:shiShen(riGan,col.gan),ssZhi:shiShen(riGan,col.zhi),
+      cg:cg,combo:computeComboFromLayers(cg),
+      isRi:(key==='ri')
+    };
+  });
+  drawAllLines(cols);
+}
+
+// resize 重绘
+window.addEventListener('resize',debounce(redrawAllLines,150));
 
 window.addEventListener('DOMContentLoaded',init);
 
