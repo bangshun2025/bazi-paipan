@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.16.0 | 2026-08-07 -->
+<!-- 八字排盘 · 公测版 v0.16.1 | 2026-08-07 -->
+<!-- v0.16.1: 档案弹窗布局优化 — dateStr 精简为仅年份 -->
 <!-- v0.16.0: P2 架构升级 — standalone.html 拆分为 6 模块 -->
 <!-- v0.13.3: 编辑弹窗标签行排序调整为固定顺序 年→月→日→时→胎→命→身 -->
 <!-- v0.13.2: Bug A 宫位设置面板溢出(列表区加flex约束+overflow滚动) + Bug B 拖拽排序后排盘标签行与popover联动 -->
@@ -9,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>八字排盘 · 从真版</title>
+<title>八字排盘 · 公测版</title>
 <style>
   :root {
     --c-wood: #2e8b3d; --c-fire: #c83a3a; --c-earth: #c8961f; --c-metal: #d97817; --c-water: #2a6ec0;
@@ -2916,6 +2917,7 @@ function onTwinPillarChange() {
     var d = window._paipanData;
     if (d) renderTwinCardsHtml(d, 'output');
   }
+  updateGongWeiTags();
 }
 
 function toggleTpPopover(e) {
@@ -3232,13 +3234,13 @@ function renderChart(data, twin, targetId) {
 
   // 流年
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  // 运前列：出生年至起运前一年的流年干支（无 data-di/data-li）
+  // 运前列：出生年至起运前一年的流年干支
   if (preQyYears > 0) {
     let preLis = '';
-    for (let py = y; py < y + preQyYears; py++) {
+    for (let py = y, liIdx = 0; py < y + preQyYears; py++, liIdx++) {
       const gz = liuNianJZ(py);
       const gzCol = '<span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span>';
-      preLis += '<span class="li">'+gzCol+'</span>';
+      preLis += '<span class="li" data-di="-1" data-li="'+liIdx+'">'+gzCol+'</span>';
     }
     luckRows.push('<div class="cell pre-qy">'+preLis+'</div>');
   }
@@ -4938,7 +4940,7 @@ function renderArchiveModal() {
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
     var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
-    var dateStr = a.year + '年' + a.month + '月' + a.day + '日 ' + pad(a.hour) + ':' + pad(a.min || 0);
+    var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
       + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'
@@ -4993,7 +4995,7 @@ function filterArchives(keyword) {
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
     var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
-    var dateStr = a.year + '年' + a.month + '月' + a.day + '日 ' + pad(a.hour) + ':' + pad(a.min || 0);
+    var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
       + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'

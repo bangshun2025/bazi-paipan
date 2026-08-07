@@ -1,4 +1,4 @@
-/* 八字排盘 v0.16.0 — archive.js */
+/* 八字排盘 v0.16.1 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -736,7 +736,7 @@ function renderArchiveModal() {
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
     var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
-    var dateStr = a.year + '年' + a.month + '月' + a.day + '日 ' + pad(a.hour) + ':' + pad(a.min || 0);
+    var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
       + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'
@@ -791,7 +791,7 @@ function filterArchives(keyword) {
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
     var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
-    var dateStr = a.year + '年' + a.month + '月' + a.day + '日 ' + pad(a.hour) + ':' + pad(a.min || 0);
+    var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
       + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'

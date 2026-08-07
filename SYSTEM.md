@@ -1,6 +1,6 @@
 # 八字排盘 · 项目总览
 
-> 最后更新：2026-08-07 | 当前版本：v0.16.0
+> 最后更新：2026-08-07 | 当前版本：v0.16.1
 > 本文档是 AI 理解本项目的入口。新 AI 进入项目后，先读此文件。
 
 ## 项目简介
@@ -13,6 +13,7 @@
 
 | 版本 | 日期 | 功能 | 关键文档 |
 |------|------|------|----------|
+| v0.16.1 | 08-07 | 档案弹窗布局优化：dateStr 精简为仅年份 | [PRD](docs/PRD_v0.16.1_档案布局优化.md)、[ADR](docs/ADR_v0.16.1_档案布局优化.md)、[TEST](docs/TEST_v0.16.1_档案布局优化.md)、[RETRO](docs/RETRO_v0.16.1_档案布局优化.md) |
 | v0.16.0 | 08-06 | P2 架构升级：5384行单体拆分为 6 个 JS 模块 | [PRD](docs/PRD_v0.16.0_架构拆分.md)、[ADR](docs/ADR_v0.16.0_架构拆分.md)、[TEST](docs/TEST_v0.16.0_P2架构升级.md)、[RETRO](docs/RETRO_v0.16.0_架构拆分.md)、[RELEASE](docs/RELEASE_v0.16.0.md) |
 | v0.15.0 | 08-06 | P1 效率基建：文档精简、模板统一 | CHANGELOG |
 | v0.14.0 | 08-06 | P0 安全加固：回归测试 80→199 条、发布检查清单 | CHANGELOG |
@@ -106,6 +107,8 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [DEVELOPER_QUICKSTART.md](DEVELOPER_QUICKSTART.md) — 开发者速查（代码段索引）
 
 ### 功能文档
+- [PRD_v0.16.1_档案布局优化.md](docs/PRD_v0.16.1_档案布局优化.md)
+- [ADR_v0.16.1_档案布局优化.md](docs/ADR_v0.16.1_档案布局优化.md)
 - [PRD_v0.16.0_架构拆分.md](docs/PRD_v0.16.0_架构拆分.md)
 - [ADR_v0.16.0_架构拆分.md](docs/ADR_v0.16.0_架构拆分.md)
 - [PRD_v0.12.0_纳运功能.md](docs/PRD_v0.12.0_纳运功能.md)
@@ -121,6 +124,7 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [PRD_v0.2.0_双胞胎.md](docs/PRD_v0.2.0_双胞胎.md)
 
 ### 测试
+- [TEST_v0.16.1_档案布局优化.md](docs/TEST_v0.16.1_档案布局优化.md)
 - [TEST_全量测评手册.md](docs/TEST_全量测评手册.md) — 全量测评手册
 - [TEST_v0.16.0_P2架构升级.md](docs/TEST_v0.16.0_P2架构升级.md)
 - [TEST_v0.12.0_纳运功能.md](docs/TEST_v0.12.0_纳运功能.md)
@@ -130,6 +134,7 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [TEST_v0.7.0_宫位功能.md](docs/TEST_v0.7.0_宫位功能.md)
 
 ### 复盘
+- [RETRO_v0.16.1_档案布局优化.md](docs/RETRO_v0.16.1_档案布局优化.md)
 - [RETRO_v0.16.0_架构拆分.md](docs/RETRO_v0.16.0_架构拆分.md)
 - [RETRO_v0.10.4_宫位多选.md](docs/RETRO_v0.10.4_宫位多选.md)
 - [RETRO_v0.9.1_搜索稳定性.md](docs/RETRO_v0.9.1_搜索稳定性.md)

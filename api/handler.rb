@@ -702,14 +702,27 @@ class BaziPaipanExt < Clacky::ApiExtension
   end
 
 
-  # 独立页面 — 完整版（来自排盘.app standalone.html）
+  # 独立页面 — 完整版（模块化 standalone-split.html）
   get "/standalone" do
-    html_path = File.join(self.class.ext_dir, "standalone.html")
+    html_path = File.join(self.class.ext_dir, "standalone-split.html")
     if File.exist?(html_path)
       html = File.read(html_path, encoding: "UTF-8")
       raise Clacky::ApiExtension::Halt.new(200, html, "text/html; charset=utf-8")
     else
-      error!("standalone.html not found", status: 500)
+      error!("standalone-split.html not found", status: 500)
+    end
+  end
+
+  # JS 模块文件（standalone-split.html 依赖）
+  %w[constants.js algorithm.js archive.js gongwei.js render.js main.js].each do |js_file|
+    get "/#{js_file}" do
+      file_path = File.join(self.class.ext_dir, js_file)
+      if File.exist?(file_path)
+        content = File.read(file_path, encoding: "UTF-8")
+        raise Clacky::ApiExtension::Halt.new(200, content, "application/javascript; charset=utf-8")
+      else
+        error!("#{js_file} not found", status: 500)
+      end
     end
   end
 

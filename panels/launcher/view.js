@@ -6,25 +6,32 @@
   // ============================================================
   var APPS = [
     {
-      id: "bazi-paipan",
-      name: "八字排盘",
+      id: "bazi-online",
+      name: "八字排盘 · 正式",
       subtitle: "线上正式版",
-      desc: "输入出生时间，排四柱、大运、流年，支持真太阳时修正与 AI 自然语言录入。",
+      desc: "GitHub Pages 发布版，对外分享链接。",
       icon: "甲",
       iconColor: "#2e8b3d",
       url: "https://bangshun2025.github.io/bazi-paipan/"
     },
     {
-      id: "bazi-paipan-local",
-      name: "八字排盘",
-      subtitle: "本地开发版",
-      desc: "与公开版相同引擎，走 Clacky 本地 API，方便调试与迭代。",
+      id: "bazi-gongce",
+      name: "八字排盘 · 公测",
+      subtitle: "本地公测版",
+      desc: "本地引擎，稳定版本。验证通过后升为正式版。",
       icon: "甲",
       iconColor: "#b5343a",
       url: "http://localhost:7070/api/ext/bazi-paipan/standalone"
+    },
+    {
+      id: "bazi-test",
+      name: "八字排盘 · 内测",
+      subtitle: "开发内测版",
+      desc: "开发流水线自动部署，新功能尝鲜。",
+      icon: "甲",
+      iconColor: "#d4a017",
+      url: "http://localhost:7070/api/ext/bazi-paipan-test/standalone"
     }
-    // 后续扩展在此追加：
-    // { id: "xxx", name: "应用名", subtitle: "副标题", desc: "描述", icon: "图", iconColor: "#xxx", url: "/api/ext/xxx/standalone" }
   ];
 
   // ============================================================

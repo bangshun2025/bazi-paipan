@@ -1,4 +1,4 @@
-// 八字排盘面板 — bazi-paipan · 从真版
+// 八字排盘面板 — bazi-paipan · 公测
 // 通过 registerWorkspace + sidebar.nav 挂载，沿用原版纸质书卷风格
 (function () {
   var TG = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
