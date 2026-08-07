@@ -249,7 +249,7 @@ function setFormData(d) {
   document.getElementById('inHour').value = d.hour;
   document.getElementById('inMin').value = d.min || 0;
   document.getElementById('useSolar').checked = d.useSolar;
-  toggleSolar();
+  APP.toggleSolar();
   if (d.useSolar) {
     if (d.prov) { document.getElementById('inProv').value = d.prov; onProvChange(); }
     setTimeout(() => {
@@ -311,7 +311,7 @@ function loadArchive(idx) {
   var archives = getArchives();
   if (!archives[idx]) return;
   setFormData(archives[idx]);
-  doPaipan();
+  APP.doPaipan();
 }
 
 function delArchive() {
@@ -624,8 +624,8 @@ function renderTrash() {
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span>${a.name} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
         <div style="display:flex;gap:6px;">
-          <button class="archive-row-edit" onclick="restoreFromTrash(${i})" title="恢复">↩️ 恢复</button>
-          <button class="archive-row-del" onclick="permanentDelete(${i})" title="彻底删除">🗑️ 彻底删除</button>
+          <button class="archive-row-edit" onclick="ARCHIVE.restoreFromTrash(${i})" title="恢复">↩️ 恢复</button>
+          <button class="archive-row-del" onclick="ARCHIVE.permanentDelete(${i})" title="彻底删除">🗑️ 彻底删除</button>
         </div>
       </div>
       ${delTime ? '<div style="font-size:11px;color:var(--c-gray);margin-top:2px;">删除于: ' + delTime + '</div>' : ''}
@@ -744,9 +744,9 @@ function renderArchiveModal() {
       + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
       + '</div>'
       + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="openEditPanel(' + i + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="moveToTrash(' + i + ')">🗑️ 删除</button>'
-      + '<button class="archive-row-btn" onclick="loadFromArchive(' + i + ')">排盘</button>'
+      + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + i + ')">✏️ 修改</button>'
+      + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + i + ')">🗑️ 删除</button>'
+      + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + i + ')">排盘</button>'
       + '</div>'
       + '</div>';
   }
@@ -799,9 +799,9 @@ function filterArchives(keyword) {
       + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
       + '</div>'
       + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="openEditPanel(' + idx + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="moveToTrash(' + idx + ')">🗑️ 删除</button>'
-      + '<button class="archive-row-btn" onclick="loadFromArchive(' + idx + ')">排盘</button>'
+      + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + idx + ')">✏️ 修改</button>'
+      + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + idx + ')">🗑️ 删除</button>'
+      + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + idx + ')">排盘</button>'
       + '</div>'
       + '</div>';
   }
@@ -813,7 +813,7 @@ function loadFromArchive(idx) {
   if (!archives[idx]) return;
   setFormData(archives[idx]);
   closeArchivePanel();
-  doPaipan();
+  APP.doPaipan();
   // Scroll to top to see form
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

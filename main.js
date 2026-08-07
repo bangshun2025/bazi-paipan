@@ -41,7 +41,6 @@
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
-  var toggleCalendar = ALGO.toggleCalendar;
   var updateSolarPreview = ALGO.updateSolarPreview;
   var getLng = ALGO.getLng;
   var dayOfYear = ALGO.dayOfYear;

@@ -364,7 +364,7 @@ function updateGzTriggerText() {
 
 // 同步 popover checkbox 状态
 function syncGzCheckboxes() {
-  var cbs = document.querySelectorAll('.gz-cb-item input[type="checkbox"]');
+  var cbs = document.querySelectorAll('#gz-popover .gz-cb-item input[type="checkbox"]');
   for (var i = 0; i < cbs.length; i++) {
     var val = cbs[i].value;
     cbs[i].checked = selectedGongWei.indexOf(val) >= 0;
@@ -385,7 +385,7 @@ function rebuildGzCbGrid() {
   for (var i = 0; i < gongWeiGroups.length; i++) {
     var g = gongWeiGroups[i];
     var checked = selectedGongWei.indexOf(g.name) >= 0 ? ' checked' : '';
-    items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + g.name + '" onchange="toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '><span>' + g.name + '宫位</span></label>';
+    items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + g.name + '" onchange="GONGWEI.toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '><span>' + g.name + '宫位</span></label>';
   }
   grid.innerHTML = items;
 }
@@ -395,16 +395,16 @@ function renderGongWeiPanel() {
   var cbItems = '';
   for (var i = 0; i < gongWeiGroups.length; i++) {
     var group = gongWeiGroups[i];
-    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + group.name + '" onchange="toggleGongWei(\'' + group.name + '\', this.checked)"><span>' + group.name + '宫位</span></label>';
+    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + group.name + '" onchange="GONGWEI.toggleGongWei(\'' + group.name + '\', this.checked)"><span>' + group.name + '宫位</span></label>';
   }
   return '<div class="gz-panel-wrapper">'
-    + '<button class="btn-simple gz-trigger" id="gz-trigger" onclick="toggleGzPopover(event)">宫位<span class="gz-count"></span> ▾<span class="gz-summary"></span></button>'
+    + '<button class="btn-simple gz-trigger" id="gz-trigger" onclick="GONGWEI.toggleGzPopover(event)">宫位<span class="gz-count"></span> ▾<span class="gz-summary"></span></button>'
     + '<div class="gz-popover" id="gz-popover">'
     + '<div class="gz-cb-grid">' + cbItems + '</div>'
     + '<div class="gz-popover-actions">'
-    + '<button onclick="selectAllGongWei()">全选</button>'
-    + '<button onclick="clearAllGongWei()">清空</button>'
-    + '<button class="gz-settings-btn" onclick="closeGzPopover();openGzSettings();">⚙ 宫位设置</button>'
+    + '<button onclick="GONGWEI.selectAllGongWei()">全选</button>'
+    + '<button onclick="GONGWEI.clearAllGongWei()">清空</button>'
+    + '<button class="gz-settings-btn" onclick="GONGWEI.closeGzPopover();GONGWEI.openGzSettings();">⚙ 宫位设置</button>'
     + '</div></div></div>';
 }
 
@@ -503,21 +503,21 @@ function renderGzSettingsList() {
     var downDisabled = i === gongWeiGroups.length - 1 ? ' disabled' : '';
 
     html += '<div class="gz-set-item" draggable="true" data-idx="' + i + '"'
-      + ' ondragstart="gzDragStart(event,' + i + ')"'
-      + ' ondragover="gzDragOver(event)"'
-      + ' ondragleave="gzDragLeave(event)"'
-      + ' ondrop="gzDrop(event,' + i + ')"'
-      + ' ondragend="gzDragEnd(event)">'
+      + ' ondragstart="GONGWEI.gzDragStart(event,' + i + ')"'
+      + ' ondragover="GONGWEI.gzDragOver(event)"'
+      + ' ondragleave="GONGWEI.gzDragLeave(event)"'
+      + ' ondrop="GONGWEI.gzDrop(event,' + i + ')"'
+      + ' ondragend="GONGWEI.gzDragEnd(event)">'
       + '<span class="gz-drag-handle" title="拖拽排序">⠿</span>'
       + '<div class="gz-set-info">'
       + '<div class="gz-set-name">' + g.name + (g.isPreset ? '<span class="gz-preset-tag">预置</span>' : '') + '</div>'
       + '<div class="gz-set-preview">' + preview + '</div>'
       + '</div>'
       + '<div class="gz-set-actions">'
-      + '<button onclick="openGzEdit(\'' + g.id + '\')" title="编辑">✎</button>'
-      + '<button onclick="confirmDeleteGroup(\'' + g.id + '\',\'' + g.name + '\')" title="删除">🗑</button>'
-      + '<button onclick="moveUp(' + i + ');renderGzSettingsList();updateGongWeiTags();"' + upDisabled + ' title="上移">↑</button>'
-      + '<button onclick="moveDown(' + i + ');renderGzSettingsList();updateGongWeiTags();"' + downDisabled + ' title="下移">↓</button>'
+      + '<button onclick="GONGWEI.openGzEdit(\'' + g.id + '\')" title="编辑">✎</button>'
+      + '<button onclick="GONGWEI.confirmDeleteGroup(\'' + g.id + '\',\'' + g.name + '\')" title="删除">🗑</button>'
+      + '<button onclick="GONGWEI.moveUp(' + i + ');GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();"' + upDisabled + ' title="上移">↑</button>'
+      + '<button onclick="GONGWEI.moveDown(' + i + ');GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();"' + downDisabled + ' title="下移">↓</button>'
       + '</div></div>';
   }
   list.innerHTML = html;
@@ -683,7 +683,7 @@ function renderGzTrashList() {
       + '<div class="gz-trash-time">删除于 ' + timeStr + '</div>'
       + '</div>'
       + '<div class="gz-trash-actions">'
-      + '<button onclick="restoreFromTrash(\'' + t.id + '\');renderGzTrashList();renderGzSettingsList();updateGongWeiTags();">恢复</button>'
+      + '<button onclick="GONGWEI.restoreFromTrash(\'' + t.id + '\');GONGWEI.renderGzTrashList();GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();">恢复</button>'
       + '</div></div>';
   }
   list.innerHTML = html;
@@ -718,36 +718,37 @@ function renderTwinPillarPanel() {
       }
       var p = keys[i];
       var checked = twinPillars.indexOf(p) >= 0 ? ' checked' : '';
-      items += '<label class="gz-cb-item"><input type="checkbox" value="' + p + '"' + checked + ' onchange="onTwinPillarChange()"><span>' + pillarLabels[p] + '</span></label>';
+      items += '<label class="gz-cb-item"><input type="checkbox" value="' + p + '"' + checked + ' onchange="GONGWEI.onTwinPillarChange()"><span>' + pillarLabels[p] + '</span></label>';
     }
     return items;
   }
   var row1Html = buildRow(row1);
   var row2Html = buildRow(row2);
   return '<div class="gz-panel-wrapper">'
-    + '<button class="btn-simple gz-trigger" onclick="toggleTpPopover(event)">分气<span class="gz-count"></span> ▾</button>'
+    + '<button class="btn-simple gz-trigger" onclick="GONGWEI.toggleTpPopover(event)">分气<span class="gz-count"></span> ▾</button>'
     + '<div class="gz-popover" id="tp-popover">'
     + '<div class="tp-cb-grid" style="display:grid;grid-template-columns:repeat(4, 1fr);gap:4px 16px;">' + row1Html + row2Html + '</div>'
     + '<div class="gz-popover-actions">'
-    + '<button onclick="selectAllTwinPillars()">全选</button>'
-    + '<button onclick="clearAllTwinPillars()">清空</button>'
+    + '<button onclick="GONGWEI.selectAllTwinPillars()">全选</button>'
+    + '<button onclick="GONGWEI.clearAllTwinPillars()">清空</button>'
     + '</div></div></div>';
 }
 
 function onTwinPillarChange() {
   var cbs = document.querySelectorAll('#tp-popover input[type=checkbox]');
-  twinPillars = [];
+  twinPillars.length = 0;
   for (var i = 0; i < cbs.length; i++) {
     if (cbs[i].checked) twinPillars.push(cbs[i].value);
   }
   var twinType = window._twinType;
   if (twinType === 'longfeng') {
     var d1 = window._paipanData, d2 = window._paipanData2;
-    if (d1 && d2) renderLongFengCardsHtml(d1, d2, 'output');
+    if (d1 && d2) RENDER.renderLongFengCardsHtml(d1, d2, 'output');
   } else if (twinType === 'same') {
     var d = window._paipanData;
-    if (d) renderTwinCardsHtml(d, 'output');
+    if (d) RENDER.renderTwinCardsHtml(d, 'output');
   }
+  GONGWEI.updateGongWeiTags();
 }
 
 function toggleTpPopover(e) {

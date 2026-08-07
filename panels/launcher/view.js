@@ -8,7 +8,7 @@
     {
       id: "bazi-paipan",
       name: "八字排盘",
-      subtitle: "从真版",
+      subtitle: "线上正式版",
       desc: "输入出生时间，排四柱、大运、流年，支持真太阳时修正与 AI 自然语言录入。",
       icon: "甲",
       iconColor: "#2e8b3d",
