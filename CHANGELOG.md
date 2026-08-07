@@ -4,6 +4,28 @@
 
 ---
 
+## v0.16.1 — 档案布局优化 + API 路由修复 (2026-08-07)
+
+### 优化
+- 档案弹窗每条档案行仅显示 `YYYY年`，精简掉月/日/时/分
+- dateStr 精简释放横向空间，最长名字组合完整可见，无截断
+- 搜索过滤结果的 dateStr 格式与完整列表一致
+
+### 修复
+- API 端点 `/standalone` 从旧版单体 `standalone.html` 切换到模块化 `standalone-split.html`
+- 新增 6 个 JS 模块文件的显式路由（constants.js 等），避免通配路由冲突
+- gongwei.js 全局 onclick 函数引用改为 `GONGWEI.*` 命名空间前缀
+- archive.js `toggleSolar()`/`doPaipan()` 改为 `APP.toggleSolar()`/`APP.doPaipan()`
+
+### 技术
+- standalone-split.html 内建运前流年 `data-di="-1"` 和分气×宫位 `updateGongWeiTags()` 修复
+
+### 测试
+- 199 条断言全绿（0 FAIL）
+- AC-1~AC-6 档案布局验收 6/6 通过
+
+---
+
 ## v0.16.0 — P2 架构升级 (2026-08-06)
 
 ### 架构
