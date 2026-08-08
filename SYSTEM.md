@@ -1,6 +1,6 @@
 # 八字排盘 · 项目总览
 
-> 最后更新：2026-08-07 | 当前版本：v0.16.1
+> 最后更新：2026-08-08 | 当前版本：v0.18.0
 > 本文档是 AI 理解本项目的入口。新 AI 进入项目后，先读此文件。
 
 ## 项目简介
@@ -13,6 +13,8 @@
 
 | 版本 | 日期 | 功能 | 关键文档 |
 |------|------|------|----------|
+| v0.18.0 | 08-08 | 简0级别：新增极简层级（五层级循环）+ 四柱三垣间隔 | [PRD](docs/PRD_v0.18.0_简0级别与三垣间隔.md)、[ADR](docs/ADR_v0.18.0_简0级别与三垣间隔.md)、[TEST](docs/TEST_v0.18.0_简0级别与三垣间隔.md) |
+| v0.17.0 | 08-07 | 简分级别：四层级循环切换（L0-L3）+ 纳运行位置调整 | [PRD](docs/PRD_v0.17.0_简分级别.md)、[ADR](docs/ADR_v0.17.0_简分级别.md)、[TEST](docs/TEST_v0.17.0_简分级别.md)、[RETRO](docs/RETRO_v0.17.0_简分级别.md) |
 | v0.16.1 | 08-07 | 档案弹窗布局优化：dateStr 精简为仅年份 | [PRD](docs/PRD_v0.16.1_档案布局优化.md)、[ADR](docs/ADR_v0.16.1_档案布局优化.md)、[TEST](docs/TEST_v0.16.1_档案布局优化.md)、[RETRO](docs/RETRO_v0.16.1_档案布局优化.md) |
 | v0.16.0 | 08-06 | P2 架构升级：5384行单体拆分为 6 个 JS 模块 | [PRD](docs/PRD_v0.16.0_架构拆分.md)、[ADR](docs/ADR_v0.16.0_架构拆分.md)、[TEST](docs/TEST_v0.16.0_P2架构升级.md)、[RETRO](docs/RETRO_v0.16.0_架构拆分.md)、[RELEASE](docs/RELEASE_v0.16.0.md) |
 | v0.15.0 | 08-06 | P1 效率基建：文档精简、模板统一 | CHANGELOG |
@@ -82,12 +84,14 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 
 | 事项 | 优先级 | 状态 | 来源 |
 |------|--------|------|------|
+| v0.17.0 三垣区重复纳运行 bug | P0 | ✅ 已修复(v0.18.0) | ADR v0.18.0 |
 | pillar() 函数在 render.js 中重复 5 次（应统一到 constants.js） | P0 | 未处理 | P2 复盘 |
 | 全局状态散落（被选宫位、当前大运/流年索引分布在 module 作用域） | P1 | 未处理 | P2 复盘 |
 | standalone.html 和 standalone-split.html CSS 完全相同（534行逐字一致） | P1 | 未处理 | P2 复盘 |
 | `?test=1` 199 条断言 vs 部分功能未覆盖（如分气 checkbox） | P1 | 部分覆盖 | 测试复盘 |
 | onclick 全部改为命名空间前缀，但仍有少量 `onchange` 遗留 | P2 | 大部分完成 | v0.16.0 |
 | 档案 13 个目录命名不规范（无版本号前缀、角色名混用） | P2 | 待标准化 | 本次 audit |
+| 编程师实现自查遗漏（多渲染路径）导致 TC-10 Bug | P2 | 已修复 | RETRO v0.17.0 |
 
 ## 如何继续开发
 
@@ -107,6 +111,10 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [DEVELOPER_QUICKSTART.md](DEVELOPER_QUICKSTART.md) — 开发者速查（代码段索引）
 
 ### 功能文档
+- [PRD_v0.18.0_简0级别与三垣间隔.md](docs/PRD_v0.18.0_简0级别与三垣间隔.md)
+- [ADR_v0.18.0_简0级别与三垣间隔.md](docs/ADR_v0.18.0_简0级别与三垣间隔.md)
+- [PRD_v0.17.0_简分级别.md](docs/PRD_v0.17.0_简分级别.md)
+- [ADR_v0.17.0_简分级别.md](docs/ADR_v0.17.0_简分级别.md)
 - [PRD_v0.16.1_档案布局优化.md](docs/PRD_v0.16.1_档案布局优化.md)
 - [ADR_v0.16.1_档案布局优化.md](docs/ADR_v0.16.1_档案布局优化.md)
 - [PRD_v0.16.0_架构拆分.md](docs/PRD_v0.16.0_架构拆分.md)
@@ -124,6 +132,7 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [PRD_v0.2.0_双胞胎.md](docs/PRD_v0.2.0_双胞胎.md)
 
 ### 测试
+- [TEST_v0.17.0_简分级别.md](docs/TEST_v0.17.0_简分级别.md)
 - [TEST_v0.16.1_档案布局优化.md](docs/TEST_v0.16.1_档案布局优化.md)
 - [TEST_全量测评手册.md](docs/TEST_全量测评手册.md) — 全量测评手册
 - [TEST_v0.16.0_P2架构升级.md](docs/TEST_v0.16.0_P2架构升级.md)
@@ -134,6 +143,7 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 - [TEST_v0.7.0_宫位功能.md](docs/TEST_v0.7.0_宫位功能.md)
 
 ### 复盘
+- [RETRO_v0.17.0_简分级别.md](docs/RETRO_v0.17.0_简分级别.md)
 - [RETRO_v0.16.1_档案布局优化.md](docs/RETRO_v0.16.1_档案布局优化.md)
 - [RETRO_v0.16.0_架构拆分.md](docs/RETRO_v0.16.0_架构拆分.md)
 - [RETRO_v0.10.4_宫位多选.md](docs/RETRO_v0.10.4_宫位多选.md)

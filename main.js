@@ -1,4 +1,4 @@
-/* 八字排盘 v0.16.0 — main.js */
+/* 八字排盘 v0.18.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -144,7 +144,7 @@
   var gongWeiTrash = GONGWEI.gongWeiTrash;
 
   // ===== 别名：来自 render.js =====
-  var toggleSimple = RENDER.toggleSimple;
+  var toggleLevel = RENDER.toggleLevel;
   var buildPillarRows = RENDER.buildPillarRows;
   var renderChart = RENDER.renderChart;
   var bindEvents = RENDER.bindEvents;

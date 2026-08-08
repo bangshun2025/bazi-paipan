@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.16.0 | 2026-08-06 -->
+<!-- 八字排盘 · 从真版 v0.18.0 | 2026-08-08 -->
+<!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
+<!-- v0.17.0: 行序优化 — 主星→干支→藏干→纳音→纳运→星运→自坐→空亡→神煞 -->
 <!-- v0.16.0: 去除七柱标签必填校验（允许空标签），保存按钮仅需组名即可启用 -->
 <!-- v0.13.3: 编辑弹窗标签行排序调整为固定顺序 年→月→日→时→胎→命→身 -->
 <!-- v0.13.2: Bug A 宫位设置面板溢出(列表区加flex约束+overflow滚动) + Bug B 拖拽排序后排盘标签行与popover联动 -->
@@ -204,11 +206,37 @@
   .chart .rm td { font-size:17px; color:var(--c-ink); padding:3px 3px; }
   .chart .rm .rl { font-size:17px; }
 
-  /* 精简模式：隐藏纳音/空亡/神煞 */
-  .chart.simple tr[data-row-type~="nayin"],
-  .chart.simple tr[data-row-type~="nayun"],
-  .chart.simple tr[data-row-type~="kongwang"],
-  .chart.simple tr[data-row-type~="shensha"] { display:none; }
+  /* 简分级别：五层级循环切换 L0(极简)→L1(简)→L2(中)→L3(详)→L4(全) */
+
+  /* L0 → 极简：隐藏所有扩展信息行 */
+  .chart.level-0 tr[data-row-type~="xingyun"],
+  .chart.level-0 tr[data-row-type~="zizuo"],
+  .chart.level-0 tr[data-row-type~="nayin"],
+  .chart.level-0 tr[data-row-type~="nayun"],
+  .chart.level-0 tr[data-row-type~="kongwang"],
+  .chart.level-0 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L1 → 简：隐藏纳音/纳运/空亡/神煞（仅星运+自坐可见） */
+  .chart.level-1 tr[data-row-type~="nayin"],
+  .chart.level-1 tr[data-row-type~="nayun"],
+  .chart.level-1 tr[data-row-type~="kongwang"],
+  .chart.level-1 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L2 → 中：隐藏空亡+神煞 */
+  .chart.level-2 tr[data-row-type~="kongwang"],
+  .chart.level-2 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L3 → 详：仅隐藏神煞 */
+  .chart.level-3 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L4 → 全：无隐藏（空规则块保留以便理解） */
+
+  /* 四柱-三垣分隔行 */
+  tr.sanyuan-sep { height: 0.75em; }
+  tr.sanyuan-sep td { padding: 0; border-bottom: 2px solid var(--c-line); }
+
+  /* 龙凤胎卡片三垣区间距 */
+  .bz-twin-card .bz-sanyuan-area { margin-top: 0.75em; }
 
   .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
   .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
@@ -742,7 +770,7 @@
   </div>
 </div>
 
-<!-- 八字排盘 v0.16.0 — 模块加载 -->
+<!-- 八字排盘 v0.18.0 — 模块加载 -->
 <script src="constants.js"></script>
 <script src="algorithm.js"></script>
 <script src="archive.js"></script>

@@ -1,6 +1,6 @@
 # 八字排盘 · 编程师手册
 
-> 最后更新：2026-08-07 | 对应版本：v0.16.1
+> 最后更新：2026-08-08 | 对应版本：v0.18.0
 > 编程师接到任务后的第一份必读材料。配合 ARCHITECTURE.md（架构决策）和 ALGORITHM.md（算法宪法）使用。
 
 ## 速览
@@ -21,8 +21,8 @@
 | `algorithm.js` | 672 | 排盘核心（年月日时四柱、大运、流年、神煞、人元司令） | 改排盘逻辑改这里。依赖 constants.js。**改了算法必须跑全量回归 + 同步 ALGORITHM.md** |
 | `archive.js` | 866 | 档案管理（存取删搜索、弹窗 UI、数据持久化） | 改档案功能改这里。操作 `Archives.json`（GitHub Pages 静态文件） |
 | `gongwei.js` | 860 | 宫位自定义（14 宫 checkbox 面板、标签行渲染） | 改宫位功能改这里。渲染模式分单人/同性双胞/龙凤胎三种 |
-| `render.js` | 1513 | UI 渲染（表格生成、大运流年表、双胞胎对比、事件绑定、DOM 更新） | **最复杂的模块**。包含 pillar() 重复 5 次的已知问题。改渲染逻辑改这里 |
-| `main.js` | 873 | 入口/表单事件/测试入口（`paipan()` 主函数、表单校验、真太阳时、自动排盘） | 改表单交互、入口流程改这里。`?test=1` 自动测试入口也在这里 |
+| `render.js` | 1558 | UI 渲染（表格生成、大运流年表、双胞胎对比、事件绑定、DOM 更新、toggleLevel 五层级切换、sanyuan-sep 分隔行） | **最复杂的模块**。包含 pillar() 重复 5 次的已知问题。注意五层级 toggleLevel 和三处渲染路径同步 |
+| `main.js` | 872 | 入口/表单事件/测试入口（`paipan()` 主函数、表单校验、真太阳时、自动排盘） | 改表单交互、入口流程改这里。`?test=1` 自动测试入口也在这里 |
 | `build_modules.py` | — | 构建脚本：JS 模块 → 内联回 standalone.html | 每次发布正式版前跑一次。不改业务逻辑 |
 | `debug_all.html` | — | 8 个 iframe 加载不同案例组合 | 调试多案例并行验证用 |
 
@@ -161,10 +161,19 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **正确做法**：模块在根目录是设计如此，不要移动。以实际代码为准
 - **来源**：RETRO v0.16.0 问题4
 
+### 多渲染路径遗漏——TC-10 龙凤胎初始 L0 状态 Bug（v0.17.0）
+
+- **场景**：简分级别功能要求三处渲染路径（单人/双胞胎/龙凤胎）的 `<table>` 初始 class 都改为 `level-0`，但编程师只改了 `renderChart()` 单人模式，遗漏了 `renderTwinCardsHtml()` 和 `renderLongFengCardsHtml()` 两处
+- **后果**：龙凤胎/双胞胎模式下首次排盘，L0 默认状态所有扩展行均可见（应为隐藏）。点击一次按钮后恢复正常——因为 `toggleLevel()` 会重新设置 class
+- **正确做法**：ADR 明确列出三处修改点时，应逐条对照。未来引入「实现自查清单」机制——编程师完成后逐条对照 ADR 自检
+- **来源**：RETRO v0.17.0
+
 ## 重构记录
 
 | 版本 | 变更 | 影响范围 | 注意事项 |
 |------|------|---------|---------|
+| v0.18.0 | 简0级别：五层级循环切换 + 四柱三垣间隔 + 三垣冗余纳运修复 | render.js（~15行）、standalone-split.html（CSS ~25行） | CSS 层级规则扩展为 5 组 level-0~4；toggleLevel %5；三处渲染路径按钮「简→极简」；buildPillarRows 三垣区纳运删冗余；sanyuan-sep 独立 tr 分隔行 |
+| v0.17.0 | 简分级别：四层级循环切换 + 纳运行位置调整 | render.js（+43行）、main.js（-1行）、standalone-split.html（+CSS） | 三处渲染路径 `<table>` 需同步加 `level-0` class。_applyDLUpdates 需重映射 dy/ln |
 | v0.16.1 | 档案弹窗 dateStr 精简为仅年份 | archive.js（L739/L794）、standalone.html（L4942/L4997） | 仅改4行。不改 CSS/弹窗宽度/数据结构/排盘逻辑。最小改动原则 |
 | v0.16.0 | 5384 行单体 → 6 模块拆分 | 全部文件 | onclick 全部改为命名空间前缀（`APP.xxx`）。仍有少量 `onchange` 遗留 |
 | v0.16.0 | build_modules.py 构建脚本 | standalone.html | `standalone.html` 由脚本合成，不再手动维护。紧急修 hotfix 可临时改 |
@@ -179,6 +188,7 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - [ ] 新增/修改了算法？→ 同步更新了 `ALGORITHM.md`
 - [ ] 新增了功能？→ 同步更新了 `TEST_全量测评手册.md` 对应子章节
 - [ ] 准备发布？→ 跑了 `build_modules.py` + 验证 `standalone.html` 内的版本注释
+- [ ] ADR 列出多处于修改点时，逐条对照自检（不遗漏任何渲染路径）
 - [ ] 没留 console.log / debugger
 - [ ] onclick 使用命名空间前缀
 
