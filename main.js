@@ -487,7 +487,7 @@ function doAiParse() {
   
   // 构建预览
   let preview = '';
-  if (r.name) preview += '姓名：' + r.name + '  ';
+  if (r.name) preview += '姓名：' + (ARCHIVE.getPrivacyMode() ? '已隐藏' : r.name) + '  ';
   preview += '性别：' + r.gender + '  ';
   if (r.year) preview += r.year + '年' + r.month + '月' + r.day + '日  ';
   if (r.hour !== null) preview += r.hour + ':' + String(r.min).padStart(2,'0') + '  ';

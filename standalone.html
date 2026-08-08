@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.18.0 | 2026-08-08 -->
+<!-- 八字排盘 · 从真版 v0.19.0 | 2026-08-09 -->
+<!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
 <!-- v0.17.0: 行序优化 — 主星→干支→藏干→纳音→纳运→星运→自坐→空亡→神煞 -->
 <!-- v0.16.0: 去除七柱标签必填校验（允许空标签），保存按钮仅需组名即可启用 -->
@@ -45,6 +46,7 @@
   .input-row input[type=number] { width:58px; text-align:center; }
   .input-row .btn { padding:5px 16px; background:var(--c-ink); color:var(--c-paper); border:none; border-radius:2px; cursor:pointer; font-size:13px; letter-spacing:.1em; font-family:var(--font-display); }
   .input-row .btn:hover { background:var(--c-red); }
+  .btn-privacy.privacy-on { background:var(--c-red); color:var(--c-paper); border-color:var(--c-red); }
   .btn-arch { font-size:14px; padding:2px 6px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; line-height:1; }
   .btn-arch:hover { background:var(--c-ink); }
   .btn-ai { font-size:12px; padding:4px 10px; border:1px dashed var(--c-gray); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); color:var(--c-gray); white-space:nowrap; }
@@ -582,6 +584,7 @@
   <div class="input-section">
     <div class="input-row">
       <label>小名</label><input type="text" id="inNickname" placeholder="小名" style="width:64px;">
+      <label>艺名</label><input type="text" id="inYiming" placeholder="艺名（选填）" style="width:64px;">
       <label>姓名</label><input type="text" id="inName" value="邦顺" style="width:80px;">
       <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
       <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
@@ -604,6 +607,7 @@
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
+      <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
       <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
@@ -642,7 +646,7 @@
     <div class="archive-modal" onclick="event.stopPropagation()">
       <div class="archive-modal-header">
         <span class="archive-modal-title">📋 档案</span>
-        <button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button>
+        <span style="display:flex;align-items:center;gap:8px;"><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
       </div>
       <div class="archive-modal-search">
         <input type="text" id="archive-search-modal" placeholder="输入姓名进行筛选" oninput="ARCHIVE.onArchiveSearch(this.value)">
@@ -663,6 +667,10 @@
         <div class="edit-row">
           <label>昵称</label>
           <input type="text" id="editNickname" placeholder="昵称（选填）" style="width:100%;">
+        </div>
+        <div class="edit-row">
+          <label>艺名（选填）</label>
+          <input type="text" id="editYiming" placeholder="艺名（隐私模式显示名）" style="width:100%;">
         </div>
         <div class="edit-row">
           <label>姓名</label>
@@ -770,7 +778,7 @@
   </div>
 </div>
 
-<!-- 八字排盘 v0.18.0 — 模块加载 -->
+<!-- 八字排盘 v0.19.0 — 模块加载 -->
 <script>
 /* 八字排盘 v0.16.0 — constants.js */
 (function() {
@@ -1590,6 +1598,7 @@ const TRASH_KEY = 'bz_trash_v2';
 const ARCH_KEY_OLD = 'paipan_archives';
 const TRASH_KEY_OLD = 'paipan_trash';
 const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
+const PRIVACY_KEY = 'bz_privacy_mode';
 
   // ===== 挂载到全局命名空间 =====
   window.CONST = {
@@ -1627,6 +1636,7 @@ const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
     ARCH_KEY_OLD: ARCH_KEY_OLD,
     TRASH_KEY_OLD: TRASH_KEY_OLD,
     ARCH_BACKUP_KEY: ARCH_BACKUP_KEY,
+    PRIVACY_KEY: PRIVACY_KEY,
   };
 })();
 </script>
@@ -2343,6 +2353,7 @@ function buildShunLabel(shun, gender, nianGan) {
   var ARCH_KEY_OLD = CONST.ARCH_KEY_OLD;
   var TRASH_KEY_OLD = CONST.TRASH_KEY_OLD;
   var ARCH_BACKUP_KEY = CONST.ARCH_BACKUP_KEY;
+  var PRIVACY_KEY = CONST.PRIVACY_KEY;
 
   // ===== 别名：来自 algorithm.js =====
   var monthDays = ALGO.monthDays;
@@ -2504,6 +2515,45 @@ function saveTrash(arr) {
   localStorage.setItem(TRASH_KEY, JSON.stringify(arr));
 }
 
+// ===== 隐私模式（v0.19.0）=====
+// 默认开启：无键或 '1' → 开启；'0' → 关闭
+function getPrivacyMode() {
+  return localStorage.getItem(PRIVACY_KEY) !== '0';
+}
+function setPrivacyMode(on) {
+  localStorage.setItem(PRIVACY_KEY, on ? '1' : '0');
+}
+// 统一显示名：隐私关闭维持现状（小名 / 正名）；隐私开启降级链 艺名 → 小名 → 匿名
+function getDisplayName(a) {
+  if (!a) return '';
+  if (!getPrivacyMode()) {
+    return (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
+  }
+  return (a.yiming && a.yiming.trim()) ? a.yiming
+    : (a.nickname && a.nickname.trim()) ? a.nickname
+    : '匿名';
+}
+// 切换开关：更新两处按钮状态 + 重渲染档案面板（若开）+ 重排当前标题（若 output 有数据）
+function togglePrivacy() {
+  var on = !getPrivacyMode();
+  setPrivacyMode(on);
+  // 更新两处按钮
+  var b1 = document.getElementById('btnPrivacy');
+  var b2 = document.getElementById('btnPrivacy2');
+  var label = on ? '🔒 隐私' : '🔓 隐私';
+  [b1, b2].forEach(function(b) {
+    if (!b) return;
+    b.textContent = label;
+    if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
+  });
+  // 重渲染档案面板（若开）
+  refreshArchiveModalIfOpen();
+  // 重排当前标题（若 output 有数据）
+  if (window.RENDER && document.getElementById('output') && document.getElementById('output').innerHTML.indexOf('person-info') >= 0) {
+    window.RENDER.doPaipan();
+  }
+}
+
 // 档案保存后刷新弹窗列表（如果弹窗当前可见）
 function refreshArchiveModalIfOpen() {
   var overlay = document.getElementById('archiveOverlay');
@@ -2516,6 +2566,7 @@ function getFormData() {
   var isLunar = (APP.calendarType === 'lunar');
   return {
     nickname: document.getElementById('inNickname').value || '',
+    yiming: document.getElementById('inYiming').value || '',
     name: document.getElementById('inName').value || '未命名',
     gender: document.getElementById('inGender').value,
     year: parseInt(document.getElementById('inYear').value),
@@ -2543,6 +2594,7 @@ function setFormData(d) {
     toggleCalendar(calType);
   }
   document.getElementById('inNickname').value = d.nickname || '';
+  document.getElementById('inYiming').value = d.yiming || '';
   document.getElementById('inName').value = d.name;
   document.getElementById('inGender').value = d.gender;
   document.getElementById('inYear').value = d.year;
@@ -2604,7 +2656,7 @@ function saveArchive() {
   // 检查同名同性别是否已存在
   var existIdx = archives.findIndex(function(a) { return a.name === d.name && a.gender === d.gender; });
   if (existIdx >= 0) {
-    if (!confirm('「' + d.name + '」已存在，覆盖更新？')) return;
+    if (!confirm('「' + getDisplayName(d) + '」已存在，覆盖更新？')) return;
     archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
   } else {
     archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
@@ -2633,7 +2685,7 @@ function moveToTrash(idx) {
   if (!archives[idx]) return;
   var a = archives[idx];
   var extraMsg = a.isPreset ? '\n⚠ 这是预置档案，删除后可在回收站恢复。' : '';
-  if (!confirm('确定删除「' + a.name + '」的档案？可在回收站恢复。' + extraMsg)) return;
+  if (!confirm('确定删除「' + getDisplayName(a) + '」的档案？可在回收站恢复。' + extraMsg)) return;
   var ts = new Date().toISOString();
   var trashItem = Object.assign({}, a, {deletedAt: ts});
   var trash = getTrash();
@@ -2658,6 +2710,7 @@ function openEditPanel(idx) {
   _editOriginal = JSON.parse(JSON.stringify(a));
 
   document.getElementById('editNickname').value = a.nickname || '';
+  document.getElementById('editYiming').value = a.yiming || '';
   document.getElementById('editName').value = a.name || '';
   document.getElementById('editGender').value = a.gender;
   var isLunar = a.calendarType === 'lunar';
@@ -2704,6 +2757,7 @@ function closeEditPanel() {
   var changed = _editOriginal && (
     edited.name !== _editOriginal.name ||
     edited.nickname !== _editOriginal.nickname ||
+    edited.yiming !== _editOriginal.yiming ||
     edited.gender !== _editOriginal.gender ||
     edited.year !== _editOriginal.year ||
     edited.month !== _editOriginal.month ||
@@ -2735,6 +2789,7 @@ function getEditFormData() {
   }
   return {
     nickname: document.getElementById('editNickname').value || '',
+    yiming: document.getElementById('editYiming').value || '',
     name: document.getElementById('editName').value || '',
     gender: document.getElementById('editGender').value,
     year: parseInt(document.getElementById('editYear').value) || 0,
@@ -2829,7 +2884,7 @@ function saveEdit() {
     }
   }
   if (conflictIdx >= 0) {
-    if (!confirm('「' + edited.name + '」已存在，覆盖更新？')) return;
+    if (!confirm('「' + getDisplayName(edited) + '」已存在，覆盖更新？')) return;
     // 删除冲突项，保留当前编辑项
     archives.splice(conflictIdx, 1);
     if (conflictIdx < _editIdx) _editIdx--;
@@ -2929,7 +2984,7 @@ function renderTrash() {
     var delTime = a.deletedAt ? new Date(a.deletedAt).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\//g,'-') : '';
     return `<div style="display:flex;flex-direction:column;padding:8px 8px;border-bottom:1px solid rgba(128,128,128,.15);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span>${a.name} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
+        <span>${getDisplayName(a)} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
         <div style="display:flex;gap:6px;">
           <button class="archive-row-edit" onclick="ARCHIVE.restoreFromTrash(${i})" title="恢复">↩️ 恢复</button>
           <button class="archive-row-del" onclick="ARCHIVE.permanentDelete(${i})" title="彻底删除">🗑️ 彻底删除</button>
@@ -2950,7 +3005,7 @@ function restoreFromTrash(idx) {
   const archives = getArchives();
   const existIdx = archives.findIndex(a => a.name === restored.name && a.gender === restored.gender);
   if (existIdx >= 0) {
-    if (!confirm('「' + restored.name + '」已存在，覆盖恢复？')) return;
+    if (!confirm('「' + getDisplayName(restored) + '」已存在，覆盖恢复？')) return;
     archives[existIdx] = restored;
   } else {
     archives.push(restored);
@@ -2966,7 +3021,7 @@ function restoreFromTrash(idx) {
 function permanentDelete(idx) {
   const trash = getTrash();
   if (!trash[idx]) return;
-  if (!confirm('确定彻底删除「' + trash[idx].name + '」？此操作不可恢复。')) return;
+  if (!confirm('确定彻底删除「' + getDisplayName(trash[idx]) + '」？此操作不可恢复。')) return;
   trash.splice(idx, 1);
   saveTrash(trash);
   renderTrash();
@@ -3042,7 +3097,7 @@ function renderArchiveModal() {
     var a = archives[i];
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
+    var displayName = getDisplayName(a);
     var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
@@ -3082,6 +3137,7 @@ function filterArchives(keyword) {
   for (var i = 0; i < archives.length; i++) {
     var a = archives[i];
     var match = (a.nickname || '').toLowerCase().indexOf(k) >= 0
+      || (a.yiming || '').toLowerCase().indexOf(k) >= 0
       || (a.name || '').toLowerCase().indexOf(k) >= 0;
     if (match) filtered.push({arch: a, idx: i});
   }
@@ -3097,7 +3153,7 @@ function filterArchives(keyword) {
     var idx = filtered[j].idx;
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
+    var displayName = getDisplayName(a);
     var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
@@ -3168,6 +3224,10 @@ function loadFromArchive(idx) {
     renderArchiveModal: renderArchiveModal,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
+    getPrivacyMode: getPrivacyMode,
+    setPrivacyMode: setPrivacyMode,
+    getDisplayName: getDisplayName,
+    togglePrivacy: togglePrivacy,
     loadFromArchive: loadFromArchive,
   };
 })();
@@ -4584,7 +4644,7 @@ function renderChart(data, twin, targetId) {
   const shunLabel = data.qiYun ? buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan) : '';
   const html = `
     <div class="top-bar">
-      <div class="person-info"><b>${name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
+      <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>
 
@@ -5145,7 +5205,7 @@ function renderTwinCardsHtml(data, targetId) {
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
@@ -5254,7 +5314,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+name+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
@@ -5300,6 +5360,12 @@ function injectCurDaYunLiuNian(data) {
 // ============ 入口 ============
 function doPaipan() {
   const name = document.getElementById('inName').value || '未命名';
+  // v0.19.0 隐私模式：构造显示名（data.name 保持真名不动，仅显示层替换）
+  const displayName = ARCHIVE.getDisplayName({
+    name: name,
+    nickname: document.getElementById('inNickname').value,
+    yiming: document.getElementById('inYiming').value
+  });
   const gender = document.getElementById('inGender').value;
   const y = parseInt(document.getElementById('inYear').value);
   const m = parseInt(APP.calendarType === 'lunar'
@@ -5347,10 +5413,12 @@ function doPaipan() {
       const g1 = document.getElementById('inGender').value;
       const g2 = document.getElementById('inGender2').value;
       const d1 = paipan(name, g1, ey, em, ed, eh, emi);
+      d1.displayName = displayName;
       d1.trueSolar = tst;
       d1.renYuan = renYuanSiLing(solarY, solarM, solarD);
       injectCurDaYunLiuNian(d1);
       const d2 = paipan(name, g2, ey, em, ed, eh, emi);
+      d2.displayName = displayName;
       d2.trueSolar = tst;
       d2.renYuan = renYuanSiLing(solarY, solarM, solarD);
       injectCurDaYunLiuNian(d2);
@@ -5359,6 +5427,7 @@ function doPaipan() {
       setCurrentBaziResult(extractBaziFromPaipan(d1));
     } else if (twin === '1') {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
+      data.displayName = displayName;
       data.trueSolar = tst;
       data.renYuan = renYuanSiLing(solarY, solarM, solarD);
       output.innerHTML = '';
@@ -5366,6 +5435,7 @@ function doPaipan() {
       setCurrentBaziResult(extractBaziFromPaipan(data));
     } else {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
+      data.displayName = displayName;
       data.trueSolar = tst;
       data.renYuan = renYuanSiLing(solarY, solarM, solarD);
       output.innerHTML = '';
@@ -5558,7 +5628,7 @@ function renderChartToHtml(data, arch) {
   var nowYear = new Date().getFullYear();
   var sx = data.shengXiao;
   var info = '<div style="font-family:var(--font-display);font-size:14px;color:var(--c-ink);margin-bottom:6px;">'
-    + '<b>' + arch.name + '</b> '
+    + '<b>' + ARCHIVE.getDisplayName(arch) + '</b> '
     + '<span class="sex-tag" style="font-family:var(--font-display);font-size:14px;color:var(--c-red);margin-left:4px;">' + (arch.gender === '男' ? '乾造' : '坤造') + '</span>'
     + ' <span style="color:var(--c-gray);font-size:13px;">' + arch.gender + ' · ' + arch.year + '年' + arch.month + '月' + arch.day + '日 ' + pad(arch.hour) + ':' + pad(arch.min||0) + '</span>'
     + ' <span style="color:var(--c-gray);font-size:13px;">' + data.nian.gan + data.nian.zhi + '年生 · 属' + sx + '</span>'
@@ -6085,7 +6155,7 @@ function doAiParse() {
   
   // 构建预览
   let preview = '';
-  if (r.name) preview += '姓名：' + r.name + '  ';
+  if (r.name) preview += '姓名：' + (ARCHIVE.getPrivacyMode() ? '已隐藏' : r.name) + '  ';
   preview += '性别：' + r.gender + '  ';
   if (r.year) preview += r.year + '年' + r.month + '月' + r.day + '日  ';
   if (r.hour !== null) preview += r.hour + ':' + String(r.min).padStart(2,'0') + '  ';
@@ -6468,6 +6538,17 @@ document.addEventListener('click', function(e) {
     calendarType: calendarType,
   };
 })();
+</script>
+<script>
+  // v0.19.0 初始化隐私开关按钮状态（默认开启：🔒 + 高亮）
+  (function() {
+    var on = ARCHIVE.getPrivacyMode();
+    [document.getElementById('btnPrivacy'), document.getElementById('btnPrivacy2')].forEach(function(b) {
+      if (!b) return;
+      b.textContent = on ? '🔒 隐私' : '🔓 隐私';
+      if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
+    });
+  })();
 </script>
 
 </body>
