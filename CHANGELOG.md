@@ -4,6 +4,21 @@
 
 ---
 
+## v0.20.3 — 常用宫位双 tab 补同步 (2026-08-11)
+
+### 修复
+- **index.html / standalone.html 设置弹窗缺「全部宫位/常用宫位」双 tab**：v0.20.0 常用宫位分级开发时，tab 栏 HTML + CSS（gz-tabs/gz-tab/gz-star/gz-fav-footer）只同步进了 standalone-split.html，index.html 与 standalone.html 漏同步——导致正式版/公测版主入口看不到常用宫位管理功能（JS 引用元素为空，null-safe 静默失效）
+- 补同步内容：`gz-tabs` 栏（gzTabAll/gzTabFav）、`gzSettingsActionsAll`/`gzFooterAll`/`gzFooterFav` id、`.gz-tabs`/`.gz-tab`/`.gz-star`/`.gz-fav-footer` CSS 块
+
+### 测试
+- 本地 + 公测版浏览器实测：双 tab 渲染、切换、footer 联动、星标、常用列表、默认排序全部正常
+- `?test=1` 211/211 全绿
+
+### 修改文件
+- `index.html` / `standalone.html`（正式版 + 公测版各两份）
+
+---
+
 ## v0.20.2 — 紧急修复：index.html 排盘崩溃 (2026-08-11)
 
 ### 修复
