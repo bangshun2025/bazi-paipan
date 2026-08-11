@@ -1,12 +1,12 @@
 # 八字排盘 · 编程师手册
 
-> 最后更新：2026-08-08 | 对应版本：v0.18.0
+> 最后更新：2026-08-11 | 对应版本：v0.20.1
 > 编程师接到任务后的第一份必读材料。配合 ARCHITECTURE.md（架构决策）和 ALGORITHM.md（算法宪法）使用。
 
 ## 速览
 
 - **技术栈**：原生 JS + CSS（零构建步骤），IIFE + `window.*` 命名空间
-- **入口文件**：`standalone-split.html`（当前主产物）；`standalone.html`（回退版，通过 build_modules.py 内联合成）
+- **入口文件**：`standalone-split.html`（当前主产物）；`standalone.html`（回退版，手动同步 JS 改动）
 - **启动方式**：浏览器直接打开 `standalone-split.html`；或启动 Clacky server 通过面板 iframe 访问
 - **测试方式**：`standalone-split.html?test=1` → 199 条自动断言；`debug_all.html` → 多组合验证
 - **部署**：GitHub Pages（`bangshun2025.github.io/bazi-paipan/`），Git tag push 自动生效
@@ -15,13 +15,13 @@
 
 | 文件 | 行数 | 职责 | 修改时注意 |
 |------|:--:|------|-----------|
-| `standalone-split.html` | 754 | HTML/CSS 骨架 + 6 模块 `<script>` 标签加载 | 改 CSS 看这里。CSS ≈534 行（与 standalone.html 完全相同，双端同步） |
-| `standalone.html` | ~5400 | 回退版单体文件 | **不要直接改**。由 `build_modules.py` 内联合成。只在紧急热修时临时改 |
-| `constants.js` | 857 | 常量/数据表（天干地支、纳音、节气、农历数据、人元司令等所有静态数据） | 改算法数据（如新增纳音规则）改这里。**这是 pillar() 等共用函数应该放的地方** |
+| `standalone-split.html` | 838 | HTML/CSS 骨架 + 6 模块 `<script>` 标签加载 | 改 CSS 看这里。CSS ≈534 行（与 standalone.html 完全相同，双端同步）。v0.20.0 新增 gz-tabs/gz-tab/gz-star 样式 + 设置页双 tab 按钮（gzTabAll/gzTabFav） |
+| `standalone.html` | 6837 | 回退版单体文件 | **不要直接改**。由 `build_modules.py` 内联合成。只在紧急热修时临时改 |
+| `constants.js` | 859 | 常量/数据表（天干地支、纳音、节气、农历数据、人元司令等所有静态数据） | 改算法数据（如新增纳音规则）改这里。**这是 pillar() 等共用函数应该放的地方** |
 | `algorithm.js` | 672 | 排盘核心（年月日时四柱、大运、流年、神煞、人元司令） | 改排盘逻辑改这里。依赖 constants.js。**改了算法必须跑全量回归 + 同步 ALGORITHM.md** |
-| `archive.js` | 866 | 档案管理（存取删搜索、弹窗 UI、数据持久化） | 改档案功能改这里。操作 `Archives.json`（GitHub Pages 静态文件） |
-| `gongwei.js` | 860 | 宫位自定义（14 宫 checkbox 面板、标签行渲染） | 改宫位功能改这里。渲染模式分单人/同性双胞/龙凤胎三种 |
-| `render.js` | 1558 | UI 渲染（表格生成、大运流年表、双胞胎对比、事件绑定、DOM 更新、toggleLevel 五层级切换、sanyuan-sep 分隔行） | **最复杂的模块**。包含 pillar() 重复 5 次的已知问题。注意五层级 toggleLevel 和三处渲染路径同步 |
+| `archive.js` | 916 | 档案管理（存取删搜索、弹窗 UI、数据持久化）+ **隐私模式**（getPrivacyMode/setPrivacyMode/getDisplayName/togglePrivacy + yiming 字段读写） | 改档案功能改这里。操作 `Archives.json`（GitHub Pages 静态文件）。**getDisplayName(a) 是显示名唯一出口：隐私开→降级链(艺名→小名→匿名)，关→「小名 / 正名」。任何显示姓名的位置必须走它** |
+| `gongwei.js` | 1139 | 宫位自定义（14 宫 checkbox 面板、标签行渲染）+ **常用宫位分级**（bz_gongwei_fav localStorage、getFavGroups、☆切换/排序/移除/默认排序、三态视图 gzSettingsView） | 改宫位功能改这里。渲染模式分单人/同性双胞/龙凤胎三种。**数据一致性铁律：updateGroup/deleteGroup/resetToDefaults/restoreFromTrash 都要同步清理 fav 和 selected；下拉面板/标签行遍历源用 getFavGroups() 而非 gongWeiGroups** |
+| `render.js` | 1568 | UI 渲染（表格生成、大运流年表、双胞胎对比、事件绑定、DOM 更新、toggleLevel 五层级切换、sanyuan-sep 分隔行、data.displayName 脱敏标题） | **最复杂的模块**。包含 pillar() 重复 5 次的已知问题。注意五层级 toggleLevel 和三处渲染路径同步。**排盘标题必须用 doPaipan 构造的 data.displayName，禁止直接拼 a.name** |
 | `main.js` | 872 | 入口/表单事件/测试入口（`paipan()` 主函数、表单校验、真太阳时、自动排盘） | 改表单交互、入口流程改这里。`?test=1` 自动测试入口也在这里 |
 | `build_modules.py` | — | 构建脚本：JS 模块 → 内联回 standalone.html | 每次发布正式版前跑一次。不改业务逻辑 |
 | `debug_all.html` | — | 8 个 iframe 加载不同案例组合 | 调试多案例并行验证用 |
@@ -50,6 +50,8 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 | `shenSha(data)` | algorithm.js | 神煞计算（⚠️ 桃花有 Bug） |
 | `renYuanSiLing(y, m, d)` | algorithm.js | 人元司令（⚠️ 1970年1月边界 Bug） |
 | `renderGongWeiPanel()` | gongwei.js | 渲染宫位 checkbox 面板 |
+| `getFavGroups()` | gongwei.js | 返回常用宫位组列表（按 bz_gongwei_fav 顺序）——下拉面板/标签行的遍历源 |
+| `toggleFav(name)` | gongwei.js | ☆ 切换常用标记（入/出 fav） |
 | `saveArchive()` / `loadArchive()` | archive.js | 档案存取 |
 
 ## 代码约定
@@ -140,12 +142,12 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **正确做法**：`pillar()` 应统一到 `constants.js` 中（已知技术债，P0）
 - **来源**：P2 复盘
 
-### 改完代码要跑 build_modules.py
+### build_modules.py 是拆分工具，不是内联工具（v0.20.1 澄清）
 
-- **场景**：只改了 JS 模块文件（如 `algorithm.js`），忘了更新 `standalone.html`
-- **后果**：本地调试正常，但线上版本（standalone.html）没有同步——用户看到的是旧版
-- **正确做法**：发布前跑 `python3 build_modules.py`，内联回 standalone.html，并验证 `?test=1` 通过
-- **来源**：CONTRIBUTING.md / 发布流程
+- **场景**：只改了 JS 模块文件（如 `algorithm.js`），以为跑 `python3 build_modules.py` 就能把改动回写进 `standalone.html`
+- **后果**：`build_modules.py` 实际方向是「standalone → 6 模块」的**拆分**工具，不是内联工具；standalone.html 需**手动同步**改动。且工具内联过程存在 `\n` 转义符→字面换行的缺陷（v0.20.1 已修复 2 处 confirm 处字面 `\n`，破坏内联段语法导致 GONGWEI 加载失败误判）
+- **正确做法**：发布前手动将 JS 模块改动同步到 `standalone.html`（保持与 standalone-split 一致），并验证 `?test=1` 通过
+- **来源**：RETRO v0.20.1 建议2 / ADR v0.16.0（工具定位修正）
 
 ### 跨文档不一致
 
@@ -168,10 +170,34 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **正确做法**：ADR 明确列出三处修改点时，应逐条对照。未来引入「实现自查清单」机制——编程师完成后逐条对照 ADR 自检
 - **来源**：RETRO v0.17.0
 
+### 宫位数据一致性级联（v0.20.0）
+
+- **场景**：`updateGroup()`（改名）、`deleteGroup()`（删除）、`resetToDefaults()`（恢复默认）等修改宫位组数据的函数
+- **后果**：只改了 groups 忘了同步 `bz_gongwei_fav` / `bz_gongwei_selected`，会出现「常用 tab 里的幽灵组名」或「选中了不存在的组」
+- **正确做法**：v0.20.0 起，所有修改宫位组数据的函数必须同步清理 fav（`findGroupByName !== null` 过滤）和 selected。ADR 数据一致性约束表是唯一真相源
+- **来源**：ADR v0.20.0 数据一致性约束表
+
+### 隐私判断「某处是否显示姓名」必须 grep 源码确认（v0.19.0）
+
+- **场景**：PRD 决策 4 凭印象判断「龙凤胎视图不显示姓名、无需改动」，架构师对照源码发现 render.js L1219 实际渲染 `<b>d1.name</b>`——老大真名会直接上屏，隐私目标整体落空（ADR-005 修正）
+- **后果**：若未被拦截，上课投影时龙凤胎学员真名泄露
+- **正确做法**：涉及「某处是否显示姓名/显示什么名字」的判断，PRD 阶段就 grep `\.name\b`/`displayName` 确认每处渲染点；所有显示姓名位置统一走 `ARCHIVE.getDisplayName(a)`，禁止直接拼 `a.name`（`data.name` 始终保留真名，仅显示层替换）
+- **来源**：ADR v0.19.0 ADR-005
+
+### 值导出 vs 闭包变量：测试代码必须走公开 API（v0.20.1）
+
+- **场景**：测试/外部代码直接赋值导出对象属性 `GONGWEI.selectedGongWei = ["信息","做功"]`，然后调用 `persistSelected()` 期望生效
+- **后果**：`initGongWeiData()` 内部对 `selectedGongWei` 重新赋值，切断了 `window.GONGWEI` 的导出引用——外部引用指向旧值（赋值对象），内部闭包变量指向新值。`persistSelected()` 操作的是内部闭包变量，外部赋值完全无效（v0.20.1 A2 断言首次验证失败即此因）
+- **正确做法**：gongwei.js 内部状态一律通过公开函数操作：`clearSelection()` + `toggleSelect()` 组合、`selectAll()`、`loadSelected()`、`loadFav()`、`persistFav()`、`resetFavOrder()`、`isSelected()`。测试代码不得直接写导出属性，只能读+走公开 API
+- **代码位置**：gongwei.js L1054-1138（window.GONGWEI 值导出）
+- **来源**：RETRO v0.20.1 问题1
+
 ## 重构记录
 
 | 版本 | 变更 | 影响范围 | 注意事项 |
 |------|------|---------|---------|
+| v0.20.0 | 常用宫位分级：bz_gongwei_fav localStorage + 设置页双 tab（全部/常用）+ ☆标记/排序/移除/默认排序 + 旧用户自动迁移（无 key=全部默认常用） | gongwei.js（+278行）、standalone-split.html（+37行）、standalone.html/index.html（内联同步） | 三态视图 gzSettingsView(all/fav/trash)；下拉面板/标签行遍历源改 getFavGroups()；级联清理 4 函数（updateGroup/deleteGroup/resetToDefaults/restoreFromTrash）；新增组默认不入常用；「全部宫位 tab 打勾」语义=加入常用（不再是排盘显示） |
+| v0.19.0 | 隐私模式：yiming 艺名字段 + 全局开关（默认开启）+ getDisplayName 统一显示函数脱敏 | archive.js（+50行）、render.js（+10行）、constants.js（+2行）、standalone-split.html（+47行） | 显示名单点收敛：隐私开→降级链（艺名→小名→匿名），关→v0.18.0 逐字一致。`data.name` 保留真名不动。开关 localStorage `bz_privacy_mode`（'1'/'0'，无键默认开）。AI 预览「姓名：已隐藏」 |
 | v0.18.0 | 简0级别：五层级循环切换 + 四柱三垣间隔 + 三垣冗余纳运修复 | render.js（~15行）、standalone-split.html（CSS ~25行） | CSS 层级规则扩展为 5 组 level-0~4；toggleLevel %5；三处渲染路径按钮「简→极简」；buildPillarRows 三垣区纳运删冗余；sanyuan-sep 独立 tr 分隔行 |
 | v0.17.0 | 简分级别：四层级循环切换 + 纳运行位置调整 | render.js（+43行）、main.js（-1行）、standalone-split.html（+CSS） | 三处渲染路径 `<table>` 需同步加 `level-0` class。_applyDLUpdates 需重映射 dy/ln |
 | v0.16.1 | 档案弹窗 dateStr 精简为仅年份 | archive.js（L739/L794）、standalone.html（L4942/L4997） | 仅改4行。不改 CSS/弹窗宽度/数据结构/排盘逻辑。最小改动原则 |
@@ -187,6 +213,7 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - [ ] 改了 DOM 结构？→ 审查了所有硬编码行索引（tr[2] 铁律）
 - [ ] 新增/修改了算法？→ 同步更新了 `ALGORITHM.md`
 - [ ] 新增了功能？→ 同步更新了 `TEST_全量测评手册.md` 对应子章节
+- [ ] 改了宫位组数据函数（updateGroup/deleteGroup/resetToDefaults/restoreFromTrash）？→ 检查 `bz_gongwei_fav` / `bz_gongwei_selected` 级联同步
 - [ ] 准备发布？→ 跑了 `build_modules.py` + 验证 `standalone.html` 内的版本注释
 - [ ] ADR 列出多处于修改点时，逐条对照自检（不遗漏任何渲染路径）
 - [ ] 没留 console.log / debugger

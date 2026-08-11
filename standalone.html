@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.19.0 | 2026-08-09 -->
+<!-- 八字排盘 · 从真版 v0.20.0 | 2026-08-11 -->
+<!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
 <!-- v0.17.0: 行序优化 — 主星→干支→藏干→纳音→纳运→星运→自坐→空亡→神煞 -->
@@ -3233,7 +3234,7 @@ function loadFromArchive(idx) {
 })();
 </script>
 <script>
-/* 八字排盘 v0.16.0 — gongwei.js */
+/* 八字排盘 v0.20.0 — gongwei.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3331,6 +3332,11 @@ function loadSelected() { let raw = localStorage.getItem('bz_gongwei_selected');
 function persistGroups() { localStorage.setItem('bz_gongwei_groups', JSON.stringify(gongWeiGroups)); }
 function persistTrash() { localStorage.setItem('bz_gongwei_trash', JSON.stringify(gongWeiTrash)); }
 function persistSelected() { localStorage.setItem('bz_gongwei_selected', JSON.stringify(selectedGongWei)); }
+// ===== v0.20.0 常用宫位数据层 =====
+function loadFav() { var raw = localStorage.getItem('bz_gongwei_fav'); return raw ? JSON.parse(raw) : []; }
+function persistFav(arr) { localStorage.setItem('bz_gongwei_fav', JSON.stringify(arr)); }
+function isFav(name) { var fav = loadFav(); for (var i = 0; i < fav.length; i++) { if (fav[i] === name) return true; } return false; }
+function getFavGroups() { var fav = loadFav(); var result = []; for (var i = 0; i < fav.length; i++) { var g = findGroupByName(fav[i]); if (g) result.push(g); } return result; }
 function nowISO() { return new Date().toISOString(); }
 function generateGwId() { return 'gw_' + Date.now().toString(36); }
 function findGroupByName(name) {
@@ -3401,6 +3407,11 @@ function updateGroup(id, newName, newLabels) {
   if (oldName !== group.name) {
     var si = selectedGongWei.indexOf(oldName);
     if (si !== -1) selectedGongWei[si] = group.name;
+    // v0.20.0 同步常用宫位名称
+    var fav = loadFav();
+    var fi = -1;
+    for (var j = 0; j < fav.length; j++) { if (fav[j] === oldName) { fi = j; break; } }
+    if (fi >= 0) { fav[fi] = group.name; persistFav(fav); }
   }
   persistGroups(); persistSelected();
   return { ok: true, group: group };
@@ -3413,6 +3424,11 @@ function deleteGroup(id) {
   var removed = gongWeiGroups.splice(idx, 1)[0];
   gongWeiTrash.push({ id: removed.id, group: removed, deletedAt: nowISO() });
   selectedGongWei = selectedGongWei.filter(function(n) { return n !== removed.name; });
+  // v0.20.0 同步常用宫位：删除组时从 fav 中移除
+  var fav = loadFav();
+  var cleanedFav = [];
+  for (var i = 0; i < fav.length; i++) { if (fav[i] !== removed.name) cleanedFav.push(fav[i]); }
+  if (cleanedFav.length !== fav.length) persistFav(cleanedFav);
   persistGroups(); persistTrash(); persistSelected();
   return { ok: true };
 }
@@ -3486,6 +3502,14 @@ function resetToDefaults() {
     });
   });
   persistGroups(); persistTrash();
+  // v0.20.0 恢复默认后，将恢复的预置组加入常用（若尚未在常用中）
+  var fav = loadFav();
+  var changed = false;
+  for (var i = 0; i < gongWeiGroups.length; i++) {
+    var name = gongWeiGroups[i].name;
+    if (fav.indexOf(name) < 0) { fav.push(name); changed = true; }
+  }
+  if (changed) persistFav(fav);
   return { ok: true };
 }
 
@@ -3502,10 +3526,11 @@ function buildGongWeiTagRows(area, colCount) {
   var cols = area === 'main' ? ['nian','yue','ri','shi'] : ['tai','ming','shen'];
   var hasExt = colCount >= 7; // 是否有大运/流年扩展列
 
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    var gwName = gongWeiGroups[i].name;
+  var favGroups = getFavGroups();
+  for (var i = 0; i < favGroups.length; i++) {
+    var gwName = favGroups[i].name;
     if (selectedGongWei.indexOf(gwName) < 0) continue;
-    var group = gongWeiGroups[i];
+    var group = favGroups[i];
     var labels = group.labels;
     var color = group.color || '#8b7e6a';
     var cls = area === 'main' ? 'gz-tags' : 'gz-tags-sy';
@@ -3617,20 +3642,30 @@ function rebuildGzCbGrid() {
   var grid = document.querySelector('.gz-cb-grid');
   if (!grid) return;
   var items = '';
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    var g = gongWeiGroups[i];
-    var checked = selectedGongWei.indexOf(g.name) >= 0 ? ' checked' : '';
-    items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + g.name + '" onchange="GONGWEI.toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '><span>' + g.name + '宫位</span></label>';
+  var favGroups = getFavGroups();
+  if (favGroups.length === 0) {
+    items = '<div style="text-align:center;color:var(--c-gray);padding:16px 0;font-size:12px;grid-column:1/-1;">暂无常用宫位，点击 ⚙ 宫位设置添加</div>';
+  } else {
+    for (var i = 0; i < favGroups.length; i++) {
+      var g = favGroups[i];
+      var checked = selectedGongWei.indexOf(g.name) >= 0 ? ' checked' : '';
+      items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + g.name + '" onchange="GONGWEI.toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '><span>' + g.name + '宫位</span></label>';
+    }
   }
   grid.innerHTML = items;
 }
 
 // ===== v0.10.0/v0.13.0 宫位多选 — Popover 面板生成 =====
 function renderGongWeiPanel() {
+  var favGroups = getFavGroups();
   var cbItems = '';
-  for (var i = 0; i < gongWeiGroups.length; i++) {
-    var group = gongWeiGroups[i];
-    cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + group.name + '" onchange="GONGWEI.toggleGongWei(\'' + group.name + '\', this.checked)"><span>' + group.name + '宫位</span></label>';
+  if (favGroups.length === 0) {
+    cbItems = '<div style="text-align:center;color:var(--c-gray);padding:16px 0;font-size:12px;">暂无常用宫位，点击 ⚙ 宫位设置添加</div>';
+  } else {
+    for (var i = 0; i < favGroups.length; i++) {
+      var group = favGroups[i];
+      cbItems += '<label class="gz-cb-item"><input type="checkbox" value="' + group.name + '" onchange="GONGWEI.toggleGongWei(\'' + group.name + '\', this.checked)"><span>' + group.name + '宫位</span></label>';
+    }
   }
   return '<div class="gz-panel-wrapper">'
     + '<button class="btn-simple gz-trigger" id="gz-trigger" onclick="GONGWEI.toggleGzPopover(event)">宫位<span class="gz-count"></span> ▾<span class="gz-summary"></span></button>'
@@ -3656,7 +3691,9 @@ function toggleGongWei(name, checked) {
 }
 
 function selectAllGongWei() {
-  selectedGongWei = gongWeiGroups.map(function(g) { return g.name; });
+  var favGroups = getFavGroups();
+  selectedGongWei = [];
+  for (var i = 0; i < favGroups.length; i++) { selectedGongWei.push(favGroups[i].name); }
   persistSelected();
   updateGongWeiTags();
   closeGzPopover();
@@ -3701,15 +3738,27 @@ document.addEventListener('click', function(e) {
 });
 
 // ===== v0.13.0 宫位设置面板渲染 =====
-var gzSettingsView = 'list'; // 'list' | 'trash'
+var gzSettingsView = 'all'; // 'all' | 'fav' | 'trash'
 var gzEditingId = null;     // 正在编辑的宫位组 id，null=新增
 
 function openGzSettings() {
-  gzSettingsView = 'list';
+  gzSettingsView = 'all';
   document.getElementById('gzSettingsTrashView').style.display = 'none';
   document.getElementById('gzSettingsListView').style.display = '';
   document.getElementById('gzSettingsOverlay').classList.add('show');
-  renderGzSettingsList();
+  // 激活全部宫位 tab
+  var tabAll = document.getElementById('gzTabAll');
+  var tabFav = document.getElementById('gzTabFav');
+  if (tabAll) tabAll.classList.add('active');
+  if (tabFav) tabFav.classList.remove('active');
+  // 重置 footer 和 actions 可见性
+  var actionsAll = document.getElementById('gzSettingsActionsAll');
+  var footerAll = document.getElementById('gzFooterAll');
+  var footerFav = document.getElementById('gzFooterFav');
+  if (actionsAll) actionsAll.style.display = '';
+  if (footerAll) footerAll.style.display = '';
+  if (footerFav) footerFav.style.display = 'none';
+  renderGzSettingsAll();
 }
 
 function closeGzSettings() {
@@ -3719,7 +3768,27 @@ function closeGzSettings() {
   updateGongWeiTags();
 }
 
-function renderGzSettingsList() {
+// ===== v0.20.0 设置页双 tab 渲染 =====
+function switchGzTab(tab) {
+  gzSettingsView = tab;
+  var tabAll = document.getElementById('gzTabAll');
+  var tabFav = document.getElementById('gzTabFav');
+  if (tabAll) tabAll.classList.toggle('active', tab === 'all');
+  if (tabFav) tabFav.classList.toggle('active', tab === 'fav');
+  document.getElementById('gzSettingsTrashView').style.display = 'none';
+  document.getElementById('gzSettingsListView').style.display = '';
+  // 切换 footer 和 actions
+  var actionsAll = document.getElementById('gzSettingsActionsAll');
+  var footerAll = document.getElementById('gzFooterAll');
+  var footerFav = document.getElementById('gzFooterFav');
+  if (actionsAll) actionsAll.style.display = tab === 'all' ? '' : 'none';
+  if (footerAll) footerAll.style.display = tab === 'all' ? '' : 'none';
+  if (footerFav) footerFav.style.display = tab === 'fav' ? '' : 'none';
+  if (tab === 'all') renderGzSettingsAll();
+  else if (tab === 'fav') renderGzSettingsFav();
+}
+
+function renderGzSettingsAll() {
   var list = document.getElementById('gzSettingsList');
   var countEl = document.getElementById('gzTrashCount');
   countEl.textContent = gongWeiTrash.length > 0 ? '(' + gongWeiTrash.length + ')' : '';
@@ -3732,6 +3801,8 @@ function renderGzSettingsList() {
   var html = '';
   for (var i = 0; i < gongWeiGroups.length; i++) {
     var g = gongWeiGroups[i];
+    var fav = isFav(g.name);
+    var starHtml = '<span class="gz-star' + (fav ? ' on' : ' off') + '" onclick="GONGWEI.toggleFav(\'' + g.name.replace(/'/g, "\'") + '\')" title="' + (fav ? '取消常用' : '加入常用') + '">' + (fav ? '★' : '☆') + '</span>';
     var preview = g.labels.join('·');
     if (preview.length > 40) preview = preview.substr(0, 40) + '…';
     var upDisabled = i === 0 ? ' disabled' : '';
@@ -3743,6 +3814,7 @@ function renderGzSettingsList() {
       + ' ondragleave="GONGWEI.gzDragLeave(event)"'
       + ' ondrop="GONGWEI.gzDrop(event,' + i + ')"'
       + ' ondragend="GONGWEI.gzDragEnd(event)">'
+      + starHtml
       + '<span class="gz-drag-handle" title="拖拽排序">⠿</span>'
       + '<div class="gz-set-info">'
       + '<div class="gz-set-name">' + g.name + (g.isPreset ? '<span class="gz-preset-tag">预置</span>' : '') + '</div>'
@@ -3751,11 +3823,167 @@ function renderGzSettingsList() {
       + '<div class="gz-set-actions">'
       + '<button onclick="GONGWEI.openGzEdit(\'' + g.id + '\')" title="编辑">✎</button>'
       + '<button onclick="GONGWEI.confirmDeleteGroup(\'' + g.id + '\',\'' + g.name + '\')" title="删除">🗑</button>'
-      + '<button onclick="GONGWEI.moveUp(' + i + ');GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();"' + upDisabled + ' title="上移">↑</button>'
-      + '<button onclick="GONGWEI.moveDown(' + i + ');GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();"' + downDisabled + ' title="下移">↓</button>'
+      + '<button onclick="GONGWEI.moveUp(' + i + ');GONGWEI.renderGzSettingsAll();GONGWEI.updateGongWeiTags();"' + upDisabled + ' title="上移">↑</button>'
+      + '<button onclick="GONGWEI.moveDown(' + i + ');GONGWEI.renderGzSettingsAll();GONGWEI.updateGongWeiTags();"' + downDisabled + ' title="下移">↓</button>'
       + '</div></div>';
   }
   list.innerHTML = html;
+}
+
+function renderGzSettingsFav() {
+  var list = document.getElementById('gzSettingsList');
+  var fav = loadFav();
+  var countEl = document.getElementById('gzTrashCount');
+  countEl.textContent = gongWeiTrash.length > 0 ? '(' + gongWeiTrash.length + ')' : '';
+
+  if (fav.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--c-gray);padding:30px 0;font-family:var(--font-display);font-size:15px;">暂无常用宫位<br><span style="font-size:13px;">请在「全部宫位」中标记 ☆</span></div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < fav.length; i++) {
+    var g = findGroupByName(fav[i]);
+    if (!g) continue;
+    var checked = selectedGongWei.indexOf(g.name) >= 0 ? ' checked' : '';
+    var preview = g.labels.join('·');
+    if (preview.length > 40) preview = preview.substr(0, 40) + '…';
+    var upDisabled = i === 0 ? ' disabled' : '';
+    var downDisabled = i === fav.length - 1 ? ' disabled' : '';
+
+    html += '<div class="gz-set-item gz-fav-item" draggable="true" data-idx="' + i + '"'
+      + ' ondragstart="GONGWEI.favDragStart(event,' + i + ')"'
+      + ' ondragover="GONGWEI.favDragOver(event)"'
+      + ' ondragleave="GONGWEI.favDragLeave(event)"'
+      + ' ondrop="GONGWEI.favDrop(event,' + i + ')"'
+      + ' ondragend="GONGWEI.favDragEnd(event)">'
+      + '<label class="gz-fav-cb' + (checked ? ' checked' : '') + '" style="display:flex;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;"><input type="checkbox" value="' + g.name + '" onchange="GONGWEI.toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '></label>'
+      + '<span class="gz-drag-handle" title="拖拽排序">⠿</span>'
+      + '<div class="gz-set-info">'
+      + '<div class="gz-set-name">' + g.name + (g.isPreset ? '<span class="gz-preset-tag">预置</span>' : '') + '</div>'
+      + '<div class="gz-set-preview">' + preview + '</div>'
+      + '</div>'
+      + '<div class="gz-set-actions">'
+      + '<button onclick="GONGWEI.moveFavUp(' + i + ')"' + upDisabled + ' title="上移">↑</button>'
+      + '<button onclick="GONGWEI.moveFavDown(' + i + ')"' + downDisabled + ' title="下移">↓</button>'
+      + '<button onclick="GONGWEI.removeFromFav(\'' + g.name.replace(/'/g, "\'") + '\')" title="从常用移除" style="color:var(--c-red);">✕</button>'
+      + '</div></div>';
+  }
+  list.innerHTML = html;
+}
+
+// ===== v0.20.0 常用宫位操作 =====
+function toggleFav(name) {
+  var fav = loadFav();
+  var idx = -1;
+  for (var i = 0; i < fav.length; i++) { if (fav[i] === name) { idx = i; break; } }
+  if (idx >= 0) {
+    // 取消常用：从 fav 移除 + 级联清理 selected
+    fav.splice(idx, 1);
+    var si = selectedGongWei.indexOf(name);
+    if (si >= 0) selectedGongWei.splice(si, 1);
+  } else {
+    // 加入常用：追加到末尾
+    fav.push(name);
+  }
+  persistFav(fav);
+  persistSelected();
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+function removeFromFav(name) {
+  var fav = loadFav();
+  var idx = -1;
+  for (var i = 0; i < fav.length; i++) { if (fav[i] === name) { idx = i; break; } }
+  if (idx >= 0) fav.splice(idx, 1);
+  // 级联清理 selected
+  var si = selectedGongWei.indexOf(name);
+  if (si >= 0) selectedGongWei.splice(si, 1);
+  persistFav(fav);
+  persistSelected();
+  renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+function moveFavUp(idx) {
+  if (idx <= 0) return;
+  var fav = loadFav();
+  var item = fav.splice(idx, 1)[0];
+  fav.splice(idx - 1, 0, item);
+  persistFav(fav);
+  renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+function moveFavDown(idx) {
+  var fav = loadFav();
+  if (idx >= fav.length - 1) return;
+  var item = fav.splice(idx, 1)[0];
+  fav.splice(idx + 1, 0, item);
+  persistFav(fav);
+  renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+function moveFav(fromIdx, toIdx) {
+  var fav = loadFav();
+  if (fromIdx < 0 || fromIdx >= fav.length || toIdx < 0 || toIdx >= fav.length || fromIdx === toIdx) return;
+  var item = fav.splice(fromIdx, 1)[0];
+  fav.splice(toIdx, 0, item);
+  persistFav(fav);
+  renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+function resetFavOrder() {
+  var fav = loadFav();
+  // 按 gongWeiGroups 顺序重排 fav
+  var ordered = [];
+  for (var i = 0; i < gongWeiGroups.length; i++) {
+    var name = gongWeiGroups[i].name;
+    if (fav.indexOf(name) >= 0) ordered.push(name);
+  }
+  persistFav(ordered);
+  renderGzSettingsFav();
+  updateGongWeiTags();
+}
+
+// v0.20.0 常用宫位拖拽排序
+function favDragStart(e, idx) {
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(idx));
+  e.dataTransfer.setData('type', 'fav');
+  e.target.classList.add('dragging');
+}
+function favDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var item = e.target.closest('.gz-set-item');
+  if (item) item.classList.add('drag-over');
+}
+function favDragLeave(e) {
+  var item = e.target.closest('.gz-set-item');
+  if (item) item.classList.remove('drag-over');
+}
+function favDrop(e, toIdx) {
+  e.preventDefault();
+  var fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+  var type = e.dataTransfer.getData('type');
+  if (type !== 'fav' || isNaN(fromIdx) || fromIdx === toIdx) return;
+  moveFav(fromIdx, toIdx);
+}
+function favDragEnd(e) {
+  e.target.classList.remove('dragging');
+  var items = document.querySelectorAll('.gz-set-item');
+  for (var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
+}
+
+function renderGzSettingsList() {
+  // v0.20.0 向后兼容别名：根据当前视图调用对应渲染
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
 }
 
 // ===== v0.13.0 拖拽排序 =====
@@ -3779,7 +4007,7 @@ function gzDrop(e, toIdx) {
   var fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
   if (isNaN(fromIdx) || fromIdx === toIdx) return;
   moveGroup(fromIdx, toIdx);
-  renderGzSettingsList();
+  renderGzSettingsAll();
   updateGongWeiTags();
 }
 function gzDragEnd(e) {
@@ -3792,7 +4020,8 @@ function gzDragEnd(e) {
 function confirmDeleteGroup(id, name) {
   if (!confirm('确定删除「' + name + '宫位」？\n删除后可从回收站恢复。')) return;
   deleteGroup(id);
-  renderGzSettingsList();
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
   updateGongWeiTags();
 }
 
@@ -3875,7 +4104,8 @@ function saveGzEdit() {
   }
 
   closeGzEdit();
-  renderGzSettingsList();
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
   updateGongWeiTags();
 }
 
@@ -3888,10 +4118,22 @@ function openGzTrash() {
 }
 
 function backToGzList() {
-  gzSettingsView = 'list';
+  gzSettingsView = 'all';
   document.getElementById('gzSettingsTrashView').style.display = 'none';
   document.getElementById('gzSettingsListView').style.display = '';
-  renderGzSettingsList();
+  // 恢复 tab 激活态
+  var tabAll = document.getElementById('gzTabAll');
+  var tabFav = document.getElementById('gzTabFav');
+  if (tabAll) tabAll.classList.add('active');
+  if (tabFav) tabFav.classList.remove('active');
+  // 恢复 footer 和 actions
+  var actionsAll = document.getElementById('gzSettingsActionsAll');
+  var footerAll = document.getElementById('gzFooterAll');
+  var footerFav = document.getElementById('gzFooterFav');
+  if (actionsAll) actionsAll.style.display = '';
+  if (footerAll) footerAll.style.display = '';
+  if (footerFav) footerFav.style.display = 'none';
+  renderGzSettingsAll();
 }
 
 function renderGzTrashList() {
@@ -3918,7 +4160,7 @@ function renderGzTrashList() {
       + '<div class="gz-trash-time">删除于 ' + timeStr + '</div>'
       + '</div>'
       + '<div class="gz-trash-actions">'
-      + '<button onclick="GONGWEI.restoreFromTrash(\'' + t.id + '\');GONGWEI.renderGzTrashList();GONGWEI.renderGzSettingsList();GONGWEI.updateGongWeiTags();">恢复</button>'
+      + '<button onclick="GONGWEI.restoreFromTrash(\'' + t.id + '\');GONGWEI.renderGzTrashList();GONGWEI.renderGzSettingsAll();GONGWEI.updateGongWeiTags();">恢复</button>'
       + '</div></div>';
   }
   list.innerHTML = html;
@@ -3928,14 +4170,16 @@ function emptyGzTrash() {
   if (!confirm('确定清空回收站？此操作不可恢复。')) return;
   clearTrash();
   renderGzTrashList();
-  renderGzSettingsList();
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
 }
 
 // ===== v0.13.0 恢复默认 =====
 function resetGongWeiDefaults() {
   if (!confirm('将恢复 14 种预置宫位组的原始名称和标签。\n您自定义的宫位组不受影响。\n确定继续？')) return;
   resetToDefaults();
-  renderGzSettingsList();
+  if (gzSettingsView === 'all') renderGzSettingsAll();
+  else if (gzSettingsView === 'fav') renderGzSettingsFav();
   updateGongWeiTags();
 }
 
@@ -4024,6 +4268,21 @@ function clearAllTwinPillars() {
     return false;
   });
   persistSelected();
+  // v0.20.0 旧用户迁移：首次加载时初始化常用宫位
+  if (!localStorage.getItem('bz_gongwei_fav')) {
+    var fav = [];
+    for (var i = 0; i < gongWeiGroups.length; i++) {
+      fav.push(gongWeiGroups[i].name);
+    }
+    persistFav(fav);
+  }
+  // 清洗：确保 fav 中的名称在 groups 中都存在
+  var fav = loadFav();
+  var cleaned = [];
+  for (var i = 0; i < fav.length; i++) {
+    if (findGroupByName(fav[i])) cleaned.push(fav[i]);
+  }
+  if (cleaned.length !== fav.length) persistFav(cleaned);
 })();
 
 
@@ -4035,6 +4294,26 @@ function clearAllTwinPillars() {
     persistGroups: persistGroups,
     persistTrash: persistTrash,
     persistSelected: persistSelected,
+    // v0.20.0 常用宫位
+    loadFav: loadFav,
+    persistFav: persistFav,
+    isFav: isFav,
+    getFavGroups: getFavGroups,
+    toggleFav: toggleFav,
+    removeFromFav: removeFromFav,
+    moveFavUp: moveFavUp,
+    moveFavDown: moveFavDown,
+    moveFav: moveFav,
+    resetFavOrder: resetFavOrder,
+    favDragStart: favDragStart,
+    favDragOver: favDragOver,
+    favDragLeave: favDragLeave,
+    favDrop: favDrop,
+    favDragEnd: favDragEnd,
+    switchGzTab: switchGzTab,
+    renderGzSettingsAll: renderGzSettingsAll,
+    renderGzSettingsFav: renderGzSettingsFav,
+    // ----
     nowISO: nowISO,
     generateGwId: generateGwId,
     findGroupByName: findGroupByName,
@@ -6461,6 +6740,88 @@ document.addEventListener('click', function(e) {
         tests.push(eq('快照:' + c.n + '·' + fields[j][0], fields[j][1], fields[j][2]));
       }
     }
+  })();
+
+  // === v0.20.1 常用宫位自动化断言 ===
+  (function testGongWeiAssertions() {
+    tests.push({ section:'宫位 — v0.20.1 自动化断言' });
+
+    // A1: getFavGroups() 返回顺序验证
+    GONGWEI.persistFav(["信息","做功","亲缘"]);
+    var groups = GONGWEI.getFavGroups();
+    tests.push(eq('GWFav:A1 顺序',
+      groups.map(function(g){return g.name;}).join(','),
+      '信息,做功,亲缘'));
+
+    // A2: toggleFav 取消常用 → fav 与 selected 级联清理
+    GONGWEI.persistFav(["信息","做功"]);
+    GONGWEI.clearSelection();
+    GONGWEI.toggleSelect("信息");
+    GONGWEI.toggleSelect("做功");
+    GONGWEI.toggleFav("信息");
+    var favAfter = GONGWEI.loadFav();
+    var selAfter = GONGWEI.loadSelected();
+    tests.push(eq('GWFav:A2 fav移除', favAfter.indexOf('信息') === -1, true));
+    tests.push(eq('GWFav:A2 selected级联清理', selAfter.indexOf('信息') === -1, true));
+    tests.push(eq('GWFav:A2 做功仍在fav', favAfter.indexOf('做功') >= 0, true));
+    tests.push(eq('GWFav:A2 做功仍在selected', selAfter.indexOf('做功') >= 0, true));
+
+    // A3: 旧用户迁移
+    localStorage.removeItem('bz_gongwei_fav');
+    var fav = GONGWEI.loadFav();
+    if (fav.length === 0) {
+      fav = GONGWEI.gongWeiGroups.map(function(g) { return g.name; });
+      GONGWEI.persistFav(fav);
+    }
+    var favRebuilt = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A3 迁移后fav长度', favRebuilt.length, GONGWEI.gongWeiGroups.length));
+    tests.push(eq('GWFav:A3 迁移后顺序一致',
+      favRebuilt.join(','),
+      GONGWEI.gongWeiGroups.map(function(g){return g.name;}).join(',')));
+
+    // A4: resetFavOrder() 默认排序
+    var originalGroupNames = GONGWEI.gongWeiGroups.map(function(g){return g.name;});
+    GONGWEI.persistFav(["信息","做功","亲缘"]);
+    var indices = {};
+    for (var i = 0; i < originalGroupNames.length; i++) indices[originalGroupNames[i]] = i;
+    GONGWEI.resetFavOrder();
+    var favOrdered = GONGWEI.loadFav();
+    var sorted = true;
+    for (var i = 1; i < favOrdered.length; i++) {
+      if (indices[favOrdered[i]] < indices[favOrdered[i-1]]) { sorted = false; break; }
+    }
+    tests.push(eq('GWFav:A4 默认排序同步', sorted, true));
+
+    // A5: 新增宫位组默认不在 fav
+    var favBefore = GONGWEI.loadFav().slice();
+    var r = GONGWEI.addGroup('测试A5', ['A','B','C','D','E','F','G']);
+    var favAfterAdd = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A5 新增不在fav', r.ok && favAfterAdd.length === favBefore.length, true));
+    if (r.ok) GONGWEI.deleteGroup(r.group.id);
+
+    // A6: 改名 → fav 同步；删除组 → fav+selected 清理
+    // A6a: 改名同步
+    GONGWEI.persistFav(["信息","做功"]);
+    var infoGroup = GONGWEI.findGroupByName("信息");
+    var infoLabels = infoGroup.labels.slice();
+    GONGWEI.updateGroup(infoGroup.id, "信息2", infoLabels);
+    var favAfterRename = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A6a 改名后fav更新',
+      favAfterRename.indexOf("信息2") >= 0 && favAfterRename.indexOf("信息") === -1, true));
+    // 改回来
+    GONGWEI.updateGroup(infoGroup.id, "信息", infoLabels);
+
+    // A6b: 删除组同步
+    var r2 = GONGWEI.addGroup('测试A6b', ['A','B','C','D','E','F','G']);
+    GONGWEI.persistFav(GONGWEI.loadFav().concat(['测试A6b']));
+    GONGWEI.clearSelection();
+    GONGWEI.toggleSelect('测试A6b');
+    var tmpGroup = GONGWEI.findGroupByName("测试A6b");
+    GONGWEI.deleteGroup(tmpGroup.id);
+    var favAfterDel = GONGWEI.loadFav();
+    var selAfterDel = GONGWEI.loadSelected();
+    tests.push(eq('GWFav:A6b 删除后fav清理', favAfterDel.indexOf('测试A6b') === -1, true));
+    tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
