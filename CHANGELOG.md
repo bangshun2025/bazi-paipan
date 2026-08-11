@@ -4,6 +4,129 @@
 
 ---
 
+## v0.20.1 — 自动化断言补充 (2026-08-11)
+
+### 新增
+- **12条 GWFav 自动化断言**：覆盖常用宫位核心逻辑（toggleFav、isFav、renderFavTab、getSortedGongwei、常用tab渲染、下拉过滤等）
+- **PRD 模板新增「上版本复盘遗留项」section**：规范跨版本遗留项追踪
+
+### 修复
+- **main.js A2 修复**：`clearSelection` + `toggleSelect` 公开为 window 级 API，确保测试框架可调用
+
+### 测试
+- `standalone.html?test=1`：211/211 全绿
+- `standalone-split.html?test=1`：211/211 全绿
+
+### 修改文件
+- `standalone.html` / `index.html`（断言区 + PRD模板 section）
+- `main.js`（A2 公开 API 修复）
+- `gongwei.js`、`standalone-split.html`（v0.20.0/0.20.1 累积变更）
+
+---
+
+## v0.20.0 — 常用宫位分级 (2026-08-11)
+
+### 新增
+- **设置页「常用宫位」功能**：支持自定义常用宫位分组
+- **双tab管理**：全部宫位 / 常用宫位，☆ 标记常用
+- **排盘界面联动**：下拉面板只显示常用宫位、标签行顺序联动常用排序
+- 新 localStorage key：`bz_gongwei_fav`
+
+### 测试
+- 全量功能测试 22/22 通过（AC01-14 + AR01-08）
+
+### 修改文件
+- `gongwei.js`（核心逻辑，861→1139 行）
+- `standalone-split.html`（CSS + HTML，801→838 行）
+- `standalone.html` / `index.html`（构建同步，6555→6837 行）
+
+---
+
+## v0.19.0 — 隐私模式（艺名） (2026-08-09)
+
+### 新增
+- **全局隐私开关**：默认开启、localStorage 持久化（`bz_privacy_mode`），可在设置中切换
+- **档案艺名字段**：档案新增艺名（小名）字段，供显示层脱敏使用
+- **显示层脱敏（降级链 艺名→小名→匿名）**：开启隐私模式后，页面展示优先用艺名，无艺名则用小名，均无则显示「匿名」，`data.name` 始终保留真名不动
+- **AI 解析预览脱敏**：开启隐私模式时，AI 解析预览区姓名显示为「已隐藏」
+
+### 测试
+- AC1-AC13 + AC7b 隐私模式验收用例全过
+- 199 条内置回归全绿
+- `standalone.html == index.html` 字节一致
+
+### 修改文件
+- `standalone.html` / `index.html`（隐私开关 UI + 显示层脱敏逻辑）
+- `archive.js`（艺名字段 + 显示名构造 + 降级链）
+- `constants.js`（`PRIVACY_KEY`）
+- `render.js`（显示层脱敏）
+- `main.js`（AI 解析预览姓名脱敏）
+- `standalone-split.html`（同步脱敏逻辑）
+
+---
+
+## v0.18.0 — 简0级别（五层级循环）+ 四柱三垣间隔 (2026-08-08)
+
+### 新增
+- **简0级别（L0极简）**：在 L1(简) 之前插入新层级，仅显示四柱干支骨架，不显示星运/自坐/纳运/纳音/空亡/神煞
+- 简分级别从四层级扩展为五层级循环：极简→简→中→详→全→极简
+- **四柱-三垣间隔行**：单人排盘在四柱数据行与三垣表头之间插入独立 `<tr class="sanyuan-sep">`（0.75em 分隔）
+- **龙凤胎卡片三垣间距**：`.bz-sanyuan-area` 增加 `margin-top: 0.75em`
+
+### 修复
+- v0.17.0 遗留 bug：buildPillarRows 三垣区纳运行重复出现（删除冗余行）
+
+### 技术
+- CSS 层级规则从 4 组 `.level-0/1/2/3` 扩展为 5 组 `.level-0/1/2/3/4`
+- `LEVEL_LABELS`：`['极简','简','中','详','全']`；`toggleLevel()` 改为 `% 5`
+- 三处渲染入口按钮文字「简」→「极简」
+
+### 修改文件
+- `standalone-split.html`（CSS 层级规则 + 分隔行样式 + 龙凤胎间距）
+- `render.js`（toggleLevel + 分隔行插入 + 按钮文字 + 冗余纳运修复）
+
+---
+
+## v0.17.0 — 简分级别（四层级循环） (2026-08-07)
+
+### 新增
+- **简分级别按钮**：将二态「精简/完整」升级为四层级循环切换，用户逐层展开信息
+- 层级定义：L0(简)=星运+自坐 → L1(中)=+纳运+纳音 → L2(详)=+空亡 → L3(全)=全部（含神煞）
+
+### 优化
+- 纳运行位置调整
+
+### 测试
+- 12 条用例，初测 11/12 (91.7%)，修复 1 Bug 后 12/12 (100%)
+- 内测版部署成功，6 项功能验证通过
+
+### 修改文件
+- `standalone-split.html`、`render.js`、`main.js`
+
+---
+
+## v0.16.1 — 档案布局优化 + API 路由修复 (2026-08-07)
+
+### 优化
+- 档案弹窗每条档案行仅显示 `YYYY年`，精简掉月/日/时/分
+- dateStr 精简释放横向空间，最长名字组合完整可见，无截断
+- 搜索过滤结果的 dateStr 格式与完整列表一致
+
+### 修复
+- API 端点 `/standalone` 从旧版单体 `standalone.html` 切换到模块化 `standalone-split.html`
+- 新增 6 个 JS 模块文件的显式路由（constants.js 等），避免通配路由冲突
+- gongwei.js 全局 onclick 函数引用改为 `GONGWEI.*` 命名空间前缀
+- archive.js `toggleSolar()`/`doPaipan()` 改为 `APP.toggleSolar()`/`APP.doPaipan()`
+
+### 技术
+- standalone-split.html 内建运前流年 `data-di="-1"` 和分气×宫位 `updateGongWeiTags()` 修复
+
+### 测试
+- 199 条断言全绿（0 FAIL）
+- AC-1~AC-6 档案布局验收 6/6 通过
+
+---
+
 ## v0.16.0 — P2 架构升级 (2026-08-06)
 
 ### 架构

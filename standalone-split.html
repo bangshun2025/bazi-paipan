@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.16.0 | 2026-08-06 -->
+<!-- 八字排盘 · 从真版 v0.20.0 | 2026-08-11 -->
+<!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
+<!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
+<!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
+<!-- v0.17.0: 行序优化 — 主星→干支→藏干→纳音→纳运→星运→自坐→空亡→神煞 -->
 <!-- v0.16.0: 去除七柱标签必填校验（允许空标签），保存按钮仅需组名即可启用 -->
 <!-- v0.13.3: 编辑弹窗标签行排序调整为固定顺序 年→月→日→时→胎→命→身 -->
 <!-- v0.13.2: Bug A 宫位设置面板溢出(列表区加flex约束+overflow滚动) + Bug B 拖拽排序后排盘标签行与popover联动 -->
@@ -43,6 +47,7 @@
   .input-row input[type=number] { width:58px; text-align:center; }
   .input-row .btn { padding:5px 16px; background:var(--c-ink); color:var(--c-paper); border:none; border-radius:2px; cursor:pointer; font-size:13px; letter-spacing:.1em; font-family:var(--font-display); }
   .input-row .btn:hover { background:var(--c-red); }
+  .btn-privacy.privacy-on { background:var(--c-red); color:var(--c-paper); border-color:var(--c-red); }
   .btn-arch { font-size:14px; padding:2px 6px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; line-height:1; }
   .btn-arch:hover { background:var(--c-ink); }
   .btn-ai { font-size:12px; padding:4px 10px; border:1px dashed var(--c-gray); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); color:var(--c-gray); white-space:nowrap; }
@@ -204,11 +209,37 @@
   .chart .rm td { font-size:17px; color:var(--c-ink); padding:3px 3px; }
   .chart .rm .rl { font-size:17px; }
 
-  /* 精简模式：隐藏纳音/空亡/神煞 */
-  .chart.simple tr[data-row-type~="nayin"],
-  .chart.simple tr[data-row-type~="nayun"],
-  .chart.simple tr[data-row-type~="kongwang"],
-  .chart.simple tr[data-row-type~="shensha"] { display:none; }
+  /* 简分级别：五层级循环切换 L0(极简)→L1(简)→L2(中)→L3(详)→L4(全) */
+
+  /* L0 → 极简：隐藏所有扩展信息行 */
+  .chart.level-0 tr[data-row-type~="xingyun"],
+  .chart.level-0 tr[data-row-type~="zizuo"],
+  .chart.level-0 tr[data-row-type~="nayin"],
+  .chart.level-0 tr[data-row-type~="nayun"],
+  .chart.level-0 tr[data-row-type~="kongwang"],
+  .chart.level-0 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L1 → 简：隐藏纳音/纳运/空亡/神煞（仅星运+自坐可见） */
+  .chart.level-1 tr[data-row-type~="nayin"],
+  .chart.level-1 tr[data-row-type~="nayun"],
+  .chart.level-1 tr[data-row-type~="kongwang"],
+  .chart.level-1 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L2 → 中：隐藏空亡+神煞 */
+  .chart.level-2 tr[data-row-type~="kongwang"],
+  .chart.level-2 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L3 → 详：仅隐藏神煞 */
+  .chart.level-3 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L4 → 全：无隐藏（空规则块保留以便理解） */
+
+  /* 四柱-三垣分隔行 */
+  tr.sanyuan-sep { height: 0.75em; }
+  tr.sanyuan-sep td { padding: 0; border-bottom: 2px solid var(--c-line); }
+
+  /* 龙凤胎卡片三垣区间距 */
+  .bz-twin-card .bz-sanyuan-area { margin-top: 0.75em; }
 
   .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
   .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
@@ -438,6 +469,30 @@
   .gz-settings-close { font-size:18px;cursor:pointer;color:var(--c-gray);background:none;
     border:none;padding:2px 6px;line-height:1; }
   .gz-settings-close:hover { color:var(--c-red); }
+  /* v0.20.0 双 tab */
+  .gz-tabs { display:flex; border-bottom:1px solid var(--c-line); }
+  .gz-tab { flex:1; padding:8px 16px; cursor:pointer; border:none; background:transparent;
+    font-family:var(--font-body); font-size:14px; color:var(--c-gray); text-align:center;
+    border-bottom:2px solid transparent; transition:color .15s, border-color .15s; }
+  .gz-tab:hover { color:var(--c-ink); }
+  .gz-tab.active { color:var(--c-ink); font-weight:600; border-bottom-color:var(--c-ink); }
+  /* ☆ 常用标记 */
+  .gz-star { font-size:18px; cursor:pointer; padding:6px; min-width:24px; text-align:center;
+    flex-shrink:0; user-select:none; line-height:1; }
+  .gz-star.on { color:#e6a817; }
+  .gz-star.off { color:#c0b8a8; }
+  .gz-star:hover { transform:scale(1.2); }
+  /* 常用 tab 列表项 */
+  .gz-fav-item { }
+  .gz-fav-cb input[type="checkbox"] { appearance:none; -webkit-appearance:none; width:16px; height:16px;
+    border:1.5px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; position:relative; }
+  .gz-fav-cb input[type="checkbox"]:checked { background:var(--c-ink); border-color:var(--c-ink); }
+  .gz-fav-cb input[type="checkbox"]:checked::after { content:''; position:absolute; left:4px; top:1px; width:4px; height:8px;
+    border:solid var(--c-paper); border-width:0 2px 2px 0; transform:rotate(45deg); }
+  .gz-fav-footer { padding:10px 18px; border-top:1px solid var(--c-line); display:flex; gap:8px; }
+  .gz-fav-footer button { font-size:13px; padding:5px 14px; border:1px solid var(--c-line);
+    border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); }
+  .gz-fav-footer button:hover { background:var(--c-ink); color:var(--c-paper); }
   .gz-settings-actions { padding:10px 18px;display:flex;gap:8px;border-bottom:1px solid var(--c-line); }
   .gz-settings-actions button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
     border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;
@@ -554,6 +609,7 @@
   <div class="input-section">
     <div class="input-row">
       <label>小名</label><input type="text" id="inNickname" placeholder="小名" style="width:64px;">
+      <label>艺名</label><input type="text" id="inYiming" placeholder="艺名（选填）" style="width:64px;">
       <label>姓名</label><input type="text" id="inName" value="邦顺" style="width:80px;">
       <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
       <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
@@ -576,6 +632,7 @@
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
+      <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
       <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
@@ -614,7 +671,7 @@
     <div class="archive-modal" onclick="event.stopPropagation()">
       <div class="archive-modal-header">
         <span class="archive-modal-title">📋 档案</span>
-        <button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button>
+        <span style="display:flex;align-items:center;gap:8px;"><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
       </div>
       <div class="archive-modal-search">
         <input type="text" id="archive-search-modal" placeholder="输入姓名进行筛选" oninput="ARCHIVE.onArchiveSearch(this.value)">
@@ -635,6 +692,10 @@
         <div class="edit-row">
           <label>昵称</label>
           <input type="text" id="editNickname" placeholder="昵称（选填）" style="width:100%;">
+        </div>
+        <div class="edit-row">
+          <label>艺名（选填）</label>
+          <input type="text" id="editYiming" placeholder="艺名（隐私模式显示名）" style="width:100%;">
         </div>
         <div class="edit-row">
           <label>姓名</label>
@@ -685,16 +746,28 @@
           <span class="gz-settings-title">⚙ 宫位设置</span>
           <button class="gz-settings-close" onclick="GONGWEI.closeGzSettings()">✕</button>
         </div>
-        <div class="gz-settings-actions">
+        <!-- v0.20.0 tab 栏 -->
+        <div class="gz-tabs">
+          <button class="gz-tab active" id="gzTabAll" onclick="GONGWEI.switchGzTab('all')">全部宫位</button>
+          <button class="gz-tab" id="gzTabFav" onclick="GONGWEI.switchGzTab('fav')">常用宫位</button>
+        </div>
+        <div class="gz-settings-actions" id="gzSettingsActionsAll">
           <button onclick="GONGWEI.openGzEdit()">+ 新增宫位组</button>
         </div>
         <div class="gz-settings-list" id="gzSettingsList"></div>
-        <div class="gz-settings-footer">
+        <!-- 全部宫位 footer -->
+        <div class="gz-settings-footer" id="gzFooterAll">
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="btn-reset" onclick="GONGWEI.resetGongWeiDefaults()">恢复默认</button>
             <button onclick="GONGWEI.openGzTrash()">♻️ 回收站 <span id="gzTrashCount"></span></button>
           </div>
           <button class="btn-save-close" onclick="GONGWEI.closeGzSettings()">保存并关闭</button>
+        </div>
+        <!-- 常用宫位 footer -->
+        <div class="gz-fav-footer" id="gzFooterFav" style="display:none;">
+          <button onclick="GONGWEI.resetFavOrder()" title="按全部宫位顺序重排">↺ 默认排序</button>
+          <div style="flex:1;"></div>
+          <button class="btn-save-close" onclick="GONGWEI.closeGzSettings()" style="background:var(--c-ink);color:var(--c-paper);border:none;font-family:var(--font-display);letter-spacing:.05em;">保存并关闭</button>
         </div>
       </div>
       <!-- 回收站视图 -->
@@ -742,13 +815,24 @@
   </div>
 </div>
 
-<!-- 八字排盘 v0.16.0 — 模块加载 -->
+<!-- 八字排盘 v0.19.0 — 模块加载 -->
 <script src="constants.js"></script>
 <script src="algorithm.js"></script>
 <script src="archive.js"></script>
 <script src="gongwei.js"></script>
 <script src="render.js"></script>
 <script src="main.js"></script>
+<script>
+  // v0.19.0 初始化隐私开关按钮状态（默认开启：🔒 + 高亮）
+  (function() {
+    var on = ARCHIVE.getPrivacyMode();
+    [document.getElementById('btnPrivacy'), document.getElementById('btnPrivacy2')].forEach(function(b) {
+      if (!b) return;
+      b.textContent = on ? '🔒 隐私' : '🔓 隐私';
+      if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
+    });
+  })();
+</script>
 
 </body>
 </html>

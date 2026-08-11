@@ -1,4 +1,4 @@
-/* 八字排盘 v0.16.0 — main.js */
+/* 八字排盘 v0.18.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -144,7 +144,7 @@
   var gongWeiTrash = GONGWEI.gongWeiTrash;
 
   // ===== 别名：来自 render.js =====
-  var toggleSimple = RENDER.toggleSimple;
+  var toggleLevel = RENDER.toggleLevel;
   var buildPillarRows = RENDER.buildPillarRows;
   var renderChart = RENDER.renderChart;
   var bindEvents = RENDER.bindEvents;
@@ -487,7 +487,7 @@ function doAiParse() {
   
   // 构建预览
   let preview = '';
-  if (r.name) preview += '姓名：' + r.name + '  ';
+  if (r.name) preview += '姓名：' + (ARCHIVE.getPrivacyMode() ? '已隐藏' : r.name) + '  ';
   preview += '性别：' + r.gender + '  ';
   if (r.year) preview += r.year + '年' + r.month + '月' + r.day + '日  ';
   if (r.hour !== null) preview += r.hour + ':' + String(r.min).padStart(2,'0') + '  ';
@@ -793,6 +793,88 @@ document.addEventListener('click', function(e) {
         tests.push(eq('快照:' + c.n + '·' + fields[j][0], fields[j][1], fields[j][2]));
       }
     }
+  })();
+
+  // === v0.20.1 常用宫位自动化断言 ===
+  (function testGongWeiAssertions() {
+    tests.push({ section:'宫位 — v0.20.1 自动化断言' });
+
+    // A1: getFavGroups() 返回顺序验证
+    GONGWEI.persistFav(["信息","做功","亲缘"]);
+    var groups = GONGWEI.getFavGroups();
+    tests.push(eq('GWFav:A1 顺序',
+      groups.map(function(g){return g.name;}).join(','),
+      '信息,做功,亲缘'));
+
+    // A2: toggleFav 取消常用 → fav 与 selected 级联清理
+    GONGWEI.persistFav(["信息","做功"]);
+    GONGWEI.clearSelection();
+    GONGWEI.toggleSelect("信息");
+    GONGWEI.toggleSelect("做功");
+    GONGWEI.toggleFav("信息");
+    var favAfter = GONGWEI.loadFav();
+    var selAfter = GONGWEI.loadSelected();
+    tests.push(eq('GWFav:A2 fav移除', favAfter.indexOf('信息') === -1, true));
+    tests.push(eq('GWFav:A2 selected级联清理', selAfter.indexOf('信息') === -1, true));
+    tests.push(eq('GWFav:A2 做功仍在fav', favAfter.indexOf('做功') >= 0, true));
+    tests.push(eq('GWFav:A2 做功仍在selected', selAfter.indexOf('做功') >= 0, true));
+
+    // A3: 旧用户迁移
+    localStorage.removeItem('bz_gongwei_fav');
+    var fav = GONGWEI.loadFav();
+    if (fav.length === 0) {
+      fav = GONGWEI.gongWeiGroups.map(function(g) { return g.name; });
+      GONGWEI.persistFav(fav);
+    }
+    var favRebuilt = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A3 迁移后fav长度', favRebuilt.length, GONGWEI.gongWeiGroups.length));
+    tests.push(eq('GWFav:A3 迁移后顺序一致',
+      favRebuilt.join(','),
+      GONGWEI.gongWeiGroups.map(function(g){return g.name;}).join(',')));
+
+    // A4: resetFavOrder() 默认排序
+    var originalGroupNames = GONGWEI.gongWeiGroups.map(function(g){return g.name;});
+    GONGWEI.persistFav(["信息","做功","亲缘"]);
+    var indices = {};
+    for (var i = 0; i < originalGroupNames.length; i++) indices[originalGroupNames[i]] = i;
+    GONGWEI.resetFavOrder();
+    var favOrdered = GONGWEI.loadFav();
+    var sorted = true;
+    for (var i = 1; i < favOrdered.length; i++) {
+      if (indices[favOrdered[i]] < indices[favOrdered[i-1]]) { sorted = false; break; }
+    }
+    tests.push(eq('GWFav:A4 默认排序同步', sorted, true));
+
+    // A5: 新增宫位组默认不在 fav
+    var favBefore = GONGWEI.loadFav().slice();
+    var r = GONGWEI.addGroup('测试A5', ['A','B','C','D','E','F','G']);
+    var favAfterAdd = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A5 新增不在fav', r.ok && favAfterAdd.length === favBefore.length, true));
+    if (r.ok) GONGWEI.deleteGroup(r.group.id);
+
+    // A6: 改名 → fav 同步；删除组 → fav+selected 清理
+    // A6a: 改名同步
+    GONGWEI.persistFav(["信息","做功"]);
+    var infoGroup = GONGWEI.findGroupByName("信息");
+    var infoLabels = infoGroup.labels.slice();
+    GONGWEI.updateGroup(infoGroup.id, "信息2", infoLabels);
+    var favAfterRename = GONGWEI.loadFav();
+    tests.push(eq('GWFav:A6a 改名后fav更新',
+      favAfterRename.indexOf("信息2") >= 0 && favAfterRename.indexOf("信息") === -1, true));
+    // 改回来
+    GONGWEI.updateGroup(infoGroup.id, "信息", infoLabels);
+
+    // A6b: 删除组同步
+    var r2 = GONGWEI.addGroup('测试A6b', ['A','B','C','D','E','F','G']);
+    GONGWEI.persistFav(GONGWEI.loadFav().concat(['测试A6b']));
+    GONGWEI.clearSelection();
+    GONGWEI.toggleSelect('测试A6b');
+    var tmpGroup = GONGWEI.findGroupByName("测试A6b");
+    GONGWEI.deleteGroup(tmpGroup.id);
+    var favAfterDel = GONGWEI.loadFav();
+    var selAfterDel = GONGWEI.loadSelected();
+    tests.push(eq('GWFav:A6b 删除后fav清理', favAfterDel.indexOf('测试A6b') === -1, true));
+    tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

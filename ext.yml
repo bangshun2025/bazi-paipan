@@ -1,15 +1,12 @@
-id: bazi-paipan
-name: 八字排盘 · 从真版
-description: 输入出生时间，排四柱、大运、流年，支持真太阳时修正
-version: "0.13.5"
+id: bazi-paipan-test
+name: 八字排盘 · 内测
+description: 八字排盘内测版 — 开发流水线自动发布目标，用于新功能开发验证
+version: "v0.20.1"
 author: 邦顺
 origin: self
 contributes:
   api: api/handler.rb
   panels:
-    - id: launcher
-      view: panels/launcher/view.js
-      attach: ["*"]
     - id: paipan
       view: panels/paipan/view.js
       attach: ["*"]

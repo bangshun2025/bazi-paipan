@@ -1,4 +1,4 @@
-// 八字排盘面板 — bazi-paipan · 从真版
+// 八字排盘面板 — bazi-paipan-test · 内测
 // 通过 registerWorkspace + sidebar.nav 挂载，沿用原版纸质书卷风格
 (function () {
   var TG = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
@@ -119,8 +119,8 @@
   // ============================================================
   // 1. 注册 workspace（全屏工作区）
   // ============================================================
-  Clacky.ext.ui.registerWorkspace("bazi-paipan", {
-    title: "八字排盘",
+  Clacky.ext.ui.registerWorkspace("bazi-paipan-test", {
+    title: "八字排盘 · 内测",
     render: function(container) {
       var root = document.createElement("div");
       root.className = "bazi-paipan";
@@ -183,7 +183,7 @@
     resultEl.innerHTML = '<div style="color:#8b7e6a;padding:60px;text-align:center;font-family:\'Songti SC\',serif;">排盘中…</div>';
 
     var twin = document.getElementById('bzTwin').value;
-    var baseUrl = '/api/ext/bazi-paipan/paipan?' + params.toString();
+    var baseUrl = '/api/ext/bazi-paipan-test/paipan?' + params.toString();
 
     if (twin === '1') {
       // 双胞胎对比：单表合并 + 共享大运流年

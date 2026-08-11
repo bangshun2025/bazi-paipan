@@ -816,6 +816,7 @@ const TRASH_KEY = 'bz_trash_v2';
 const ARCH_KEY_OLD = 'paipan_archives';
 const TRASH_KEY_OLD = 'paipan_trash';
 const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
+const PRIVACY_KEY = 'bz_privacy_mode';
 
   // ===== 挂载到全局命名空间 =====
   window.CONST = {
@@ -853,5 +854,6 @@ const ARCH_BACKUP_KEY = 'bz_archives_v1_backup';
     ARCH_KEY_OLD: ARCH_KEY_OLD,
     TRASH_KEY_OLD: TRASH_KEY_OLD,
     ARCH_BACKUP_KEY: ARCH_BACKUP_KEY,
+    PRIVACY_KEY: PRIVACY_KEY,
   };
 })();
