@@ -4,6 +4,24 @@
 
 ---
 
+## v0.20.2 — 紧急修复：index.html 排盘崩溃 (2026-08-11)
+
+### 修复
+- **正式版 / 公测版 index.html 排盘全挂（线上事故）**：v0.20.1 修复 standalone.html 的 `\n` 转义符→字面换行缺陷时，index.html 漏同步。该缺陷导致 gongwei 内联段 SyntaxError → GONGWEI/APP 未定义 → 排盘功能整体崩溃
+- **index.html 补同步 v0.20.1 自动化断言块**：main 段与 standalone.html 完全一致（此前 index.html 缺 12 条 GWFav 断言）
+
+### 测试
+- 本地 + 线上 `?test=1` 均 211/211 全绿
+- 线上正式版排盘实测正常出盘（浏览器实测 APP.doPaipan）
+
+### 流程改进（复盘落地）
+- 发布前校验升级：`node --check` 语法校验扩展至 **index.html / standalone.html / standalone-split.html 三文件**，并做六模块 JS 段一致性对比，防止再次漏同步
+
+### 修改文件
+- `index.html`（两处 `\n` 缺陷修复 + main 段同步断言块）
+
+---
+
 ## v0.20.1 — 自动化断言补充 (2026-08-11)
 
 ### 新增
