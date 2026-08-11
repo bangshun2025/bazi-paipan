@@ -20,6 +20,7 @@
 ## 文档
 - [ ] CHANGELOG.md 已更新本次变更
 - [ ] DEVELOPER_QUICKSTART.md 行号已刷新（如有偏移）
+- [ ] `api/handler.rb` 已与公测版同步（`/standalone` 路由 + JS 模块路由）
 
 ## 发布
 - [ ] `git tag vX.Y.Z` 已打
