@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — render.js */
+/* 八字排盘 v0.22.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -334,8 +334,8 @@ function renderChart(data, twin, targetId) {
   for (let i = daYun.length - 1; i >= 0; i--) {
     if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; }
   }
-  const curDy = daYun[curDyIdx];
-  const pDy = pillar(curDy.gan, curDy.zhi);
+  const curDy = daYun.length > 0 ? daYun[curDyIdx] : null;
+  const pDy = curDy ? pillar(curDy.gan, curDy.zhi) : pillar('', '');
 
   // 当前流年
   const curLnGz = liuNianJZ(nowYear);
@@ -345,43 +345,49 @@ function renderChart(data, twin, targetId) {
   const lunarInfo = ''; // 可选：农历日期
 
   // ---- 起运交运文本 ----
-  const joy = qiYun.years, jom = qiYun.months, jod = qiYun.days, joh = qiYun.hours || 0;
-  const qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + joh + ' 小时';
-  const preQyYears = Math.ceil((qiYun.totalMonths || (qiYun.years * 12 + qiYun.months + qiYun.days / 30)) / 12);
-  const WUHE = {甲:'己',己:'甲',乙:'庚',庚:'乙',丙:'辛',辛:'丙',丁:'壬',壬:'丁',戊:'癸',癸:'戊'};
-  // 起运准确日期
-  const qyStartDate = new Date(y, m-1, d, h || 0, mi || 0);
-  qyStartDate.setFullYear(qyStartDate.getFullYear() + joy);
-  qyStartDate.setMonth(qyStartDate.getMonth() + jom);
-  qyStartDate.setDate(qyStartDate.getDate() + jod);
-  qyStartDate.setHours(qyStartDate.getHours() + joh);
-  // 交运年天干对：起运年天干 → 找五合配对
-  const jyYearGanIdx = (qyStartDate.getFullYear() - 4) % 10;
-  const jyNextGan = TG[jyYearGanIdx];
-  const jyHePair = jyNextGan + WUHE[jyNextGan];
-  // 交运节气：按起运日期直接查找所在节气月
-  let jyTermName = '', daysAfterJY = 0;
-  const qyY = qyStartDate.getFullYear();
-  for (let mi = 0; mi < 12; mi++) {
-    const tIdx = MONTH_TERM[mi];
-    let stY = qyY;
-    if (tIdx === 0 && mi === 11) stY = (qyStartDate.getMonth() === 0) ? qyY : qyY + 1;
-    const st = getSolarTerm(stY, tIdx);
-    const stDate = new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate());
-    const nextMi = (mi + 1) % 12;
-    const nextTerm = MONTH_TERM[nextMi];
-    let nextY = qyY;
-    if (nextTerm <= tIdx) nextY = qyY + 1;
-    const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate());
-    if (qyStartDate >= stDate && qyStartDate < nextDate) {
-      jyTermName = S_TERM_NAME[tIdx];
-      const qyDay2 = new Date(qyStartDate.getFullYear(), qyStartDate.getMonth(), qyStartDate.getDate());
-      daysAfterJY = Math.round((qyDay2 - stDate) / 86400000);
-      break;
+  let joy = 0, jom = 0, jod = 0, joh = 0;
+  let qiyunText = '—';
+  let preQyYears = 0;
+  let jyText = '—';
+  if (qiYun) {
+    joy = qiYun.years; jom = qiYun.months; jod = qiYun.days; joh = qiYun.hours || 0;
+    qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + joh + ' 小时';
+    preQyYears = Math.ceil((qiYun.totalMonths || (qiYun.years * 12 + qiYun.months + qiYun.days / 30)) / 12);
+    const WUHE = {甲:'己',己:'甲',乙:'庚',庚:'乙',丙:'辛',辛:'丙',丁:'壬',壬:'丁',戊:'癸',癸:'戊'};
+    // 起运准确日期
+    const qyStartDate = new Date(y, m-1, d, h || 0, mi || 0);
+    qyStartDate.setFullYear(qyStartDate.getFullYear() + joy);
+    qyStartDate.setMonth(qyStartDate.getMonth() + jom);
+    qyStartDate.setDate(qyStartDate.getDate() + jod);
+    qyStartDate.setHours(qyStartDate.getHours() + joh);
+    // 交运年天干对
+    const jyYearGanIdx = (qyStartDate.getFullYear() - 4) % 10;
+    const jyNextGan = TG[jyYearGanIdx];
+    const jyHePair = jyNextGan + WUHE[jyNextGan];
+    // 交运节气
+    let jyTermName = '', daysAfterJY = 0;
+    const qyY = qyStartDate.getFullYear();
+    for (let mi = 0; mi < 12; mi++) {
+      const tIdx = MONTH_TERM[mi];
+      let stY = qyY;
+      if (tIdx === 0 && mi === 11) stY = (qyStartDate.getMonth() === 0) ? qyY : qyY + 1;
+      const st = getSolarTerm(stY, tIdx);
+      const stDate = st ? new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate()) : new Date(-8640000000000000);
+      const nextMi = (mi + 1) % 12;
+      const nextTerm = MONTH_TERM[nextMi];
+      let nextY = qyY;
+      if (nextTerm <= tIdx) nextY = qyY + 1;
+      const nextSt = getSolarTerm(nextY, nextTerm);
+      const nextDate = nextSt ? new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate()) : new Date(8640000000000000);
+      if (qyStartDate >= stDate && qyStartDate < nextDate) {
+        jyTermName = S_TERM_NAME[tIdx];
+        const qyDay2 = new Date(qyStartDate.getFullYear(), qyStartDate.getMonth(), qyStartDate.getDate());
+        daysAfterJY = Math.round((qyDay2 - stDate) / 86400000);
+        break;
+      }
     }
+    jyText = '逢' + jyHePair[0] + '、' + jyHePair[1] + '年' + jyTermName + '后 ' + daysAfterJY + ' 天';
   }
-  const jyText = '逢' + jyHePair[0] + '、' + jyHePair[1] + '年' + jyTermName + '后 ' + daysAfterJY + ' 天';
 
   // ---- 上盘 HTML ----
   function td(cls, txt, ext='') { return '<td class="'+cls+'"'+ext+'>'+txt+'</td>'; }
@@ -971,7 +977,7 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
     if (daYun[i].startYear <= nowYear) { curDyIdx = i; break; }
   }
 
-  var joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  var joy = qiYun ? qiYun.years : 0, jom = qiYun ? qiYun.months : 0, jod = qiYun ? qiYun.days : 0;
   var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
   var jyText = '';
   (function() {
@@ -1067,7 +1073,7 @@ function renderTwinCardsHtml(data, targetId) {
   var meta1 = (gender==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan);
   var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
   var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 });
-  var joy = qiYun.years, jom = qiYun.months, jod = qiYun.days;
+  var joy = qiYun ? qiYun.years : 0, jom = qiYun ? qiYun.months : 0, jod = qiYun ? qiYun.days : 0;
   var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
   function nextJYYear(sY) { for (var i = 0; i < 20; i++) { var tY = sY + i; if ('己甲'.includes(TG[(tY - 4) % 10])) return tY; } return sY; }
   var jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
@@ -1145,16 +1151,16 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var diffMap = buildDiffMap(p1, p2);
 
   // 老大/老二卡片（不再带内嵌大运表，恢复标准5列四柱表）
-  var meta1 = (g1==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d1.qiYun.shun, d1.gender, d1.nian.gan);
+  var meta1 = (g1==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d1.qiYun ? d1.qiYun.shun : true, d1.gender, d1.nian.gan);
   var card1 = buildCardHTML(d1, { twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
-  var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun.shun, d2.gender, d2.nian.gan);
+  var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun ? d2.qiYun.shun : true, d2.gender, d2.nian.gan);
   var card2 = buildCardHTML(d2, { twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, meta: meta2 });
 
   var tstTag = '', ryTag = '';
   if (d1.trueSolar) { tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(d1.trueSolar.h)+':'+pad(d1.trueSolar.mi)+' ('+(d1.trueSolar.offsetMin>=0?'+':'')+Math.round(d1.trueSolar.offsetMin)+'分)</span>'; }
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
-  var yMc = d1.qiYun.shun ? '顺排' : '逆排';
-  var yMc2 = d2.qiYun.shun ? '顺排' : '逆排';
+  var yMc = (d1.qiYun ? d1.qiYun.shun : true) ? '顺排' : '逆排';
+  var yMc2 = (d2.qiYun ? d2.qiYun.shun : true) ? '顺排' : '逆排';
   var sexTag = (g1==='男'?'乾造':'坤造')+' · '+yMc+' | '+(g2==='男'?'乾造':'坤造')+' · '+yMc2;
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
@@ -1163,23 +1169,23 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var cd1 = 0; for (var i = dy1.length - 1; i >= 0; i--) { if (dy1[i].startYear <= nowYear) { cd1 = i; break; } }
   var lr1 = [];
   lr1.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
-  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
+  if (qy1 && qy1.years > 0) { lr1.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
   for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; lr1.push('<div class="cell'+(l===cd1?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row"><div class="cell rtag">大运</div>');
-  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
+  if (qy1 && qy1.years > 0) { lr1.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
   for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; var ss = shiShen(rg1, dy.gan), sb = zhiShiShen(rg1, dy.zhi); lr1.push('<div class="cell'+(l===cd1?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
-  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+y+'</div>'); }
+  if (qy1 && qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+y+'</div>'); }
   for (var l = 0; l < dy1.length; l++) { lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+dy1[l].startYear+'</div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (qy1.years > 0) { var pl1 = ''; for (var py = y; py < y + qy1.years; py++) { var gz = liuNianJZ(py); pl1 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell pre-qy">'+pl1+'</div>'); }
+  if (qy1 && qy1.years > 0) { var pl1 = ''; for (var py = y; py < y + qy1.years; py++) { var gz = liuNianJZ(py); pl1 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell pre-qy">'+pl1+'</div>'); }
   for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd1&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+lis+'</div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
-  if (qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+(y + qy1.years - 1)+'</div>'); }
+  if (qy1 && qy1.years > 0) { lr1.push('<div class="cell pre-qy">'+(y + qy1.years - 1)+'</div>'); }
   for (var l = 0; l < dy1.length; l++) { lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+(dy1[l].startYear + 9)+'</div>'); }
   lr1.push('</div>');
 
@@ -1188,30 +1194,30 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var cd2 = 0; for (var i = dy2.length - 1; i >= 0; i--) { if (dy2[i].startYear <= nowYear) { cd2 = i; break; } }
   var lr2 = [];
   lr2.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
-  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
+  if (qy2 && qy2.years > 0) { lr2.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
   for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; lr2.push('<div class="cell'+(l===cd2?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row"><div class="cell rtag">大运</div>');
-  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
+  if (qy2 && qy2.years > 0) { lr2.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
   for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; var ss = shiShen(rg2, dy.gan), sb = zhiShiShen(rg2, dy.zhi); lr2.push('<div class="cell'+(l===cd2?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
-  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+y+'</div>'); }
+  if (qy2 && qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+y+'</div>'); }
   for (var l = 0; l < dy2.length; l++) { lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+dy2[l].startYear+'</div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (qy2.years > 0) { var pl2 = ''; for (var py = y; py < y + qy2.years; py++) { var gz = liuNianJZ(py); pl2 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell pre-qy">'+pl2+'</div>'); }
+  if (qy2 && qy2.years > 0) { var pl2 = ''; for (var py = y; py < y + qy2.years; py++) { var gz = liuNianJZ(py); pl2 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell pre-qy">'+pl2+'</div>'); }
   for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd2&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+lis+'</div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
-  if (qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+(y + qy2.years - 1)+'</div>'); }
+  if (qy2 && qy2.years > 0) { lr2.push('<div class="cell pre-qy">'+(y + qy2.years - 1)+'</div>'); }
   for (var l = 0; l < dy2.length; l++) { lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+(dy2[l].startYear + 9)+'</div>'); }
   lr2.push('</div>');
 
   // 标签 + 起运文案
-  var joy1 = qy1.years, jom1 = qy1.months, jod1 = qy1.days;
+  var joy1 = qy1 ? qy1.years : 0, jom1 = qy1 ? qy1.months : 0, jod1 = qy1 ? qy1.days : 0;
   var qiyunText1 = '起运（老大）出生后 ' + joy1 + ' 年 ' + jom1 + ' 月 ' + jod1 + ' 天';
-  var joy2 = qy2.years, jom2 = qy2.months, jod2 = qy2.days;
+  var joy2 = qy2 ? qy2.years : 0, jom2 = qy2 ? qy2.months : 0, jod2 = qy2 ? qy2.days : 0;
   var qiyunText2 = '起运（老二）出生后 ' + joy2 + ' 年 ' + jom2 + ' 月 ' + jod2 + ' 天';
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
@@ -1288,7 +1294,7 @@ function doPaipan() {
     var isLeap = document.getElementById('inLeap').checked;
     var solar = lunarToSolar(y, m, d, isLeap);
     if (!solar) {
-      document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">日期超出支持范围（1600-2100）</div>';
+      document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">日期超出支持范围（1000-2100）</div>';
       return;
     }
     solarY = solar.y; solarM = solar.m; solarD = solar.d;
@@ -1409,7 +1415,7 @@ function extractBaziFromPaipan(p) {
     },
     extras: {
       shengXiao: p.shengXiao,
-      qiYun: { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun },
+      qiYun: p.qiYun ? { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun } : null,
       daYun: p.daYun.map(function(dy) { return { gan: dy.gan, zhi: dy.zhi, startAge: dy.startAge, endAge: dy.endAge, startYear: dy.startYear }; })
     },
     gongWeiType: null
@@ -1434,7 +1440,7 @@ function buildChartDataFromArchive(arch) {
     };
     arch.extras = {
       shengXiao: p.shengXiao,
-      qiYun: { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun },
+      qiYun: p.qiYun ? { year: p.qiYun.years, month: p.qiYun.months, day: p.qiYun.days, hour: p.qiYun.hours, shun: p.qiYun.shun } : null,
       daYun: p.daYun.map(function(dy) { return { gan: dy.gan, zhi: dy.zhi, startAge: dy.startAge, endAge: dy.endAge, startYear: dy.startYear }; })
     };
     // Save back to localStorage

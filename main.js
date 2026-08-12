@@ -651,7 +651,7 @@ document.addEventListener('click', function(e) {
 
   testChart('素素', '素素', '女', 1986,1,1,12,0, {
     'nian.gan+nian.zhi': '乙丑', 'ri.gan+ri.zhi': '乙巳', 'ri.gan': '乙',
-    'ming.gan+ming.zhi': '丙戌', 'shen.gan+shen.zhi': '甲申', 'tai.gan+tai.zhi': '庚辰'
+    'ming.gan+ming.zhi': '丁亥', 'shen.gan+shen.zhi': '癸未', 'tai.gan+tai.zhi': '己卯'
   });
 
   testChart('小龙', '小龙', '男', 1985,3,21,14,30, {

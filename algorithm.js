@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — algorithm.js */
+/* 八字排盘 v0.22.0 — algorithm.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -60,7 +60,7 @@ function normalizeDate(y, m, d) {
 
 // 农历转公历（查表法）
 function lunarToSolar(ly, lm, ld, isLeap) {
-  var idx = ly - 1600;
+  var idx = ly - 1000;
   if (idx < 0 || idx >= LUNAR_INFO.length) return null;
   var info = LUNAR_INFO[idx];
   var leapMonth = info & 0xF;
@@ -180,13 +180,14 @@ function trueSolarTime(y, m, d, h, mi, lng) {
 function getSolarTerm(y, n) {
   // n: 0=小寒 ... 23=冬至
   // 查表返回"BJT as UTC"——与qiYunDays的Date.UTC对齐
-  const idx = (y - 1600) * 24 + n;
+  const idx = (y - 1000) * 24 + n;
   const packed = SOLAR_TERMS[idx];
+  if (packed === undefined) return null; // 表外年份越界（如 999 年大雪 / 2101 年小寒）
   let days = Math.trunc(packed / 86400);
   let secs = packed % 86400;
   if (secs < 0) { secs += 86400; days -= 1; }
   const ms2000 = Date.UTC(2000, 0, 1);
-  return new Date(ms2000 + days * 86400000 + secs * 1000 + 288e5);
+  return new Date(ms2000 + days * 86400000 + secs * 1000 - 288e5);
 }
 
 function yearPillar(y) {
@@ -200,19 +201,29 @@ function yearPillar(y) {
 function monthPillar(y, m, d, h, mi, yearGan) {
   // 根据出生日期确定在哪个月（基于节气）
   const birth = new Date(y, m - 1, d, h || 0, mi || 0);
+  // 判断出生是否在立春前（用于正确选择大雪/小寒的年份）
+  const lc = getSolarTerm(y, 2);
+  const lcDate = lc ? new Date(lc.getFullYear(), lc.getMonth(), lc.getDate()) : null;
+  const beforeLC = lcDate ? birth < lcDate : false;
   for (let i = 0; i < 12; i++) {
     const termIdx = MONTH_TERM[i];
-    const stY = (termIdx === 0 && i === 11) ? y + 1 : y; // 小寒在次年1月
-    const st = getSolarTerm(stY, termIdx); // 本月起始节气
-    const stDate = new Date(st.getFullYear(), st.getMonth(), st.getDate());
+    let stY = y;
+    // 子月(大雪): 立春前出生→大雪在前一年, 否则在当年
+    if (i === 10) stY = beforeLC ? y - 1 : y;
+    // 丑月(小寒): 立春前出生→小寒在当年1月, 否则在次年1月
+    else if (i === 11) stY = beforeLC ? y : y + 1;
+    const st = getSolarTerm(stY, termIdx); // 本月起始节气（表外年份可能为 null）
+    // null 仅发生在"子月大雪在 999 年"（1000 年年初出生）：大雪已过，视为已进入本月
+    const stDate = st ? new Date(st.getFullYear(), st.getMonth(), st.getDate()) : new Date(-8640000000000000);
     
     // 下月起始节气
     const nextI = (i + 1) % 12;
     const nextTerm = MONTH_TERM[nextI];
-    let nextY = y;
-    if (nextTerm <= termIdx) nextY = y + 1;
+    let nextY = stY;
+    if (nextTerm <= termIdx) nextY = stY + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = new Date(nextSt.getFullYear(), nextSt.getMonth(), nextSt.getDate());
+    // null 仅发生在"下月节气在 2101 年"（2100 年末出生）：节气未到，视为未进下月
+    const nextDate = nextSt ? new Date(nextSt.getFullYear(), nextSt.getMonth(), nextSt.getDate()) : new Date(8640000000000000);
     
     if (birth >= stDate && birth < nextDate) {
       const zhi = DZ[(i + 2) % 12]; // 寅月=寅, 卯月=卯...
@@ -284,6 +295,7 @@ function wxClass(gan) { return WX_CSS[WU_XING[gan]] || ''; }
 // ============ 十二长生 ============
 function changSheng(gan, zhi) {
   const mapGan = CS12_MAP[gan] || CS12_MAP[{'金':'庚','水':'壬','木':'甲','火':'丙','土':'戊'}[WU_XING[gan]]];
+  if (!mapGan) return '?';
   const i = mapGan.indexOf(zhi);
   return i >= 0 ? CS12_N[i] : '?';
 }
@@ -466,23 +478,28 @@ function qiYunDays(birth, monthZhi, shun) {
   if (shun) {
     const nextI = (monthIdx + 1) % 12;
     const nextTerm = MONTH_TERM[nextI];
-    let nextY = y;
-    if (nextTerm <= termIdx) nextY = y + 1;
-    const st = getSolarTerm(nextY, nextTerm);
-    return (st.getTime() - birthMs) / 86400000;
+    let st = getSolarTerm(y, nextTerm);
+    if (st && st.getTime() < birthMs) st = getSolarTerm(y + 1, nextTerm); // 2101 越界时可能为 null
+    return st ? (st.getTime() - birthMs) / 86400000 : null;
   } else {
-    const st = getSolarTerm(y, termIdx);
-    return (birthMs - st.getTime()) / 86400000;
+    let st = getSolarTerm(y, termIdx);
+    if (st && st.getTime() > birthMs) st = getSolarTerm(y - 1, termIdx);
+    return st ? (birthMs - st.getTime()) / 86400000 : null;
   }
 }
 
 function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
+  // v0.22.0: 1000-1399 年不排大运（节气时刻精度不足以保证起运准确性）
+  if (birth.getFullYear() < 1400) {
+    return { daYun: [], qiYun: null, shun: null };
+  }
+
   const yang = '甲丙戊庚壬'.includes(nianGan);
   const male = gender === '男';
   const shun = (male && yang) || (!male && !yang);
 
   const days = qiYunDays(birth, yueZhi, shun);
-  const totalMonths = days / 3 * 12; // 3天=1年=12个月
+  const totalMonths = days === null ? NaN : days / 3 * 12; // 3天=1年=12个月
   const qyYears = Math.floor(totalMonths / 12);
   const qyMonths = Math.floor(totalMonths % 12);
   const fractionalMonth = totalMonths - Math.floor(totalMonths);
@@ -544,13 +561,13 @@ function renYuanSiLing(y, m, d) {
       stY = (m === 1) ? y : y + 1;
     }
     const st = getSolarTerm(stY, termIdx);
-    const stDate = new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate());
+    const stDate = st ? new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate()) : new Date(-8640000000000000);
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
     let nextY = y;
     if (nextTerm <= termIdx) nextY = y + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate());
+    const nextDate = nextSt ? new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate()) : new Date(8640000000000000);
     if (birth >= stDate && birth < nextDate) {
       const daysAfter = Math.floor((birth - stDate) / 86400000);
       const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
@@ -569,10 +586,10 @@ function renYuanSiLing(y, m, d) {
 // ============ 主计算函数 ============
 function paipan(name, gender, y, m, d, h, mi) {
   // 1. 年柱（考虑立春）
-  const lc2 = getSolarTerm(y, 2); // 立春
-  const lc2Date = new Date(lc2.getFullYear(), lc2.getMonth(), lc2.getDate());
+  const lc2 = getSolarTerm(y, 2); // 立春（表外年份可能为 null）
+  const lc2Date = lc2 ? new Date(lc2.getFullYear(), lc2.getMonth(), lc2.getDate()) : null;
   const birth = new Date(y, m - 1, d, h, mi);
-  const effYear = birth < lc2Date ? y - 1 : y;
+  const effYear = (lc2Date && birth < lc2Date) ? y - 1 : y;
   const nian = yearPillar(effYear);
 
   // 2. 月柱
@@ -595,7 +612,7 @@ function paipan(name, gender, y, m, d, h, mi) {
 
   // 8. 大运
   const { daYun, qiYun, shun } = computeDaYun(gender, nian.gan, yue.gan, yue.zhi, birth);
-  qiYun.shun = shun;  // 附加顺/逆排标记
+  if (qiYun) qiYun.shun = shun;  // 附加顺/逆排标记（<1400 年 qiYun 为 null，跳过）
 
   // 9. 生肖
   const shengXiao = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
