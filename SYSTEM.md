@@ -109,6 +109,7 @@ window.CONST / ALGO / ARCHIVE / GONGWEI / RENDER / APP
 3. **测试方式**：打开 `standalone-split.html?test=1` 跑 211 条自动断言（含 GWFav 常用宫位 12 条）+ `debug_all.html` 多组合验证
 4. **发布流程**：
    - QA 验证通过 → **手动同步**改动到 `standalone.html`（⚠️ `build_modules.py` 是拆分工具：standalone → 6 模块，非内联工具，勿依赖它回写）→ 更新 CHANGELOG → Git tag → push
+   - **三文件一致性校验（v0.20.2/v0.20.3 事故防线）**：`bash scripts/check-release.sh .`（内联 JS `node --check` + 六模块段一致性 + HTML 关键 id），已挂载 pre-commit 自动拦截 + 内嵌「开发-流水线-八字」Step 3/4/6 与「发布八字本地/线上」skill
    - 详细检查清单见 `RELEASE_CHECKLIST.md`
 5. **新功能开发**：复制 `docs/_TEMPLATE/` → 填写 PRD/ADR → 开发 → QA → 发布 → **执行「开发文件归拢」归档**
 
