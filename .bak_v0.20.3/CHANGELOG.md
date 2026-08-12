@@ -4,25 +4,6 @@
 
 ---
 
-## v0.21.0 — 1900 前排盘支持（数据表扩展 1600） (2026-08-12)
-
-### 新增
-- **农历数据扩展至 1600-1899 年**：三表（LUNAR_YEAR_INFO / LUNAR_MONTH_INFO / LUNAR_DAY_INFO）头部各 +300 年，索引基准从 1900 改为 1600，覆盖 300 年历史排盘
-- constants.js 数据体量：115K → 211K（+300 年农历数据）
-
-### 测试
-- L1 自动化断言 211/211 全绿（standalone.html / standalone-split.html 双环境）
-- L2 渲染验证：三组 1600-1899 年历史案例排盘正确（年柱/月柱/日柱/时柱/胎元/命宫/身宫 七柱一致）
-
-### 修改文件
-- `constants.js`（三表各 +300 年数据，索引基准调整）
-- `algorithm.js`（日柱算法适配 1600 基准）
-- `render.js`（渲染适配）
-- `archive.js`（档案适配）
-- `standalone-split.html` / `index.html` / `standalone.html`（同步更新）
-
----
-
 ## v0.20.3 — 常用宫位双 tab 补同步 (2026-08-11)
 
 ### 修复

@@ -1,7 +1,7 @@
-id: bazi-paipan-test
-name: 八字排盘 · 内测
-description: 八字排盘内测版 — 开发流水线自动发布目标，用于新功能开发验证
-version: "v0.20.1"
+id: bazi-paipan
+name: 八字排盘
+description: 八字排盘 · 从真版
+version: "v0.21.0"
 author: 邦顺
 origin: self
 contributes:
