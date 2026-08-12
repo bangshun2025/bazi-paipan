@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — algorithm.js */
+/* 八字排盘 v0.16.0 — algorithm.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -60,7 +60,7 @@ function normalizeDate(y, m, d) {
 
 // 农历转公历（查表法）
 function lunarToSolar(ly, lm, ld, isLeap) {
-  var idx = ly - 1600;
+  var idx = ly - 1900;
   if (idx < 0 || idx >= LUNAR_INFO.length) return null;
   var info = LUNAR_INFO[idx];
   var leapMonth = info & 0xF;
@@ -180,7 +180,7 @@ function trueSolarTime(y, m, d, h, mi, lng) {
 function getSolarTerm(y, n) {
   // n: 0=小寒 ... 23=冬至
   // 查表返回"BJT as UTC"——与qiYunDays的Date.UTC对齐
-  const idx = (y - 1600) * 24 + n;
+  const idx = (y - 1900) * 24 + n;
   const packed = SOLAR_TERMS[idx];
   let days = Math.trunc(packed / 86400);
   let secs = packed % 86400;

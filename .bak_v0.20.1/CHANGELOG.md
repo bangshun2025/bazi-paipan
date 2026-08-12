@@ -4,94 +4,41 @@
 
 ---
 
-## v0.21.0 — 1900 前排盘支持（数据表扩展 1600） (2026-08-12)
-
-### 新增
-- **农历数据扩展至 1600-1899 年**：三表（LUNAR_YEAR_INFO / LUNAR_MONTH_INFO / LUNAR_DAY_INFO）头部各 +300 年，索引基准从 1900 改为 1600，覆盖 300 年历史排盘
-- constants.js 数据体量：115K → 211K（+300 年农历数据）
-
-### 测试
-- L1 自动化断言 211/211 全绿（standalone.html / standalone-split.html 双环境）
-- L2 渲染验证：三组 1600-1899 年历史案例排盘正确（年柱/月柱/日柱/时柱/胎元/命宫/身宫 七柱一致）
-
-### 修改文件
-- `constants.js`（三表各 +300 年数据，索引基准调整）
-- `algorithm.js`（日柱算法适配 1600 基准）
-- `render.js`（渲染适配）
-- `archive.js`（档案适配）
-- `standalone-split.html` / `index.html` / `standalone.html`（同步更新）
-
----
-
-## v0.20.3 — 常用宫位双 tab 补同步 (2026-08-11)
-
-### 修复
-- **index.html / standalone.html 设置弹窗缺「全部宫位/常用宫位」双 tab**：v0.20.0 常用宫位分级开发时，tab 栏 HTML + CSS（gz-tabs/gz-tab/gz-star/gz-fav-footer）只同步进了 standalone-split.html，index.html 与 standalone.html 漏同步——导致正式版/公测版主入口看不到常用宫位管理功能（JS 引用元素为空，null-safe 静默失效）
-- 补同步内容：`gz-tabs` 栏（gzTabAll/gzTabFav）、`gzSettingsActionsAll`/`gzFooterAll`/`gzFooterFav` id、`.gz-tabs`/`.gz-tab`/`.gz-star`/`.gz-fav-footer` CSS 块
-
-### 测试
-- 本地 + 公测版浏览器实测：双 tab 渲染、切换、footer 联动、星标、常用列表、默认排序全部正常
-- `?test=1` 211/211 全绿
-
-### 修改文件
-- `index.html` / `standalone.html`（正式版 + 公测版各两份）
-
----
-
-## v0.20.2 — 紧急修复：index.html 排盘崩溃 (2026-08-11)
-
-### 修复
-- **正式版 / 公测版 index.html 排盘全挂（线上事故）**：v0.20.1 修复 standalone.html 的 `\n` 转义符→字面换行缺陷时，index.html 漏同步。该缺陷导致 gongwei 内联段 SyntaxError → GONGWEI/APP 未定义 → 排盘功能整体崩溃
-- **index.html 补同步 v0.20.1 自动化断言块**：main 段与 standalone.html 完全一致（此前 index.html 缺 12 条 GWFav 断言）
-
-### 测试
-- 本地 + 线上 `?test=1` 均 211/211 全绿
-- 线上正式版排盘实测正常出盘（浏览器实测 APP.doPaipan）
-
-### 流程改进（复盘落地）
-- 发布前校验升级：`node --check` 语法校验扩展至 **index.html / standalone.html / standalone-split.html 三文件**，并做六模块 JS 段一致性对比，防止再次漏同步
-
-### 修改文件
-- `index.html`（两处 `\n` 缺陷修复 + main 段同步断言块）
-
----
-
 ## v0.20.1 — 自动化断言补充 (2026-08-11)
 
 ### 新增
-- **GWFav 常用宫位自动化断言（12 条）**：覆盖 fav 首次初始化、☆ 取消级联清理（fav/selected）、旧用户迁移重建、默认排序复位、新增组默认不在 fav、增删改组幽灵名清理——内置回归集 199→211 条
-- **PRD 模板新增「上版本复盘遗留项」section**：强制后续版本追溯复盘建议，修复复盘→改进闭环断裂
+- **12条 GWFav 自动化断言**：覆盖常用宫位核心逻辑（toggleFav、isFav、renderFavTab、getSortedGongwei、常用tab渲染、下拉过滤等）
+- **PRD 模板新增「上版本复盘遗留项」section**：规范跨版本遗留项追踪
 
 ### 修复
-- `standalone.html` 两处 `\n` 转义符→字面换行缺陷（破坏 gongwei.js 内联段语法，导致 GONGWEI 模块加载失败误判）
+- **main.js A2 修复**：`clearSelection` + `toggleSelect` 公开为 window 级 API，确保测试框架可调用
 
 ### 测试
-- `?test=1` 内置回归 211 条全绿（standalone.html / standalone-split.html 双环境）
-- 复盘闭环首次跑通：v0.20.0 两条核心建议（补断言、模板加 section）全部落地
+- `standalone.html?test=1`：211/211 全绿
+- `standalone-split.html?test=1`：211/211 全绿
 
 ### 修改文件
-- `main.js`（?test=1 断言区 +12 条 GWFav）
-- `docs/_TEMPLATE/PRD.md`（新增复盘遗留项 section）
-- `standalone.html` / `standalone-split.html`（同步断言 + 修复 `\n` 缺陷）
+- `standalone.html` / `index.html`（断言区 + PRD模板 section）
+- `main.js`（A2 公开 API 修复）
+- `gongwei.js`、`standalone-split.html`（v0.20.0/0.20.1 累积变更）
 
 ---
 
 ## v0.20.0 — 常用宫位分级 (2026-08-11)
 
 ### 新增
-- **常用宫位分级**：14 宫位两级管理（全部/常用），设置页双 tab 切换
-- **☆ 常用标记**：任意宫位可标记/取消常用，下拉面板只显示常用宫位
-- **常用宫位独立排序**：与全部宫位排序解耦，标签行顺序联动常用顺序
-- **↺ 默认排序**：一键恢复常用宫位为全部宫位顺序
-- **旧用户自动迁移**：无 fav 数据时自动以全部宫位初始化（默认全部常用）
-- **数据一致性级联**：改名/删除宫位组时同步清理 fav / selected / trash
+- **设置页「常用宫位」功能**：支持自定义常用宫位分组
+- **双tab管理**：全部宫位 / 常用宫位，☆ 标记常用
+- **排盘界面联动**：下拉面板只显示常用宫位、标签行顺序联动常用排序
+- 新 localStorage key：`bz_gongwei_fav`
 
 ### 测试
-- 常用宫位 13 条 AC/AR 手工验证全过 + 全量回归 199 条全绿
+- 全量功能测试 22/22 通过（AC01-14 + AR01-08）
 
 ### 修改文件
-- `gongwei.js`（两级管理 + ☆ 标记 + fav 持久化 + 级联清理）
-- `standalone.html` / `index.html` / `standalone-split.html`（设置页双 tab + 下拉面板改造）
+- `gongwei.js`（核心逻辑，861→1139 行）
+- `standalone-split.html`（CSS + HTML，801→838 行）
+- `standalone.html` / `index.html`（构建同步，6555→6837 行）
 
 ---
 

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — archive.js */
+/* 八字排盘 v0.16.1 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -36,7 +36,6 @@
   var ARCH_KEY_OLD = CONST.ARCH_KEY_OLD;
   var TRASH_KEY_OLD = CONST.TRASH_KEY_OLD;
   var ARCH_BACKUP_KEY = CONST.ARCH_BACKUP_KEY;
-  var PRIVACY_KEY = CONST.PRIVACY_KEY;
 
   // ===== 别名：来自 algorithm.js =====
   var monthDays = ALGO.monthDays;
@@ -198,45 +197,6 @@ function saveTrash(arr) {
   localStorage.setItem(TRASH_KEY, JSON.stringify(arr));
 }
 
-// ===== 隐私模式（v0.19.0）=====
-// 默认开启：无键或 '1' → 开启；'0' → 关闭
-function getPrivacyMode() {
-  return localStorage.getItem(PRIVACY_KEY) !== '0';
-}
-function setPrivacyMode(on) {
-  localStorage.setItem(PRIVACY_KEY, on ? '1' : '0');
-}
-// 统一显示名：隐私关闭维持现状（小名 / 正名）；隐私开启降级链 艺名 → 小名 → 匿名
-function getDisplayName(a) {
-  if (!a) return '';
-  if (!getPrivacyMode()) {
-    return (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
-  }
-  return (a.yiming && a.yiming.trim()) ? a.yiming
-    : (a.nickname && a.nickname.trim()) ? a.nickname
-    : '匿名';
-}
-// 切换开关：更新两处按钮状态 + 重渲染档案面板（若开）+ 重排当前标题（若 output 有数据）
-function togglePrivacy() {
-  var on = !getPrivacyMode();
-  setPrivacyMode(on);
-  // 更新两处按钮
-  var b1 = document.getElementById('btnPrivacy');
-  var b2 = document.getElementById('btnPrivacy2');
-  var label = on ? '🔒 隐私' : '🔓 隐私';
-  [b1, b2].forEach(function(b) {
-    if (!b) return;
-    b.textContent = label;
-    if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
-  });
-  // 重渲染档案面板（若开）
-  refreshArchiveModalIfOpen();
-  // 重排当前标题（若 output 有数据）
-  if (window.RENDER && document.getElementById('output') && document.getElementById('output').innerHTML.indexOf('person-info') >= 0) {
-    window.RENDER.doPaipan();
-  }
-}
-
 // 档案保存后刷新弹窗列表（如果弹窗当前可见）
 function refreshArchiveModalIfOpen() {
   var overlay = document.getElementById('archiveOverlay');
@@ -249,7 +209,6 @@ function getFormData() {
   var isLunar = (APP.calendarType === 'lunar');
   return {
     nickname: document.getElementById('inNickname').value || '',
-    yiming: document.getElementById('inYiming').value || '',
     name: document.getElementById('inName').value || '未命名',
     gender: document.getElementById('inGender').value,
     year: parseInt(document.getElementById('inYear').value),
@@ -277,7 +236,6 @@ function setFormData(d) {
     toggleCalendar(calType);
   }
   document.getElementById('inNickname').value = d.nickname || '';
-  document.getElementById('inYiming').value = d.yiming || '';
   document.getElementById('inName').value = d.name;
   document.getElementById('inGender').value = d.gender;
   document.getElementById('inYear').value = d.year;
@@ -339,7 +297,7 @@ function saveArchive() {
   // 检查同名同性别是否已存在
   var existIdx = archives.findIndex(function(a) { return a.name === d.name && a.gender === d.gender; });
   if (existIdx >= 0) {
-    if (!confirm('「' + getDisplayName(d) + '」已存在，覆盖更新？')) return;
+    if (!confirm('「' + d.name + '」已存在，覆盖更新？')) return;
     archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
   } else {
     archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
@@ -368,7 +326,7 @@ function moveToTrash(idx) {
   if (!archives[idx]) return;
   var a = archives[idx];
   var extraMsg = a.isPreset ? '\n⚠ 这是预置档案，删除后可在回收站恢复。' : '';
-  if (!confirm('确定删除「' + getDisplayName(a) + '」的档案？可在回收站恢复。' + extraMsg)) return;
+  if (!confirm('确定删除「' + a.name + '」的档案？可在回收站恢复。' + extraMsg)) return;
   var ts = new Date().toISOString();
   var trashItem = Object.assign({}, a, {deletedAt: ts});
   var trash = getTrash();
@@ -393,7 +351,6 @@ function openEditPanel(idx) {
   _editOriginal = JSON.parse(JSON.stringify(a));
 
   document.getElementById('editNickname').value = a.nickname || '';
-  document.getElementById('editYiming').value = a.yiming || '';
   document.getElementById('editName').value = a.name || '';
   document.getElementById('editGender').value = a.gender;
   var isLunar = a.calendarType === 'lunar';
@@ -440,7 +397,6 @@ function closeEditPanel() {
   var changed = _editOriginal && (
     edited.name !== _editOriginal.name ||
     edited.nickname !== _editOriginal.nickname ||
-    edited.yiming !== _editOriginal.yiming ||
     edited.gender !== _editOriginal.gender ||
     edited.year !== _editOriginal.year ||
     edited.month !== _editOriginal.month ||
@@ -472,7 +428,6 @@ function getEditFormData() {
   }
   return {
     nickname: document.getElementById('editNickname').value || '',
-    yiming: document.getElementById('editYiming').value || '',
     name: document.getElementById('editName').value || '',
     gender: document.getElementById('editGender').value,
     year: parseInt(document.getElementById('editYear').value) || 0,
@@ -512,7 +467,7 @@ function saveEdit() {
     alert('姓名包含非法字符（< > & "）');
     valid = false;
   }
-  if (!edited.year || edited.year < 1600 || edited.year > 2100) {
+  if (!edited.year || edited.year < 1900 || edited.year > 2100) {
     document.getElementById('editYear').classList.add('edit-error');
     valid = false;
   }
@@ -567,7 +522,7 @@ function saveEdit() {
     }
   }
   if (conflictIdx >= 0) {
-    if (!confirm('「' + getDisplayName(edited) + '」已存在，覆盖更新？')) return;
+    if (!confirm('「' + edited.name + '」已存在，覆盖更新？')) return;
     // 删除冲突项，保留当前编辑项
     archives.splice(conflictIdx, 1);
     if (conflictIdx < _editIdx) _editIdx--;
@@ -667,7 +622,7 @@ function renderTrash() {
     var delTime = a.deletedAt ? new Date(a.deletedAt).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\//g,'-') : '';
     return `<div style="display:flex;flex-direction:column;padding:8px 8px;border-bottom:1px solid rgba(128,128,128,.15);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span>${getDisplayName(a)} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
+        <span>${a.name} ${a.gender === '男' ? '♂' : '♀'} ${a.year}/${a.month}/${a.day} ${a.hour}:${String(a.min||0).padStart(2,'0')} ${solar}</span>
         <div style="display:flex;gap:6px;">
           <button class="archive-row-edit" onclick="ARCHIVE.restoreFromTrash(${i})" title="恢复">↩️ 恢复</button>
           <button class="archive-row-del" onclick="ARCHIVE.permanentDelete(${i})" title="彻底删除">🗑️ 彻底删除</button>
@@ -688,7 +643,7 @@ function restoreFromTrash(idx) {
   const archives = getArchives();
   const existIdx = archives.findIndex(a => a.name === restored.name && a.gender === restored.gender);
   if (existIdx >= 0) {
-    if (!confirm('「' + getDisplayName(restored) + '」已存在，覆盖恢复？')) return;
+    if (!confirm('「' + restored.name + '」已存在，覆盖恢复？')) return;
     archives[existIdx] = restored;
   } else {
     archives.push(restored);
@@ -704,7 +659,7 @@ function restoreFromTrash(idx) {
 function permanentDelete(idx) {
   const trash = getTrash();
   if (!trash[idx]) return;
-  if (!confirm('确定彻底删除「' + getDisplayName(trash[idx]) + '」？此操作不可恢复。')) return;
+  if (!confirm('确定彻底删除「' + trash[idx].name + '」？此操作不可恢复。')) return;
   trash.splice(idx, 1);
   saveTrash(trash);
   renderTrash();
@@ -780,7 +735,7 @@ function renderArchiveModal() {
     var a = archives[i];
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = getDisplayName(a);
+    var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
     var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
@@ -820,7 +775,6 @@ function filterArchives(keyword) {
   for (var i = 0; i < archives.length; i++) {
     var a = archives[i];
     var match = (a.nickname || '').toLowerCase().indexOf(k) >= 0
-      || (a.yiming || '').toLowerCase().indexOf(k) >= 0
       || (a.name || '').toLowerCase().indexOf(k) >= 0;
     if (match) filtered.push({arch: a, idx: i});
   }
@@ -836,7 +790,7 @@ function filterArchives(keyword) {
     var idx = filtered[j].idx;
     var genderIcon = a.gender === '男' ? '♂' : '♀';
     var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = getDisplayName(a);
+    var displayName = (a.nickname || '') ? (a.nickname + ' / ' + a.name) : a.name;
     var dateStr = a.year + '年';
     html += '<div class="archive-modal-row">'
       + '<div class="archive-row-info">'
@@ -907,10 +861,6 @@ function loadFromArchive(idx) {
     renderArchiveModal: renderArchiveModal,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
-    getPrivacyMode: getPrivacyMode,
-    setPrivacyMode: setPrivacyMode,
-    getDisplayName: getDisplayName,
-    togglePrivacy: togglePrivacy,
     loadFromArchive: loadFromArchive,
   };
 })();

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — archive.js */
+/* 八字排盘 v0.16.1 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -512,7 +512,7 @@ function saveEdit() {
     alert('姓名包含非法字符（< > & "）');
     valid = false;
   }
-  if (!edited.year || edited.year < 1600 || edited.year > 2100) {
+  if (!edited.year || edited.year < 1900 || edited.year > 2100) {
     document.getElementById('editYear').classList.add('edit-error');
     valid = false;
   }

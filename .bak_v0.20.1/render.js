@@ -1,4 +1,4 @@
-/* 八字排盘 v0.21.0 — render.js */
+/* 八字排盘 v0.18.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1288,7 +1288,7 @@ function doPaipan() {
     var isLeap = document.getElementById('inLeap').checked;
     var solar = lunarToSolar(y, m, d, isLeap);
     if (!solar) {
-      document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">日期超出支持范围（1600-2100）</div>';
+      document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">日期超出支持范围（1900-2100）</div>';
       return;
     }
     solarY = solar.y; solarM = solar.m; solarD = solar.d;
