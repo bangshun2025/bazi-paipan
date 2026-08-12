@@ -25,7 +25,9 @@ jobs:
         run: npm install puppeteer
 
       - name: 启动本地服务器
-        run: python3 -m http.server 8765 &
+        run: |
+          python3 -m http.server 8765 &
+          sleep 2
         shell: bash
 
       - name: 运行回归测试
@@ -33,12 +35,12 @@ jobs:
           node -e "
           const puppeteer = require('puppeteer');
           (async () => {
-            const browser = await puppeteer.launch({ headless: 'new' });
+            const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
             const page = await browser.newPage();
             await page.goto('http://localhost:8765/standalone.html?test=1', { waitUntil: 'networkidle0' });
 
             // 等待测试完成（标题变化）
-            await page.waitForFunction(() => document.title.includes('全部通过') || document.title.includes('失败'), { timeout: 30000 });
+            await page.waitForFunction(() => document.title.includes('全部通过') || document.title.includes('失败'), { timeout: 60000 });
 
             const title = await page.title();
             console.log('测试结果:', title);
