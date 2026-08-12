@@ -7,6 +7,9 @@ origin: self
 contributes:
   api: api/handler.rb
   panels:
+    - id: launcher
+      view: panels/launcher/view.js
+      attach: ["*"]
     - id: paipan
       view: panels/paipan/view.js
       attach: ["*"]
