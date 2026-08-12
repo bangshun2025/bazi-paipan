@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<!-- 八字排盘 · 从真版 v0.20.0 | 2026-08-11 -->
+<!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
+<!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
+<!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
+<!-- v0.17.0: 行序优化 — 主星→干支→藏干→纳音→纳运→星运→自坐→空亡→神煞 -->
+<!-- v0.16.0: 去除七柱标签必填校验（允许空标签），保存按钮仅需组名即可启用 -->
+<!-- v0.13.3: 编辑弹窗标签行排序调整为固定顺序 年→月→日→时→胎→命→身 -->
+<!-- v0.13.2: Bug A 宫位设置面板溢出(列表区加flex约束+overflow滚动) + Bug B 拖拽排序后排盘标签行与popover联动 -->
+<!-- v0.12.0: 档案编辑功能 — 修改/删除/编辑弹窗/回收站增强 -->
+<!-- v0.12.0: 纳运功能 — 纳音五行十二长生（金→庚/木→甲/水→壬/火→丙/土→壬） -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>八字排盘 · 从真版</title>
+<style>
+  :root {
+    --c-wood: #2e8b3d; --c-fire: #c83a3a; --c-earth: #c8961f; --c-metal: #d97817; --c-water: #2a6ec0;
+    --c-ink: #2c2416; --c-gray: #8b7e6a; --c-line: #e0d8c8; --c-paper: #f5f0e8; --c-red: #b5343a;
+    --bz-accent-twin1: #c8961f; --bz-accent-twin2: #4a7fb5;
+    --bz-card-bg: #ffffff; --bz-card-border: #e8e4dc; --bz-shared-bg: #f5f2ec;
+    --bz-card-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+    --font-display: "Songti SC","SimSun","Noto Serif CJK SC","STSong","KaiTi",serif;
+    --font-body: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+
+    /* v0.10.0 14宫位颜色 */
+    --gz-info:     #4a6fa5; --gz-cognition:#3d7a5c; --gz-function: #a0522d;
+    --gz-zuogong:  #c8782a; --gz-qinyuan:  #b0486a; --gz-interest: #b8962a;
+    --gz-scene:    #4a80a0; --gz-persona:  #7a4a8a; --gz-client:   #c07030;
+    --gz-system:   #6a7a8a; --gz-relation: #c05858; --gz-circle:   #6a7a3a;
+    --gz-physio:   #b04040; --gz-memory:   #3a6a8a;
+    --gz-popover-bg:   var(--c-paper);
+    --gz-popover-border: var(--c-line);
+    --gz-popover-shadow: 0 4px 16px rgba(0,0,0,.12);
+    --gz-tag-row-bg: rgba(201,169,110,.04);
+  }
+  * { margin:0;padding:0;box-sizing:border-box; }
+  body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:12px; font-family:var(--font-body); }
+  .page { width:100%; max-width:1340px; background:var(--c-paper); border:1.5px solid var(--c-line); border-radius:2px; padding:16px 18px 20px; box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08); }
+
+  /* ===== 输入表单 ===== */
+  .input-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--c-line); }
+  .input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .input-row label { font-size:13px; color:var(--c-gray); white-space:nowrap; }
+  .input-row input, .input-row select { font-family:var(--font-display); font-size:14px; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); }
+  .input-row input[type=number] { width:58px; text-align:center; }
+  .input-row .btn { padding:5px 16px; background:var(--c-ink); color:var(--c-paper); border:none; border-radius:2px; cursor:pointer; font-size:13px; letter-spacing:.1em; font-family:var(--font-display); }
+  .input-row .btn:hover { background:var(--c-red); }
+  .btn-privacy.privacy-on { background:var(--c-red); color:var(--c-paper); border-color:var(--c-red); }
+  .btn-arch { font-size:14px; padding:2px 6px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; line-height:1; }
+  .btn-arch:hover { background:var(--c-ink); }
+  .btn-ai { font-size:12px; padding:4px 10px; border:1px dashed var(--c-gray); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); color:var(--c-gray); white-space:nowrap; }
+  .btn-ai:hover { border-color:var(--c-red); color:var(--c-red); }
+
+  /* AI录入弹窗 */
+  .ai-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:999;justify-content:center;align-items:center; }
+  .ai-overlay.show { display:flex; }
+  .ai-dialog { background:var(--c-paper); border:1px solid var(--c-line); border-radius:4px; padding:20px 24px; width:90%;max-width:520px; box-shadow:0 4px 24px rgba(0,0,0,.15); }
+  .ai-dialog h3 { font-family:var(--font-display); font-size:18px; margin-bottom:6px; color:var(--c-ink); }
+  .ai-dialog .hint { font-size:13px; color:var(--c-gray); margin-bottom:12px; line-height:1.5; }
+  .ai-dialog textarea { width:100%; height:80px; font-size:14px; font-family:var(--font-body); padding:10px; border:1px solid var(--c-line); border-radius:2px; resize:vertical; background:var(--c-paper); color:var(--c-ink); }
+  .ai-dialog .ai-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+  .ai-dialog .ai-btns button { font-size:14px; padding:6px 18px; border-radius:2px; cursor:pointer; font-family:var(--font-display); }
+  .ai-dialog .btn-ok { background:var(--c-ink); color:var(--c-paper); border:none; }
+  .ai-dialog .btn-ok:hover { background:var(--c-red); }
+  .ai-dialog .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
+  .ai-dialog .btn-cancel:hover { background:var(--c-line); }
+  .ai-dialog .parse-result { font-size:12px; color:var(--c-gray); margin-top:8px; min-height:18px; }
+
+  /* 双胞胎对比：三栏布局 — 盘式+大宝 | 小宝 | 大运流年 */
+  .twin-wrap { display:block; overflow-x:hidden; }
+  .twin-wrap .chart-wrap { margin-bottom:4px; }
+  .twin-wrap .chart { width:100%; min-width:auto; table-layout:fixed; }
+  .twin-wrap .chart th, .twin-wrap .chart td { padding:2px 3px; font-size:13px; }
+  .twin-wrap .chart .rl { width:54px; min-width:54px; white-space:nowrap; }
+  .twin-wrap .chart .twin-col-sep { width:3px; min-width:3px; padding:0; background:var(--c-line); opacity:0.35; }
+  .twin-wrap .chart .sep { border-left:2px solid var(--c-red); }
+  .twin-wrap .chart .col-ln { border-left:1px solid var(--c-line); }
+  .twin-wrap h3 { font-family:var(--font-display); font-size:15px; text-align:center; margin:0; padding:1px 0; border-bottom:2px solid var(--c-line); letter-spacing:.08em; }
+  .twin-wrap .twin-header-dabao h3 { color:var(--c-ink); }
+  .twin-wrap .twin-header-xiaobao h3 { color:var(--c-red); border-bottom-color:var(--c-red); }
+  .twin-wrap .twin-header-dayun h3 { color:var(--c-gray); }
+  .twin-wrap .twin-sub-hd td { padding:3px 3px !important; }
+  .twin-wrap .luck-section-wrap { margin-top:4px; }
+
+  /* ===== v0.5.0 双胞胎卡片式版面 ===== */
+  /* CSS 变量已在 :root 定义：--bz-accent-twin1/2, --bz-card-bg, --bz-card-border, --bz-shared-bg, --bz-card-shadow */
+
+  /* 卡片容器 */
+  .bz-twin-cards { display:flex; gap:24px; align-items:flex-start; margin-bottom:16px; }
+  .bz-twin-card { flex:1; min-width:360px; background:var(--bz-card-bg); border:1px solid var(--bz-card-border);
+    border-radius:4px; box-shadow:var(--bz-card-shadow); overflow:hidden; }
+
+  /* 标识色条 */
+  .bz-twin-card .bz-card-accent { height:6px; }
+  .bz-twin-card.twin-1 .bz-card-accent { background:var(--bz-accent-twin1); }
+  .bz-twin-card.twin-2 .bz-card-accent { background:var(--bz-accent-twin2); }
+
+  /* 卡片标题 */
+  .bz-twin-card .bz-card-title { padding:10px 16px 8px; font-family:var(--font-body); font-size:16px;
+    font-weight:500; letter-spacing:.08em; }
+  .bz-twin-card.twin-1 .bz-card-title { color:var(--bz-accent-twin1); }
+  .bz-twin-card.twin-2 .bz-card-title { color:var(--bz-accent-twin2); }
+
+  /* 卡片辅助信息行 */
+  .bz-twin-card .bz-card-meta { padding:0 16px 8px; font-size:13px; color:#8b7e6a; font-family:var(--font-body); }
+
+  /* 卡片内表格 */
+  .bz-twin-card .chart { min-width:auto; }
+  .bz-twin-card .chart th, .bz-twin-card .chart td { padding:3px 4px; }
+
+  /* 差异高亮 */
+  .bz-twin-card.twin-1 .bz-diff { background:rgba(200,150,31,.06); }
+  .bz-twin-card.twin-2 .bz-diff { background:rgba(74,127,181,.06); }
+
+  /* 共享区 */
+  .bz-twin-shared { margin-top:4px; background:var(--bz-shared-bg); border-radius:4px;
+    border-left:3px solid #d0c9b8; padding:14px 18px; }
+
+  /* 共享区大运流年当前高亮 → 暖金色 */
+  .bz-twin-shared .cell.cc { background:rgba(200,150,31,.08); }
+  .bz-twin-shared .luck-row.hd .cell.cc { background:rgba(200,150,31,.12); }
+
+  /* ===== v0.6.0 卡片内独立大运区 ===== */
+  .bz-card-luck { border-top:1px solid #e8e4dc; background:#fafaf6; padding:12px 14px; }
+  .bz-card-luck-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .bz-card-luck-label { font-family:"PingFang SC",sans-serif; font-size:13px; color:#8b7e6a; }
+  .bz-card-luck-info { font-family:"PingFang SC",sans-serif; font-size:12px; color:#b0a590; }
+
+  /* 大运导航 pills */
+  .bz-dayun-nav-wrapper { position:relative; }
+  .bz-dayun-nav-wrapper::after { content:''; position:absolute; right:0; top:0; bottom:0; width:24px; background:linear-gradient(to right, transparent, #fafaf6); pointer-events:none; }
+  .bz-dayun-nav { display:flex; gap:6px; overflow-x:auto; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#d0c8b8 transparent; padding:6px 0; }
+  .bz-dayun-pill { flex-shrink:0; min-width:58px; padding:6px 8px; text-align:center; font-family:"Songti SC","SimSun",serif; font-size:18px; font-weight:700; color:#2c2416; border:1px solid #e0d8c8; border-radius:4px; background:#fff; cursor:pointer; transition:background .15s; }
+  .bz-dayun-pill:hover { background:#f5f2ec; }
+  .bz-dayun-pill .pill-age { display:block; font-size:12px; font-weight:400; color:#8b7e6a; margin-top:2px; }
+  .bz-twin-card.twin-1 .bz-dayun-pill.selected { background:#c8961f; color:#fff; border-color:#c8961f; }
+  .bz-twin-card.twin-1 .bz-dayun-pill.selected .pill-age { color:rgba(255,255,255,.7); }
+  .bz-twin-card.twin-2 .bz-dayun-pill.selected { background:#4a7fb5; color:#fff; border-color:#4a7fb5; }
+  .bz-twin-card.twin-2 .bz-dayun-pill.selected .pill-age { color:rgba(255,255,255,.7); }
+
+  /* 选中大运详情 */
+  .bz-dayun-detail { margin-top:10px; padding:8px 10px; background:#fff; border-radius:4px; border:1px solid #e8e4dc; }
+  .bz-dy-main { font-family:"Songti SC","SimSun",serif; font-size:22px; font-weight:700; margin-bottom:4px; }
+  .bz-dy-main .bz-dy-na-yin { font-size:13px; font-weight:400; color:#8b7e6a; margin-left:8px; font-family:"PingFang SC",sans-serif; }
+  .bz-dy-shishen { font-size:14px; color:#2c2416; margin-bottom:10px; display:flex; gap:12px; align-items:center; }
+  .bz-dy-shishen .bz-dy-age { color:#8b7e6a; font-size:12px; font-family:"PingFang SC",sans-serif; }
+
+  /* 流年网格 */
+  .bz-liunian-grid { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .bz-liunian-item { padding:3px 8px; font-size:14px; font-family:"Songti SC",serif; cursor:pointer; border-radius:3px; }
+  .bz-liunian-item:hover { background:#f5f2ec; }
+
+  /* 流年展开详情 */
+  .bz-liunian-detail { margin-top:6px; min-height:18px; }
+  .bz-ln-expand { font-size:13px; color:#8b7e6a; font-family:"PingFang SC",sans-serif; padding:4px 8px; background:rgba(201,169,110,.06); border-radius:3px; }
+
+  /* 模式切换 tab */
+  .bz-twin-tabs { display:flex; gap:0; margin-bottom:18px; }
+  .bz-twin-tab { padding:6px 16px; font-size:13px; cursor:pointer; background:none;
+    border:1px solid #e0d8c8; color:#8b7e6a; font-family:var(--font-body); }
+  .bz-twin-tab:first-child { border-radius:3px 0 0 3px; }
+  .bz-twin-tab:last-child { border-radius:0 3px 3px 0; border-left:none; }
+  .bz-twin-tab.active { background:#2c2416; color:#f5f0e8; border-color:#2c2416; }
+
+  /* 三模式切换 — 纯 CSS */
+  .bz-twin-cards .bz-twin-card.twin-2 { display:block; }
+  .bz-twin-cards.mode-twin1 .bz-twin-card.twin-2 { display:none; }
+  .bz-twin-cards.mode-twin1 { justify-content:center; }
+  .bz-twin-cards.mode-twin1 .bz-twin-card.twin-1 { flex:0 1 55%; max-width:480px; }
+  .bz-twin-cards.mode-twin2 .bz-twin-card.twin-1 { display:none; }
+  .bz-twin-cards.mode-twin2 { justify-content:center; }
+  .bz-twin-cards.mode-twin2 .bz-twin-card.twin-2 { flex:0 1 55%; max-width:480px; }
+
+  /* 三垣折叠 */
+  .bz-twin-card .bz-sanyuan-toggle { font-size:13px; color:#8b7e6a; cursor:pointer;
+    padding:6px 16px; border-top:1px solid var(--bz-card-border);
+    font-family:var(--font-body); user-select:none; }
+  .bz-twin-card .bz-sanyuan-toggle:hover { color:var(--c-ink); }
+  .bz-twin-card .bz-sanyuan-area.collapsed { display:none; }
+
+  /* 窄屏响应式 */
+  @media (max-width:900px) {
+    .bz-twin-cards { flex-direction:column; }
+    .bz-twin-cards .bz-twin-card { flex:1 1 auto; min-width:auto; }
+    .bz-twin-cards.mode-twin1 .bz-twin-card.twin-1,
+    .bz-twin-cards.mode-twin2 .bz-twin-card.twin-2 { flex:1 1 auto; max-width:none; }
+  }
+
+  /* 顶部 */
+  .top-bar { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; border-bottom:1px solid var(--c-line); padding-bottom:12px; }
+  .person-info { font-family:var(--font-display); font-size:22px; color:var(--c-ink); letter-spacing:.08em; }
+  .person-info b { font-size:26px; margin-right:6px; }
+  .person-info .meta { color:var(--c-gray); font-size:17px; }
+  .person-info .sex-tag { font-family:var(--font-display); font-size:17px; color:var(--c-red); margin-left:8px; letter-spacing:.15em; }
+
+  /* 主盘 */
+  .chart-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:12px; position:relative; }
+  .chart { width:100%; min-width:680px; border-collapse:collapse; table-layout:auto; }
+  .chart th, .chart td { border:0.5px solid var(--c-line); text-align:center; vertical-align:middle; font-family:var(--font-display); padding:3px 5px; }
+  .chart td.rl, .chart th.rl { width:54px; min-width:54px; background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; font-weight:500; padding:3px 2px; white-space:nowrap; }
+  .chart tr.hd th { font-size:18px; color:var(--c-gray); font-weight:500; background:rgba(201,169,110,.04); padding:6px 3px; }
+  .chart .sep { border-left:1.5px solid rgba(181,52,58,.4) !important; }
+  .chart .rs td { font-size:18px; color:var(--c-ink); font-weight:500; }
+  .chart .rg td { font-size:28px; font-weight:700; padding:1px 4px; line-height:1.1; }
+  .chart .rh td { font-size:17px; color:var(--c-ink); line-height:1.6; padding:5px 4px; }
+  .chart .rn td { font-size:17px; color:var(--c-gray); letter-spacing:.05em; }
+  .chart .rm td { font-size:17px; color:var(--c-ink); padding:3px 3px; }
+  .chart .rm .rl { font-size:17px; }
+
+  /* 简分级别：五层级循环切换 L0(极简)→L1(简)→L2(中)→L3(详)→L4(全) */
+
+  /* L0 → 极简：隐藏所有扩展信息行 */
+  .chart.level-0 tr[data-row-type~="xingyun"],
+  .chart.level-0 tr[data-row-type~="zizuo"],
+  .chart.level-0 tr[data-row-type~="nayin"],
+  .chart.level-0 tr[data-row-type~="nayun"],
+  .chart.level-0 tr[data-row-type~="kongwang"],
+  .chart.level-0 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L1 → 简：隐藏纳音/纳运/空亡/神煞（仅星运+自坐可见） */
+  .chart.level-1 tr[data-row-type~="nayin"],
+  .chart.level-1 tr[data-row-type~="nayun"],
+  .chart.level-1 tr[data-row-type~="kongwang"],
+  .chart.level-1 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L2 → 中：隐藏空亡+神煞 */
+  .chart.level-2 tr[data-row-type~="kongwang"],
+  .chart.level-2 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L3 → 详：仅隐藏神煞 */
+  .chart.level-3 tr[data-row-type~="shensha"] { display:none; }
+
+  /* L4 → 全：无隐藏（空规则块保留以便理解） */
+
+  /* 四柱-三垣分隔行 */
+  tr.sanyuan-sep { height: 0.75em; }
+  tr.sanyuan-sep td { padding: 0; border-bottom: 2px solid var(--c-line); }
+
+  /* 龙凤胎卡片三垣区间距 */
+  .bz-twin-card .bz-sanyuan-area { margin-top: 0.75em; }
+
+  .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
+  .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
+
+  .wood { color:var(--c-wood); } .fire { color:var(--c-fire); } .earth { color:var(--c-earth); }
+  .metal { color:var(--c-metal); } .water { color:var(--c-water); }
+
+  .col-dy { background:rgba(200,58,58,.03); }
+  .col-ln { background:rgba(200,58,58,.06); }
+
+  /* 信息行 */
+  .info-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; font-family:var(--font-display); font-size:14px; color:var(--c-ink); }
+  .info-row .label { color:var(--c-gray); margin-right:6px; }
+  .btn-back { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; }
+  .btn-back:hover { background:var(--c-ink); color:var(--c-paper); }
+  .meta-tag { display:inline-block; font-size:13px; padding:1px 6px; margin-left:6px; border-radius:2px; background:rgba(201,169,110,.1); color:var(--c-gray); white-space:nowrap; letter-spacing:.04em; }
+  .meta-tag.true-solar { color:var(--c-red); }
+
+  /* ===== 左右并排布局 ===== */
+  .body-cols { display:flex; gap:16px; align-items:flex-start; }
+  .main-col { flex:0 0 auto; min-width:0; }
+  .luck-col { flex:1 1 auto; min-width:380px; position:sticky; top:12px; }
+  .luck-section { border:0.5px solid var(--c-line); overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .luck-table { display:table; width:100%; min-width:620px; border-collapse:collapse; }
+  .luck-row { display:table-row; }
+  .luck-row .cell { display:table-cell; padding:3px 5px; text-align:center; vertical-align:middle; font-family:var(--font-display); font-size:18px; border-right:0.5px solid var(--c-line); border-bottom:0.5px solid var(--c-line); white-space:nowrap; min-width:52px; }
+  .luck-row .cell:last-child { border-right:none; }
+  .luck-row .rtag { background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; min-width:48px; width:48px; }
+  .luck-row .year { font-size:19px; color:var(--c-ink); font-weight:600; }
+  .luck-row .age { font-size:17px; color:var(--c-gray); display:block; }
+  .luck-row .sm { font-size:20px; font-weight:700; line-height:1.15; }
+  .luck-row .st { font-size:17px; font-weight:400; color:var(--c-gray); }
+  .luck-row .bm { font-size:20px; font-weight:700; line-height:1.15; }
+  .luck-row .bt { font-size:17px; font-weight:400; color:var(--c-gray); }
+  .dy-stem { font-size:22px; font-weight:700; line-height:1.2; display:block; }
+  .dy-stem span { font-size:17px; font-weight:400; color:var(--c-gray); margin-left:1px; }
+  .dy-branch { font-size:22px; font-weight:700; line-height:1.2; display:block; margin-top:1px; }
+  .dy-branch span { font-size:17px; font-weight:400; color:var(--c-gray); margin-left:1px; }
+
+  .luck-row .cell[data-dy], .liu-row .li { cursor:pointer; transition:background .15s; }
+  .luck-row .cell[data-dy]:hover { background:rgba(200,58,58,.06); }
+  .liu-row .li:hover { color:var(--c-red); }
+
+  .liu-row .cell { font-size:17px; line-height:1.6; padding:5px 6px; vertical-align:top; white-space:normal; min-width:68px; }
+  .liu-row .li { display:block; padding:1px 0; }
+  .liu-row .li.cur { color:var(--c-red); font-weight:700; }
+  .liu-row .rtag { vertical-align:top; padding-top:10px; }
+  .luck-row.hd .cell { background:rgba(201,169,110,.04); font-size:17px; color:var(--c-gray); }
+  .cell.cc { background:rgba(200,58,58,.04); box-shadow:inset 0 0 0 1.5px rgba(200,58,58,.3); }
+
+  /* ===== 岁流运前列 ===== */
+  .luck-row .cell.pre-qy { background: rgba(0,0,0,.03); }
+  .luck-row.hd .cell.pre-qy { background: rgba(0,0,0,.05); color: var(--c-gray); }
+  .luck-row.hd .cell.pre-qy .year { color: var(--c-gray); font-weight: 400; }
+  .liu-row .cell.pre-qy { max-height: 290px; overflow-y: auto; }
+  .liu-row .cell.pre-qy .li { cursor: default; }
+  .liu-row .cell.pre-qy .li:hover { color: inherit; }
+
+  /* 始于 / 止于行 */
+  .luck-row.start-row .cell,
+  .luck-row.end-row .cell {
+    font-size: 15px;
+    color: var(--c-gray);
+    font-family: var(--font-body);
+  }
+  .luck-row.start-row .rtag,
+  .luck-row.end-row .rtag {
+    font-size: 13px;
+    letter-spacing: .08em;
+  }
+  /* 龙凤胎双表标签 */
+  .luck-table-label {
+    font-size: 14px;
+    color: var(--c-gray);
+    margin-bottom: 6px;
+    font-family: var(--font-body);
+    letter-spacing: .04em;
+  }
+
+  /* 加载提示 */
+  .loading { text-align:center; padding:60px; color:var(--c-gray); font-family:var(--font-display); }
+
+  /* ===== v0.9.0 档案弹窗 ===== */
+  .archive-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:999;justify-content:center;align-items:center; }
+  .archive-overlay.show { display:flex; }
+  .archive-modal { background:var(--c-paper); border:1px solid var(--c-line); border-radius:6px; width:90%;max-width:420px; height:480px; max-height:80vh; min-height:360px; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,.15); }
+  .archive-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 12px; border-bottom:1px solid var(--c-line); }
+  .archive-modal-title { font-family:var(--font-display); font-size:18px; color:var(--c-ink); }
+  .archive-modal-close { background:none; border:none; font-size:20px; color:var(--c-gray); cursor:pointer; padding:0 4px; line-height:1; }
+  .archive-modal-close:hover { color:var(--c-red); }
+  .archive-modal-search { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid var(--c-line); }
+  .archive-modal-search input { flex:1; font-size:14px; font-family:var(--font-body); padding:8px 12px; border:1px solid var(--c-line); border-radius:4px; background:var(--c-paper); color:var(--c-ink); }
+  .archive-modal-search input:focus { outline:none; border-color:var(--c-ink); }
+  .archive-search-btn { font-size:13px; padding:8px 16px; background:var(--c-water); color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .archive-search-btn:hover { opacity:.85; }
+  .archive-modal-list { flex:1; overflow-y:auto; min-height:0; padding:4px 0; }
+  .archive-modal-row { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; border-bottom:1px solid rgba(128,128,128,.1); cursor:default; }
+  .archive-modal-row:hover { background:rgba(0,0,0,.02); }
+  .archive-row-info { display:flex; align-items:center; gap:6px; flex:1; min-width:0; }
+  .archive-row-name { font-size:14px; color:var(--c-ink); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .archive-row-gender { font-size:13px; font-weight:600; }
+  .archive-row-gender.male { color:var(--c-water); }
+  .archive-row-gender.female { color:var(--c-red); }
+  .archive-row-date { font-size:12px; color:var(--c-gray); white-space:nowrap; }
+  .archive-row-btn { font-size:12px; padding:4px 14px; background:var(--c-water); color:#fff; border:none; border-radius:14px; cursor:pointer; font-family:var(--font-body); white-space:nowrap; flex-shrink:0; }
+  .archive-row-btn:hover { opacity:.85; }
+  .archive-modal-empty { display:flex; align-items:center; justify-content:center; height:100%; min-height:200px; text-align:center; padding:40px 20px; color:var(--c-gray); font-size:14px; }
+
+  /* v0.12.0 档案行内操作按钮 */
+  .archive-row-actions { display:flex; gap:6px; flex-shrink:0; margin-left:8px; }
+  .archive-row-edit, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
+  .archive-row-del:hover { background:var(--c-red); color:#fff; border-color:var(--c-red); }
+
+  /* v0.12.0 编辑弹窗 */
+  .edit-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1000;justify-content:center;align-items:center; }
+  .edit-overlay.show { display:flex; }
+  .edit-dialog { background:var(--c-paper); border:1px solid var(--c-line); border-radius:6px; width:90%;max-width:420px; max-height:85vh; overflow-y:auto; box-shadow:0 4px 24px rgba(0,0,0,.15); }
+  .edit-dialog-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 12px; border-bottom:1px solid var(--c-line); }
+  .edit-dialog-title { font-family:var(--font-display); font-size:18px; color:var(--c-ink); }
+  .edit-dialog-close { background:none; border:none; font-size:20px; color:var(--c-gray); cursor:pointer; padding:0 4px; line-height:1; }
+  .edit-dialog-close:hover { color:var(--c-red); }
+  .edit-dialog-body { padding:16px 20px; }
+  .edit-dialog-body .edit-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .edit-dialog-body .edit-row label { font-size:13px; color:var(--c-gray); white-space:nowrap; min-width:36px; }
+  .edit-dialog-body .edit-row input, .edit-dialog-body .edit-row select { font-family:var(--font-display); font-size:14px; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); }
+  .edit-dialog-body .edit-row input[type=number] { width:58px; text-align:center; }
+  .edit-dialog-body .edit-row input[type=text] { flex:1; min-width:120px; }
+  .edit-dialog-body .edit-error { border-color:var(--c-red) !important; background:#fff5f5 !important; }
+  .edit-dialog-footer { display:flex; gap:8px; justify-content:flex-end; padding:12px 20px; border-top:1px solid var(--c-line); }
+  .edit-dialog-footer button { font-size:14px; padding:6px 18px; border-radius:2px; cursor:pointer; font-family:var(--font-display); }
+  .edit-dialog-footer .btn-save { background:var(--c-ink); color:var(--c-paper); border:none; }
+  .edit-dialog-footer .btn-save:hover { background:var(--c-red); }
+  .edit-dialog-footer .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
+  .edit-dialog-footer .btn-cancel:hover { background:var(--c-line); }
+
+  @media (max-width:900px) {
+    .page { padding:10px 6px 14px; max-width:100%; }
+    .body-cols { flex-direction:column; }
+    .luck-col { min-width:0; position:static; }
+    .chart { min-width:500px; }
+    .chart .rg td { font-size:24px; }
+    .chart td.rl, .chart th.rl { width:36px; min-width:36px; font-size:12px; }
+    .info-row { flex-direction:column; align-items:flex-start; gap:8px; }
+    .luck-table { min-width:520px; }
+    .luck-row .cell { padding:3px 4px; min-width:44px; }
+    .liu-row .cell { min-width:56px; padding:4px 5px; }
+    .luck-row .sm, .luck-row .bm { font-size:14px; }
+    .input-row { gap:4px; }
+  }
+
+  /* ===== v0.10.0 宫位多选 — popover面板 + 多行标签 ===== */
+  /* 面板容器 */
+  .gz-panel-wrapper { position: relative; display: inline-block; }
+  .gz-trigger { font-family: var(--font-body); font-size: 13px; padding: 4px 8px;
+    border: 1px solid var(--c-line); border-radius: 2px; background: var(--c-paper);
+    color: var(--c-ink); cursor: pointer; white-space: nowrap; }
+  .gz-trigger:hover { background: var(--c-ink); color: var(--c-paper); }
+  .gz-trigger .gz-summary { font-size: 11px; color: var(--c-gray); margin-left: 6px; }
+  .gz-trigger:hover .gz-summary { color: var(--c-paper); opacity: 0.8; }
+
+  /* Popover */
+  .gz-popover {
+    display: none; position: absolute; top: 100%; right: 0; z-index: 100;
+    background: var(--gz-popover-bg); border: 1px solid var(--gz-popover-border);
+    border-radius: 4px; box-shadow: var(--gz-popover-shadow);
+    padding: 12px 14px; min-width: 280px; margin-top: 4px;
+  }
+  .gz-popover.open { display: block; }
+
+  /* Checkbox grid */
+  .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+  .gz-cb-item { display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-body); font-size: 13px; color: var(--c-ink);
+    padding: 3px 2px; cursor: pointer; user-select: none; }
+  .gz-cb-item input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; width: 16px; height: 16px;
+    border: 1.5px solid var(--c-line); border-radius: 2px;
+    background: var(--c-paper); cursor: pointer; flex-shrink: 0; position: relative;
+  }
+  .gz-cb-item input[type="checkbox"]:checked {
+    background: var(--c-ink); border-color: var(--c-ink);
+  }
+  .gz-cb-item input[type="checkbox"]:checked::after {
+    content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+    border: solid var(--c-paper); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+  .gz-cb-item.checked { font-weight: 600; }
+  .gz-popover-actions { display: flex; gap: 12px; margin-top: 10px;
+    padding-top: 8px; border-top: 1px solid var(--c-line); }
+  .gz-popover-actions button { font-size: 12px; padding: 3px 12px;
+    border: 1px solid var(--c-line); border-radius: 2px; background: var(--c-paper);
+    color: var(--c-ink); cursor: pointer; font-family: var(--font-body); }
+  .gz-popover-actions button:hover { background: var(--c-ink); color: var(--c-paper); }
+
+  /* 多行标签 */
+  .chart .gz-tags td, .chart .gz-tags-sy td {
+    font-family: var(--font-body); font-size: 13px;
+    color: var(--c-ink); padding: 3px 4px;
+    background: var(--gz-tag-row-bg);
+    border-bottom: 1px dashed var(--c-line);
+    white-space: nowrap;
+  }
+  .gz-tags td.rl, .gz-tags-sy td.rl {
+    font-size: 13px; color: var(--c-gray); background: transparent;
+    padding: 3px 4px;
+  }
+
+  /* 移动端适配 */
+  @media (max-width: 480px) {
+    .gz-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
+      transform: translateY(-50%); max-width: 90vw; }
+    .gz-cb-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ===== v0.13.0 宫位自定义 — 设置弹窗 ===== */
+  .gz-settings-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,.35);z-index:1000;justify-content:center;align-items:center; }
+  .gz-settings-overlay.show { display:flex; }
+  .gz-settings-modal { background:var(--c-paper); border:1px solid var(--c-line);
+    border-radius:4px; width:90%;max-width:560px;max-height:85vh;display:flex;
+    flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,.15); }
+  .gz-settings-header { display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px 10px;border-bottom:1px solid var(--c-line); }
+  .gz-settings-title { font-family:var(--font-display);font-size:18px;color:var(--c-ink);
+    letter-spacing:.05em; }
+  .gz-settings-close { font-size:18px;cursor:pointer;color:var(--c-gray);background:none;
+    border:none;padding:2px 6px;line-height:1; }
+  .gz-settings-close:hover { color:var(--c-red); }
+  /* v0.20.0 双 tab */
+  .gz-tabs { display:flex; border-bottom:1px solid var(--c-line); }
+  .gz-tab { flex:1; padding:8px 16px; cursor:pointer; border:none; background:transparent;
+    font-family:var(--font-body); font-size:14px; color:var(--c-gray); text-align:center;
+    border-bottom:2px solid transparent; transition:color .15s, border-color .15s; }
+  .gz-tab:hover { color:var(--c-ink); }
+  .gz-tab.active { color:var(--c-ink); font-weight:600; border-bottom-color:var(--c-ink); }
+  /* ☆ 常用标记 */
+  .gz-star { font-size:18px; cursor:pointer; padding:6px; min-width:24px; text-align:center;
+    flex-shrink:0; user-select:none; line-height:1; }
+  .gz-star.on { color:#e6a817; }
+  .gz-star.off { color:#c0b8a8; }
+  .gz-star:hover { transform:scale(1.2); }
+  /* 常用 tab 列表项 */
+  .gz-fav-item { }
+  .gz-fav-cb input[type="checkbox"] { appearance:none; -webkit-appearance:none; width:16px; height:16px;
+    border:1.5px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; position:relative; }
+  .gz-fav-cb input[type="checkbox"]:checked { background:var(--c-ink); border-color:var(--c-ink); }
+  .gz-fav-cb input[type="checkbox"]:checked::after { content:''; position:absolute; left:4px; top:1px; width:4px; height:8px;
+    border:solid var(--c-paper); border-width:0 2px 2px 0; transform:rotate(45deg); }
+  .gz-fav-footer { padding:10px 18px; border-top:1px solid var(--c-line); display:flex; gap:8px; }
+  .gz-fav-footer button { font-size:13px; padding:5px 14px; border:1px solid var(--c-line);
+    border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); }
+  .gz-fav-footer button:hover { background:var(--c-ink); color:var(--c-paper); }
+  .gz-settings-actions { padding:10px 18px;display:flex;gap:8px;border-bottom:1px solid var(--c-line); }
+  .gz-settings-actions button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
+    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;
+    font-family:var(--font-body); }
+  .gz-settings-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
+  #gzSettingsListView { display:flex;flex-direction:column;flex:1;overflow:hidden; }
+  .gz-settings-list { flex:1;overflow-y:auto;padding:8px 18px; }
+  /* 列表项 */
+  .gz-set-item { display:flex;align-items:center;gap:10px;padding:10px 12px;
+    margin-bottom:6px;background:var(--bz-card-bg);border:1px solid var(--bz-card-border);
+    border-radius:4px;transition:box-shadow .15s; }
+  .gz-set-item:hover { box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .gz-set-item.dragging { opacity:.5; }
+  .gz-set-item.drag-over { border-color:var(--c-ink);background:rgba(201,169,110,.08); }
+  .gz-drag-handle { cursor:grab;color:var(--c-gray);font-size:16px;user-select:none;
+    flex-shrink:0;padding:2px 0; }
+  .gz-drag-handle:active { cursor:grabbing; }
+  .gz-set-info { flex:1;min-width:0; }
+  .gz-set-name { font-size:15px;font-weight:600;color:var(--c-ink);display:flex;
+    align-items:center;gap:6px; }
+  .gz-preset-tag { font-size:11px;padding:1px 6px;border-radius:2px;
+    background:var(--gz-preset-tag-bg,#e8e4dc);color:var(--gz-preset-tag-color,#8b7e6a);
+    font-weight:400; }
+  .gz-set-preview { font-size:13px;color:var(--c-gray);margin-top:3px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .gz-set-actions { display:flex;gap:4px;flex-shrink:0;align-items:center; }
+  .gz-set-actions button { font-size:14px;padding:3px 6px;border:1px solid var(--c-line);
+    border-radius:2px;background:var(--c-paper);cursor:pointer;color:var(--c-ink);line-height:1; }
+  .gz-set-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
+  .gz-set-actions button:disabled { opacity:.3;cursor:not-allowed; }
+  .gz-set-actions button:disabled:hover { background:var(--c-paper);color:var(--c-ink); }
+  /* 设置面板底部 */
+  .gz-settings-footer { padding:10px 18px;border-top:1px solid var(--c-line);
+    display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap; }
+  .gz-settings-footer button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
+    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer;
+    font-family:var(--font-body); }
+  .gz-settings-footer button:hover { background:var(--c-ink);color:var(--c-paper); }
+  .gz-settings-footer .btn-save-close { background:var(--c-ink);color:var(--c-paper);border:none;
+    font-family:var(--font-display);letter-spacing:.05em; }
+  .gz-settings-footer .btn-save-close:hover { background:var(--c-red); }
+  .gz-settings-footer .btn-reset { color:var(--c-gray);font-size:12px; }
+
+  /* ===== v0.13.0 编辑弹窗（新增/修改宫位组）===== */
+  .gz-edit-overlay { display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,.35);z-index:1001;justify-content:center;align-items:center; }
+  .gz-edit-overlay.show { display:flex; }
+  .gz-edit-dialog { background:var(--c-paper);border:1px solid var(--c-line);
+    border-radius:4px;width:90%;max-width:460px;max-height:85vh;overflow-y:auto;
+    box-shadow:0 4px 24px rgba(0,0,0,.15);padding:0; }
+  .gz-edit-header { display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px 10px;border-bottom:1px solid var(--c-line); }
+  .gz-edit-title { font-family:var(--font-display);font-size:18px;color:var(--c-ink); }
+  .gz-edit-close { font-size:18px;cursor:pointer;color:var(--c-gray);background:none;
+    border:none;padding:2px 6px;line-height:1; }
+  .gz-edit-close:hover { color:var(--c-red); }
+  .gz-edit-body { padding:14px 18px; }
+  .gz-edit-row { margin-bottom:10px; }
+  .gz-edit-row label { display:block;font-size:13px;color:var(--c-gray);margin-bottom:3px;
+    font-family:var(--font-body); }
+  .gz-edit-row input { width:100%;font-family:var(--font-body);font-size:14px;padding:6px 10px;
+    border:1px solid var(--c-line);border-radius:2px;background:var(--c-paper);color:var(--c-ink); }
+  .gz-edit-row input:focus { outline:none;border-color:var(--c-ink); }
+  .gz-edit-row .err-msg { font-size:12px;color:var(--c-red);margin-top:2px;display:none; }
+  .gz-edit-footer { padding:10px 18px 14px;display:flex;justify-content:flex-end;gap:8px;
+    border-top:1px solid var(--c-line); }
+  .gz-edit-footer button { font-size:14px;padding:6px 18px;border-radius:2px;cursor:pointer;
+    font-family:var(--font-display); }
+  .gz-edit-footer .btn-cancel { background:transparent;color:var(--c-gray);border:1px solid var(--c-line); }
+  .gz-edit-footer .btn-cancel:hover { background:var(--c-line); }
+  .gz-edit-footer .btn-save { background:var(--c-ink);color:var(--c-paper);border:none; }
+  .gz-edit-footer .btn-save:hover { background:var(--c-red); }
+  .gz-edit-footer .btn-save:disabled { opacity:.4;cursor:not-allowed; }
+  .gz-edit-footer .btn-save:disabled:hover { background:var(--c-ink); }
+
+  /* ===== v0.13.0 回收站视图 ===== */
+  .gz-trash-list { padding:8px 18px;flex:1;overflow-y:auto; }
+  .gz-trash-item { padding:10px 12px;margin-bottom:6px;background:var(--bz-card-bg);
+    border:1px solid var(--bz-card-border);border-radius:4px;display:flex;
+    align-items:center;gap:10px; }
+  .gz-trash-info { flex:1;min-width:0; }
+  .gz-trash-name { font-size:15px;font-weight:600;color:var(--c-ink); }
+  .gz-trash-preview { font-size:13px;color:var(--c-gray);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .gz-trash-time { font-size:11px;color:var(--c-gray);margin-top:2px; }
+  .gz-trash-empty { text-align:center;color:var(--c-gray);padding:30px 0;
+    font-family:var(--font-display);font-size:15px; }
+  .gz-trash-actions { flex-shrink:0; }
+  .gz-trash-actions button { font-size:13px;padding:4px 12px;border:1px solid var(--c-line);
+    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer; }
+  .gz-trash-actions button:hover { background:var(--c-ink);color:var(--c-paper); }
+  .gz-trash-footer { padding:10px 18px;border-top:1px solid var(--c-line);
+    display:flex;justify-content:space-between; }
+  .gz-trash-footer button { font-size:13px;padding:5px 14px;border:1px solid var(--c-line);
+    border-radius:2px;background:var(--c-paper);color:var(--c-ink);cursor:pointer; }
+  .gz-trash-footer button:hover { background:var(--c-red);color:var(--c-paper);border-color:var(--c-red); }
+
+  /* 宫位popover中设置按钮 */
+  .gz-popover-actions .gz-settings-btn { margin-left:auto;border-left:1px solid var(--c-line);
+    padding-left:12px; }
+
+  @media (max-width: 480px) {
+    .gz-settings-modal { width:90vw;max-width:none; }
+    .gz-edit-dialog { width:90vw;max-width:none; }
+    .gz-set-actions { flex-direction:column;gap:2px; }
+  }
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ===== 输入表单 ===== -->
+  <div class="input-section">
+    <div class="input-row">
+      <label>小名</label><input type="text" id="inNickname" placeholder="小名" style="width:64px;">
+      <label>艺名</label><input type="text" id="inYiming" placeholder="艺名（选填）" style="width:64px;">
+      <label>姓名</label><input type="text" id="inName" value="邦顺" style="width:80px;">
+      <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
+      <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
+      <span style="margin-left:4px;">
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calSolar" checked onchange="APP.toggleCalendar('solar')">新历</label>
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calLunar" onchange="APP.toggleCalendar('lunar')">农历</label>
+      </span>
+      <input type="number" id="inYear" value="1982" min="1900" max="2100" style="width:72px;"> <span style="font-size:13px;">年</span>
+      <span id="inMonthCell"><input type="number" id="inMonth" value="10" min="1" max="12" style="width:48px;"></span> <span style="font-size:13px;">月</span>
+      <input type="number" id="inDay" value="18" min="1" max="31" style="width:48px;"> <span style="font-size:13px;">日</span>
+      <span id="inLeapGroup" style="display:none;"><label style="font-size:12px;"><input type="checkbox" id="inLeap">闰月</label></span>
+      <input type="number" id="inHour" value="5" min="0" max="23" style="width:48px;"> <span style="font-size:13px;">时</span>
+      <input type="number" id="inMin" value="1" min="0" max="59" style="width:48px;"> <span style="font-size:13px;">分</span>
+      <label style="cursor:pointer;user-select:none;"><input type="checkbox" id="useSolar" onchange="APP.toggleSolar()" style="vertical-align:middle;margin-right:2px;">真太阳时</label>
+      <span id="solarGroup" style="display:none;">
+      <label>省</label><select id="inProv" onchange="APP.onProvChange()" style="width:80px;"><option value="">—</option></select>
+      <label>市</label><select id="inCity" onchange="APP.onCityChange()" style="width:96px;"><option value="">—</option></select>
+      <label>区县</label><select id="inDist" style="width:96px;"><option value="">—</option></select>
+      <span id="liveSolar" style="font-size:11px;color:var(--c-gray);margin:0 6px;white-space:nowrap;font-family:var(--font-display);"></span>
+      </span>
+      <button class="btn" onclick="APP.doPaipan()">排 盘</button>
+      <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
+      <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
+      <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
+      <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
+      <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
+    </div>
+  </div>
+
+  <!-- ===== AI录入弹窗 ===== -->
+  <div class="ai-overlay" id="aiOverlay">
+    <div class="ai-dialog">
+      <h3>🤖 AI 自然语言录入</h3>
+      <div class="hint">输入包含姓名、性别、出生日期、时间和地点的自然语句<br>例：邦顺 男 1982年10月18日早上5点 广西南宁</div>
+      <textarea id="aiInput" placeholder="在这里用自然语言描述…"></textarea>
+      <div class="parse-result" id="aiPreview"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="APP.hideAiInput()">取消</button>
+        <button class="btn-ok" onclick="APP.doAiParse()">解析并排盘</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 回收站弹窗 ===== -->
+  <div class="ai-overlay" id="trashOverlay">
+    <div class="ai-dialog">
+      <h3>♻️ 回收站</h3>
+      <div class="trash-list" id="trashList" style="max-height:300px;overflow-y:auto;text-align:left;font-size:13px;padding:8px;border:1px solid var(--c-gray);border-radius:6px;margin:8px 0;"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="ARCHIVE.hideTrash()">关闭</button>
+        <button class="btn-ok" onclick="ARCHIVE.emptyTrash()">清空回收站</button>
+      </div>
+    </div>
+  </div>
+  <div id="output"><div class="loading">输入出生时间，点击「排盘」</div></div>
+
+  <!-- ===== v0.9.0 档案弹窗 ===== -->
+  <div class="archive-overlay" id="archiveOverlay" onclick="ARCHIVE.closeArchivePanel()">
+    <div class="archive-modal" onclick="event.stopPropagation()">
+      <div class="archive-modal-header">
+        <span class="archive-modal-title">📋 档案</span>
+        <span style="display:flex;align-items:center;gap:8px;"><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
+      </div>
+      <div class="archive-modal-search">
+        <input type="text" id="archive-search-modal" placeholder="输入姓名进行筛选" oninput="ARCHIVE.onArchiveSearch(this.value)">
+        <button class="archive-search-btn" onclick="ARCHIVE.filterArchives(document.getElementById('archive-search-modal').value)">确定</button>
+      </div>
+      <div class="archive-modal-list" id="archive-modal-list"></div>
+    </div>
+  </div>
+
+  <!-- v0.12.0 编辑档案弹窗 -->
+  <div class="edit-overlay" id="editOverlay">
+    <div class="edit-dialog" onclick="event.stopPropagation()">
+      <div class="edit-dialog-header">
+        <span class="edit-dialog-title">✏️ 编辑档案</span>
+        <button class="edit-dialog-close" onclick="ARCHIVE.closeEditPanel()">✕</button>
+      </div>
+      <div class="edit-dialog-body">
+        <div class="edit-row">
+          <label>昵称</label>
+          <input type="text" id="editNickname" placeholder="昵称（选填）" style="width:100%;">
+        </div>
+        <div class="edit-row">
+          <label>艺名（选填）</label>
+          <input type="text" id="editYiming" placeholder="艺名（隐私模式显示名）" style="width:100%;">
+        </div>
+        <div class="edit-row">
+          <label>姓名</label>
+          <input type="text" id="editName" placeholder="姓名（必填）" style="width:100%;">
+        </div>
+        <div class="edit-row">
+          <label>性别</label>
+          <select id="editGender"><option value="男">男</option><option value="女">女</option></select>
+          <span style="margin-left:8px;">
+            <label style="cursor:pointer;font-size:13px;"><input type="radio" name="editCalType" id="editCalSolar" checked onchange="ARCHIVE.editCalChange()">公历</label>
+            <label style="cursor:pointer;font-size:13px;"><input type="radio" name="editCalType" id="editCalLunar" onchange="ARCHIVE.editCalChange()">农历</label>
+          </span>
+        </div>
+        <div class="edit-row" id="editDateRow">
+          <label>日期</label>
+          <input type="number" id="editYear" min="1900" max="2100" placeholder="年">
+          <span id="editMonthCell"><input type="number" id="editMonth" min="1" max="12" placeholder="月"></span>
+          <input type="number" id="editDay" min="1" max="31" placeholder="日">
+          <span id="editLeapGroup" style="display:none;"><label style="font-size:12px;"><input type="checkbox" id="editLeap">闰月</label></span>
+        </div>
+        <div class="edit-row">
+          <label>时间</label>
+          <input type="number" id="editHour" min="0" max="23" placeholder="时">
+          <input type="number" id="editMin" min="0" max="59" placeholder="分">
+        </div>
+        <div class="edit-row">
+          <label style="cursor:pointer;user-select:none;"><input type="checkbox" id="editSolar" onchange="ARCHIVE.editSolarToggle()">真太阳时</label>
+        </div>
+        <div class="edit-row" id="editSolarGroup" style="display:none;">
+          <label>省</label><select id="editProv" onchange="ARCHIVE.editProvChange()"><option value="">—</option></select>
+          <label>市</label><select id="editCity" onchange="ARCHIVE.editCityChange()"><option value="">—</option></select>
+          <label>区</label><select id="editDist"><option value="">—</option></select>
+        </div>
+      </div>
+      <div class="edit-dialog-footer">
+        <button class="btn-cancel" onclick="ARCHIVE.closeEditPanel()">取消</button>
+        <button class="btn-save" onclick="ARCHIVE.saveEdit()">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.13.0 宫位设置弹窗 ===== -->
+  <div class="gz-settings-overlay" id="gzSettingsOverlay" onclick="GONGWEI.closeGzSettings()">
+    <div class="gz-settings-modal" onclick="event.stopPropagation()">
+      <!-- 列表视图 -->
+      <div id="gzSettingsListView">
+        <div class="gz-settings-header">
+          <span class="gz-settings-title">⚙ 宫位设置</span>
+          <button class="gz-settings-close" onclick="GONGWEI.closeGzSettings()">✕</button>
+        </div>
+        <!-- v0.20.0 tab 栏 -->
+        <div class="gz-tabs">
+          <button class="gz-tab active" id="gzTabAll" onclick="GONGWEI.switchGzTab('all')">全部宫位</button>
+          <button class="gz-tab" id="gzTabFav" onclick="GONGWEI.switchGzTab('fav')">常用宫位</button>
+        </div>
+        <div class="gz-settings-actions" id="gzSettingsActionsAll">
+          <button onclick="GONGWEI.openGzEdit()">+ 新增宫位组</button>
+        </div>
+        <div class="gz-settings-list" id="gzSettingsList"></div>
+        <!-- 全部宫位 footer -->
+        <div class="gz-settings-footer" id="gzFooterAll">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn-reset" onclick="GONGWEI.resetGongWeiDefaults()">恢复默认</button>
+            <button onclick="GONGWEI.openGzTrash()">♻️ 回收站 <span id="gzTrashCount"></span></button>
+          </div>
+          <button class="btn-save-close" onclick="GONGWEI.closeGzSettings()">保存并关闭</button>
+        </div>
+        <!-- 常用宫位 footer -->
+        <div class="gz-fav-footer" id="gzFooterFav" style="display:none;">
+          <button onclick="GONGWEI.resetFavOrder()" title="按全部宫位顺序重排">↺ 默认排序</button>
+          <div style="flex:1;"></div>
+          <button class="btn-save-close" onclick="GONGWEI.closeGzSettings()" style="background:var(--c-ink);color:var(--c-paper);border:none;font-family:var(--font-display);letter-spacing:.05em;">保存并关闭</button>
+        </div>
+      </div>
+      <!-- 回收站视图 -->
+      <div id="gzSettingsTrashView" style="display:none;flex-direction:column;flex:1;">
+        <div class="gz-settings-header">
+          <button style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--c-gray);" onclick="GONGWEI.backToGzList()">← 返回</button>
+          <span class="gz-settings-title">♻️ 回收站</span>
+          <button class="gz-settings-close" onclick="GONGWEI.closeGzSettings()">✕</button>
+        </div>
+        <div class="gz-trash-list" id="gzTrashList"></div>
+        <div class="gz-trash-footer">
+          <span></span>
+          <button onclick="GONGWEI.emptyGzTrash()">清空回收站</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.13.0 宫位编辑弹窗（新增/修改） ===== -->
+  <div class="gz-edit-overlay" id="gzEditOverlay" onclick="GONGWEI.checkCloseGzEdit()">
+    <div class="gz-edit-dialog" onclick="event.stopPropagation()">
+      <div class="gz-edit-header">
+        <span class="gz-edit-title" id="gzEditTitle">新增宫位组</span>
+        <button class="gz-edit-close" onclick="GONGWEI.checkCloseGzEdit()">✕</button>
+      </div>
+      <div class="gz-edit-body">
+        <div class="gz-edit-row">
+          <label>组名（必填，≤6字）</label>
+          <input type="text" id="gzEditName" maxlength="6" placeholder="如：教学">
+          <div class="err-msg" id="gzEditNameErr"></div>
+        </div>
+        <div class="gz-edit-row"><label>年柱</label><input type="text" id="gzEditL1" maxlength="12" placeholder="年柱标签"></div>
+        <div class="gz-edit-row"><label>月柱</label><input type="text" id="gzEditL2" maxlength="12" placeholder="月柱标签"></div>
+        <div class="gz-edit-row"><label>日柱</label><input type="text" id="gzEditL3" maxlength="12" placeholder="日柱标签"></div>
+        <div class="gz-edit-row"><label>时柱</label><input type="text" id="gzEditL5" maxlength="12" placeholder="时柱标签"></div>
+        <div class="gz-edit-row"><label>胎元</label><input type="text" id="gzEditL0" maxlength="12" placeholder="胎元标签"></div>
+        <div class="gz-edit-row"><label>命宫</label><input type="text" id="gzEditL4" maxlength="12" placeholder="命宮标签"></div>
+        <div class="gz-edit-row"><label>身宫</label><input type="text" id="gzEditL6" maxlength="12" placeholder="身宫标签"></div>
+      </div>
+      <div class="gz-edit-footer">
+        <button class="btn-cancel" onclick="GONGWEI.checkCloseGzEdit()">取消</button>
+        <button class="btn-save" id="gzEditSaveBtn" onclick="GONGWEI.saveGzEdit()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 八字排盘 v0.19.0 — 模块加载 -->
+<script src="constants.js"></script>
+<script src="algorithm.js"></script>
+<script src="archive.js"></script>
+<script src="gongwei.js"></script>
+<script src="render.js"></script>
+<script src="main.js"></script>
+<script>
+  // v0.19.0 初始化隐私开关按钮状态（默认开启：🔒 + 高亮）
+  (function() {
+    var on = ARCHIVE.getPrivacyMode();
+    [document.getElementById('btnPrivacy'), document.getElementById('btnPrivacy2')].forEach(function(b) {
+      if (!b) return;
+      b.textContent = on ? '🔒 隐私' : '🔓 隐私';
+      if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
+    });
+  })();
+</script>
+
+</body>
+</html>
