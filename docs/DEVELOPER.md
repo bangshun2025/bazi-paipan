@@ -1,6 +1,6 @@
 # 八字排盘 · 编程师手册
 
-> 最后更新：2026-08-11 | 对应版本：v0.20.1
+> 最后更新：2026-08-13 | 对应版本：v0.22.0
 > 编程师接到任务后的第一份必读材料。配合 ARCHITECTURE.md（架构决策）和 ALGORITHM.md（算法宪法）使用。
 
 ## 速览
@@ -8,7 +8,7 @@
 - **技术栈**：原生 JS + CSS（零构建步骤），IIFE + `window.*` 命名空间
 - **入口文件**：`standalone-split.html`（当前主产物）；`standalone.html`（回退版，手动同步 JS 改动）
 - **启动方式**：浏览器直接打开 `standalone-split.html`；或启动 Clacky server 通过面板 iframe 访问
-- **测试方式**：`standalone-split.html?test=1` → 199 条自动断言；`debug_all.html` → 多组合验证
+- **测试方式**：`standalone-split.html?test=1` → 211 条自动断言（http:// 拆分版）；index.html/standalone.html?test=1 → 212 条（file:// 内联版含素素用例，**双环境都必须跑**）；`debug_all.html` → 多组合验证
 - **部署**：GitHub Pages（`bangshun2025.github.io/bazi-paipan/`），Git tag push 自动生效
 
 ## 文件地图
@@ -16,8 +16,8 @@
 | 文件 | 行数 | 职责 | 修改时注意 |
 |------|:--:|------|-----------|
 | `standalone-split.html` | 838 | HTML/CSS 骨架 + 6 模块 `<script>` 标签加载 | 改 CSS 看这里。CSS ≈534 行（与 standalone.html 完全相同，双端同步）。v0.20.0 新增 gz-tabs/gz-tab/gz-star 样式 + 设置页双 tab 按钮（gzTabAll/gzTabFav） |
-| `standalone.html` | 6837 | 回退版单体文件 | **不要直接改**。由 `build_modules.py` 内联合成。只在紧急热修时临时改 |
-| `constants.js` | 859 | 常量/数据表（天干地支、纳音、节气、农历数据、人元司令等所有静态数据） | 改算法数据（如新增纳音规则）改这里。**这是 pillar() 等共用函数应该放的地方** |
+| `standalone.html` | 7673 | 回退版单体文件（含全量数据 735KB） | **不要直接改**。由 `build_modules.py` 内联合成。只在紧急热修时临时改。**内联测试断言段必须与 main.js 同步**（v0.22.0 教训） |
+| `constants.js` | 1585 | 常量/数据表（天干地支、纳音、节气、农历数据、人元司令等所有静态数据；v0.22.0 起 1000-2100 全量 sxtwl 数据） | 改算法数据（如新增纳音规则）改这里。**这是 pillar() 等共用函数应该放的地方**。**数据表重生后必须做常规年份行为对比验证** |
 | `algorithm.js` | 672 | 排盘核心（年月日时四柱、大运、流年、神煞、人元司令） | 改排盘逻辑改这里。依赖 constants.js。**改了算法必须跑全量回归 + 同步 ALGORITHM.md** |
 | `archive.js` | 916 | 档案管理（存取删搜索、弹窗 UI、数据持久化）+ **隐私模式**（getPrivacyMode/setPrivacyMode/getDisplayName/togglePrivacy + yiming 字段读写） | 改档案功能改这里。操作 `Archives.json`（GitHub Pages 静态文件）。**getDisplayName(a) 是显示名唯一出口：隐私开→降级链(艺名→小名→匿名)，关→「小名 / 正名」。任何显示姓名的位置必须走它** |
 | `gongwei.js` | 1139 | 宫位自定义（14 宫 checkbox 面板、标签行渲染）+ **常用宫位分级**（bz_gongwei_fav localStorage、getFavGroups、☆切换/排序/移除/默认排序、三态视图 gzSettingsView） | 改宫位功能改这里。渲染模式分单人/同性双胞/龙凤胎三种。**数据一致性铁律：updateGroup/deleteGroup/resetToDefaults/restoreFromTrash 都要同步清理 fav 和 selected；下拉面板/标签行遍历源用 getFavGroups() 而非 gongWeiGroups** |
@@ -110,6 +110,24 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **避免方法**：弹窗设置 `height:480px; min-height:360px` 固定尺寸，避免内容变化导致布局跳动
 - **发现/修复版本**：v0.9.1 / v0.9.1
 
+#### Bug: 素素断言月柱错位（内联版测试假绿）
+- **根因**：sxtwl 数据重生修复了旧版小寒节气系统性偏早约 5 天的数据 bug，素素测试用例月柱从「丙戌/甲申/庚辰」变为「丁亥/癸未/己卯」，但 index.html/standalone.html 内联测试断言未同步——main.js 已改、内联版没改，导致内联版测试通过的是旧断言（假绿）
+- **代码位置**：main.js + index.html/standalone.html 内联测试段
+- **避免方法**：改断言必须同步三文件（main.js + index.html + standalone.html）；回归必须跑双环境（http:// 拆分版 + file:// 内联版）
+- **发现/修复版本**：v0.22.0 / v0.22.0
+
+#### Bug: qiYun 空指针崩溃（渲染层）
+- **根因**：某些年份（如 1400 前简化排盘）大运数据为空时渲染层直接访问 qiYun 属性崩溃
+- **代码位置**：render.js 大运渲染（4 处守卫）
+- **避免方法**：渲染层访问数据属性前必须判空；数据分级（完整/简化）变化时审查所有消费方
+- **发现/修复版本**：v0.22.0 / v0.22.0
+
+#### Bug: 小寒节气系统性偏移约 5 天（数据层）
+- **根因**：旧版节气数据表小寒节气偏早约 5 天，导致每年 1/1-1/5 出生者月柱误算为丑月（应为子月）；2100 年边缘另有 56 天旧表数据不全
+- **代码位置**：constants.js 数据表（v0.22.0 全量重生修复）
+- **避免方法**：数据表重生必须做常规年份行为对比验证（抽样 + 逐日细化量化偏移）；影响面用 Node 沙箱量化（1900-2100 每月 1 日抽样 2412 天中 201 天差异，全部为每年 1/1）
+- **发现/修复版本**：v0.22.0 / v0.22.0
+
 ## 踩坑记录
 
 以下不是 Bug，但很容易犯错的陷阱——每项都来自真实 RETRO。
@@ -191,6 +209,20 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **正确做法**：gongwei.js 内部状态一律通过公开函数操作：`clearSelection()` + `toggleSelect()` 组合、`selectAll()`、`loadSelected()`、`loadFav()`、`persistFav()`、`resetFavOrder()`、`isSelected()`。测试代码不得直接写导出属性，只能读+走公开 API
 - **代码位置**：gongwei.js L1054-1138（window.GONGWEI 值导出）
 - **来源**：RETRO v0.20.1 问题1
+
+### 测试代码段三文件同步（v0.22.0）
+
+- **场景**：编程师只改了 main.js 的素素断言（三柱月柱），index.html/standalone.html 内联测试段没同步——内联版回归跑的是旧断言，测试「通过」其实是假绿
+- **后果**：若未抓出，线上内联版携带过期断言，后续任何版本回归都会被假绿掩盖真实回归
+- **正确做法**：凡改 main.js 测试代码，必须同步 index.html + standalone.html 内联测试段；回归固定跑双环境（http:// 拆分版 ?test=1 + file:// 内联版 ?test=1），两环境断言数可能不同（211 vs 212），各自必须全绿
+- **来源**：RETRO v0.22.0
+
+### rebase 后 annotated tag 指向废弃 commit（v0.22.0）
+
+- **场景**：本地已打 tag v0.22.0 后 pull --rebase，历史重写导致旧 tag 指向废弃 commit d2327e3
+- **后果**：线上部署/回滚引用错误版本
+- **正确做法**：rebase 后必须检查 tag 指向（`git rev-parse vX.Y.Z`），若指向废弃 commit 则删除重建 tag 并 force push（`git push origin vX.Y.Z --force`）
+- **来源**：RETRO v0.22.0
 
 ## 重构记录
 
