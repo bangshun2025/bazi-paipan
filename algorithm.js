@@ -597,8 +597,8 @@ function paipan(name, gender, y, m, d, h, mi) {
   // 2. 月柱
   const yue = monthPillar(y, m, d, h, mi, nian.gan);
 
-  // 3. 日柱
-  const ri = dayPillar(y, m, d);
+  // 3. 日柱（v0.23.2 子时换日：真太阳时 h≥23 时日柱取次日；无早子时/晚子时之说）
+  const ri = dayPillar(y, m, h >= 23 ? d + 1 : d);
 
   // 4. 时柱
   const shi = hourPillar(ri.gan, h);

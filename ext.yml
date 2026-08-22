@@ -1,7 +1,7 @@
 id: bazi-paipan
 name: 八字排盘
 description: 八字排盘 · 从真版
-version: "v0.23.1"
+version: "v0.23.2"
 author: 邦顺
 origin: self
 contributes:
