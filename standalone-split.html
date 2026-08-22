@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.22.0 | 2026-08-11 -->
+<!-- 八字排盘 · 从真版 v0.23.0 | 2026-08-22 -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -41,7 +41,7 @@
 
   /* ===== 输入表单 ===== */
   .input-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--c-line); }
-  .input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; position:relative; }
   .input-row label { font-size:13px; color:var(--c-gray); white-space:nowrap; }
   .input-row input, .input-row select { font-family:var(--font-display); font-size:14px; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); }
   .input-row input[type=number] { width:58px; text-align:center; }
@@ -600,6 +600,17 @@
     .gz-set-actions { flex-direction:column;gap:2px; }
   }
 
+  /* v0.23.0 盘面截图瞬时提示 */
+  .screenshot-notify {
+    position:absolute; z-index:50;
+    background:var(--c-ink); color:var(--c-paper);
+    font-size:12px; font-family:var(--font-body);
+    padding:4px 12px; border-radius:2px;
+    white-space:nowrap; pointer-events:none;
+    animation:ss-notify-in .15s ease;
+  }
+  @keyframes ss-notify-in { from { opacity:0; } to { opacity:1; } }
+
 </style>
 </head>
 <body>
@@ -631,6 +642,7 @@
       <span id="liveSolar" style="font-size:11px;color:var(--c-gray);margin:0 6px;white-space:nowrap;font-family:var(--font-display);"></span>
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
+      <button class="btn btn-privacy" id="btnScreenshot" onclick="APP.captureScreenshot()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📷 截图</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
       <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>

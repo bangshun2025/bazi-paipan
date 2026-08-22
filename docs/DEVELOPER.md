@@ -1,6 +1,6 @@
 # 八字排盘 · 编程师手册
 
-> 最后更新：2026-08-13 | 对应版本：v0.22.0
+> 最后更新：2026-08-22 | 对应版本：v0.23.0
 > 编程师接到任务后的第一份必读材料。配合 ARCHITECTURE.md（架构决策）和 ALGORITHM.md（算法宪法）使用。
 
 ## 速览
@@ -22,7 +22,7 @@
 | `archive.js` | 916 | 档案管理（存取删搜索、弹窗 UI、数据持久化）+ **隐私模式**（getPrivacyMode/setPrivacyMode/getDisplayName/togglePrivacy + yiming 字段读写） | 改档案功能改这里。操作 `Archives.json`（GitHub Pages 静态文件）。**getDisplayName(a) 是显示名唯一出口：隐私开→降级链(艺名→小名→匿名)，关→「小名 / 正名」。任何显示姓名的位置必须走它** |
 | `gongwei.js` | 1139 | 宫位自定义（14 宫 checkbox 面板、标签行渲染）+ **常用宫位分级**（bz_gongwei_fav localStorage、getFavGroups、☆切换/排序/移除/默认排序、三态视图 gzSettingsView） | 改宫位功能改这里。渲染模式分单人/同性双胞/龙凤胎三种。**数据一致性铁律：updateGroup/deleteGroup/resetToDefaults/restoreFromTrash 都要同步清理 fav 和 selected；下拉面板/标签行遍历源用 getFavGroups() 而非 gongWeiGroups** |
 | `render.js` | 1568 | UI 渲染（表格生成、大运流年表、双胞胎对比、事件绑定、DOM 更新、toggleLevel 五层级切换、sanyuan-sep 分隔行、data.displayName 脱敏标题） | **最复杂的模块**。包含 pillar() 重复 5 次的已知问题。注意五层级 toggleLevel 和三处渲染路径同步。**排盘标题必须用 doPaipan 构造的 data.displayName，禁止直接拼 a.name** |
-| `main.js` | 872 | 入口/表单事件/测试入口（`paipan()` 主函数、表单校验、真太阳时、自动排盘） | 改表单交互、入口流程改这里。`?test=1` 自动测试入口也在这里 |
+| `main.js` | 954 | 入口/表单事件/测试入口（`paipan()` 主函数、表单校验、真太阳时、自动排盘）+ **盘面截图**（captureScreenshot/buildScreenshotFilename/sanitizeFilename/notifyScreenshot，v0.23.0） | 改表单交互、入口流程改这里。`?test=1` 自动测试入口也在这里。截图用 html2canvas CDN 按需加载（三源降级 + 8s 超时），**截离屏克隆节点必须显式纸色背景 + scale 面积保护**（v0.23.0 经验） |
 | `build_modules.py` | — | 构建脚本：JS 模块 → 内联回 standalone.html | 每次发布正式版前跑一次。不改业务逻辑 |
 | `debug_all.html` | — | 8 个 iframe 加载不同案例组合 | 调试多案例并行验证用 |
 
@@ -53,6 +53,10 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 | `getFavGroups()` | gongwei.js | 返回常用宫位组列表（按 bz_gongwei_fav 顺序）——下拉面板/标签行的遍历源 |
 | `toggleFav(name)` | gongwei.js | ☆ 切换常用标记（入/出 fav） |
 | `saveArchive()` / `loadArchive()` | archive.js | 档案存取 |
+| `captureScreenshot()` | main.js | 盘面截图入口：未排盘→提示；排盘→离屏克隆 #output + html2canvas 渲染 + PNG 下载（v0.23.0） |
+| `buildScreenshotFilename(a)` | main.js | 截图文件名：`八字排盘_{隐私名}_{YYYYMMDD}.png`，隐私名走 getDisplayName 降级链（v0.23.0） |
+| `sanitizeFilename(s)` | main.js | 文件名清洗（去非法字符，防空名→匿名兜底）（v0.23.0） |
+| `notifyScreenshot(msg)` | main.js | 截图即时提示（瞬时，不用 alert）（v0.23.0） |
 
 ## 代码约定
 
@@ -224,10 +228,17 @@ window.CONST / window.ALGO / window.ARCHIVE / window.GONGWEI / window.RENDER / w
 - **正确做法**：rebase 后必须检查 tag 指向（`git rev-parse vX.Y.Z`），若指向废弃 commit 则删除重建 tag 并 force push（`git push origin vX.Y.Z --force`）
 - **来源**：RETRO v0.22.0
 
+### html2canvas 离屏截图注意（v0.23.0）
+- **场景**：用 html2canvas 截取 #output 长图
+- **后果**：透明背景/大图超 canvas 上限（iOS 4096px）导致截图失败或底色发黑
+- **正确做法**：①克隆节点显式纸色背景（#output 本身透明）②按面积保护动态 scale 收缩（长图不截断）③CDN 按需加载三源降级 + 8s 超时提示，不阻塞主流程 ④防重入 busy 态 + 未排盘守卫 ⑤文件名走 getDisplayName 隐私降级链（艺名→小名→匿名）
+- **来源**：ADR v0.23.0 / QA v0.23.0
+
 ## 重构记录
 
 | 版本 | 变更 | 影响范围 | 注意事项 |
 |------|------|---------|---------|
+| v0.23.0 | 盘面截图：📷 按钮 + html2canvas 长图 PNG 下载 + 隐私文件名 + 防重入 + CDN 三源降级 | main.js（+82行）、standalone-split.html（按钮+CSS ~13行）、standalone.html/index.html（内联同步 + 断言 211→224） | 纯显示层读取，不动 constants/algorithm/archive/gongwei/render；check-release.sh KEYS 追加 btnScreenshot；三文件同步 |
 | v0.20.0 | 常用宫位分级：bz_gongwei_fav localStorage + 设置页双 tab（全部/常用）+ ☆标记/排序/移除/默认排序 + 旧用户自动迁移（无 key=全部默认常用） | gongwei.js（+278行）、standalone-split.html（+37行）、standalone.html/index.html（内联同步） | 三态视图 gzSettingsView(all/fav/trash)；下拉面板/标签行遍历源改 getFavGroups()；级联清理 4 函数（updateGroup/deleteGroup/resetToDefaults/restoreFromTrash）；新增组默认不入常用；「全部宫位 tab 打勾」语义=加入常用（不再是排盘显示） |
 | v0.19.0 | 隐私模式：yiming 艺名字段 + 全局开关（默认开启）+ getDisplayName 统一显示函数脱敏 | archive.js（+50行）、render.js（+10行）、constants.js（+2行）、standalone-split.html（+47行） | 显示名单点收敛：隐私开→降级链（艺名→小名→匿名），关→v0.18.0 逐字一致。`data.name` 保留真名不动。开关 localStorage `bz_privacy_mode`（'1'/'0'，无键默认开）。AI 预览「姓名：已隐藏」 |
 | v0.18.0 | 简0级别：五层级循环切换 + 四柱三垣间隔 + 三垣冗余纳运修复 | render.js（~15行）、standalone-split.html（CSS ~25行） | CSS 层级规则扩展为 5 组 level-0~4；toggleLevel %5；三处渲染路径按钮「简→极简」；buildPillarRows 三垣区纳运删冗余；sanyuan-sep 独立 tr 分隔行 |

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.22.0 | 2026-08-11 -->
+<!-- 八字排盘 · 从真版 v0.23.0 | 2026-08-22 -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -41,7 +41,7 @@
 
   /* ===== 输入表单 ===== */
   .input-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--c-line); }
-  .input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; position:relative; }
   .input-row label { font-size:13px; color:var(--c-gray); white-space:nowrap; }
   .input-row input, .input-row select { font-family:var(--font-display); font-size:14px; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); }
   .input-row input[type=number] { width:58px; text-align:center; }
@@ -600,6 +600,17 @@
     .gz-set-actions { flex-direction:column;gap:2px; }
   }
 
+  /* v0.23.0 盘面截图瞬时提示 */
+  .screenshot-notify {
+    position:absolute; z-index:50;
+    background:var(--c-ink); color:var(--c-paper);
+    font-size:12px; font-family:var(--font-body);
+    padding:4px 12px; border-radius:2px;
+    white-space:nowrap; pointer-events:none;
+    animation:ss-notify-in .15s ease;
+  }
+  @keyframes ss-notify-in { from { opacity:0; } to { opacity:1; } }
+
 </style>
 </head>
 <body>
@@ -631,6 +642,7 @@
       <span id="liveSolar" style="font-size:11px;color:var(--c-gray);margin:0 6px;white-space:nowrap;font-family:var(--font-display);"></span>
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
+      <button class="btn btn-privacy" id="btnScreenshot" onclick="APP.captureScreenshot()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📷 截图</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
       <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
@@ -8360,7 +8372,7 @@ function renderChartToHtml(data, arch) {
   };
 })();
 
-/* 八字排盘 v0.18.0 — main.js */
+/* 八字排盘 v0.23.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -8898,6 +8910,220 @@ document.addEventListener('click', function(e) {
   if (e.target.id === 'aiOverlay') hideAiInput();
 });
 
+
+// ============================================================
+// v0.23.0 盘面截图 — #output 一键导出 PNG 长图
+// 引擎：html2canvas@1.4.1 CDN 按需加载（三源降级，成功后缓存零网络）
+// ============================================================
+var screenshotEngineReady = false;   // 引擎加载成功标志（二次点击零网络）
+var screenshotBusy = false;          // 防重入
+
+// CDN 三源降级链（jsDelivr → BootCDN → unpkg），@1.4.1 版本锁定防隐式升级漂移
+var SCREENSHOT_ENGINE_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+  'https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+];
+
+// 逐源动态注入 <script>，每源 8 秒超时（onload/onerror 与 timer 竞态，先到先裁决）
+function loadScreenshotEngine(cb) {
+  if (screenshotEngineReady) { cb(true); return; }
+  var idx = 0;
+  var settled = false;
+  function tryNext() {
+    if (settled) return;
+    if (idx >= SCREENSHOT_ENGINE_SOURCES.length) {
+      settled = true;
+      cb(false);
+      return;
+    }
+    var url = SCREENSHOT_ENGINE_SOURCES[idx++];
+    var s = document.createElement('script');
+    var finished = false;
+    var timer = setTimeout(function() {
+      if (finished) return;
+      finished = true;
+      if (s.parentNode) s.parentNode.removeChild(s);
+      tryNext();
+    }, 8000);
+    function settle() {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+    }
+    s.onload = function() {
+      if (finished) return;
+      settle();
+      if (typeof window.html2canvas === 'function') {
+        screenshotEngineReady = true;
+        settled = true;
+        cb(true);
+      } else {
+        if (s.parentNode) s.parentNode.removeChild(s);
+        tryNext();
+      }
+    };
+    s.onerror = function() {
+      if (finished) return;
+      settle();
+      if (s.parentNode) s.parentNode.removeChild(s);
+      tryNext();
+    };
+    s.src = url;
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+
+// 瞬时提示：绝对定位 div 浮于截图按钮上方，2.5 秒后移除（拒绝 alert：阻塞交互且挂起 T06 断言）
+function notifyScreenshot(msg) {
+  var old = document.getElementById('screenshotNotify');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  var btn = document.getElementById('btnScreenshot');
+  if (!btn || !btn.parentNode) return;
+  var div = document.createElement('div');
+  div.id = 'screenshotNotify';
+  div.className = 'screenshot-notify';
+  div.textContent = msg;
+  div.style.left = (btn.offsetLeft + btn.offsetWidth / 2) + 'px';
+  div.style.top = (btn.offsetTop + btn.offsetHeight + 6) + 'px';
+  div.style.transform = 'translateX(-50%)';
+  btn.parentNode.appendChild(div);
+  setTimeout(function() {
+    if (div.parentNode) div.parentNode.removeChild(div);
+  }, 2500);
+}
+
+// 文件名字符清洗：/ \ : * ? " < > | 及空白字符 → '-'，清洗后为空兜底「匿名」
+function sanitizeFilename(s) {
+  var cleaned = String(s == null ? '' : s)
+    .replace(/[\/\\:*?"<>|\s]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || '匿名';
+}
+
+// 本地日期 YYYYMMDD 手工拼接（禁 toISOString：UTC 本地晚间跨天偏移）
+function localYYYYMMDD() {
+  var d = new Date();
+  return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
+}
+
+// 文件名生成：八字排盘_<显示名清洗>_<YYYYMMDD>.png
+// 隐私铁律：显示名走 ARCHIVE.getDisplayName（隐私开启即脱敏降级链），绝不直读真名
+function buildScreenshotFilename(person) {
+  return '八字排盘_' + sanitizeFilename(ARCHIVE.getDisplayName(person || {})) + '_' + localYYYYMMDD() + '.png';
+}
+
+// 恢复按钮 + busy 复位（所有路径 finally 统一调用）
+function resetScreenshotBtn() {
+  screenshotBusy = false;
+  var btn = document.getElementById('btnScreenshot');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '📷 截图';
+  }
+}
+
+// 排盘结果一键截图：克隆 #output → 离屏渲染 → PNG 长图下载
+function captureScreenshot() {
+  var output = document.getElementById('output');
+  if (!output) return;
+  // 1. 未排盘守卫（沿用现有 person-info 判定，与 togglePrivacy 重渲染判定一致）
+  if (output.innerHTML.indexOf('person-info') < 0) {
+    notifyScreenshot('请先排盘');
+    return;
+  }
+  // 2. 防重入
+  if (screenshotBusy) return;
+  screenshotBusy = true;
+  var btn = document.getElementById('btnScreenshot');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ 截图中…';
+  }
+
+  // 3. 引擎加载（首次 CDN 动态注入；失败恢复按钮并提示，不阻塞排盘主流程）
+  loadScreenshotEngine(function(ok) {
+    if (!ok) {
+      resetScreenshotBtn();
+      notifyScreenshot('截图组件加载失败，请检查网络后重试');
+      return;
+    }
+    var holder = null;
+    var canvas = null;
+    var url = null;
+    try {
+      // 4. 克隆 #output → 离屏容器（留在 document 内：CSS 变量/样式自然生效）
+      //    容器显式纸色背景：克隆体脱离 .page 后无底色，不声明则截图底色漂移
+      //    定位用 absolute（fixed 在 html2canvas 克隆 iframe 中会被视口裁剪 → 长图截断）
+      holder = document.createElement('div');
+      holder.id = 'screenshotHolder';
+      var SHOT_PAD = 36; // v0.23.1: 截图左右留白，内容不贴边（holder 加宽 2*PAD 保持内容区原宽）
+      holder.style.cssText = 'position:absolute;left:-9999px;top:0;z-index:-1;pointer-events:none;'
+        + 'width:' + ((output.offsetWidth || 1300) + SHOT_PAD * 2) + 'px;'
+        + 'background:var(--c-paper);';
+      var clone = output.cloneNode(true);
+      clone.style.padding = '0 ' + SHOT_PAD + 'px';
+      holder.appendChild(clone);
+      document.body.appendChild(holder);
+
+      // 5. dpr 适配 + canvas 面积保护（物理像素 > 3200 万时逐级收缩 scale，优先能导出）
+      var dpr = window.devicePixelRatio || 1;
+      var scale = Math.min(dpr, 2);
+      var width = holder.offsetWidth || output.offsetWidth || 1300;
+      var height = holder.scrollHeight || output.scrollHeight || 800;
+      var maxPx = 32000000;
+      if ((width * scale) * (height * scale) > maxPx) {
+        if ((width * 1.5) * (height * 1.5) <= maxPx) scale = 1.5;
+        else if (width * height <= maxPx) scale = 1;
+        else scale = Math.sqrt(maxPx / (width * height));
+      }
+
+      // 6. 渲染 holder（含纸色背景）→ Canvas → toBlob（弃 toDataURL：大图内存减半）→ a[download] 下载
+      //    windowWidth/windowHeight 显式设为完整内容尺寸，防视口裁剪截断长图
+      //    所有异常路径收敛到 finally 清理：移除离屏容器 + 释放 canvas + 恢复按钮
+      window.html2canvas(holder, {
+        scale: scale,
+        useCORS: true,
+        logging: false,
+        backgroundColor: null,
+        windowWidth: width,
+        windowHeight: height
+      }).then(function(c) {
+        canvas = c;
+        return new Promise(function(resolve, reject) {
+          canvas.toBlob(function(blob) {
+            if (!blob) { reject(new Error('toBlob 失败')); return; }
+            url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = buildScreenshotFilename(ARCHIVE.getFormData());
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            resolve();
+          }, 'image/png');
+        });
+      }).then(function() {
+        if (url) setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      }).catch(function(err) {
+        if (window.console) console.error('[截图] 渲染失败:', err);
+        notifyScreenshot('截图失败，请重试');
+      }).then(function() {
+        if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+        resetScreenshotBtn();
+      });
+    } catch (err) {
+      if (window.console) console.error('[截图] 异常:', err);
+      if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      resetScreenshotBtn();
+      notifyScreenshot('截图失败，请重试');
+    }
+  });
+}
+
 // ===== 回归测试模式（URL 加 ?test=1）=====
 (function() {
   if (!/[\?&]test=1(&|$)/.test(location.search)) return;
@@ -9239,6 +9465,64 @@ document.addEventListener('click', function(e) {
     tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
   })();
 
+
+  // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============
+  (function testScreenshot() {
+    tests.push({ section:'截图 — v0.23.0' });
+
+    // T01: 截图按钮存在且 onclick 绑定 captureScreenshot（测试 UI 隐藏 .page 但 DOM 仍在）
+    var sbtn = document.getElementById('btnScreenshot');
+    tests.push(eq('截图:T01 按钮存在', sbtn ? '存在' : '缺失', '存在'));
+    tests.push(eq('截图:T01 onclick 绑定', sbtn ? (sbtn.getAttribute('onclick') || '').indexOf('captureScreenshot') >= 0 : false, true));
+
+    // T02-T04: 文件名生成 + 隐私联动（改写隐私开关，try/finally 恢复防污染后续断言）
+    var prevPrivacy = ARCHIVE.getPrivacyMode();
+    try {
+      ARCHIVE.setPrivacyMode(false);
+      var f2 = buildScreenshotFilename({ name:'邦顺', nickname:'', yiming:'' });
+      tests.push(eq('截图:T02 隐私关→含真名', f2.indexOf('邦顺') >= 0, true));
+      tests.push(eq('截图:T02 前缀格式', f2.indexOf('八字排盘_') === 0 && /\.png$/.test(f2), true));
+
+      ARCHIVE.setPrivacyMode(true);
+      var f3 = buildScreenshotFilename({ name:'邦顺', nickname:'小名', yiming:'小荷' });
+      tests.push(eq('截图:T03 隐私开→含艺名', f3.indexOf('小荷') >= 0, true));
+      tests.push(eq('截图:T03 不含真名', f3.indexOf('邦顺') === -1, true));
+
+      var f4 = buildScreenshotFilename({ name:'邦顺', nickname:'', yiming:'' });
+      tests.push(eq('截图:T04 匿名兜底', f4.indexOf('匿名') >= 0, true));
+      tests.push(eq('截图:T04 不含真名', f4.indexOf('邦顺') === -1, true));
+    } finally {
+      ARCHIVE.setPrivacyMode(prevPrivacy);
+    }
+
+    // T05: 字符清洗纯函数直测
+    var s5 = sanitizeFilename('小/荷 花');
+    tests.push(eq('截图:T05 清洗后不含斜杠', s5.indexOf('/') === -1, true));
+    tests.push(eq('截图:T05 清洗后不含空格', s5.indexOf(' ') === -1, true));
+
+    // T06: 未排盘守卫（主动重置 #output 为占位态保证确定性，不依赖当前渲染态）
+    var out = document.getElementById('output');
+    var prevHtml = out ? out.innerHTML : '';
+    var threw = null;
+    var clickCount = 0;
+    var origClick = HTMLAnchorElement.prototype.click;
+    try {
+      if (out) out.innerHTML = '<div class="loading">占位</div>';
+      HTMLAnchorElement.prototype.click = function() { clickCount++; };
+      captureScreenshot();
+    } catch (e) {
+      threw = e;
+    } finally {
+      HTMLAnchorElement.prototype.click = origClick;
+      if (out) out.innerHTML = prevHtml;
+      var nt = document.getElementById('screenshotNotify');
+      if (nt && nt.parentNode) nt.parentNode.removeChild(nt);
+    }
+    tests.push(eq('截图:T06 不抛异常', threw === null, true));
+    tests.push(eq('截图:T06 无下载触发', clickCount === 0, true));
+    tests.push(eq('截图:T06 无离屏残留', document.getElementById('screenshotHolder') ? '有残留' : '无残留', '无残留'));
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');
@@ -9312,6 +9596,8 @@ document.addEventListener('click', function(e) {
     doAiParse: doAiParse,
     doPaipan: doPaipan,
     calendarType: calendarType,
+    captureScreenshot: captureScreenshot,
+    buildScreenshotFilename: buildScreenshotFilename,
   };
 })();
 </script>

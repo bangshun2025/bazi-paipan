@@ -14,7 +14,7 @@ DIR="${1:-$(pwd)}"
 cd "$DIR" || { echo "❌ 目录不存在: $DIR"; exit 1; }
 
 FILES="index.html standalone.html standalone-split.html"
-KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll"
+KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot"
 MODULES="constants algorithm archive gongwei render main"
 FAIL=0
 TMP="$(mktemp -d)"
