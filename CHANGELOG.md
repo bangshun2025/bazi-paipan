@@ -12,6 +12,9 @@
 - 截图防重入（busy 态）、未排盘即时提示、html2canvas CDN 三源降级链（jsDelivr/unpkg/本地兜底 8s 超时）
 - 自动化断言 211→224（截图按钮/文件名/清洗/空态 13 条）
 
+### 修复
+- 截图长图左右贴边：离屏克隆容器左右各加 36px 纸色留白（holder 加宽 2×36px 保持内容区原宽，不挤压排版）
+
 ### 文档
 - [PRD](docs/PRD_v0.23.0_盘面截图.md) / [ADR](docs/ADR_v0.23.0_盘面截图.md) / [QA](docs/QA_v0.23.0_盘面截图.md) / [RELEASE](docs/RELEASE_v0.23.0_盘面截图.md)
 
