@@ -329,7 +329,8 @@ function updateSolarPreview() {
   if (!el) return;
   const lng = getLng();
   const y = parseInt(document.getElementById('inYear').value);
-  const m = parseInt(document.getElementById('inMonth').value);
+  // v0.23.1 农历模式 inMonth 被替换为 inMonthSelect，DOM 自适应取值
+  const m = parseInt((document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value);
   const d = parseInt(document.getElementById('inDay').value);
   const h = parseInt(document.getElementById('inHour').value);
   const mi = parseInt(document.getElementById('inMin').value) || 0;
@@ -1221,7 +1222,8 @@ function captureScreenshot() {
     parseNaturalInput: parseNaturalInput,
     doAiParse: doAiParse,
     doPaipan: doPaipan,
-    calendarType: calendarType,
+    // v0.23.1 getter：实时反映日历模式（值快照会导致农历模式误判走公历分支）
+    get calendarType() { return calendarType; },
     captureScreenshot: captureScreenshot,
     buildScreenshotFilename: buildScreenshotFilename,
   };

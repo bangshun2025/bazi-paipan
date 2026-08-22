@@ -4,6 +4,19 @@
 
 ---
 
+## v0.23.1 — 农历+真太阳时排盘修复 (2026-08-22)
+
+### 修复
+- **农历模式排盘无反应**：`APP.calendarType` 由创建时值快照改为 getter 实时读取（原值快照恒为 'solar'，农历模式下 doPaipan 误走公历 DOM 分支 → `inMonth` 为 null → TypeError 中断）；`updateSolarPreview` 月份取值 DOM 自适应（inMonthSelect || inMonth），勾选真太阳时时不再崩溃
+- **真太阳时分钟进位**：`Math.round(adjMin % 60)` 小数偏移（如 59.6 分）取整为 60 分时未进位到小时（显示 04:60），现进位为 05:00；`adjH` 同步改 `let`
+
+### 修改文件
+- `main.js`（APP.calendarType getter + updateSolarPreview DOM 自适应）
+- `algorithm.js`（trueSolarTime 分钟进位）
+- `index.html` / `standalone.html`（内联同步）
+
+---
+
 ## v0.23.0 — 盘面截图 (2026-08-22)
 
 ### 新增

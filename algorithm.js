@@ -169,8 +169,10 @@ function trueSolarTime(y, m, d, h, mi, lng) {
   const daysInMonth = new Date(adjY, adjM, 0).getDate();
   if (adjD < 1) { adjM -= 1; if (adjM < 1) { adjM = 12; adjY -= 1; } adjD = new Date(adjY, adjM, 0).getDate(); }
   else if (adjD > daysInMonth) { adjD -= daysInMonth; adjM += 1; if (adjM > 12) { adjM = 1; adjY += 1; } }
-  const adjH = Math.floor(adjMin / 60);
-  const adjMi = Math.round(adjMin % 60);
+  let adjH = Math.floor(adjMin / 60);
+  let adjMi = Math.round(adjMin % 60);
+  // v0.23.1 小数偏移取整进位：59.6 分 → 60 分需进位到小时
+  if (adjMi === 60) { adjMi = 0; adjH += 1; }
   return {
     y: adjY, m: adjM, d: adjD, h: adjH, mi: adjMi,
     offsetMin: offsetMin,
