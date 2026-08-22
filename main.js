@@ -385,22 +385,26 @@ const TIME_MOD = {
 };
 
 function parseNaturalInput(text) {
-  const result = { name:'', gender:'男', year:null, month:null, day:null, hour:null, min:0, prov:'', city:'', dist:'' };
+  const result = { name:'', gender:'男', year:null, month:null, day:null, hour:null, min:0, prov:'', city:'', dist:'', calendarType:'solar' };
   let t = text.trim();
   if (!t) return result;
+  // v0.23.3 地址匹配基准：保留原始文本，避免省=市（如北京市）替换后城市/区县失配
+  const t0 = t;
 
   // 1. 提取性别
   const genderM = t.match(/[男女]/);
   if (genderM) { result.gender = genderM[0]; t = t.replace(genderM[0], ' '); }
 
-  // 2. 提取日期 — 中文格式
-  const dateCN = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]/);
+  // 2. 提取日期 — 中文格式（"日/号"后缀可省略，如"1986年7月26（农历）"）
+  const dateCN = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?/);
   if (dateCN) {
     result.year = parseInt(dateCN[1]);
     result.month = parseInt(dateCN[2]);
     result.day = parseInt(dateCN[3]);
     t = t.replace(dateCN[0], ' ');
   }
+  // v0.23.3 农历标志识别：农历/阴历/旧历/老历（含括号写法）
+  if (/农历|阴历|旧历|老历/.test(text)) result.calendarType = 'lunar';
   // 数字格式 1982-10-18 / 1982.10.18 / 1982/10/18
   if (!result.year) {
     const dateNum = t.match(/(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})/);
@@ -451,21 +455,23 @@ function parseNaturalInput(text) {
   // 按长度降序匹配，防止"广西"匹配到"广西省"
   const sortedProv = [...provList].sort((a,b) => b.length - a.length);
   for (const p of sortedProv) {
-    if (t.includes(p)) {
+    const shortP = p.replace(/[省市区]$/, '');
+    if (t0.includes(p) || t0.includes(shortP)) {
       result.prov = p;
-      t = t.replace(p, ' ');
+      t = t.replace(p, ' ').replace(shortP, ' ');
       // 提取城市
       const cities = Object.keys(LOC_DATA[p].cities);
       const sortedCities = [...cities].sort((a,b) => b.length - a.length);
       for (const c of sortedCities) {
         const shortC = c.replace(/[市县区]$/, '');
-        if (t.includes(c) || t.includes(shortC)) {
+        if (t0.includes(c) || t0.includes(shortC)) {
           result.city = c;
           t = t.replace(c, ' ').replace(shortC, ' ');
-          // 提取区县
+          // 提取区县（支持省县写法：输入"南丹"匹配"南丹县"）
           const dists = LOC_DATA[p].cities[c]?.dist || [];
           for (const d of dists) {
-            if (t.includes(d)) { result.dist = d; t = t.replace(d, ' '); break; }
+            const shortD = d.replace(/[县区市]$/, '');
+            if (t0.includes(d) || t0.includes(shortD)) { result.dist = d; t = t.replace(d, ' ').replace(shortD, ' '); break; }
           }
           break;
         }
@@ -490,7 +496,7 @@ function doAiParse() {
   let preview = '';
   if (r.name) preview += '姓名：' + (ARCHIVE.getPrivacyMode() ? '已隐藏' : r.name) + '  ';
   preview += '性别：' + r.gender + '  ';
-  if (r.year) preview += r.year + '年' + r.month + '月' + r.day + '日  ';
+  if (r.year) preview += r.year + '年' + r.month + '月' + r.day + '日' + (r.calendarType === 'lunar' ? '（农历）' : '') + '  ';
   if (r.hour !== null) preview += r.hour + ':' + String(r.min).padStart(2,'0') + '  ';
   if (r.prov) preview += r.prov + (r.city||'') + (r.dist||'');
   
@@ -504,8 +510,15 @@ function doAiParse() {
   // 填表
   if (r.name) document.getElementById('inName').value = r.name;
   document.getElementById('inGender').value = r.gender;
+  // v0.23.3 农历模式兼容：先切日历（会重建月控件），再填月份
+  var needLunar = (r.calendarType === 'lunar');
+  if (needLunar !== (APP.calendarType === 'lunar')) toggleCalendar(needLunar ? 'lunar' : 'solar');
   document.getElementById('inYear').value = r.year;
-  document.getElementById('inMonth').value = r.month;
+  if (needLunar) {
+    document.getElementById('inMonthSelect').value = r.month;
+  } else {
+    document.getElementById('inMonth').value = r.month;
+  }
   document.getElementById('inDay').value = r.day;
   if (r.hour !== null) document.getElementById('inHour').value = r.hour;
   document.getElementById('inMin').value = r.min;
