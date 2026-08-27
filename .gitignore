@@ -1,1 +1,12 @@
 .DS_Store
+
+# ===== 安全防呆（v0.24.0 发布师添加 2026-08-27）=====
+# 备份目录（含 v0.23.3 全量备份，禁止进仓库）
+.bak*/
+# 密码/密钥类文件（数据库密码、service_role key 等严禁进 Git）
+*密码*
+*password*
+*secret*
+*service_role*
+# Supabase 配置记录档案（含数据库密码，仅存人生资产档案目录）
+Supabase配置记录*

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.23.4 — main.js */
+/* 八字排盘 v0.24.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1247,6 +1247,38 @@ function captureScreenshot() {
     document.title = '❌ ' + failed + ' 失败 — 八字排盘回归测试';
   }
 })();
+
+// ===== v0.24.0 追加断言辅助 =====
+// auth.js/records.js 在 main 段之后加载，测试区同步渲染时其逻辑尚不可用；
+// 各模块加载完成后经 __testAppend 追加断言并重算统一统计（不重排既有断言）。
+window.__testAppend = function(t) {
+  var results = document.getElementById('test-results');
+  var summary = document.getElementById('test-summary');
+  if (!results || !summary) return;
+  // 解析既有统计（banner 文本：全部 N 条断言通过 / f/t 条断言失败）
+  var text = summary.textContent || '';
+  var mFail = text.match(/(\d+)\s*\/\s*(\d+)\s*条断言失败/);
+  var mOk = text.match(/全部\s*(\d+)\s*条断言通过/);
+  var total = 0, failed = 0;
+  if (mFail) { total = parseInt(mFail[2], 10); failed = parseInt(mFail[1], 10); }
+  else if (mOk) { total = parseInt(mOk[1], 10); failed = 0; }
+  var ok = !!t.ok;
+  total++; if (!ok) failed++;
+  var block = document.createElement('div');
+  block.setAttribute('data-ok', ok ? '1' : '0');
+  block.style.cssText = 'margin-bottom:6px;padding:8px 12px;border-radius:4px;font-size:14px;font-family:monospace;background:' + (ok ? '#1b3a1b' : '#3a1b1b') + ';border-left:3px solid ' + (ok ? '#4caf50' : '#f44336');
+  block.textContent = (ok ? '✅ ' : '❌ ') + t.label + (t.detail ? ' — ' + t.detail : '');
+  results.appendChild(block);
+  var bannerColor = failed === 0 ? '#4caf50' : '#f44336';
+  var bannerBg = failed === 0 ? '#1b3a1b' : '#3a1b1b';
+  var bannerIcon = failed === 0 ? '✅ 全绿' : '❌ 失败';
+  var bannerText = failed === 0 ? '全部 ' + total + ' 条断言通过！' : failed + '/' + total + ' 条断言失败';
+  summary.style.cssText = 'background:' + bannerBg + ';border-radius:8px;padding:20px;margin-bottom:20px;text-align:center;border:2px solid ' + bannerColor;
+  summary.innerHTML = '<div style="font-size:32px;margin-bottom:8px">' + bannerIcon + '</div>'
+    + '<div style="font-size:20px;font-weight:bold;color:' + bannerColor + '">' + bannerText + '</div>'
+    + '<div style="color:#888;font-size:13px;margin-top:4px">含 v0.24 追加断言</div>';
+  document.title = failed === 0 ? '✅ 全部通过 — 八字排盘回归测试' : '❌ ' + failed + ' 失败 — 八字排盘回归测试';
+};
 
 
   // ===== 挂载到全局命名空间 =====
