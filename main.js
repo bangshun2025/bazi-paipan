@@ -1,4 +1,4 @@
-/* 八字排盘 v0.23.0 — main.js */
+/* 八字排盘 v0.23.4 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====

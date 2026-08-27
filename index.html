@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.23.0 | 2026-08-22 -->
+<!-- 八字排盘 · 从真版 v0.23.4 | 2026-08-27 -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -4648,9 +4648,11 @@ function renYuanSiLing(y, m, d, h, minute) {
 function paipan(name, gender, y, m, d, h, mi) {
   // 1. 年柱（考虑立春）
   const lc2 = getSolarTerm(y, 2); // 立春（表外年份可能为 null）
-  const lc2Date = lc2 ? new Date(lc2.getFullYear(), lc2.getMonth(), lc2.getDate()) : null;
   const birth = new Date(y, m - 1, d, h, mi);
-  const effYear = (lc2Date && birth < lc2Date) ? y - 1 : y;
+  // v0.23.4 节气当天出生修复：立春边界改用完整时刻（BJT-as-UTC 基准），修复立春当天零点截断导致年柱错判
+  const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
+  const lc2Ms = lc2 ? lc2.getTime() + 288e5 : null;
+  const effYear = (lc2Ms !== null && birthMs < lc2Ms) ? y - 1 : y;
   const nian = yearPillar(effYear);
 
   // 2. 月柱
@@ -6807,7 +6809,7 @@ function clearAllTwinPillars() {
 })();
 </script>
 <script>
-/* 八字排盘 v0.22.0 — render.js */
+/* 八字排盘 v0.23.4 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -8384,7 +8386,7 @@ function renderChartToHtml(data, arch) {
   };
 })();
 
-/* 八字排盘 v0.23.0 — main.js */
+/* 八字排盘 v0.23.4 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====

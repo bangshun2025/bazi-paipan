@@ -1,4 +1,4 @@
-/* 八字排盘 v0.22.0 — render.js */
+/* 八字排盘 v0.23.4 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1323,12 +1323,12 @@ function doPaipan() {
       const d1 = paipan(name, g1, ey, em, ed, eh, emi);
       d1.displayName = displayName;
       d1.trueSolar = tst;
-      d1.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      d1.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d1);
       const d2 = paipan(name, g2, ey, em, ed, eh, emi);
       d2.displayName = displayName;
       d2.trueSolar = tst;
-      d2.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      d2.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d2);
       output.innerHTML = '';
       renderLongFengCardsHtml(d1, d2, 'output');
@@ -1337,7 +1337,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
-      data.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
       renderTwinCardsHtml(data, 'output');
       setCurrentBaziResult(extractBaziFromPaipan(data));
@@ -1345,7 +1345,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
-      data.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
       renderChart(data);
       setCurrentBaziResult(extractBaziFromPaipan(data));
