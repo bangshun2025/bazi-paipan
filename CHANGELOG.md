@@ -4,6 +4,25 @@
 
 ---
 
+## v0.23.4 — 节气当天出生排盘崩溃修复：节气边界完整时刻比较 + 交运越界 null 防护 (2026-08-27)
+
+### 修复
+- **节气当天出生月柱误判（P0 崩溃根因）**：`monthPillar` 节气区间判断原按「节气日零点」截断，1987-05-06 立夏（17:05）当天 06:30 出生被误判巳月 → 逆排起运回退找立夏 → 起运 121 年 8 月 → 起运日期 2109 年越出节气表 → `getSolarTerm` 返回 null → 交运循环 `.getUTCFullYear()` 崩溃。现统一按「BJT-as-UTC」完整时刻比较（`Date.UTC(y,m-1,d,h,mi)` vs 节气 `getTime()+8h`），节气当天、节气前出生不再误判
+- **人元司令同日零点截断**：`renYuanSiLing` 增加时分参数、与 monthPillar 同基准完整时刻比较，节气当天不再显示「立夏后 0 日」
+- **年柱立春边界同类零点截断**：`paipan` 年柱立春判断同步改完整时刻（同类边界，顺带修复）
+- **交运节气循环 null 防护**：standalone.html / index.html 交运循环 `st`/`nextSt` 为 null（2101+ 越界）时用哨兵日期，不再抛 `Cannot read properties of null (reading 'getUTCFullYear')`（对齐 render.js 375/381 既有判空）
+- **自动化断言 224→232**：`?test=1` 新增 T01-T04（节气当天 06:30→辰月、18:00→巳月、人元司令含谷雨、交运越界不抛异常），双环境全绿
+
+### 修改文件
+- `algorithm.js`（monthPillar / renYuanSiLing / paipan 年柱立春）
+- `standalone.html` / `index.html`（内联同步 + 交运循环判空）
+- `main.js`（T01-T04 断言）
+
+### 文档
+- [PRD](docs/PRD_v0.23.1_节气当天出生崩溃修复.md)（起草 v0.23.1，Leader 定版 v0.23.4）/ [ADR](docs/ADR_v0.23.4_节气当天出生崩溃修复.md) / [QA](docs/QA_v0.23.4_节气当天出生崩溃修复.md) / [TEST](docs/TEST_v0.23.4_节气当天出生崩溃修复.md)
+
+---
+
 ## v0.23.3 — AI 录入识别农历/县份 + 农历模式排盘崩溃修复 (2026-08-23)
 
 ### 修复
