@@ -534,14 +534,16 @@ function doAiParse() {
       setTimeout(() => {
         if (r.dist) document.getElementById('inDist').value = r.dist;
         hideAiInput();
-        doPaipan();
+        // P0-01 修复：统一走守卫入口，禁止绕过未登录拦截
+        window.APP.doPaipan();
       }, 100);
     }, 100);
   } else {
     document.getElementById('useSolar').checked = false;
     toggleSolar();
     hideAiInput();
-    doPaipan();
+    // P0-01 修复：统一走守卫入口，禁止绕过未登录拦截
+    window.APP.doPaipan();
   }
 }
 

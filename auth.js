@@ -30,6 +30,17 @@
       };
       window.APP.__authGuarded = true;
     }
+    // P0-01 修复：同时包装 RENDER.doPaipan，封堵直连 RENDER 的入口
+    //（如 togglePrivacy 切换时 window.RENDER.doPaipan() 重排，不得绕过守卫）
+    if (window.RENDER && typeof window.RENDER.doPaipan === 'function' && !window.RENDER.__authGuarded) {
+      var origRenderDoPaipan = window.RENDER.doPaipan;
+      window.RENDER.doPaipan = function() {
+        if (isTestMode()) return origRenderDoPaipan.apply(this, arguments); // 回归测试放行
+        if (!isLoggedIn()) { requireLogin(); return; }
+        return origRenderDoPaipan.apply(this, arguments);
+      };
+      window.RENDER.__authGuarded = true;
+    }
   })();
 
   // ===== 初始化 =====
@@ -44,6 +55,16 @@
         return origDoPaipan.apply(this, arguments);
       };
       window.APP.__authGuarded = true;
+    }
+    // P0-01 修复：与顶层同逻辑包装 RENDER.doPaipan（幂等跳过）
+    if (window.RENDER && typeof window.RENDER.doPaipan === 'function' && !window.RENDER.__authGuarded) {
+      var origRenderDoPaipan = window.RENDER.doPaipan;
+      window.RENDER.doPaipan = function() {
+        if (isTestMode()) return origRenderDoPaipan.apply(this, arguments); // 回归测试放行
+        if (!isLoggedIn()) { requireLogin(); return; }
+        return origRenderDoPaipan.apply(this, arguments);
+      };
+      window.RENDER.__authGuarded = true;
     }
     if (!window.supabase) {
       console.error('[auth] supabase-js CDN 未加载');
@@ -354,5 +375,29 @@
     t('v0.24 T02:空url判定缺配置', isConfigMissing({ url: '', anonKey: 'x' }) === true, '空url→missing');
     t('v0.24 T02:null判定缺配置', isConfigMissing(null) === true, 'null→missing');
     t('v0.24 T02:有效凭证非缺配置', isConfigMissing({ url: 'https://ok.supabase.co', anonKey: 'sb_publishable__x' }) === false, '有效→ok');
+    // ===== T05（P0-01 回归）：AI 录入路径不得绕过排盘守卫 =====
+    t('v0.24 T05:守卫已包装RENDER', !!(window.RENDER && window.RENDER.__authGuarded === true), 'renderGuarded=' + (window.RENDER && window.RENDER.__authGuarded));
+    t('v0.24 T05:APP.doPaipan非原始引用', !!(window.APP && window.RENDER && window.APP.doPaipan !== window.RENDER.doPaipan), 'app!=render=' + (window.APP && window.RENDER && window.APP.doPaipan !== window.RENDER.doPaipan));
+    (function() {
+      // doAiParse 内部必须调守卫入口（window.APP.doPaipan），patch 计数验证
+      var called = 0;
+      var aiInput = document.getElementById('aiInput');
+      if (!aiInput) { t('v0.24 T05:doAiParse走守卫入口', false, 'aiInput不存在'); return; }
+      var origDoPaipan = window.APP.doPaipan;
+      window.APP.doPaipan = function() { called++; return 'GUARDED'; };
+      var origVal = aiInput.value;
+      aiInput.value = '张三 男 1982年10月18日 05:01';
+      try {
+        window.APP.doAiParse();
+      } catch (e) {
+        t('v0.24 T05:doAiParse走守卫入口', false, '异常:' + e.message);
+        window.APP.doPaipan = origDoPaipan;
+        aiInput.value = origVal;
+        return;
+      }
+      window.APP.doPaipan = origDoPaipan;
+      aiInput.value = origVal;
+      t('v0.24 T05:doAiParse走守卫入口', called > 0, '守卫入口被调=' + called);
+    })();
   })();
 })();
