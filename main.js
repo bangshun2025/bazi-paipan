@@ -1106,6 +1106,36 @@ function captureScreenshot() {
   })();
 
 
+  // ============ v0.23.4 节气当天出生崩溃修复断言（T01-T04） ============
+  (function testSolarTermDayFix() {
+    tests.push({ section:'节气当天 — v0.23.4 崩溃修复' });
+
+    // T01: 1987-05-06 06:30（立夏 17:05:35 前）→ 辰月
+    var m1 = monthPillar(1987, 5, 6, 6, 30, '丁');
+    tests.push(eq('T01:立夏当天06:30→辰月', m1.zhi, '辰'));
+    tests.push(eq('T01:月柱甲辰', m1.gan + m1.zhi, '甲辰'));
+
+    // T02: 1987-05-06 18:00（立夏后）→ 巳月
+    var m2 = monthPillar(1987, 5, 6, 18, 0, '丁');
+    tests.push(eq('T02:立夏当天18:00→巳月', m2.zhi, '巳'));
+    tests.push(eq('T02:月柱乙巳', m2.gan + m2.zhi, '乙巳'));
+
+    // T03: renYuanSiLing 带时分 → 06:30 落辰月（清明后 30 日），不得出现「立夏后 0 日」
+    var ry = renYuanSiLing(1987, 5, 6, 6, 30);
+    tests.push(eq('T03:人元司令含清明', ry.indexOf('清明') >= 0, true));
+    tests.push(eq('T03:天数30', ry.indexOf('30 日') >= 0, true));
+    tests.push(eq('T03:无立夏后0日', ry.indexOf('立夏后 0 日') === -1, true));
+
+    // T04: 起运日期越界（2109，超出节气表 1000-2100）→ 交运循环 null 防护不抛异常
+    var threw4 = null;
+    try {
+      var p4 = paipan('越界防护', '男', 1987, 5, 6, 6, 30);
+      p4.qiYun.years = 122; p4.qiYun.months = 0; p4.qiYun.days = 0; p4.qiYun.hours = 0;
+      renderChart(p4, 1, 'output');
+    } catch (e) { threw4 = e; }
+    tests.push(eq('T04:交运越界不抛异常', threw4 === null, true));
+  })();
+
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============
   (function testScreenshot() {
     tests.push({ section:'截图 — v0.23.0' });

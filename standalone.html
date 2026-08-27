@@ -4254,11 +4254,15 @@ function yearPillar(y) {
 // ============ 月柱 ============
 function monthPillar(y, m, d, h, mi, yearGan) {
   // 根据出生日期确定在哪个月（基于节气）
-  const birth = new Date(y, m - 1, d, h || 0, mi || 0);
+  // v0.23.4 节气当天出生修复：节气边界改用完整时刻（保留时分），统一按
+  // "BJT-as-UTC" 基准比较（出生 Date.UTC 字段 = 北京钟表时间；节气 getTime()+8h 转回北京钟表）。
+  // 修复：节气当天出生被"节气日零点"截断误判下月（如 1987-05-06 立夏 17:05，06:30 错判巳月→起运越界崩溃）
+  const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
+  const BJT_OFFSET = 288e5; // 8 小时（节气表存真实 UTC，需转回北京时间基准）
   // 判断出生是否在立春前（用于正确选择大雪/小寒的年份）
   const lc = getSolarTerm(y, 2);
-  const lcDate = lc ? new Date(lc.getFullYear(), lc.getMonth(), lc.getDate()) : null;
-  const beforeLC = lcDate ? birth < lcDate : false;
+  const lcMs = lc ? lc.getTime() + BJT_OFFSET : null;
+  const beforeLC = lcMs !== null && birthMs < lcMs;
   for (let i = 0; i < 12; i++) {
     const termIdx = MONTH_TERM[i];
     let stY = y;
@@ -4268,8 +4272,8 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     else if (i === 11) stY = beforeLC ? y : y + 1;
     const st = getSolarTerm(stY, termIdx); // 本月起始节气（表外年份可能为 null）
     // null 仅发生在"子月大雪在 999 年"（1000 年年初出生）：大雪已过，视为已进入本月
-    const stDate = st ? new Date(st.getFullYear(), st.getMonth(), st.getDate()) : new Date(-8640000000000000);
-    
+    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
+
     // 下月起始节气
     const nextI = (i + 1) % 12;
     const nextTerm = MONTH_TERM[nextI];
@@ -4277,9 +4281,9 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     if (nextTerm <= termIdx) nextY = stY + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
     // null 仅发生在"下月节气在 2101 年"（2100 年末出生）：节气未到，视为未进下月
-    const nextDate = nextSt ? new Date(nextSt.getFullYear(), nextSt.getMonth(), nextSt.getDate()) : new Date(8640000000000000);
-    
-    if (birth >= stDate && birth < nextDate) {
+    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+
+    if (birthMs >= stMs && birthMs < nextMs) {
       const zhi = DZ[(i + 2) % 12]; // 寅月=寅, 卯月=卯...
       const ganStart = WU_HU_DUN[yearGan];
       const gan = TG[(TG.indexOf(ganStart) + i) % 10];
@@ -4604,9 +4608,12 @@ const REN_YUAN = {
   '丑':[[9,'癸'],[12,'辛'],[30,'己']]
 };
 
-function renYuanSiLing(y, m, d) {
+function renYuanSiLing(y, m, d, h, minute) {
   // 遍历月节气找到当前月份，算节后第几天
-  const birth = new Date(y, m-1, d);
+  // v0.23.4 节气当天出生修复：与 monthPillar 同基准（BJT-as-UTC 完整时刻），
+  // 修复节气当天零点截断导致错月（如 1987-05-06 立夏 06:30 显示"立夏后 0 日"）
+  const birthMs = Date.UTC(y, m - 1, d, h || 0, minute || 0);
+  const BJT_OFFSET = 288e5;
   for (let mi = 0; mi < 12; mi++) {
     const termIdx = MONTH_TERM[mi];
     let stY = y;
@@ -4615,15 +4622,15 @@ function renYuanSiLing(y, m, d) {
       stY = (m === 1) ? y : y + 1;
     }
     const st = getSolarTerm(stY, termIdx);
-    const stDate = st ? new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate()) : new Date(-8640000000000000);
+    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
     let nextY = y;
     if (nextTerm <= termIdx) nextY = y + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextDate = nextSt ? new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate()) : new Date(8640000000000000);
-    if (birth >= stDate && birth < nextDate) {
-      const daysAfter = Math.floor((birth - stDate) / 86400000);
+    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+    if (birthMs >= stMs && birthMs < nextMs) {
+      const daysAfter = Math.floor((birthMs - stMs) / 86400000);
       const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
       const termName = S_TERM_NAME[termIdx];
       const ry = REN_YUAN[monthZhi];
@@ -7174,13 +7181,15 @@ function renderChart(data, twin, targetId) {
       let stY = qyY;
       if (tIdx === 0 && mi === 11) stY = (qyStartDate.getMonth() === 0) ? qyY : qyY + 1;
       const st = getSolarTerm(stY, tIdx);
-      const stDate = new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate());
+      // v0.23.4 交运节气越界防护：起运日期超出节气表（2101+）时 getSolarTerm 返回 null，
+      // 补判空避免 .getUTCFullYear() 崩溃（与 render.js 对齐）
+      const stDate = st ? new Date(st.getUTCFullYear(), st.getUTCMonth(), st.getUTCDate()) : new Date(-8640000000000000);
       const nextMi = (mi + 1) % 12;
       const nextTerm = MONTH_TERM[nextMi];
       let nextY = qyY;
       if (nextTerm <= tIdx) nextY = qyY + 1;
       const nextSt = getSolarTerm(nextY, nextTerm);
-      const nextDate = new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate());
+      const nextDate = nextSt ? new Date(nextSt.getUTCFullYear(), nextSt.getUTCMonth(), nextSt.getUTCDate()) : new Date(8640000000000000);
       if (qyStartDate >= stDate && qyStartDate < nextDate) {
         jyTermName = S_TERM_NAME[tIdx];
         const qyDay2 = new Date(qyStartDate.getFullYear(), qyStartDate.getMonth(), qyStartDate.getDate());
@@ -8125,12 +8134,12 @@ function doPaipan() {
       const d1 = paipan(name, g1, ey, em, ed, eh, emi);
       d1.displayName = displayName;
       d1.trueSolar = tst;
-      d1.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      d1.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d1);
       const d2 = paipan(name, g2, ey, em, ed, eh, emi);
       d2.displayName = displayName;
       d2.trueSolar = tst;
-      d2.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      d2.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d2);
       output.innerHTML = '';
       renderLongFengCardsHtml(d1, d2, 'output');
@@ -8139,7 +8148,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
-      data.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
       renderTwinCardsHtml(data, 'output');
       setCurrentBaziResult(extractBaziFromPaipan(data));
@@ -8147,7 +8156,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
-      data.renYuan = renYuanSiLing(solarY, solarM, solarD);
+      data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
       renderChart(data);
       setCurrentBaziResult(extractBaziFromPaipan(data));
@@ -9482,6 +9491,36 @@ function captureScreenshot() {
     tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
   })();
 
+
+  // ============ v0.23.4 节气当天出生崩溃修复断言（T01-T04） ============
+  (function testSolarTermDayFix() {
+    tests.push({ section:'节气当天 — v0.23.4 崩溃修复' });
+
+    // T01: 1987-05-06 06:30（立夏 17:05:35 前）→ 辰月
+    var m1 = monthPillar(1987, 5, 6, 6, 30, '丁');
+    tests.push(eq('T01:立夏当天06:30→辰月', m1.zhi, '辰'));
+    tests.push(eq('T01:月柱甲辰', m1.gan + m1.zhi, '甲辰'));
+
+    // T02: 1987-05-06 18:00（立夏后）→ 巳月
+    var m2 = monthPillar(1987, 5, 6, 18, 0, '丁');
+    tests.push(eq('T02:立夏当天18:00→巳月', m2.zhi, '巳'));
+    tests.push(eq('T02:月柱乙巳', m2.gan + m2.zhi, '乙巳'));
+
+    // T03: renYuanSiLing 带时分 → 06:30 落辰月（清明后 30 日），不得出现「立夏后 0 日」
+    var ry = renYuanSiLing(1987, 5, 6, 6, 30);
+    tests.push(eq('T03:人元司令含清明', ry.indexOf('清明') >= 0, true));
+    tests.push(eq('T03:天数30', ry.indexOf('30 日') >= 0, true));
+    tests.push(eq('T03:无立夏后0日', ry.indexOf('立夏后 0 日') === -1, true));
+
+    // T04: 起运日期越界（2109，超出节气表 1000-2100）→ 交运循环 null 防护不抛异常
+    var threw4 = null;
+    try {
+      var p4 = paipan('越界防护', '男', 1987, 5, 6, 6, 30);
+      p4.qiYun.years = 122; p4.qiYun.months = 0; p4.qiYun.days = 0; p4.qiYun.hours = 0;
+      renderChart(p4, 1, 'output');
+    } catch (e) { threw4 = e; }
+    tests.push(eq('T04:交运越界不抛异常', threw4 === null, true));
+  })();
 
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============
   (function testScreenshot() {
