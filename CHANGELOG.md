@@ -4,6 +4,35 @@
 
 ---
 
+## v0.24.0 — Supabase 账号功能：云端排盘记录 + 30 天免登 + 首次登录本地迁移 (2026-08-29)
+
+### Added
+- **账号系统（Supabase Auth）**：Email + 密码登录/注册/登出，30 天免登（本地持久会话）；登录遮罩 + 三按钮（登录/注册/游客）UI
+- **云端排盘记录**：登录后排盘自动保存，列表 / 查看 / 删除（RLS 用户隔离，仅本人可见）
+- **首次登录本地迁移**：登录时将本地档案合并/上传云端，避免数据孤岛
+- **AI 录入守卫强化（P0-01 修复）**：`doAiParse` 统一走 `APP.doPaipan` 守卫入口（原绕过守卫），守卫同时包装 `RENDER.doPaipan` 纵深防御，未登录 AI 录入被拦截
+- **自动化断言 232→247**：`?test=1` 新增 v0.24 T01-T04（指纹幂等/唯一、含 id 档案指纹）+ T05（守卫包装/守卫入口/patch 计数），三入口 247 条全绿
+- **check-release 增强**：KEYS 补 16 个 v0.24 id、MODULES 补 4 新模块、新增第 4 步外部 JS vs 内联段一致性校验
+
+### Changed
+- `standalone.html` / `index.html`：按 ADR 五段内联 supabase/config/auth/records + 登录 UI + 记录列表，头部版本注释升 v0.24.0
+- `standalone-split.html`：头部版本注释升 v0.24.0
+- `api/handler.rb`：新增 config.js / auth.js / records.js / supabase.min.js 静态路由
+- 版本号 v0.23.3 → v0.24.0（公测基线线上 v0.23.4 保留，本次仅发内测版）
+
+### Security
+- config.js 含真实 anonKey（publishable 级别，可提交 Git）；数据库密码/secret 仅存档案文件（仓库外），`.gitignore` 补 `.bak*/`、`*密码*`、`*password*`、`*secret*`、`*service_role*`、`Supabase配置记录*` 防呆规则
+
+### 修改文件
+- 新增：`config.js` / `auth.js` / `records.js` / `supabase.min.js`
+- 已改：`standalone.html` / `index.html` / `standalone-split.html` / `main.js` / `api/handler.rb` / `scripts/check-release.sh` / `.gitignore`
+- 版本声明：`ext.yml` / `CHANGELOG.md` / `SYSTEM.md`
+
+### 文档
+- [PRD](docs/PRD_v0.24.0_Supabase账号功能.md) / [ADR](docs/ADR_v0.24.0_Supabase账号功能.md) / [TEST](docs/TEST_v0.24.0_Supabase账号功能.md) / [QA 回归报告](docs/QA_v0.24.0_P0-01修复回归报告.md)
+
+---
+
 ## v0.23.4 — 节气当天出生排盘崩溃修复：节气边界完整时刻比较 + 交运越界 null 防护 (2026-08-27)
 
 ### 修复
