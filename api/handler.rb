@@ -714,7 +714,7 @@ class BaziPaipanExt < Clacky::ApiExtension
   end
 
   # JS 模块文件（standalone-split.html 依赖）
-  %w[constants.js algorithm.js archive.js gongwei.js render.js main.js config.js auth.js records.js supabase.min.js].each do |js_file|
+  %w[constants.js algorithm.js archive.js gongwei.js render.js main.js config.js auth.js records.js gongwei-cloud.js supabase.min.js].each do |js_file|
     get "/#{js_file}" do
       file_path = File.join(self.class.ext_dir, js_file)
       if File.exist?(file_path)

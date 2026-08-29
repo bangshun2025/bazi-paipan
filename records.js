@@ -1,4 +1,4 @@
-/* 八字排盘 v0.24.0 — records.js（排盘记录云端模块）
+/* 八字排盘 v0.25.0 — records.js（排盘记录云端模块）
  * ------------------------------------------------------------
  * 职责：保存/列表/查看/删除排盘记录 + 首次登录 localStorage 迁移
  * 依赖：auth.js（window.AUTH）+ supabase-js v2 + algorithm.js（迁移现算）
@@ -485,7 +485,7 @@
     PRESET_ARCHIVES: (window.ARCHIVE && window.ARCHIVE.PRESET_ARCHIVES) || []
   };
 
-  // ===== v0.24.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
+  // ===== v0.25.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
   (function() {
     if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     var t = function(label, ok, detail) {

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.24.0 — auth.js（Supabase 账号模块）
+/* 八字排盘 v0.25.0 — auth.js（Supabase 账号模块）
  * ------------------------------------------------------------
  * 职责：登录/注册/登出 UI + 会话管理（30 天免登录）+ 未登录拦截排盘
  * 依赖：config.js（window.SUPABASE_CONFIG）+ supabase-js v2（CDN 全局 supabase）
@@ -105,6 +105,8 @@
       sb.auth.onAuthStateChange(function(event, session) {
         if (event === 'SIGNED_OUT') {
           currentUser = null;
+          // v0.25.0 宫位上云：登出停防抖，本地不回退
+          if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.onLogout) window.GONGWEI_CLOUD.onLogout();
           showLoginScreen();
         } else if (event === 'SIGNED_IN' && session && session.user) {
           currentUser = session.user;
@@ -166,6 +168,8 @@
     if (!sb) return Promise.resolve();
     return sb.auth.signOut().then(function() {
       currentUser = null;
+      // v0.25.0 宫位上云：登出停防抖，本地不回退
+      if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.onLogout) window.GONGWEI_CLOUD.onLogout();
       showLoginScreen();
     }).catch(function() { currentUser = null; showLoginScreen(); });
   }
@@ -176,6 +180,10 @@
     // 触发云端记录加载 + 迁移检测（records.js）
     if (window.RECORDS && window.RECORDS.onLogin) {
       window.RECORDS.onLogin(user);
+    }
+    // v0.25.0 宫位配置上云：登录拉取云端为准 / 首传本地
+    if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.onLogin) {
+      window.GONGWEI_CLOUD.onLogin(user);
     }
   }
 
@@ -361,7 +369,7 @@
     isConfigMissing: isConfigMissing
   };
 
-  // ===== v0.24.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
+  // ===== v0.25.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
   (function() {
     if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     var t = function(label, ok, detail) {

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.24.0 — main.js */
+/* 八字排盘 v0.25.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1195,6 +1195,90 @@ function captureScreenshot() {
     tests.push(eq('截图:T06 无离屏残留', document.getElementById('screenshotHolder') ? '有残留' : '无残留', '无残留'));
   })();
 
+  // ===== v0.25.0 宫位配置保护 T01-T06（GONGWEI 纯逻辑，gongwei.js 在 main 前加载可同步断言）=====
+  (function() {
+    tests.push({ section:'宫位配置保护(v0.25)' });
+    var GW = window.GONGWEI;
+    if (!GW) { tests.push(fail('v0.25 T01:GONGWEI 已挂载', 'window.GONGWEI 缺失')); return; }
+    var LS = ['bz_gongwei_groups', 'bz_gongwei_trash', 'bz_gongwei_selected', 'bz_gongwei_fav'];
+    var snap = {};
+    for (var si = 0; si < LS.length; si++) { try { snap[LS[si]] = localStorage.getItem(LS[si]); } catch (e) { snap[LS[si]] = null; } }
+    try { snap.bz_gongwei_schema_version = localStorage.getItem('bz_gongwei_schema_version'); } catch (e) { snap.bz_gongwei_schema_version = null; }
+    function countBackup() {
+      var n = 0;
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('_backup_') >= 0) n++; }
+      return n;
+    }
+    function countCorrupt(prefix) {
+      var n = 0;
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(prefix) === 0) n++; }
+      return n;
+    }
+    function restore() {
+      for (var ri = 0; ri < LS.length; ri++) {
+        try { var k = LS[ri]; if (snap[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, snap[k]); } catch (e) {}
+      }
+      try { if (snap.bz_gongwei_schema_version === null) localStorage.removeItem('bz_gongwei_schema_version'); else localStorage.setItem('bz_gongwei_schema_version', snap.bz_gongwei_schema_version); } catch (e) {}
+      if (typeof GW.refreshGongWeiState === 'function') GW.refreshGongWeiState();
+    }
+    var beforeGroups = JSON.stringify(GW.loadGroups());
+
+    // T01 schema 版本
+    tests.push(eq('v0.25 T01:GONGWEI_SCHEMA_VERSION=1', GW.GONGWEI_SCHEMA_VERSION, 1));
+    var sv = null;
+    try { sv = localStorage.getItem('bz_gongwei_schema_version'); } catch (e) {}
+    tests.push(eq('v0.25 T01:localStorage 有 schema_version', sv !== null, true));
+
+    // T02 导出结构
+    var payload = GW.buildExportPayload();
+    tests.push(eq('v0.25 T02:导出含4键+schemaVersion', payload && Object.keys(payload).sort().join(','), 'exportedAt,exportedAtLocal,fav,groups,schemaVersion,selected,trash'));
+    try {
+      var round = JSON.parse(JSON.stringify(payload));
+      tests.push(eq('v0.25 T02:导出JSON可逆', JSON.stringify(round) === JSON.stringify(payload), true));
+    } catch (e) {
+      tests.push(fail('v0.25 T02:导出JSON可逆', 'JSON 序列化异常'));
+    }
+
+    // T03 导入合法（先备份当前 backup 基线）
+    var bakBase3 = countBackup();
+    var importedGroups = [{ id: 'gw_t03', name: '测试T03组', labels: ['a'], isPreset: false, color: '#888', createdAt: 'x', updatedAt: 'x' }];
+    var r3 = GW.applyImportPayload({ schemaVersion: 1, groups: importedGroups, trash: [], selected: ['测试T03组'], fav: ['测试T03组'] });
+    tests.push(eq('v0.25 T03:导入返回ok', r3 && r3.ok, true));
+    tests.push(eq('v0.25 T03:groups与导入值一致', JSON.stringify(GW.loadGroups()), JSON.stringify(importedGroups)));
+    tests.push(eq('v0.25 T03:selected与导入值一致', JSON.stringify(GW.loadSelected()), JSON.stringify(['测试T03组'])));
+    tests.push(eq('v0.25 T03:fav与导入值一致', JSON.stringify(GW.loadFav()), JSON.stringify(['测试T03组'])));
+    tests.push(eq('v0.25 T03:导入产生backup键', countBackup() > bakBase3, true));
+    restore();
+    tests.push(eq('v0.25 T03:恢复后groups不变', JSON.stringify(GW.loadGroups()), beforeGroups));
+
+    // T04 导入非法（校验失败不覆盖、无新 backup）
+    var bakBase4 = countBackup();
+    tests.push(eq('v0.25 T04:非对象 ok=false', GW.validateImportPayload({ bad: 1 }).ok, false));
+    tests.push(eq('v0.25 T04:版本过高 ok=false', GW.validateImportPayload({ schemaVersion: 99, groups: [] }).ok, false));
+    tests.push(eq('v0.25 T04:缺groups ok=false', GW.validateImportPayload({ schemaVersion: 1, groups: 'x' }).ok, false));
+    var r4 = GW.applyImportPayload({ bad: 1 });
+    tests.push(eq('v0.25 T04:apply非法返回 ok=false', r4 && r4.ok, false));
+    tests.push(eq('v0.25 T04:非法导入后数据不变', JSON.stringify(GW.loadGroups()), beforeGroups));
+    tests.push(eq('v0.25 T04:非法导入无新backup键', countBackup() === bakBase4, true));
+
+    // T05 损坏 JSON → 默认14组 + corrupt 备份
+    try { localStorage.setItem('bz_gongwei_groups', '{broken'); } catch (e) {}
+    var g5 = GW.loadGroups();
+    tests.push(eq('v0.25 T05:损坏→默认14组', Array.isArray(g5) && g5.length, 14));
+    tests.push(eq('v0.25 T05:损坏产生corrupt备份', countCorrupt('bz_gongwei_groups_corrupt_') > 0, true));
+    restore();
+    tests.push(eq('v0.25 T05:恢复后groups不变', JSON.stringify(GW.loadGroups()), beforeGroups));
+
+    // T06 缺失 → 默认14组 + 无新增 corrupt
+    var corrupt6 = countCorrupt('bz_gongwei_groups_corrupt_');
+    try { localStorage.removeItem('bz_gongwei_groups'); } catch (e) {}
+    var g6 = GW.loadGroups();
+    tests.push(eq('v0.25 T06:缺失→默认14组', Array.isArray(g6) && g6.length, 14));
+    tests.push(eq('v0.25 T06:缺失无新增corrupt', countCorrupt('bz_gongwei_groups_corrupt_') === corrupt6, true));
+    restore();
+    tests.push(eq('v0.25 T06:恢复后groups不变', JSON.stringify(GW.loadGroups()), beforeGroups));
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');
@@ -1250,7 +1334,7 @@ function captureScreenshot() {
   }
 })();
 
-// ===== v0.24.0 追加断言辅助 =====
+// ===== v0.25.0 追加断言辅助 =====
 // auth.js/records.js 在 main 段之后加载，测试区同步渲染时其逻辑尚不可用；
 // 各模块加载完成后经 __testAppend 追加断言并重算统一统计（不重排既有断言）。
 window.__testAppend = function(t) {

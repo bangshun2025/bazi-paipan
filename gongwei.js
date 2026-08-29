@@ -1,4 +1,4 @@
-/* 八字排盘 v0.20.0 — gongwei.js */
+/* 八字排盘 v0.25.0 — gongwei.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -84,21 +84,82 @@
 let gongWeiGroups = [];
 let gongWeiTrash = [];
 
+// ===== v0.25.0 宫位配置保护 — schema 版本 =====
+const GONGWEI_SCHEMA_VERSION = 1;
+
+// ===== v0.25.0 宫位配置保护 — 容错工具 =====
+function gzIsTestMode() {
+  return /[\?&]test=1(&|$)/.test(location.search);
+}
+function notifyCorrupt() {
+  // 回归测试（?test=1）跳过 alert，避免阻塞断言
+  if (gzIsTestMode()) return;
+  alert('宫位配置数据已损坏，已为您备份原数据并恢复默认设置。可在宫位设置中导入备份。');
+}
+// 同键名 corrupt 备份只保留最近 1 份：先清旧键再写新键（命名带时间戳区分来源）
+function backupCorrupt(key, raw) {
+  var short = String(key).replace(/^bz_gongwei_/, '');
+  var prefix = 'bz_gongwei_' + short + '_corrupt_';
+  var toRemove = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(prefix) === 0) toRemove.push(k);
+    }
+    for (var j = 0; j < toRemove.length; j++) localStorage.removeItem(toRemove[j]);
+    localStorage.setItem(prefix + Date.now(), raw);
+  } catch (e) {}
+}
+// 统一「缺失 vs 损坏」二分容错：
+//   缺失（首启，键不存在）→ 正常 fallback，不提示；
+//   损坏（JSON.parse 异常 / 非数组 / 空数组且 emptyIsCorrupt=true）→ 备份损坏串 + 提示 + fallback。
+function safeLoad(key, fallback, emptyIsCorrupt) {
+  var raw = null;
+  try { raw = localStorage.getItem(key); } catch (e) {}
+  if (!raw) return fallback();
+  try {
+    var v = JSON.parse(raw);
+    if (Array.isArray(v) && v.length > 0) return v;
+    if (Array.isArray(v) && v.length === 0) {
+      if (emptyIsCorrupt === false) return v; // trash/selected/fav 空数组为正常清空态
+      backupCorrupt(key, raw); notifyCorrupt(); return fallback();
+    }
+    backupCorrupt(key, raw); notifyCorrupt(); return fallback();
+  } catch (e) {
+    backupCorrupt(key, raw); notifyCorrupt(); return fallback();
+  }
+}
+
 // ===== localStorage 读写 =====
 function loadGroups() {
-  let raw = localStorage.getItem('bz_gongwei_groups');
-  if (!raw) return initGongWeiGroups();
-  try { let g = JSON.parse(raw); if (!Array.isArray(g) || g.length === 0) return initGongWeiGroups(); return g; }
-  catch(e) { return initGongWeiGroups(); }
+  return safeLoad('bz_gongwei_groups', function() { return initGongWeiGroups(); }, true);
 }
-function loadTrash() { let raw = localStorage.getItem('bz_gongwei_trash'); return raw ? JSON.parse(raw) : []; }
-function loadSelected() { let raw = localStorage.getItem('bz_gongwei_selected'); return raw ? JSON.parse(raw) : []; }
-function persistGroups() { localStorage.setItem('bz_gongwei_groups', JSON.stringify(gongWeiGroups)); }
-function persistTrash() { localStorage.setItem('bz_gongwei_trash', JSON.stringify(gongWeiTrash)); }
-function persistSelected() { localStorage.setItem('bz_gongwei_selected', JSON.stringify(selectedGongWei)); }
+function loadTrash() {
+  return safeLoad('bz_gongwei_trash', function() { return []; }, false);
+}
+function loadSelected() {
+  return safeLoad('bz_gongwei_selected', function() { return []; }, false);
+}
+function persistGroups() {
+  localStorage.setItem('bz_gongwei_groups', JSON.stringify(gongWeiGroups));
+  if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.markDirty) window.GONGWEI_CLOUD.markDirty();
+}
+function persistTrash() {
+  localStorage.setItem('bz_gongwei_trash', JSON.stringify(gongWeiTrash));
+  if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.markDirty) window.GONGWEI_CLOUD.markDirty();
+}
+function persistSelected() {
+  localStorage.setItem('bz_gongwei_selected', JSON.stringify(selectedGongWei));
+  if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.markDirty) window.GONGWEI_CLOUD.markDirty();
+}
 // ===== v0.20.0 常用宫位数据层 =====
-function loadFav() { var raw = localStorage.getItem('bz_gongwei_fav'); return raw ? JSON.parse(raw) : []; }
-function persistFav(arr) { localStorage.setItem('bz_gongwei_fav', JSON.stringify(arr)); }
+function loadFav() {
+  return safeLoad('bz_gongwei_fav', function() { return []; }, false);
+}
+function persistFav(arr) {
+  localStorage.setItem('bz_gongwei_fav', JSON.stringify(arr));
+  if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.markDirty) window.GONGWEI_CLOUD.markDirty();
+}
 function isFav(name) { var fav = loadFav(); for (var i = 0; i < fav.length; i++) { if (fav[i] === name) return true; } return false; }
 function getFavGroups() { var fav = loadFav(); var result = []; for (var i = 0; i < fav.length; i++) { var g = findGroupByName(fav[i]); if (g) result.push(g); } return result; }
 function nowISO() { return new Date().toISOString(); }
@@ -127,7 +188,9 @@ function initGongWeiGroups() {
       createdAt: now, updatedAt: now
     };
   });
-  gongWeiGroups = groups; persistGroups(); persistTrash([]); persistSelected([]);
+  gongWeiGroups = groups; persistGroups();
+  // v0.25.0：不再在此写入空 trash/selected —— 缺失分支自然返回 []，避免「首启写入空数组→下次读取误判损坏」；
+  // 也避免 groups 损坏重建时连带清空用户已有的 trash/selected。
   return groups;
 }
 
@@ -1019,8 +1082,126 @@ function clearAllTwinPillars() {
   onTwinPillarChange();
   closeTpPopover();
 }
+// ===== v0.25.0 宫位配置保护 — schema 版本管理 =====
+function ensureSchemaVersion() {
+  var cur = null;
+  try { cur = localStorage.getItem('bz_gongwei_schema_version'); } catch (e) {}
+  if (!cur) {
+    try { localStorage.setItem('bz_gongwei_schema_version', String(GONGWEI_SCHEMA_VERSION)); } catch (e) {}
+    return GONGWEI_SCHEMA_VERSION;
+  }
+  var v = parseInt(cur, 10) || 1;
+  if (v < GONGWEI_SCHEMA_VERSION) return migrateGongweiSchema(v);
+  return v;
+}
+// 未来 schema 升级：读旧版本号 → 按版本执行 merge（补齐新默认字段、保留用户自定义），禁止整体覆盖
+function migrateGongweiSchema(fromVersion) {
+  // v0.26+ 若宫位结构变更：switch(fromVersion){ case 1: /* merge 规则 */ break; }
+  try { localStorage.setItem('bz_gongwei_schema_version', String(GONGWEI_SCHEMA_VERSION)); } catch (e) {}
+  return GONGWEI_SCHEMA_VERSION;
+}
+
+// ===== v0.25.0 宫位配置保护 — 导出/导入 =====
+function gzPad2(n) { return String(n).padStart(2, '0'); }
+function buildExportPayload() {
+  var d = new Date();
+  return {
+    schemaVersion: GONGWEI_SCHEMA_VERSION,
+    exportedAt: d.toISOString(),
+    exportedAtLocal: d.getFullYear() + '-' + gzPad2(d.getMonth() + 1) + '-' + gzPad2(d.getDate()) + ' ' + gzPad2(d.getHours()) + ':' + gzPad2(d.getMinutes()) + ':' + gzPad2(d.getSeconds()),
+    groups: loadGroups(),
+    trash: loadTrash(),
+    selected: loadSelected(),
+    fav: loadFav()
+  };
+}
+function exportConfig() {
+  var payload = buildExportPayload();
+  var d = new Date();
+  var name = 'gongwei-config_' + d.getFullYear() + gzPad2(d.getMonth() + 1) + gzPad2(d.getDate()) + '_' + gzPad2(d.getHours()) + gzPad2(d.getMinutes()) + gzPad2(d.getSeconds()) + '.json';
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  return { ok: true, filename: name };
+}
+function validateImportPayload(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, error: '文件不是有效的宫位配置 JSON' };
+  if (typeof obj.schemaVersion !== 'number' || isNaN(obj.schemaVersion)) return { ok: false, error: '文件不是有效的宫位配置 JSON' };
+  if (obj.schemaVersion > GONGWEI_SCHEMA_VERSION) return { ok: false, error: '版本不兼容（文件 v' + obj.schemaVersion + ' > 当前 v' + GONGWEI_SCHEMA_VERSION + '）' };
+  if (!Array.isArray(obj.groups)) return { ok: false, error: '数据结构不完整（缺少宫位分组数据）' };
+  if (obj.trash !== undefined && !Array.isArray(obj.trash)) return { ok: false, error: '数据结构不完整（回收站数据格式错误）' };
+  if (obj.selected !== undefined && !Array.isArray(obj.selected)) return { ok: false, error: '数据结构不完整（勾选数据格式错误）' };
+  if (obj.fav !== undefined && !Array.isArray(obj.fav)) return { ok: false, error: '数据结构不完整（常用宫位数据格式错误）' };
+  return { ok: true };
+}
+function applyImportPayload(obj) {
+  var v = validateImportPayload(obj);
+  if (!v.ok) return v; // 校验失败绝不产生 backup 键
+  var keys = ['groups', 'trash', 'selected', 'fav'];
+  var lsKeys = { groups: 'bz_gongwei_groups', trash: 'bz_gongwei_trash', selected: 'bz_gongwei_selected', fav: 'bz_gongwei_fav' };
+  var ts = Date.now();
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i], lk = lsKeys[k];
+    var raw = null;
+    try { raw = localStorage.getItem(lk); } catch (e) {}
+    if (raw !== null) {
+      try { localStorage.setItem(lk + '_backup_' + ts, raw); } catch (e) {}
+    }
+    try { localStorage.setItem(lk, JSON.stringify(obj[k] || [])); } catch (e) {}
+  }
+  try { localStorage.setItem('bz_gongwei_schema_version', String(GONGWEI_SCHEMA_VERSION)); } catch (e) {}
+  // 刷新内存态与 UI
+  refreshGongWeiState();
+  return { ok: true };
+}
+// 从 localStorage 重新载入内存态并刷新宫位 UI（导入后 / 云端拉取后复用）
+function refreshGongWeiState() {
+  gongWeiGroups = loadGroups();
+  gongWeiTrash = loadTrash();
+  selectedGongWei = loadSelected();
+  renderGzSettingsAll();
+  rebuildGzCbGrid();
+  updateGongWeiTags();
+}
+function importConfig() {
+  var input = document.getElementById('gzFileImport');
+  if (input) input.click();
+}
+function handleImportFile(event) {
+  var file = event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    var text = reader.result;
+    var obj = null;
+    try { obj = JSON.parse(text); } catch (e) { obj = null; }
+    if (!obj || typeof obj !== 'object') {
+      if (!gzIsTestMode()) alert('文件不是有效的宫位配置 JSON');
+      return;
+    }
+    var v = validateImportPayload(obj);
+    if (!v.ok) {
+      if (!gzIsTestMode()) alert(v.error);
+      return;
+    }
+    var r = applyImportPayload(obj);
+    if (r.ok) {
+      if (!gzIsTestMode()) alert('宫位配置已导入');
+    } else if (!gzIsTestMode()) {
+      alert(r.error);
+    }
+    if (event.target) event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
 // ===== v0.13.0 宫位数据初始化 =====
 (function initGongWeiData() {
+  ensureSchemaVersion();
   gongWeiGroups = loadGroups();
   gongWeiTrash = loadTrash();
   selectedGongWei = loadSelected();
@@ -1083,6 +1264,17 @@ function clearAllTwinPillars() {
     findGroupByName: findGroupByName,
     getGroupColor: getGroupColor,
     initGongWeiGroups: initGongWeiGroups,
+    // v0.25.0 宫位配置保护
+    GONGWEI_SCHEMA_VERSION: GONGWEI_SCHEMA_VERSION,
+    ensureSchemaVersion: ensureSchemaVersion,
+    migrateGongweiSchema: migrateGongweiSchema,
+    buildExportPayload: buildExportPayload,
+    exportConfig: exportConfig,
+    validateImportPayload: validateImportPayload,
+    applyImportPayload: applyImportPayload,
+    refreshGongWeiState: refreshGongWeiState,
+    importConfig: importConfig,
+    handleImportFile: handleImportFile,
     addGroup: addGroup,
     updateGroup: updateGroup,
     deleteGroup: deleteGroup,

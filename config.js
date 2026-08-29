@@ -1,4 +1,4 @@
-/* 八字排盘 v0.24.0 — config.js（Supabase 凭证配置）
+/* 八字排盘 v0.25.0 — config.js（Supabase 凭证配置）
  * ------------------------------------------------------------
  * 联调前请把下面两个占位值替换为真实 Supabase 项目凭证：
  *   1. 在 https://supabase.com 创建项目后，Project Settings → API

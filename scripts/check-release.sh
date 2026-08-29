@@ -14,8 +14,8 @@ DIR="${1:-$(pwd)}"
 cd "$DIR" || { echo "❌ 目录不存在: $DIR"; exit 1; }
 
 FILES="index.html standalone.html standalone-split.html"
-KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail"
-MODULES="constants algorithm archive gongwei render main config auth records supabase.min"
+KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote"
+MODULES="constants algorithm archive gongwei render main config auth records gongwei-cloud supabase.min"
 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -88,32 +88,46 @@ for f in $FILES; do
 done
 
 echo "【4/4】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
-for m in config auth records supabase.min; do
+for m in gongwei gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
   [ -f standalone.html ] || { fail "缺少 standalone.html，跳过内联比对"; continue; }
-  python3 - "$m" "$ext" "$TMP/inline_$m.js" <<'PYEOF'
-import sys
-m = sys.argv[1]
+  python3 - "$m" "$ext" "$TMP/inline_$m.js" "$TMP/ext_$m.js" <<'PYEOF'
+import sys, re
+m, ext, out_inline, out_ext = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+def strip_header(s):
+    # 去掉文件头连续的 /* 八字排盘 vX — xxx.js */ 版本注释块（1 行或多行块）
+    lines = s.split('\n')
+    i = 0
+    while i < len(lines):
+        t = lines[i].lstrip()
+        if t.startswith('/* 八字排盘 v'):
+            if '*/' in lines[i]:
+                i += 1
+            else:
+                i += 1
+                while i < len(lines) and '*/' not in lines[i]:
+                    i += 1
+                i += 1
+        else:
+            break
+    return '\n'.join(lines[i:]).lstrip('\n')
 src = open('standalone.html', encoding='utf-8').read()
 idx = src.find(f'— {m}.js */')
 if idx == -1:
-    open(sys.argv[3], 'w', encoding='utf-8').write('')
-    raise SystemExit(0)
-start = src.rfind('<script>', 0, idx)
-end = src.find('</script>', idx)
-block = src[start:end]
-# 去掉 <script> 标签与插入的定位注释行（/* 八字排盘 v0.24.0 — xxx.js */）
-body = block[len('<script>'):].lstrip('\n')
-lines = body.split('\n')
-if lines and lines[0].startswith('/* 八字排盘 v0.24.0 —'):
-    body = '\n'.join(lines[1:]).lstrip('\n')
-body = body.rstrip('\n')
-open(sys.argv[3], 'w', encoding='utf-8').write(body)
+    open(out_inline, 'w', encoding='utf-8').write('')
+else:
+    start = src.rfind('<script>', 0, idx)
+    end = src.find('</script>', idx)
+    block = src[start:end]
+    body = block[len('<script>'):].lstrip('\n')
+    body = strip_header(body).rstrip('\n')
+    open(out_inline, 'w', encoding='utf-8').write(body)
+open(out_ext, 'w', encoding='utf-8').write(strip_header(open(ext, encoding='utf-8').read()).rstrip('\n'))
 PYEOF
   if [ ! -s "$TMP/inline_$m.js" ]; then
     fail "内联段未找到: $m.js"
-  elif cmp -s <(python3 -c "import sys; sys.stdout.write(open('$ext',encoding='utf-8').read().rstrip('\n'))") <(python3 -c "import sys; sys.stdout.write(open('$TMP/inline_$m.js',encoding='utf-8').read().rstrip('\n'))"); then
+  elif cmp -s "$TMP/ext_$m.js" "$TMP/inline_$m.js"; then
     pass "$m.js 外部 vs 内联一致"
   else
     fail "$m.js 外部 vs 内联不一致（漂移！）"

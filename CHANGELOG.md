@@ -4,6 +4,33 @@
 
 ---
 
+## v0.25.0 — 宫位配置保护：容错 + 导出导入 + 云同步 (2026-08-29)
+
+### Added
+- **宫位配置容错改造**：`gongwei.js` 新增 `safeLoad`（损坏配置安全加载兜底）/ `backupCorrupt`（损坏配置自动备份）/ `notifyCorrupt`（损坏提示），本地宫位配置损坏时不再崩溃
+- **导出 / 导入配置**：宫位配置支持导出为文件 / 从文件导入，含 schema 版本化（`schema_version`）
+- **云同步模块**：`gongwei-cloud.js` 上云同步（AC10 云拉取 / AC11 首传推云），登录后宫位配置可云端备份与恢复
+- **auth.js 钩子**：登录 / 登出事件接入云同步触发
+- **自动化断言 247→269**：`?test=1` 新增 v0.25 断言（safeLoad / backupCorrupt / notifyCorrupt / 导出导入 / schema 版本化），三入口 269 条全绿
+- **check-release 增强**：gongwei.js / gongwei-cloud.js 纳入外部 JS vs 内联段一致性比对
+
+### Changed
+- `standalone.html` / `index.html`：gongwei 段内联同步 + 导出/导入 UI + 云同步 UI
+- `standalone-split.html`：同步 UI 与内联段
+- `api/handler.rb`：新增 gongwei-cloud.js 静态路由
+- 版本号 v0.24.0 → v0.25.0（本次正式发布，公测线上 v0.24.0 → v0.25.0）
+
+### Notes
+- AC10/11（云拉取 / 首传推云）依赖 Supabase 建表：`docs/sql/user_gongwei_config.sql`（项目 vugckrqxqufiyfrpptwt 的 SQL Editor 执行）
+- 未建表时云同步静默降级，本地功能完全正常
+
+### 修改文件
+- 新增：`gongwei-cloud.js` / `docs/sql/user_gongwei_config.sql`
+- 已改：`gongwei.js` / `auth.js` / `main.js` / `standalone.html` / `index.html` / `standalone-split.html` / `api/handler.rb` / `scripts/check-release.sh`
+- 版本声明：`ext.yml` / `CHANGELOG.md`
+
+---
+
 ## v0.24.0 — Supabase 账号功能：云端排盘记录 + 30 天免登 + 首次登录本地迁移 (2026-08-29)
 
 ### Added

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.24.0 | 2026-08-27 -->
+<!-- 八字排盘 · 从真版 v0.25.0 | 2026-08-29 -->
+<!-- v0.25.0: 宫位配置保护 — 容错(损坏备份+提示) + 导出/导入JSON + schema版本化 + Supabase上云(user_gongwei_config) -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -612,7 +613,7 @@
   @keyframes ss-notify-in { from { opacity:0; } to { opacity:1; } }
 
 </style>
-  <!-- v0.24.0 Supabase 账号功能：supabase-js v2（本地化，摆脱 CDN 依赖） -->
+  <!-- v0.25.0 Supabase 账号功能：supabase-js v2（本地化，摆脱 CDN 依赖） -->
   <script src="supabase.min.js"></script>
 </head>
 <body>
@@ -806,9 +807,14 @@
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="btn-reset" onclick="GONGWEI.resetGongWeiDefaults()">恢复默认</button>
             <button onclick="GONGWEI.openGzTrash()">♻️ 回收站 <span id="gzTrashCount"></span></button>
+            <button id="btnExportConfig" onclick="GONGWEI.exportConfig()">📤 导出配置</button>
+            <button id="btnImportConfig" onclick="GONGWEI.importConfig()">📥 导入配置</button>
+            <input type="file" id="gzFileImport" accept=".json" style="display:none" onchange="GONGWEI.handleImportFile(event)">
           </div>
           <button class="btn-save-close" onclick="GONGWEI.closeGzSettings()">保存并关闭</button>
         </div>
+        <!-- v0.25.0 宫位配置说明 -->
+        <div id="gzCloudSyncNote" style="font-size:11px;color:var(--c-gray);padding:8px 16px;">宫位配置仅保存在本机浏览器，可点「导出配置」备份；登录后自动同步到云端。</div>
         <!-- 常用宫位 footer -->
         <div class="gz-fav-footer" id="gzFooterFav" style="display:none;">
           <button onclick="GONGWEI.resetFavOrder()" title="按全部宫位顺序重排">↺ 默认排序</button>
@@ -881,7 +887,7 @@
 </script>
 
 
-<!-- ===== v0.24.0 我的排盘列表 ===== -->
+<!-- ===== v0.25.0 我的排盘列表 ===== -->
 <div id="recordsOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1900;justify-content:center;align-items:center;">
   <div style="background:var(--c-paper);border:1px solid var(--c-line);border-radius:4px;width:92%;max-width:640px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 6px 30px rgba(0,0,0,.2);">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--c-line);">
@@ -892,7 +898,7 @@
   </div>
 </div>
 
-<!-- ===== v0.24.0 排盘详情 ===== -->
+<!-- ===== v0.25.0 排盘详情 ===== -->
 <div id="recordDetailOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1950;justify-content:center;align-items:center;">
   <div style="background:var(--c-paper);border:1px solid var(--c-line);border-radius:4px;width:92%;max-width:420px;max-height:82vh;overflow-y:auto;box-shadow:0 6px 30px rgba(0,0,0,.2);">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--c-line);">
@@ -906,6 +912,7 @@
 <script src="config.js"></script>
 <script src="auth.js"></script>
 <script src="records.js"></script>
+<script src="gongwei-cloud.js"></script>
 
 </body>
 </html>
