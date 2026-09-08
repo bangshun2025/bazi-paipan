@@ -4,6 +4,32 @@
 
 ---
 
+## v0.26.0 — 当年节气数据 + 节气流年联动 (2026-09-07)
+
+### Added
+- **当年节气数据块（v1）**：大运流年区下方新增 12 节数据（立春/惊蛰/清明/立夏/芒种/小暑/立秋/白露/寒露/立冬/大雪/小寒，不含「气」），四行竖排版式（第一行月日 / 第二行时间 / 第三行节名 / 第四行干支竖排），`render.js` 新增 `buildJieqiHtml(year)` 纯函数 + `jqGanzhiOf` 干支换算
+- **节气流年联动（v2）**：节气区默认年份 = 命主出生年；点流年格 / 大运列 / 运前「出生前流年」/ 📍 今年按钮时，节气区局部刷新跟随（`refreshJieqi` 仅替换 `.jieqi-section`，null 防御不抛）
+- **流年口径单源**：`liunianYearOf(cardData, dyIdx, lnIdx)` 统一换算公历年（大运列表高亮与节气区联动同式），双胞胎运前列补 `data-di="-1"` / `data-li`
+- **双胞胎适配**：同卵/龙凤胎共享一块节气区，初始年份取老大出生年，点各自侧流年跟随各自 daYun 年
+- **自动化断言 269→339**：`?test=1` 新增 v0.26 断言 T01-T14（buildJieqiHtml 纯函数 / 三入口初始出生年 / 连续跟随 / 运前 / 大运 / 📍 今年 / 越界 2100·2200 不抛 / 同卵 / 龙凤胎跨年），三入口 339 条全绿
+
+### Changed
+- `render.js`：新增节气区渲染与联动层（三入口 `renderChart`/同卵/龙凤胎均挂 `_jieqiYear`，`bindEvents` 大运/流年回调 + `scrollToNow` 末尾追加 `refreshJieqi`）
+- `standalone.html` / `index.html` / `standalone-split.html`：三 HTML 内联同步 + 头部版本注释 v0.26.0
+- `main.js`：新增 T01-T14 断言段（内联同步三入口）
+- 版本号 v0.25.0 → v0.26.0（本次内测发布）
+
+### Notes
+- 仅显示「节」不显示「气」（用户需求明确）；「当年」默认口径经 v2 裁决改为出生年，`nowYear` 仅用于大运表初始高亮定位与 📍 今年按钮语义
+- 验收基线：v1 PRD AC01-09 + v2 PRD AC01-11 / AR01-06 / T06-T14 + ADR D1-D9；QA 结论 ✅ 无 P0/P1/P2，P3=1 为测试环境观察项
+- `check-release.sh` 退出码 0；?test=1 339 条断言全绿 0 失败
+
+### 修改文件
+- 已改：`render.js` / `main.js` / `standalone.html` / `index.html` / `standalone-split.html` / `ext.yml` / `CHANGELOG.md` / `SYSTEM.md`
+- 文档：`docs/PRD_v0.26.0_当年节气数据.md` / `docs/ADR_v0.26.0_当年节气数据.md` / `docs/PRD_v0.26.0_节气流年联动.md` / `docs/ADR_v0.26.0_节气流年联动.md` / `docs/TEST_v0.26.0_当年节气数据+节气流年联动.md` / `docs/QA_v0.26.0_当年节气数据+节气流年联动验收报告.md`
+
+---
+
 ## v0.25.0 — 宫位配置保护：容错 + 导出导入 + 云同步 (2026-08-29)
 
 ### Added

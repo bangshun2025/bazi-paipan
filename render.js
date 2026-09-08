@@ -1,4 +1,4 @@
-/* 八字排盘 v0.23.4 — render.js */
+/* 八字排盘 v0.26.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -298,6 +298,78 @@ function buildPillarRows(p, options) {
   return { main: main, sanyuan: sanyuan };
 }
 
+// ============ v0.26.0 当年节气数据块（12 节，不含气） ============
+// year: 注入的「当年」公历年（默认取系统当前年，便于 ?test=1 以 mock year 断言）
+// 返回：大运流年区下方「当年节气数据」块 HTML；表外年份返回占位提示（不抛异常）
+function buildJieqiHtml(year) {
+  year = year || new Date().getFullYear();
+  // D4 整块越界：系统时钟异常防御（正常出生年输入 1900-2100 不可达）
+  if (year < 1000 || year > 2101) {
+    return '<div class="jieqi-section"><div class="jieqi-note">节气数据仅支持 1000-2100 年</div></div>';
+  }
+  // D2 遍历 MONTH_TERM（12 个「节」索引）→ 天然不含「气」
+  var cols = [];
+  var needHint = false; // 小寒等列越界（null）时标题轻提示
+  for (var i = 0; i < MONTH_TERM.length; i++) {
+    var idx = MONTH_TERM[i];
+    var termYear = year + (i === MONTH_TERM.length - 1 ? 1 : 0); // 末位小寒取次年
+    var st = getSolarTerm(termYear, idx); // null = 表外越界（如 2100 年次年小寒）
+    var md = '—', tm = '—';
+    if (st) {
+      // getSolarTerm 返回「BJT as UTC」→ 展示直接取 UTC 字段，不做时区偏移
+      md = (st.getUTCMonth() + 1) + '/' + st.getUTCDate();
+      tm = pad(st.getUTCHours()) + ':' + pad(st.getUTCMinutes());
+    } else {
+      needHint = true;
+    }
+    cols.push('<div class="jq-col" data-term="' + S_TERM_NAME[idx] + '">'
+      + '<div class="jq-md">' + md + '</div>'
+      + '<div class="jq-tm">' + tm + '</div>'
+      + '<div class="jq-name">' + S_TERM_NAME[idx] + '</div>'
+      + '<div class="jq-gz">' + jqGanzhiOf(st) + '</div>'
+      + '</div>');
+  }
+  var hint = needHint ? '<span class="jieqi-hint">（小寒超出节气表）</span>' : '';
+  return '<div class="jieqi-section">'
+    + '<div class="jieqi-title">' + year + ' 年 · 十二节（立春→小寒）' + hint + '</div>'
+    + '<div class="jieqi-wrap"><div class="jieqi-grid">' + cols.join('') + '</div></div>'
+    + '</div>';
+}
+
+// D1 每列干支：交节当天（公历自然日）的日柱，天干上、地支下竖排。
+// 取 UTC 字段直接定位自然日 → dayPillar，不做 23 点换算（与日历标注一致）。
+// st 为 null（表外越界）时返回占位。日后如需切月柱只改本函数内部。
+function jqGanzhiOf(st) {
+  if (!st) return '<span class="jq-gan">—</span><span class="jq-zhi">—</span>';
+  var p = dayPillar(st.getUTCFullYear(), st.getUTCMonth() + 1, st.getUTCDate());
+  return '<span class="jq-gan">' + p.gan + '</span><span class="jq-zhi">' + p.zhi + '</span>';
+}
+
+// ============ v0.26.0 节气流年联动（v2 增量） ============
+// 公历年换算纯函数，与 updateCardDyLnColumns 内同式（口径单源，防漂移）：
+//   dyIdx===-1 → 运前流年：出生年 + 列偏移；否则 → 该运起始年 + 列偏移。
+// 数据缺失/异常时返回 null（调用方静默跳过，不崩）。
+function liunianYearOf(cd, dyIdx, lnIdx) {
+  if (!cd || !cd.daYun) return null;
+  if (dyIdx === -1) return cd.y + lnIdx;
+  var dy = cd.daYun[dyIdx];
+  return dy ? dy.startYear + lnIdx : null;
+}
+
+// 把 root 内唯一的 .jieqi-section 整块替换为 buildJieqiHtml(year) 的产物，
+// 并回写 root._jieqiYear。不触碰 luck-section / chart / 事件绑定（节气块纯展示）。
+// root 约定：可 querySelector 到 .jieqi-section 的任意祖先（#output / .bz-twin-shared / document）。
+// 若找不到节气块（异常态/旧 HTML）则静默返回（防御，不抛异常）。
+function refreshJieqi(root, year) {
+  var sec = root.querySelector('.jieqi-section');
+  if (!sec) return;
+  root._jieqiYear = year;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = buildJieqiHtml(year);
+  var neu = tmp.firstChild;
+  if (neu) sec.parentNode.replaceChild(neu, sec);
+}
+
 function renderChart(data, twin, targetId) {
   twin = twin || 1;
   targetId = targetId || 'output';
@@ -573,6 +645,7 @@ function renderChart(data, twin, targetId) {
         <div class="luck-section">
           <div class="luck-table">${luckRows.join('\n')}</div>
         </div>
+        ${buildJieqiHtml(y)}
       </div>
     </div>`;
 
@@ -580,6 +653,7 @@ function renderChart(data, twin, targetId) {
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
   container._paipanData = data;
+  container._jieqiYear = y; // v0.26.0 v2: 节气区默认出生年（D6）
   if (targetId === 'output' || (typeof targetId === 'object' && targetId.id === 'output')) {
     window._paipanData = data;
   }
@@ -617,6 +691,10 @@ function bindEvents(data, container) {
       hiDy(i, scope);
       hiLn(i, 0, scope);
       updateCardDyLnColumns(container, cardEl || c, i, 0);
+      // v0.26.0 v2 节气流年联动：大运列 → 该运起始年
+      var cdA = (cardEl && cardEl._cardData) ? cardEl._cardData : (container._paipanData || data);
+      var dyJ = cdA && cdA.daYun ? cdA.daYun[i] : null;
+      if (dyJ) refreshJieqi(container, dyJ.startYear);
       setTimeout(function(){ redrawZuHeSVG(cardEl || container); }, 80);
     });
   });
@@ -649,6 +727,10 @@ function bindEvents(data, container) {
       }
       // 龙凤胎: 传递卡片元素确保只更新对应卡片的图表列
       updateCardDyLnColumns(container, cardEl2 || li, di, liIdx);
+      // v0.26.0 v2 节气流年联动：按触发命主数据换算公历年 → 局部刷新节气块
+      var cdB = (cardEl2 && cardEl2._cardData) ? cardEl2._cardData : (container._paipanData || data);
+      var yB = liunianYearOf(cdB, di, liIdx);
+      if (yB !== null && yB !== undefined) refreshJieqi(container, yB);
       setTimeout(function(){ redrawZuHeSVG(cardEl2 || container); }, 80);
     });
   });
@@ -734,17 +816,15 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   }
 
   var pDy, pLn;
+  var lnYear = liunianYearOf(cardData, dyIdx, lnIdx); // v0.26.0 v2: 口径单源（与节气区联动同式）
+  if (lnYear === null || lnYear === undefined) return;
+  var lnGz = liuNianJZ(lnYear);
   if (dyIdx === -1) {
-    // 运前流年(di=-1): 无对应大运，通过出生年+偏移计算流年
-    var lnYear = cardData.y + lnIdx;
-    var lnGz = liuNianJZ(lnYear);
+    // 运前流年(di=-1): 无对应大运，大运列显示月柱
     pDy = pill(cardData.yue.gan, cardData.yue.zhi);
     pLn = pill(lnGz[0], lnGz[1]);
   } else {
     var dy = daYun[dyIdx];
-    if (!dy) return;
-    var lnYear = dy.startYear + lnIdx;
-    var lnGz = liuNianJZ(lnYear);
     pDy = pill(dy.gan, dy.zhi);
     pLn = pill(lnGz[0], lnGz[1]);
   }
@@ -1099,7 +1179,7 @@ function renderTwinCardsHtml(data, targetId) {
   luckRows.push('</div>');
   // 流年 + 运前列
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (joy > 0) { var preLis = ''; for (var py = y; py < y + joy; py++) { var gz = liuNianJZ(py); preLis += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell pre-qy">'+preLis+'</div>'); }
+  if (joy > 0) { var preLis = ''; for (var py = y, liI = 0; py < y + joy; py++, liI++) { var gz = liuNianJZ(py); preLis += '<span class="li" data-di="-1" data-li="'+liI+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell pre-qy">'+preLis+'</div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===curDyIdx&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+lis+'</div>'); }
   luckRows.push('</div>');
   // 止于
@@ -1116,11 +1196,12 @@ function renderTwinCardsHtml(data, targetId) {
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
-    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n    </div>';
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
   container._paipanData = data;
+  container._jieqiYear = y; // v0.26.0 v2: 同卵默认出生年（D6/D8）
   window._paipanData = data;
   window._twinType = 'same';
 
@@ -1181,7 +1262,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   for (var l = 0; l < dy1.length; l++) { lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+dy1[l].startYear+'</div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (qy1 && qy1.years > 0) { var pl1 = ''; for (var py = y; py < y + qy1.years; py++) { var gz = liuNianJZ(py); pl1 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell pre-qy">'+pl1+'</div>'); }
+  if (qy1 && qy1.years > 0) { var pl1 = ''; for (var py = y, liI = 0; py < y + qy1.years; py++, liI++) { var gz = liuNianJZ(py); pl1 += '<span class="li" data-di="-1" data-li="'+liI+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell pre-qy">'+pl1+'</div>'); }
   for (var l = 0; l < dy1.length; l++) { var dy = dy1[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd1&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr1.push('<div class="cell'+(l===cd1?' cc':'')+'">'+lis+'</div>'); }
   lr1.push('</div>');
   lr1.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
@@ -1206,7 +1287,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   for (var l = 0; l < dy2.length; l++) { lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+dy2[l].startYear+'</div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (qy2 && qy2.years > 0) { var pl2 = ''; for (var py = y; py < y + qy2.years; py++) { var gz = liuNianJZ(py); pl2 += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell pre-qy">'+pl2+'</div>'); }
+  if (qy2 && qy2.years > 0) { var pl2 = ''; for (var py = y, liI = 0; py < y + qy2.years; py++, liI++) { var gz = liuNianJZ(py); pl2 += '<span class="li" data-di="-1" data-li="'+liI+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell pre-qy">'+pl2+'</div>'); }
   for (var l = 0; l < dy2.length; l++) { var dy = dy2[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===cd2&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } lr2.push('<div class="cell'+(l===cd2?' cc':'')+'">'+lis+'</div>'); }
   lr2.push('</div>');
   lr2.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
@@ -1225,7 +1306,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
-    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n    </div>';
+    + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
@@ -1238,6 +1319,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   if (cards[0]) cards[0]._cardData = d1;
   if (cards[1]) cards[1]._cardData = d2;
   container._paipanData = d1;
+  container._jieqiYear = d1.y; // v0.26.0 v2: 龙凤胎默认老大出生年（D6/D8）
   bindEvents(d1, container);
 }
 
@@ -1378,6 +1460,8 @@ function scrollToNow(scope) {
   // 更新图表大运流年列
   var container = scope.querySelector('.bz-result') || scope.querySelector('#output') || scope;
   updateCardDyLnColumns(container, container, curDyIdx, curLi);
+  // v0.26.0 v2 节气流年联动：📍 今年 → 系统当前年
+  refreshJieqi(container, nowYear);
   // 再滚动
   const sec = scope.querySelector('.luck-section');
   const cc = sec && sec.querySelector('.cc');
@@ -1551,6 +1635,10 @@ function renderChartToHtml(data, arch) {
   window.RENDER = {
     toggleLevel: toggleLevel,
     buildPillarRows: buildPillarRows,
+    buildJieqiHtml: buildJieqiHtml,
+    jqGanzhiOf: jqGanzhiOf,
+    liunianYearOf: liunianYearOf,
+    refreshJieqi: refreshJieqi,
     renderChart: renderChart,
     bindEvents: bindEvents,
     hiDy: hiDy,

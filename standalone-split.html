@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.25.0 | 2026-08-29 -->
+<!-- 八字排盘 · 从真版 v0.26.0 | 2026-09-07 -->
+<!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
+<!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.25.0: 宫位配置保护 — 容错(损坏备份+提示) + 导出/导入JSON + schema版本化 + Supabase上云(user_gongwei_config) -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
@@ -264,6 +266,24 @@
   .main-col { flex:0 0 auto; min-width:0; }
   .luck-col { flex:1 1 auto; min-width:380px; position:sticky; top:12px; }
   .luck-section { border:0.5px solid var(--c-line); overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* ===== v0.26.0 当年节气数据块（12 节，不含气） ===== */
+  .jieqi-section { margin-top:12px; border:0.5px solid var(--c-line); }
+  .jieqi-title { padding:6px 10px; font-size:13px; color:var(--c-gray); background:rgba(201,169,110,.06); border-bottom:0.5px solid var(--c-line); white-space:nowrap; letter-spacing:.05em; }
+  .jieqi-title .jieqi-hint { color:var(--c-red); margin-left:6px; }
+  .jieqi-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .jieqi-grid { display:flex; min-width:528px; }
+  .jq-col { flex:0 0 auto; min-width:44px; text-align:center; border-right:0.5px solid var(--c-line); }
+  .jq-col:last-child { border-right:none; }
+  .jq-col > div { padding:3px 2px; border-bottom:0.5px solid var(--c-line); }
+  .jq-col > div:last-child { border-bottom:none; }
+  .jq-md { font-size:13px; color:var(--c-gray); }
+  .jq-tm { font-size:13px; color:var(--c-gray); }
+  .jq-name { font-size:15px; color:var(--c-ink); font-weight:700; font-family:var(--font-display); }
+  .jq-gz { line-height:1.2; }
+  .jq-gan { display:block; font-size:16px; font-weight:700; font-family:var(--font-display); }
+  .jq-zhi { display:block; font-size:16px; font-weight:700; font-family:var(--font-display); margin-top:1px; }
+  .jieqi-note { padding:10px; font-size:13px; color:var(--c-gray); }
   .luck-table { display:table; width:100%; min-width:620px; border-collapse:collapse; }
   .luck-row { display:table-row; }
   .luck-row .cell { display:table-cell; padding:3px 5px; text-align:center; vertical-align:middle; font-family:var(--font-display); font-size:18px; border-right:0.5px solid var(--c-line); border-bottom:0.5px solid var(--c-line); white-space:nowrap; min-width:52px; }

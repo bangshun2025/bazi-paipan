@@ -1,4 +1,4 @@
-/* 八字排盘 v0.25.0 — main.js */
+/* 八字排盘 v0.26.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1277,6 +1277,170 @@ function captureScreenshot() {
     tests.push(eq('v0.25 T06:缺失无新增corrupt', countCorrupt('bz_gongwei_groups_corrupt_') === corrupt6, true));
     restore();
     tests.push(eq('v0.25 T06:恢复后groups不变', JSON.stringify(GW.loadGroups()), beforeGroups));
+  })();
+
+  // ===== v0.26.0 当年节气数据 T01-T05（RENDER.buildJieqiHtml mock year 注入，不 mock 时钟）=====
+  (function() {
+    tests.push({ section:'当年节气数据(v0.26)' });
+    var RJ = (window.RENDER && typeof window.RENDER.buildJieqiHtml === 'function') ? window.RENDER.buildJieqiHtml : null;
+    if (!RJ) { tests.push(fail('v0.26 T01:RENDER.buildJieqiHtml 已挂载', 'window.RENDER.buildJieqiHtml 缺失')); return; }
+    var JIE = ['立春','惊蛰','清明','立夏','芒种','小暑','立秋','白露','寒露','立冬','大雪','小寒'];
+    var QI  = ['雨水','春分','谷雨','小满','夏至','大暑','处暑','秋分','霜降','小雪','冬至','大寒'];
+    function hasTag(html, name) { return html.indexOf('data-term="' + name + '"') >= 0; }
+
+    // T01 结构/集合：12 节齐全、12 气不出现（仅 MONTH_TERM 12 索引 → 天然不含气）
+    var s26 = '';
+    try { s26 = RJ(2026); } catch (e) { tests.push(fail('v0.26 T01:buildJieqiHtml(2026) 不抛', e.message)); return; }
+    var miss = [];
+    for (var a = 0; a < JIE.length; a++) { if (!hasTag(s26, JIE[a])) miss.push(JIE[a]); }
+    tests.push(eq('v0.26 T01:12节齐全(' + JIE.join('/') + ')', miss.length === 0, true));
+    var hitQi = [];
+    for (var b = 0; b < QI.length; b++) { if (hasTag(s26, QI[b])) hitQi.push(QI[b]); }
+    tests.push(eq('v0.26 T01:不含12气(' + QI.join('/') + ')', hitQi.length === 0, true));
+
+    // T02 年份口径：MONTH_TERM 末位=0（小寒）；末列小寒取 year+1
+    var mtArr = window.CONST && window.CONST.MONTH_TERM;
+    tests.push(eq('v0.26 T02:MONTH_TERM 末位=0(小寒)', mtArr && mtArr[mtArr.length - 1], 0));
+    var xhRe = /data-term="小寒"[\s\S]*?class="jq-md">1\/5</;
+    tests.push(eq('v0.26 T02:2026 小寒取次年 1/5', xhRe.test(s26), true));
+
+    // T03 取数正确：2026 全 12 列月日/时间与 constants.js 锚点一致（PRD AC05）
+    var ANCHORS = [
+      ['立春','2/4','04:01'],['惊蛰','3/5','21:58'],['清明','4/5','02:39'],['立夏','5/5','19:48'],
+      ['芒种','6/5','23:48'],['小暑','7/7','09:56'],['立秋','8/7','19:42'],['白露','9/7','22:40'],
+      ['寒露','10/8','14:28'],['立冬','11/7','17:51'],['大雪','12/7','10:52'],['小寒','1/5','22:09']
+    ];
+    var mdAll = [], tmAll = [], mdm, tmm, reAll = /class="jq-md">([^<]+)<\/div><div class="jq-tm">([^<]+)<\/div>/g;
+    while ((mdm = reAll.exec(s26)) !== null) { mdAll.push(mdm[1]); tmAll.push(mdm[2]); }
+    tests.push(eq('v0.26 T03:12列完整', mdAll.length, 12));
+    for (var c = 0; c < ANCHORS.length; c++) {
+      tests.push(eq('v0.26 T03:' + ANCHORS[c][0] + '月日=' + ANCHORS[c][1], mdAll[c], ANCHORS[c][1]));
+      tests.push(eq('v0.26 T03:' + ANCHORS[c][0] + '时间=' + ANCHORS[c][2], tmAll[c], ANCHORS[c][2]));
+    }
+
+    // T04 干支竖排结构：.jq-gz 内 .jq-gan 在上、.jq-zhi 在下（字符串顺序）
+    var gzRe = /class="jq-gz"><span class="jq-gan">[^<]+<\/span><span class="jq-zhi">[^<]+<\/span><\/div>/g;
+    var gzCnt = (s26.match(gzRe) || []).length;
+    tests.push(eq('v0.26 T04:干支竖排块×12(gan上zhi下)', gzCnt, 12));
+
+    // T05 边界防御：2100 小寒「—」不抛；2200 占位提示不抛
+    var s2100 = '', s2200 = '', e2100 = null, e2200 = null;
+    try { s2100 = RJ(2100); } catch (e) { e2100 = e; }
+    tests.push(eq('v0.26 T05:buildJieqiHtml(2100) 不抛异常', e2100 === null, true));
+    tests.push(eq('v0.26 T05:2100 小寒列月日=—', /data-term="小寒"[\s\S]*?class="jq-md">—</.test(s2100), true));
+    tests.push(eq('v0.26 T05:2100 标题提示小寒越界', s2100.indexOf('小寒超出节气表') >= 0, true));
+    try { s2200 = RJ(2200); } catch (e) { e2200 = e; }
+    tests.push(eq('v0.26 T05:buildJieqiHtml(2200) 不抛异常', e2200 === null, true));
+    tests.push(eq('v0.26 T05:2200 灰字占位提示', s2200.indexOf('jieqi-note') >= 0 && s2200.indexOf('仅支持') >= 0, true));
+  })();
+
+  // ===== v0.26.0 节气流年联动 T06-T14（真实 paipan 数据 → #tst-out → click/调函数断言）=====
+  (function() {
+    tests.push({ section:'节气流年联动(v0.26)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.refreshJieqi !== 'function' || typeof R.liunianYearOf !== 'function') {
+      tests.push(fail('v0.26 T06: 前置 RENDER.renderChart/refreshJieqi/liunianYearOf 已挂载', '缺失'));
+      return;
+    }
+    // 独立测试容器（隐藏正常 UI 时也放 body，不与页面 #output 互相干扰）
+    var tst = document.createElement('div');
+    tst.id = 'tst-out';
+    document.body.appendChild(tst);
+    function jqTitle() { var t = tst.querySelector('.jieqi-title'); return t ? t.textContent : ''; }
+    function jieqiYear() { return tst._jieqiYear; }
+    function assertTitleYear(tag, targetYear) {
+      tests.push(eq(tag + ': 标题含' + targetYear, jqTitle().indexOf(String(targetYear)) >= 0, true));
+      tests.push(eq(tag + ': _jieqiYear=' + targetYear, jieqiYear(), targetYear));
+    }
+    // 在容器内找「换算后年份 == targetYear」的流年格并 dispatch click
+    function clickLiMatching(cd, targetYear, scopeCard) {
+      var lis = (scopeCard || tst).querySelectorAll('.liu-row .li');
+      for (var k = 0; k < lis.length; k++) {
+        var di = parseInt(lis[k].getAttribute('data-di'), 10);
+        var liI = parseInt(lis[k].getAttribute('data-li'), 10);
+        if (isNaN(di) || isNaN(liI)) continue;
+        if (R.liunianYearOf(cd, di, liI) === targetYear) {
+          lis[k].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // 单人测试盘：1982-10-18 05:01 男（出生年 1982 ≠ 系统当前年）
+    var pd = paipan('联动测试', '男', 1982, 10, 18, 5, 1);
+    if (!pd || !pd.daYun || !pd.daYun.length) { tests.push(fail('v0.26 T06: paipan(1982 男) 返回完整数据', '缺 daYun')); return; }
+    var nowY = new Date().getFullYear();
+    R.renderChart(pd, undefined, 'tst-out');
+
+    // T06 初始节气标题 = 出生年（v2-AC01）
+    tests.push(eq('v0.26 T06: 初始标题含出生年1982', jqTitle().indexOf('1982') >= 0, true));
+    tests.push(eq('v0.26 T06: 初始 _jieqiYear=1982', jieqiYear(), 1982));
+    if (nowY !== 1982) { tests.push(eq('v0.26 T06: 初始标题不含系统年' + nowY, jqTitle().indexOf(String(nowY)) < 0, true)); }
+
+    // T07 点 2026 流年 → 2026；连续 2031 → 2042 每次跟随（v2-AC02/AC03）
+    tests.push(eq('v0.26 T07: 找到2026流年格', clickLiMatching(pd, 2026), true));
+    assertTitleYear('v0.26 T07: 点2026流年', 2026);
+    tests.push(eq('v0.26 T07: 找到2031流年格', clickLiMatching(pd, 2031), true));
+    assertTitleYear('v0.26 T07: 点2031流年', 2031);
+    tests.push(eq('v0.26 T07: 找到2042流年格', clickLiMatching(pd, 2042), true));
+    assertTitleYear('v0.26 T07: 再点2042流年', 2042);
+
+    // T08 点运前流年 data-di=-1 → 出生年+列偏移（v2-AC05）
+    var preLis = tst.querySelectorAll('.liu-row .li[data-di="-1"]');
+    tests.push(eq('v0.26 T08: 运前列存在(起运1989>1982)', preLis.length > 0, true));
+    if (preLis.length > 0) {
+      var jPre = parseInt(preLis[preLis.length - 1].getAttribute('data-li'), 10);
+      preLis[preLis.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      assertTitleYear('v0.26 T08: 点运前末格', pd.y + jPre);
+    }
+
+    // T09 点大运列 data-dy=2 → 该运 startYear（v2-AC04）
+    var dyCell = tst.querySelector('[data-dy="2"]');
+    tests.push(eq('v0.26 T09: 找到 data-dy=2 大运列', !!dyCell, true));
+    if (dyCell) {
+      dyCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      assertTitleYear('v0.26 T09: 点大运[2]', pd.daYun[2].startYear);
+    }
+
+    // T10 scrollToNow（📍 今年）→ nowYear（v2-AC06）
+    R.scrollToNow(tst);
+    assertTitleYear('v0.26 T10: 今年', nowY);
+
+    // T11 refreshJieqi DOM 替换路径越界不抛（v2-AC10，与 T05 纯函数互补）
+    var e2100 = null, e2200 = null;
+    try { R.refreshJieqi(tst, 2100); } catch (e) { e2100 = e; }
+    tests.push(eq('v0.26 T11: refreshJieqi(2100) 不抛', e2100 === null, true));
+    tests.push(eq('v0.26 T11: 2100 小寒列=—', /data-term="小寒"[\s\S]*?class="jq-md">—</.test(tst.innerHTML), true));
+    tests.push(eq('v0.26 T11: 2100 _jieqiYear=2100', jieqiYear(), 2100));
+    try { R.refreshJieqi(tst, 2200); } catch (e) { e2200 = e; }
+    tests.push(eq('v0.26 T11: refreshJieqi(2200) 不抛', e2200 === null, true));
+    tests.push(eq('v0.26 T11: 2200 整块占位', !!tst.querySelector('.jieqi-note') && tst.innerHTML.indexOf('仅支持') >= 0, true));
+
+    // T12 同卵双胞胎：共享区一块 + 标题 = 出生年（v2-AC08）
+    R.renderTwinCardsHtml(pd, 'tst-out');
+    tests.push(eq('v0.26 T12: 同卵节气块仅1块', tst.querySelectorAll('.jieqi-section').length, 1));
+    assertTitleYear('v0.26 T12: 同卵初始', 1982);
+
+    // T13/T14 龙凤胎跨年（老大男1982 / 老二女1983 代码级构造）：初始=老大；点老二侧流年跟老二（v2-AC09/AC11）
+    var d1 = paipan('老大', '男', 1982, 10, 18, 5, 1);
+    var d2 = paipan('老二', '女', 1983, 1, 1, 0, 10);
+    if (!d1 || !d2 || !d2.daYun || !d2.daYun.length) {
+      tests.push(fail('v0.26 T13: 龙凤胎数据构造完整', 'd1/d2 缺 daYun'));
+      return;
+    }
+    R.renderLongFengCardsHtml(d1, d2, 'tst-out');
+    tests.push(eq('v0.26 T13: 龙凤胎共享节气块仅1块', tst.querySelectorAll('.jieqi-section').length, 1));
+    assertTitleYear('v0.26 T13: 龙凤胎初始=老大1982', d1.y);
+    var card2 = tst.querySelector('.bz-card-luck[data-card-index="1"]');
+    tests.push(eq('v0.26 T14: 找到老二侧流年区', !!card2, true));
+    if (card2) {
+      var y2 = d2.daYun[1].startYear; // 老二某步大运起始年
+      tests.push(eq('v0.26 T14: 老二侧找到' + y2 + '流年格', clickLiMatching(d2, y2, card2), true));
+      assertTitleYear('v0.26 T14: 点老二侧流年跟老二', y2);
+    }
+    // 容器复位，避免污染其它断言
+    R.renderChart(pd, undefined, 'tst-out');
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
