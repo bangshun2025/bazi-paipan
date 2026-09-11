@@ -14,8 +14,8 @@ DIR="${1:-$(pwd)}"
 cd "$DIR" || { echo "❌ 目录不存在: $DIR"; exit 1; }
 
 FILES="index.html standalone.html standalone-split.html"
-KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote jieqi-section jq-gz"
-MODULES="constants algorithm archive gongwei render main config auth records gongwei-cloud supabase.min"
+KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote jieqi-section jq-gz jq-tsmd jq-tstm xySettingsOverlay xySettingsList xy-trigger xy-note xySearchBar xySearchInput xySearchClear xySearchCount xySearchEmpty xy-group-title"
+MODULES="constants algorithm archive gongwei xingyao render main config auth records gongwei-cloud supabase.min"
 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -78,7 +78,7 @@ fi
 echo "【3/4】三文件 HTML 关键 id 存在性"
 # 运行时生成的 DOM key（在 render.js/main.js 代码里而非静态 HTML），
 # standalone-split.html 用外部 render.js，故允许在 JS 源码中兜底命中。
-RUNTIME_KEYS="jieqi-section jq-gz"
+RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger"
 for f in $FILES; do
   [ -f "$f" ] || { fail "缺少文件: $f"; continue; }
   for k in $KEYS; do
@@ -87,8 +87,8 @@ for f in $FILES; do
     elif grep -qE "class=\"[^\"]*${k}([ \"]|$)" "$f"; then
       pass "$f 含 class=$k"
     elif case " $RUNTIME_KEYS " in *" $k "*) true;; *) false;; esac && \
-         { { [ -f render.js ] && grep -q "$k" render.js; } || { [ -f main.js ] && grep -q "$k" main.js; }; }; then
-      pass "$f 运行时生成 $k (render/main.js)"
+         { { [ -f render.js ] && grep -q "$k" render.js; } || { [ -f main.js ] && grep -q "$k" main.js; } || { [ -f xingyao.js ] && grep -q "$k" xingyao.js; }; }; then
+      pass "$f 运行时生成 $k (render/main/xingyao.js)"
     else
       fail "$f 缺 id/class=$k"
     fi
@@ -96,7 +96,7 @@ for f in $FILES; do
 done
 
 echo "【4/4】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
-for m in gongwei gongwei-cloud config auth records supabase.min; do
+for m in gongwei xingyao gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
   [ -f standalone.html ] || { fail "缺少 standalone.html，跳过内联比对"; continue; }

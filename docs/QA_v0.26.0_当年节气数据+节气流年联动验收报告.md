@@ -22,7 +22,7 @@
 2. **语法与发布门槛**：node --check 四个 JS + `bash scripts/check-release.sh .` 退出码。
 3. **自动化断言**：headless Chrome CDP 打开 `index.html?test=1`，收 summary/✅/❌/异常。
 4. **真实浏览器 UI 实测**：CDP file:// 交互单人盘六场景。
-5. **双胞胎与重置**：T12-T14 自动化断言（真实 paipan 数据 + DOM dispatchEvent）+ 代码链兜底。
+5. **双胞胎与重置**：双胞胎用 T12-T14 自动化断言（真实 paipan 数据 + DOM dispatchEvent）；「重新排盘重置出生年」另经 `index.html?test=1` 真实表单→「排盘」按钮→doPaipan→renderChart 完整 UI 路径直接验证。
 
 ## 三、代码级检查结果（CI）
 
@@ -61,15 +61,18 @@
 | STEP3 | 点大运列 [data-dy=2] | 标题=2009（=daYun[2].startYear）、_jieqiYear=2009 | ✅ v2-AC04 |
 | STEP4 | 点运前流年 data-di=-1 末格(j=6) | 标题=1988（=1982+6）、_jieqiYear=1988 | ✅ v2-AC05 |
 | STEP5 | 点 📍 今年 | 标题=2026（nowYear）、_jieqiYear=2026 | ✅ v2-AC06 |
-| STEP6 | 重新排盘（干净页） | 加载默认即 1982；点 2042 后再触发排盘由代码链+T06 覆盖 | ✅ §2.3 |
+| STEP6 | 重新排盘重置（?test=1 放行登录守卫） | 排盘 1982（测试甲）→ 标题=1982；点 2042 → 标题=2042；改出生年 1995 重排盘（测试乙）→ 标题**重置=1995**、_jieqiYear=1995 | ✅ §2.3 重置 / v2-AC01 |
+| STEP7 | 干净页首次排盘=出生年（非系统年） | 测试甲 1982 排盘后标题=1982（系统年 2026），证明初始/重排盘均取出生年 | ✅ v2-AC01 |
 
 > 双胞胎：T12（同卵仅 1 块 =1982）✅ v2-AC08；T13/T14（龙凤胎初始=老大1982、点老二侧流年跟老二 daYun 年）✅ v2-AC09/AC11。越界：T11 refreshJieqi(2100)→小寒「—」不抛、(2200)→整块占位不抛 ✅ v2-AC10。
+>
+> **重置场景说明（STEP6-7）**：`file:// index.html`（非测试模式）未登录时，点排盘会被登录守卫 `requireLogin()` 用原生 `alert` 拦截（见 QA-01），headless 下 alert 阻塞渲染线程故无法自动交互。改用 `index.html?test=1`（auth.js `isTestMode()` 放行守卫）走**真实表单→按钮→doPaipan→renderChart** 完整 UI 路径，实测「重排盘重置=新出生年」成立（1995 覆盖先前 2042 的临时态）。该场景由 UI 直接验证，非仅代码等价。
 
 ## 五、缺陷清单
 
 | 编号 | 级别 | 标题 | 现象 | 根因 | 复现步骤 | 影响 | 修复建议 | 状态 |
 |------|:----:|------|------|------|---------|------|---------|:----:|
-| QA-01 | P3 | CDP+file:// 环境重排盘后页面主线程长时间忙碌（环境性观察，非代码缺陷） | doPaipan 触发后 CDP Runtime.evaluate 超时（约 >15s 无响应），需新开 tab 或等更久恢复 | 排盘含 SVG 重绘/supabase 网络等待等同步+异步大计算，headless file:// 下无服务端资源、连接等待拖长；多次同 tab 反复触发叠加 | 同一 CDP tab 连续多次 doPaipan | 仅影响自动化环境，不影响用户正常 http 使用；无功能错误、无异常抛出 | 验收侧建议后续 UI 自动化改用 http:// 服务形态 + 每次排盘后等待 ≥5s 再断言 | 记录不阻塞 |
+| QA-01 | P3 | 非测试模式下未登录点排盘，headless 环境被原生 alert 阻塞（环境性观察，非代码缺陷） | `file:// index.html`（非 ?test=1）未登录时点排盘/程序化 btn.click → CDP `Runtime.evaluate`、`Page.enable` 全部超时（渲染主线程 >15s 无响应），需关闭该 tab 恢复 | **auth.js L209 `requireLogin()` → 原生 `alert('请先登录后使用排盘功能')`**：未登录守卫拦截排盘并弹 modal alert，headless Chrome 下 modal dialog 阻塞渲染线程直至被处理。**与 doPaipan 计算量无关**（改用 ?test=1 放行守卫后同一 UI 路径 3s 内正常返回） | file:// 打开 index.html（非 ?test=1）未登录 → 点「排盘」（或程序化触发 doPaipan） | 仅影响「未登录 + headless file://」自动化环境；真实用户会看到 alert 并被引导登录，属**预期的登录拦截行为**，无功能错误、无异常抛出 | 验收侧改用 `index.html?test=1`（`isTestMode()` 放行守卫）或 http + 已登录会话；产品侧无需修改 | 记录不阻塞 |
 
 **缺陷计数：P0=0 / P1=0 / P2=0 / P3=1（环境性，非阻塞）**
 
@@ -107,7 +110,7 @@
 ## 七、未覆盖项 / 说明
 
 1. **AR06 三档宽度截图**：v2 ADR 明确「CSS 无增量预期」，本轮未做逐档截图比对；版式沿用 v1（v1 已验收过三档宽度）。如需可补拍，不阻塞。
-2. **「重新排盘重置出生年」UI 直接点击**：CDP 环境 doPaipan 大计算阻塞 evaluate 无法自动断言；以代码链（renderChart L656 每次 `container._jieqiYear = y`，重排盘=重 renderChart）+ T06/T12（每次 renderChart 后断言 _jieqiYear=出生年）覆盖，逻辑等价。
+2. **「重新排盘重置出生年」**：已在 `index.html?test=1`（`isTestMode()` 放行登录守卫）下，经**真实表单填写 → 点「排盘」按钮 → doPaipan → renderChart** 完整 UI 路径直接验证通过（见 §四 STEP6-7，1995 重置掉先前 2042 临时态）。非仅代码等价。原 `file://` 非测试模式因未登录守卫弹 `alert` 阻塞 headless 渲染线程而无法自动交互，属 QA-01 环境性问题。
 3. **双胞胎跨年 UI**：用代码级构造（d2.y=1983 真实 paipan 数据）经 T13/T14 覆盖，等同 UI 级（真实 DOM + 真实 click）。
 
 ## 八、回归记录（本报告版本无缺陷需回归；后续如修复 QA-01 观察项按原步骤复测即可）

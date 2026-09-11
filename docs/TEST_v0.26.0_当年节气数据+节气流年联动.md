@@ -102,8 +102,10 @@
 | RI-01 | check-release.sh | `bash scripts/check-release.sh .` | 退出码 0 |
 | RI-02 | ?test=1 全量断言 | CDP 打开 index.html?test=1 | 339 条全绿、0 失败、无异常 |
 | RI-03 | UI 冒烟（真实 Chrome） | CDP file:// index.html 交互 | 六步见 TC-01~06 |
+| RI-04 | 重置 UI 直接验证 | CDP `index.html?test=1` 真实表单→「排盘」按钮→改年份重排 | 排盘=出生年；点流年跟随；重排盘重置为新出生年 |
 
-## 六、未覆盖项说明
+## 六、未覆盖项 / 环境说明
 
 - 双胞胎 UI 场景以 ?test=1 T12-T14（真实 paipan 数据 + 真实 DOM dispatchEvent click）覆盖，等同 UI 级验证。
-- 「重新排盘重置出生年」UI 直接点击路径因 CDP+file:// 环境 doPaipan 同步大计算阻塞 evaluate 无法自动断言，以代码链（renderChart 每次渲染设 _jieqiYear=y）+ T06/T12 初始断言兜底（每次 renderChart 后 _jieqiYear=出生年已由 T06 断言）。
+- 「重新排盘重置出生年」（TC-07）：已在 `index.html?test=1`（`isTestMode()` 放行登录守卫）下经真实表单→「排盘」按钮→doPaipan→renderChart 完整 UI 路径**直接验证通过**（1982 排盘→点 2042→改出生年 1995 重排盘→标题重置 1995）。
+- 【环境注意】`file:// index.html`（非 ?test=1）未登录时点排盘，被 auth.js 登录守卫 `requireLogin()`（L209 原生 `alert`）拦截；headless 下 modal alert 阻塞渲染主线程，CDP 交互全部超时。此为**预期登录拦截行为，非产品缺陷**（详见 report.md QA-01）。自动化验收请统一使用 `?test=1`。

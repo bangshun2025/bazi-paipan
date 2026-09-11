@@ -21,7 +21,7 @@
       desc: "本地引擎，稳定版本。验证通过后升为正式版。",
       icon: "甲",
       iconColor: "#b5343a",
-      url: "http://localhost:7070/api/ext/bazi-paipan/standalone"
+      url: "/api/ext/bazi-paipan/standalone"
     },
     {
       id: "bazi-test",
@@ -30,7 +30,34 @@
       desc: "开发流水线自动部署，新功能尝鲜。",
       icon: "甲",
       iconColor: "#d4a017",
-      url: "http://localhost:7070/api/ext/bazi-paipan-test/standalone"
+      url: "/api/ext/bazi-paipan-test/standalone"
+    },
+    {
+      id: "qimen-paipan",
+      name: "奇门遁甲排盘",
+      subtitle: "时家飞盘拆补法",
+      desc: "时家起局 · 拆补法 · 飞盘 · 阳艮阴坤 · 阳遁 · 值使门起暗干。",
+      icon: "遁",
+      iconColor: "#2e4a6b",
+      url: "/api/ext/qimen-paipan/standalone"
+    },
+    {
+      id: "ziwei-online",
+      name: "紫微斗数排盘 · 正式",
+      subtitle: "线上正式版",
+      desc: "GitHub Pages 发布版，对外分享链接。",
+      icon: "紫",
+      iconColor: "#2e8b3d",
+      url: "https://bangshun2025.github.io/ziwei-paipan/"
+    },
+    {
+      id: "ziwei-paipan",
+      name: "紫微斗数排盘 · 本地",
+      subtitle: "本地版 v0.5.0",
+      desc: "本地档案（保存/搜索/回收站）· 省市区三级联动 · 实时真太阳时；年按立春换年 · 月按节气十二节 · 日按农历日序安紫微。",
+      icon: "紫",
+      iconColor: "#5b3a8e",
+      url: "/api/ext/ziwei-paipan/standalone"
     }
   ];
 
@@ -64,7 +91,7 @@
   // ============================================================
   function renderCard(app) {
     return [
-      '<a class="al-card" href="', app.url, '" target="_blank">',
+      '<a class="al-card" href="', app.url, '" target="_blank" rel="noopener">',
         '<div class="al-card-top">',
           '<div class="al-card-icon" style="background:', app.iconColor, '15;color:', app.iconColor, ';">', app.icon, '</div>',
           '<div>',
@@ -85,7 +112,7 @@
     return [
       '<div class="al-page">',
         '<div class="al-header">',
-          '<h2>扩展应用</h2>',
+          '<h2>生命排盘</h2>',
           '<div class="sub">共 ', APPS.length, ' 个应用 · 点击卡片在新标签页打开</div>',
         '</div>',
         '<div class="al-grid">', cards, '</div>',
@@ -97,10 +124,24 @@
   // 注册 workspace（面板内展示）
   // ============================================================
   Clacky.ext.ui.registerWorkspace("app-launcher", {
-    title: "扩展应用",
+    title: "生命排盘",
     render: function (container) {
       var root = document.createElement("div");
       root.innerHTML = render();
+      // 打开方式：优先 window.open（桌面 App 内已验证可用）；若被拦截则
+      // 不 preventDefault，退回 <a target="_blank"> 的原生行为。
+      // 本地卡片用相对地址，天然对齐当前 App 的 host/端口，避免写死端口失效。
+      var cards = root.querySelectorAll(".al-card");
+      for (var i = 0; i < cards.length; i++) {
+        (function (a) {
+          a.addEventListener("click", function (e) {
+            var url = a.getAttribute("href");
+            if (!url) return;
+            var win = window.open(url, "_blank");
+            if (win) e.preventDefault();
+          });
+        })(cards[i]);
+      }
       container.appendChild(root);
     }
   });
@@ -118,7 +159,7 @@
     item.className = "task-item task-item-summary";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
-    item.setAttribute("aria-label", "扩展应用");
+    item.setAttribute("aria-label", "生命排盘");
     item.style.cssText = "cursor:pointer;";
     item.onclick = function (e) {
       e.preventDefault();
@@ -154,7 +195,7 @@
 
     var name = document.createElement("span");
     name.className = "task-name";
-    name.textContent = "扩展应用";
+    name.textContent = "生命排盘";
 
     info.appendChild(name);
     row.appendChild(svg);

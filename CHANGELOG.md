@@ -4,6 +4,109 @@
 
 ---
 
+## v0.30.0 — 星曜设置页迭代（搜索筛选 / 三栏同屏 / 纳音全名）(2026-09-11)
+
+### Added
+- **设置页搜索框**：按「包含」关系实时筛选六十甲子（`己` = 6 行 / `戌` = 5 行 / 留空 = 60 行）；含命中计数「命中 N 项」、无结果提示「没有匹配的干支」（全局仅 1 处）、`✕` 一键清空
+- **IME 组合态闸门**：拼音/日文输入法组合期间（`ji` → `己`）不做过滤，避免列表在 60/1/0 行之间抖动；`compositionend` 后才按最终值筛选
+- **设置页三栏同屏**（≥1280px）：60 行按 20 行拆三栏并排 —— 单一 `<tbody id="xySettingsList">` 容器内 60 个 `tr[data-gz][data-xy-group]` 全为其后代（不拆表、不拆 tbody）；三栏**共享一行表头**（`thead th` 恒 4）
+- **静态栏头**：表格上方 `.xy-groups-heads` 内 3 个 `div.xy-group-title[data-xy-group]`（文案「第 N 组 · 首干支 – 末干支」），不在 tbody 内、无 `data-gz`（不参与草稿采集）；空栏保留占位、栏头不隐藏
+
+### Changed
+- **筛选只改显隐 + 栏位不变**：命中行仍留在本栏（每栏 20 行槽位固定、空栏保留占位），`己` 严格 2/2/2 且各栏位左边界正确；命中 0 行时全局唯一空提示 + 3 栏头仍可见
+- **设置页纳音列**：列名「纳音五行」→「**纳音**」；取值由末字五行（如 `火`）→ **完整纳音名**（如 `甲戌` → `山头火`）；主盘纳音行本就为全名，本次仅对齐设置页
+- **表头几何（ADR v1.6 §15.3 C3）**：`thead` 宽度显式 `calc((100% - 32px)/3)`（= 一栏宽），列模板与数据行逐像素同构（`56px 76px minmax(0,1fr) minmax(0,1fr)` + `gap:4px`）⇒ 4 个标签与第 1 栏各列左边界偏差实测 **[0,0,0,0]**（修正前等分铺满全宽，偏差最大 615.7px，「纳音」标签悬在第 2 栏干支列上方）
+- **设置页免滚动（AC20）**：`td` 纵向 padding `2px → 1px`（选择器 `.xy-table tbody > tr > td`，仅星曜设置弹层；主盘 `div.luck-table` 零影响），行高 24.00px → **22.00px**；弹层 `width:90vw; max-width:1200px; max-height:92vh` ⇒ 1280×800 表区纵向溢出 **15px → 0px**，三基线（1440×900 / 1280×800 / 1600×1000）溢出 **0/0/0px**
+- **自动化断言 517 → 664**：`?test=1` 新增「星曜(v0.30)」段 T01–T15（含 C8 表头几何 3 条：`th`=4 + 逐列偏差 ≤12px + `th[i].width` ≥40px；AC25 筛选态栏位正确性）；原 v0.29 段纳音相关 13 条同步改严（全名 + 末字一致性双断）
+- **`scripts/check-release.sh` 门禁扩容**（L1 方案 A）：`KEYS` 追加 `xySearchBar` / `xySearchInput` / `xySearchClear` / `xySearchCount` / `xySearchEmpty` / `xy-group-title`；`RUNTIME_KEYS` 改为 `jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger`（移除 `xy-group-row` —— 静态栏头后组标题行已不存在，按「不留幽灵」原则清理）；【3/4】兜底扫描文件由 `render.js` / `main.js` 扩为含 `xingyao.js`（PASS 121 → 139，无新增失败）
+- **`docs/ALGORITHM.md` §21.1/§21.2 + `scripts/sync-xingyao-algorithm.py` 连带同步**：§21.2 表头改「纳音」、60 行取完整纳音名；脚本 `HEADER` 常量与 `NAYIN[gz][-1]` → `NAYIN[gz]`；同一入参复跑**幂等无变更**
+- 已改：`xingyao.js` / `main.js` / `index.html` / `standalone.html` / `standalone-split.html` / `scripts/check-release.sh` / `scripts/sync-xingyao-algorithm.py` / `docs/ALGORITHM.md` / `CHANGELOG.md`
+- 文档：`docs/PRD_v0.30.0_星曜设置页迭代.md`(r7) / `docs/ADR_v0.30.0_星曜设置页迭代.md`(v1.6) / `docs/实施记录-v0.30.0-星曜设置页迭代.md`
+
+### Notes
+- 筛选**只改显隐**（`tr[hidden]` + 兜底 CSS `.xy-settings-modal [hidden]{display:none!important}`，C2 必需项 —— `tr{display:grid}` 会压过 UA 的 `[hidden]{display:none}`，无兜底则被筛掉的行仍显示），**不删 DOM、不重渲染行、不新增/重建元素**；`collectDraft()` 仍全量遍历 60 行，筛选态下隐藏行的草稿照常采集与保存
+- **切栏实现**（ADR §15.3 C1/C3）：`grid-auto-flow:row dense` + 按 `data-xy-group` 钉 `grid-column`（**非** `grid-auto-flow:column` —— 后者在筛选态会塌栏，已列入被否决方案 D19）；三栏宽只在 ≥1280px 生效，`<1280px` 单栏纵向（E15，已知行为 L，允许纵向滚动）
+- localStorage 键 `bz_xingyao_map` 结构、`schemaVersion=1` 一律不变、不迁移；**搜索态不落盘**（无任何 search 相关新键）
+- 搜索仅匹配干支文本，纯空白（半角/全角）视为留空，按字面匹配（正则元字符不生效）
+- 断言只锁钩子 / 行为 / 几何，**不锁** computed `grid-auto-flow` / `grid-template-*` 字面值（PRD r7 FR3.4.3 / D20）
+- 主盘零影响：三条红线未触碰（筛选只改 `hidden`、主盘纳音行不动、localStorage 键与 schema 不变）；`?test=1` 测试态键隔离 `bz_xingyao_map__test`
+- `ext.yml` 版本由发布师在发布环节由 `0.29.0` 升至 `0.30.0`
+- 冻结产物内 6 处代码注释（`index.html:301/:11727`、`standalone.html:301/:11727`、`standalone-split.html:301`、`main.js:2248`）引用的「ADR v1.4 §15.3 C3」为**编写时引用**，其语义与现行 **ADR v1.6 §15.3** 一致（v1.5 勘误 `gap:0`→`gap:4px` 与作用域表述、v1.6 勘误 `R7`→`R8`）；按「冻结产物字节永不为引用改名而改」原则，**产物零改动**。
+- 已知限制：
+  - **页面级**横向溢出（1280×800 = 15px / 1024×800 = 56px / 390×844 = 276px）来自主盘 `div.luck-table`（816px 固定宽 / `min-width:620px`）**既有行为、非本版引入**，本轮不修（Leader 裁定备案）；星曜设置弹层内横向溢出 **0**
+  - 导入 JSON 后设置页列表不即时重绘（v0.29 遗留，非缺陷，Leader 裁定留 v0.30.x）
+  - `<1280px` 单栏纵向需纵向滚动（E15；AC20 免滚动仅约束 ≥1280px）
+
+---
+
+## v0.29.0 — 盘面「星曜」行 + 星曜设置页 + ALGORITHM.md §21 (2026-09-11)
+
+### Added
+- **盘面「星曜」行**：在四柱区与三垣区盘面的「藏气」行与「纳音」行之间新增一行 `星曜`；显示级别 **L0/L1 隐藏、L2 起显示**；值按「六十甲子」键查询用户自定义的「星曜名称 / 来源体系」映射表（出厂全空）
+- **工具栏「星曜」按钮 + 星曜设置页**：工具栏「简」按钮之后新增「星曜」按钮，点击弹出设置页（`xySettingsOverlay`）；表格**四列**（六十甲子 / 纳音五行 / 星曜名称 / 来源体系）× **60 行**，支持**修改 / 清空 / 还原**
+- **新模块 `xingyao.js`**：星曜数据读写（localStorage）与设置页交互、盘面星曜行取值；纳入三端内联与模块加载顺序
+- **`docs/ALGORITHM.md` §21 星曜**：新增「星曜」章节（21.1 定义 / 21.2 六十甲子↔星曜名称·来源体系对应表 / 21.3 生效机制），由 `scripts/sync-xingyao-algorithm.py` **幂等重写**
+
+### Changed
+- **自动化断言 429 → 517**：`?test=1` 新增 v0.29「星曜」段 **88** 条（覆盖 T01–T10），三端 × file/http 双环境 6 组全绿
+- **三端内联同步**：`index.html` / `standalone.html` 内联 JS + `standalone-split.html` 模块加载
+- `ext.yml` 版本 `0.28.0` → `0.29.0`（本次内测发布）
+- 已改：`xingyao.js`(新增) / `render.js` / `main.js` / `standalone.html` / `index.html` / `standalone-split.html` / `scripts/check-release.sh` / `docs/ALGORITHM.md` / `ext.yml` / `CHANGELOG.md` / `SYSTEM.md`
+- 文档：`docs/PRD_v0.29.0_星曜功能.md` / `docs/ADR_v0.29.0_星曜功能.md` / `docs/TEST_v0.29.0_星曜功能.md` / `docs/QA_v0.29.0_星曜功能.md` / `docs/部署报告-v0.29.0-内测发布.md`
+
+### Notes
+- 星曜数据**出厂即全空**、**不由程序推演**（不内置任何星曜体系默认数据），名称/来源体系完全由用户手填；不参与任何命理推导，仅作盘面展示。
+- 本版为**内测发布**（local 层，不 commit、不打 tag）；待用户 L4 验收后再走正式发布。
+- 已知限制（非缺陷，Leader 裁定留 v0.29.x）：`renderChartToHtml` / `renderExpandedChart` 未加星曜行，全仓库无调用点，不影响发布。
+
+---
+
+## v0.28.0 — 当年节气数据区 · 干支行改为月建干支 (2026-09-10)
+
+### Changed
+- **节气区干支数据源**：12 节气列最后一行「干支」由**交节日柱**（旧口径，如 1982 立春列显 `戊午`）改为**该节所起月份的月建干支（月柱）**（新口径，如 `壬寅`）；按**五虎遁**（年干推月干）直推。`render.js` 新增纯函数 `jieqiMonthGZ(yearGan, idx)` 并挂 `RENDER.jieqiMonthGZ`
+- **年基口径**：整块 12 列统一取「所选干支年」的年干（`ALGO.yearPillar(year).gan`）为五虎遁年基；小寒列同取**本年**年基（`jieqiMonthGZ('癸',11)` = `乙丑`，反例：误用次年干得此值）
+- **版式零变化**：仅换数据源，列数 / 行序 / CSS / DOM 结构不变；`algorithm.js`、`constants.js` **零改动**，排盘口径与四柱（D1）不动
+- **自动化断言 393 → 429**：`?test=1` 新增 v0.28 T01–T04 共 **36** 条（1982 十二节锚点 12/12、五虎遁纯函数含反例、经度无关性、真实渲染 + `refreshJieqi` 一致性），双环境全绿
+- 三端内联同步；`ext.yml` 版本 `0.27.0` → `0.28.0`（本次内测发布）
+- 已改：`render.js` / `main.js` / `standalone.html` / `index.html` / `ext.yml` / `CHANGELOG.md` / `SYSTEM.md`
+- 文档：`docs/PRD_v0.28.0_干支行改月建干支.md` / `docs/ADR_v0.28.0_干支行改月建干支.md` / `docs/report_v0.28.0_干支行改月建干支.md` / `docs/部署报告-v0.28.0-内测发布.md`
+
+### Notes
+- 口径变更为**需求确认**的结果（旧口径「交节日柱」易被误读为月柱），非缺陷修复。
+- 本次内测**仅升版 + 版本注释 + 文档**；功能代码已 freeze（编程师交付 md5 基线），发布师未改功能逻辑。
+- 观察项 OBS-01/02/03 见部署报告 §六（均非本版缺陷）。
+
+---
+
+## v0.27.0 — 节气区真太阳日月 + 真太阳时间 (2026-09-10)
+
+### Added
+- **节气区真太阳两行**：12 节气列由 4 行扩展为 6 行，在 `.jq-tm`（北京时间）**之后**、`.jq-name` 之前插入两行：`☀ 真太阳日月`（`.jq-tsmd`，M/D）与 `☀ 真太阳时间`（`.jq-tstm`，HH:MM）；值 = 交节时刻（BJT）经**出生地经度**换算的真太阳时
+- **经度贯穿**：`doPaipan` 无条件 `getLng()`（与 `useSolar` 勾选**解耦**），写入 `data.lng`（三入口一致），渲染后落 `container._jieqiLng`；`buildJieqiHtml(year, lng)` / `refreshJieqi(..., lng)` 签名扩展（向后兼容，缺省即旧行为）
+- **缺省经度降级**：`lng` 非有限数（未选出生地）时 12 列两行显「—」，区块标题追加轻提示「（未选出生地，真太阳时不可用）」
+- **自动化断言 339→393**：`?test=1` 新增 v0.27-T01~T07（真太阳换算锚点 / 行序正则回归 / `lng` 缺省「—」 / 跨日两例 / 三端同步），三入口 393 条全绿
+- 复用既有 `ALGO.trueSolarTime`（含均时差 `equationOfTime`），**不新增算法、不改排盘口径与干支（D1）**；`algorithm.js` 零改动
+
+### Changed
+- `render.js`：`buildJieqiHtml` / `refreshJieqi` 增 `lng` 参数与**显式判空**（`trueSolarTime` 传 undefined 返回 NaN 不抛，靠 try/catch 会漏）；三入口 `renderChart` / 同卵 / 龙凤胎渲染传 `lng`；`doPaipan` 取 `lng`
+- `main.js`：新增 v0.27-T01~T07 断言段（内联同步三入口）
+- `index.html` / `standalone.html`：内联 JS 副本 + CSS（`.jq-tsmd` / `.jq-tstm`）+ 断言同步 + 头部版本注释 v0.27.0
+- `standalone-split.html`：CSS 同步（JS 走外链）+ 头部版本注释 v0.27.0
+- `scripts/check-release.sh`：`KEYS` / `RUNTIME_KEYS` 扩展 `jq-tsmd` `jq-tstm`
+- 版本号 v0.26.0 → v0.27.0（本次内测发布）
+
+### Notes
+- 验收基线：PRD AC01-AC08 / R01-R03 + ADR D1-D8；QA 结论 ✅ 无 P0/P1/P2，仅 1 项**存量** P3（龙凤胎点大运/流年 `redrawZuHeSVG` 未定义，基线 v0.26.0 即存在、非本版回归，不阻断）
+- `check-release.sh` 退出码 0；`?test=1` 393 条断言全绿 0 失败
+- 基线 tag `v0.26.0` 保留用于回滚
+
+### 修改文件
+- 已改：`render.js` / `main.js` / `standalone.html` / `index.html` / `standalone-split.html` / `scripts/check-release.sh` / `ext.yml` / `CHANGELOG.md` / `SYSTEM.md`
+- 文档：`docs/PRD_v0.27.0_节气真太阳时.md` / `docs/ADR_v0.27.0_节气真太阳时.md` / `docs/部署报告-v0.27.0-内测发布.md`
+
+---
+
 ## v0.26.0 — 当年节气数据 + 节气流年联动 (2026-09-07)
 
 ### Added
