@@ -19,7 +19,7 @@ DIR="${1:-$(pwd)}"
 cd "$DIR" || { echo "❌ 目录不存在: $DIR"; exit 1; }
 
 FILES="index.html standalone.html standalone-split.html"
-KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote jieqi-section jq-gz jq-tsmd jq-tstm xySettingsOverlay xySettingsList xy-trigger xy-note xySearchBar xySearchInput xySearchClear xySearchCount xySearchEmpty xy-group-title"
+KEYS="gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote jieqi-section jq-gz jq-tsmd jq-tstm xySettingsOverlay xySettingsList xy-trigger xy-note xySearchBar xySearchInput xySearchClear xySearchCount xySearchEmpty xy-group-title archive-tag-bar archive-tag-default-panel btnDefaultTag"
 MODULES="constants algorithm archive gongwei xingyao render main config auth records gongwei-cloud supabase.min"
 FAIL=0
 TMP="$(mktemp -d)"

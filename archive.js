@@ -1,4 +1,4 @@
-/* 八字排盘 v0.31.0 — archive.js */
+/* 八字排盘 v0.32.0 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -37,6 +37,11 @@
   var TRASH_KEY_OLD = CONST.TRASH_KEY_OLD;
   var ARCH_BACKUP_KEY = CONST.ARCH_BACKUP_KEY;
   var PRIVACY_KEY = CONST.PRIVACY_KEY;
+
+  // ===== v0.32.0 档案标签 =====
+  var ARCH_TAG_KEY = 'bz_archive_default_tag';  // 默认标签（打开档案时默认只显示该标签）
+  var TAG_MAX = 12;                             // 单条档案标签上限
+  var TAG_UNTAGGED = '__untagged__';            // 「未分类」伪标签
 
   // ===== 别名：来自 algorithm.js =====
   var monthDays = ALGO.monthDays;
@@ -750,25 +755,189 @@ function escHtml(s) {
 }
 
 function openArchivePanel() {
+  var searchEl = document.getElementById('archive-search-modal');
+  _searchKeyword = '';
+  if (searchEl) searchEl.value = '';
+  // 默认标签：打开时只显示默认标签下的档案；未设默认 / 默认标签已空 → 显示全部
+  _activeTag = resolveDefaultFilter();
+  hideDefaultTagPicker();
   renderArchiveModal();
   document.getElementById('archiveOverlay').classList.add('show');
-  document.getElementById('archive-search-modal').value = '';
-  setTimeout(function() { document.getElementById('archive-search-modal').focus(); }, 100);
+  if (searchEl) setTimeout(function() { searchEl.focus(); }, 100);
 }
 
 function closeArchivePanel() {
+  hideDefaultTagPicker();
   document.getElementById('archiveOverlay').classList.remove('show');
+}
+
+// ============================================================
+// v0.32.0 档案标签（行内直接填 + 标签筛选 + 默认标签）
+// ============================================================
+
+// 单条档案的标签（缺省 / 脏数据一律降级为空数组）
+function getArchiveTags(a) {
+  if (!a || !Array.isArray(a.tags)) return [];
+  var out = [];
+  for (var i = 0; i < a.tags.length; i++) {
+    var t = String(a.tags[i] == null ? '' : a.tags[i]).trim();
+    if (t && out.indexOf(t) < 0) out.push(t);
+  }
+  return out;
+}
+
+// 输入框文本 → 标签数组：空格 / 逗号 / 顿号 / 分号 / 竖线分隔，去重并限量
+function parseTagInput(v) {
+  var parts = String(v == null ? '' : v).split(/[\s,，、;；|]+/);
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var t = parts[i].trim();
+    if (!t || out.indexOf(t) >= 0) continue;
+    out.push(t);
+    if (out.length >= TAG_MAX) break;
+  }
+  return out;
+}
+
+// 行内标签输入落库（失焦 / 回车触发）。只重绘标签栏，不重绘列表：
+// 若当场重绘列表，输入框 blur 与「修改」按钮 click 之间节点被替换，点击会丢。
+function saveRowTags(idx, value) {
+  var archives = getArchives();
+  if (!archives[idx]) return;
+  var tags = parseTagInput(value);
+  if (getArchiveTags(archives[idx]).join('\u0001') === tags.join('\u0001')) return;
+  archives[idx].tags = tags;
+  saveArchives(archives);
+  renderTagBar();
+}
+
+function getDefaultTag() {
+  try { return localStorage.getItem(ARCH_TAG_KEY) || ''; } catch (e) { return ''; }
+}
+
+function setDefaultTag(tag) {
+  var t = String(tag || '').trim();
+  if (t) localStorage.setItem(ARCH_TAG_KEY, t);
+  else localStorage.removeItem(ARCH_TAG_KEY);
+}
+
+// 默认标签若已不在任何档案上 → 回落「全部」，避免打开就是空列表
+function resolveDefaultFilter() {
+  var def = getDefaultTag();
+  if (!def) return '';
+  var archives = getArchives();
+  for (var i = 0; i < archives.length; i++) {
+    if (getArchiveTags(archives[i]).indexOf(def) >= 0) return def;
+  }
+  return '';
+}
+
+function matchTagFilter(a, filter) {
+  if (!filter) return true;
+  var tags = getArchiveTags(a);
+  if (filter === TAG_UNTAGGED) return tags.length === 0;
+  return tags.indexOf(filter) >= 0;
+}
+
+// 现存标签汇总：按标签名排序（中文按拼音），附条数与未分类数
+function collectTags(archives) {
+  var counts = {}, list = [], untagged = 0;
+  for (var i = 0; i < archives.length; i++) {
+    var tags = getArchiveTags(archives[i]);
+    if (!tags.length) untagged++;
+    for (var j = 0; j < tags.length; j++) {
+      if (counts[tags[j]]) { counts[tags[j]]++; continue; }
+      counts[tags[j]] = 1;
+      list.push(tags[j]);
+    }
+  }
+  list.sort(function(a, b) { return a.localeCompare(b, 'zh'); });
+  return { tags: list, counts: counts, untagged: untagged, total: archives.length };
+}
+
+function renderTagBar() {
+  var bar = document.getElementById('archive-tag-bar');
+  if (!bar) return;
+  var hasUntagged = false;
+  var info = collectTags(getArchives());
+  var def = getDefaultTag();
+  var html = '<span class="archive-tag-label">标签</span>'
+    + '<button class="archive-tag-chip' + (_activeTag === '' ? ' active' : '') + '" data-tag="">全部<span class="n">' + info.total + '</span></button>';
+  for (var i = 0; i < info.tags.length; i++) {
+    var t = info.tags[i];
+    html += '<button class="archive-tag-chip' + (_activeTag === t ? ' active' : '') + '" data-tag="' + escHtml(t) + '">'
+      + (t === def ? '<span class="star">★</span>' : '') + escHtml(t) + '<span class="n">' + info.counts[t] + '</span></button>';
+  }
+  hasUntagged = info.untagged > 0;
+  if (hasUntagged) {
+    html += '<button class="archive-tag-chip' + (_activeTag === TAG_UNTAGGED ? ' active' : '') + '" data-tag="' + TAG_UNTAGGED + '">未分类<span class="n">' + info.untagged + '</span></button>';
+  }
+  bar.innerHTML = html;
+  if (!bar._tagBound) {
+    bar.addEventListener('click', function(e) {
+      var el = e.target.closest ? e.target.closest('.archive-tag-chip') : null;
+      if (!el) return;
+      setTagFilter(el.getAttribute('data-tag') || '');
+    });
+    bar._tagBound = true;
+  }
+  var btn = document.getElementById('btnDefaultTag');
+  if (btn) btn.textContent = def ? ('🏷 默认：' + def) : '🏷 默认标签';
+  renderDefaultTagPicker(info, def);
+}
+
+function renderDefaultTagPicker(info, def) {
+  var panel = document.getElementById('archive-tag-default-panel');
+  if (!panel) return;
+  var html = '<div class="archive-tag-default-title">默认标签：打开档案时默认只显示该标签（随时点上方标签可切换）</div>'
+    + '<label class="archive-tag-default-opt"><input type="checkbox" class="archive-tag-default-cb" data-tag=""' + (def ? '' : ' checked') + '>全部显示</label>';
+  for (var i = 0; i < info.tags.length; i++) {
+    var t = info.tags[i];
+    html += '<label class="archive-tag-default-opt"><input type="checkbox" class="archive-tag-default-cb" data-tag="' + escHtml(t) + '"'
+      + (t === def ? ' checked' : '') + '>' + escHtml(t) + '<span class="n">' + info.counts[t] + '</span></label>';
+  }
+  if (info.untagged > 0) {
+    html += '<label class="archive-tag-default-opt"><input type="checkbox" class="archive-tag-default-cb" data-tag="' + TAG_UNTAGGED + '"'
+      + (def === TAG_UNTAGGED ? ' checked' : '') + '>未分类<span class="n">' + info.untagged + '</span></label>';
+  }
+  panel.innerHTML = html;
+  if (!panel._tagBound) {
+    panel.addEventListener('change', function(e) {
+      var el = e.target;
+      if (!el || !el.classList || !el.classList.contains('archive-tag-default-cb')) return;
+      var tag = el.getAttribute('data-tag') || '';
+      setDefaultTag(tag);
+      _activeTag = tag ? resolveDefaultFilter() : '';
+      hideDefaultTagPicker();
+      renderArchiveModal();
+    });
+    panel._tagBound = true;
+  }
+}
+
+function toggleDefaultTagPicker() {
+  var panel = document.getElementById('archive-tag-default-panel');
+  if (!panel) return;
+  var show = panel.style.display === 'none' || !panel.style.display;
+  renderTagBar();
+  panel.style.display = show ? 'block' : 'none';
+}
+
+function hideDefaultTagPicker() {
+  var panel = document.getElementById('archive-tag-default-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+function setTagFilter(tag) {
+  _activeTag = String(tag || '');
+  hideDefaultTagPicker();
+  renderArchiveModal();
 }
 
 function renderArchiveModal() {
   var listEl = document.getElementById('archive-modal-list');
-  var archives = getArchives();
   if (!listEl) return;
-
-  if (archives.length === 0) {
-    listEl.innerHTML = '<div class="archive-modal-empty">暂无档案，排盘后自动保存</div>';
-    return;
-  }
+  var archives = getArchives();
 
   // Sort by updatedAt desc
   archives.sort(function(a, b) {
@@ -776,28 +945,57 @@ function renderArchiveModal() {
   });
   saveArchives(archives);
 
+  renderTagBar();
+
+  var k = _searchKeyword.trim().toLowerCase();
+  if (archives.length === 0) {
+    listEl.innerHTML = '<div class="archive-modal-empty">暂无档案，排盘后自动保存</div>';
+    return;
+  }
+
   var html = '';
+  var hit = 0;
   for (var i = 0; i < archives.length; i++) {
     var a = archives[i];
-    var genderIcon = a.gender === '男' ? '♂' : '♀';
-    var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = getDisplayName(a);
-    var dateStr = a.year + '年';
-    html += '<div class="archive-modal-row">'
-      + '<div class="archive-row-info">'
-      + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'
-      + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
-      + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
-      + '</div>'
-      + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + i + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + i + ')">🗑️ 删除</button>'
-      + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + i + ')">排盘</button>'
-      + '</div>'
-      + '</div>';
+    if (!matchTagFilter(a, _activeTag)) continue;
+    if (k && !archiveMatchesKeyword(a, k)) continue;
+    html += archiveRowHtml(a, i);
+    hit++;
   }
-  listEl.innerHTML = html;
+  listEl.innerHTML = hit ? html : '<div class="archive-modal-empty">未找到匹配档案</div>';
 }
+
+function archiveMatchesKeyword(a, k) {
+  return (a.nickname || '').toLowerCase().indexOf(k) >= 0
+    || (a.yiming || '').toLowerCase().indexOf(k) >= 0
+    || (a.name || '').toLowerCase().indexOf(k) >= 0
+    || getArchiveTags(a).join(' ').toLowerCase().indexOf(k) >= 0;
+}
+
+function archiveRowHtml(a, idx) {
+  var genderIcon = a.gender === '男' ? '♂' : '♀';
+  var genderCls = a.gender === '男' ? 'male' : 'female';
+  return '<div class="archive-modal-row">'
+    + '<div class="archive-row-info">'
+    + '<span class="archive-row-name">' + escHtml(getDisplayName(a)) + '</span>'
+    + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
+    + '<span class="archive-row-date">' + escHtml(a.year + '年') + '</span>'
+    + '</div>'
+    + '<div class="archive-row-actions">'
+    + '<input class="archive-row-tags" type="text" placeholder="标签" title="多个标签用空格分隔，回车保存"'
+    + ' value="' + escHtml(getArchiveTags(a).join(' ')) + '"'
+    + ' onchange="ARCHIVE.saveRowTags(' + idx + ', this.value)"'
+    + ' onkeydown="if(event.key===\'Enter\'){this.blur();}">'
+    + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + idx + ')">✏️ 修改</button>'
+    + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + idx + ')">🗑️ 删除</button>'
+    + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + idx + ')">排盘</button>'
+    + '</div>'
+    + '</div>';
+}
+
+// 标签筛选与搜索词（两者叠加生效）
+var _activeTag = '';
+var _searchKeyword = '';
 
 // P1：搜索防抖 150ms，减少输入过程中的中间态渲染
 var _filterTimer = null;
@@ -807,52 +1005,8 @@ function onArchiveSearch(val) {
 }
 
 function filterArchives(keyword) {
-  var k = (keyword || '').trim().toLowerCase();
-  var archives = getArchives();
-  var listEl = document.getElementById('archive-modal-list');
-  if (!listEl) return;
-
-  if (!k) {
-    renderArchiveModal();
-    return;
-  }
-
-  var filtered = [];
-  for (var i = 0; i < archives.length; i++) {
-    var a = archives[i];
-    var match = (a.nickname || '').toLowerCase().indexOf(k) >= 0
-      || (a.yiming || '').toLowerCase().indexOf(k) >= 0
-      || (a.name || '').toLowerCase().indexOf(k) >= 0;
-    if (match) filtered.push({arch: a, idx: i});
-  }
-
-  if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="archive-modal-empty">未找到匹配档案</div>';
-    return;
-  }
-
-  var html = '';
-  for (var j = 0; j < filtered.length; j++) {
-    var a = filtered[j].arch;
-    var idx = filtered[j].idx;
-    var genderIcon = a.gender === '男' ? '♂' : '♀';
-    var genderCls = a.gender === '男' ? 'male' : 'female';
-    var displayName = getDisplayName(a);
-    var dateStr = a.year + '年';
-    html += '<div class="archive-modal-row">'
-      + '<div class="archive-row-info">'
-      + '<span class="archive-row-name">' + escHtml(displayName) + '</span>'
-      + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
-      + '<span class="archive-row-date">' + escHtml(dateStr) + '</span>'
-      + '</div>'
-      + '<div class="archive-row-actions">'
-      + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + idx + ')">✏️ 修改</button>'
-      + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + idx + ')">🗑️ 删除</button>'
-      + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + idx + ')">排盘</button>'
-      + '</div>'
-      + '</div>';
-  }
-  listEl.innerHTML = html;
+  _searchKeyword = String(keyword == null ? '' : keyword);
+  renderArchiveModal();
 }
 
 function loadFromArchive(idx) {
@@ -908,10 +1062,127 @@ function loadFromArchive(idx) {
     renderArchiveModal: renderArchiveModal,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
+    // v0.32.0 标签
+    TAG_UNTAGGED: TAG_UNTAGGED,
+    TAG_MAX: TAG_MAX,
+    ARCH_TAG_KEY: ARCH_TAG_KEY,
+    getArchiveTags: getArchiveTags,
+    parseTagInput: parseTagInput,
+    saveRowTags: saveRowTags,
+    getDefaultTag: getDefaultTag,
+    setDefaultTag: setDefaultTag,
+    resolveDefaultFilter: resolveDefaultFilter,
+    matchTagFilter: matchTagFilter,
+    collectTags: collectTags,
+    renderTagBar: renderTagBar,
+    renderDefaultTagPicker: renderDefaultTagPicker,
+    toggleDefaultTagPicker: toggleDefaultTagPicker,
+    hideDefaultTagPicker: hideDefaultTagPicker,
+    setTagFilter: setTagFilter,
+    archiveRowHtml: archiveRowHtml,
+    getActiveTagFilter: function() { return _activeTag; },
     getPrivacyMode: getPrivacyMode,
     setPrivacyMode: setPrivacyMode,
     getDisplayName: getDisplayName,
     togglePrivacy: togglePrivacy,
     loadFromArchive: loadFromArchive,
   };
+
+  // ===== v0.32.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
+  // archive.js 早于 main.js 加载，__testAppend（main.js 定义）此刻尚不存在，
+  // 故断言推到 load 之后跑，确保并入统一统计
+  function runV032Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var eqJson = function(a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+
+    // T01 标签解析
+    t('v0.32 T01:空格分隔', eqJson(parseTagInput('自在班 老大'), ['自在班', '老大']), JSON.stringify(parseTagInput('自在班 老大')));
+    t('v0.32 T01:中英分隔符混用', eqJson(parseTagInput('a,b，c、d;e；f|g'), ['a', 'b', 'c', 'd', 'e', 'f', 'g']), JSON.stringify(parseTagInput('a,b，c、d;e；f|g')));
+    t('v0.32 T01:重复标签去重', eqJson(parseTagInput('a a  a'), ['a']), JSON.stringify(parseTagInput('a a  a')));
+    t('v0.32 T01:空输入得空数组', parseTagInput('   ').length === 0, JSON.stringify(parseTagInput('   ')));
+    t('v0.32 T01:上限 12 个', parseTagInput('t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13').length === 12, parseTagInput('t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13').length);
+
+    // T02 标签读取（脏数据降级）
+    t('v0.32 T02:空值过滤+trim+去重', eqJson(getArchiveTags({ tags: ['a', '', '  ', null, 'a', ' b '] }), ['a', 'b']), JSON.stringify(getArchiveTags({ tags: ['a', '', '  ', null, 'a', ' b '] })));
+    t('v0.32 T02:无 tags 字段→空数组', getArchiveTags({}).length === 0 && getArchiveTags(null).length === 0, 'nos');
+
+    // T03 筛选匹配
+    t('v0.32 T03:空筛选命中全部', matchTagFilter({ tags: [] }, '') === true);
+    t('v0.32 T03:命中标签', matchTagFilter({ tags: ['班A', '班B'] }, '班B') === true);
+    t('v0.32 T03:未命中标签', matchTagFilter({ tags: ['班A'] }, '班B') === false);
+    t('v0.32 T03:未分类伪标签', matchTagFilter({ tags: [] }, TAG_UNTAGGED) === true && matchTagFilter({ tags: ['x'] }, TAG_UNTAGGED) === false);
+
+    // T04 标签汇总
+    var info = collectTags([{ tags: ['乙', '甲'] }, { tags: ['甲'] }, { tags: [] }]);
+    t('v0.32 T04:标签去重+计数', info.tags.length === 2 && info.tags.indexOf('甲') >= 0 && info.tags.indexOf('乙') >= 0 && info.counts['甲'] === 2 && info.counts['乙'] === 1, JSON.stringify(info.tags));
+    t('v0.32 T04:标签按名排序(ASCII)', eqJson(collectTags([{ tags: ['b'] }, { tags: ['a'] }]).tags, ['a', 'b']), JSON.stringify(collectTags([{ tags: ['b'] }, { tags: ['a'] }]).tags));
+    t('v0.32 T04:未分类计数', info.untagged === 1 && info.total === 3, info.untagged + '/' + info.total);
+
+    // T05 默认标签读写（用完还原）
+    var bakDefault = getDefaultTag();
+    setDefaultTag('回归默认');
+    t('v0.32 T05:写后读一致', getDefaultTag() === '回归默认', getDefaultTag());
+    setDefaultTag('');
+    t('v0.32 T05:清空后为空', getDefaultTag() === '', getDefaultTag());
+
+    // T06-T08 渲染冒烟 + 筛选 + 默认标签（临时替换档案库，断言后完整还原）
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    try {
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't1', name: '测试甲', gender: '男', year: 2020, month: 1, day: 1, hour: 0, min: 0, tags: ['自在班', '老大'], updatedAt: '2020-01-02T00:00:00.000Z' },
+        { id: 't2', name: '测试乙', gender: '女', year: 2021, month: 2, day: 2, hour: 1, min: 0, updatedAt: '2020-01-01T00:00:00.000Z' }
+      ]));
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var rows = document.querySelectorAll('#archive-modal-list .archive-modal-row');
+      t('v0.32 T06:无标签旧档案照常渲染', rows.length === 2, rows.length);
+      var tagInput = document.querySelector('#archive-modal-list .archive-row-tags');
+      t('v0.32 T06:标签框紧邻修改按钮之前', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.className.indexOf('archive-row-edit') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.className);
+      t('v0.32 T06:标签框回填多标签', !!tagInput && tagInput.value === '自在班 老大', tagInput && tagInput.value);
+      t('v0.32 T06:标签栏 全部+2标签+未分类', document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length === 4, document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length);
+
+      saveRowTags(0, '自在班 新标签');
+      var t1 = getArchives().filter(function(x) { return x.id === 't1'; })[0];
+      t('v0.32 T07:行内填写直接入库', eqJson(getArchiveTags(t1), ['自在班', '新标签']), JSON.stringify(getArchiveTags(t1)));
+      saveRowTags(0, '');
+      t1 = getArchives().filter(function(x) { return x.id === 't1'; })[0];
+      t('v0.32 T07:清空输入即删标签', getArchiveTags(t1).length === 0, JSON.stringify(getArchiveTags(t1)));
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't1', name: '测试甲', gender: '男', year: 2020, month: 1, day: 1, hour: 0, min: 0, tags: ['自在班', '老大'], updatedAt: '2020-01-02T00:00:00.000Z' },
+        { id: 't2', name: '测试乙', gender: '女', year: 2021, month: 2, day: 2, hour: 1, min: 0, updatedAt: '2020-01-01T00:00:00.000Z' }
+      ]));
+      renderArchiveModal();
+
+      setTagFilter('自在班');
+      t('v0.32 T07:按标签筛选剩 1 行', document.querySelectorAll('#archive-modal-list .archive-modal-row').length === 1, document.querySelectorAll('#archive-modal-list .archive-modal-row').length);
+      setTagFilter(TAG_UNTAGGED);
+      var editBtn = document.querySelector('#archive-modal-list .archive-row-edit');
+      t('v0.32 T07:未分类筛选剩 1 行且索引正确', document.querySelectorAll('#archive-modal-list .archive-modal-row').length === 1 && !!editBtn && editBtn.getAttribute('onclick').indexOf('openEditPanel(1)') >= 0, editBtn && editBtn.getAttribute('onclick'));
+      setTagFilter('不存在的标签');
+      t('v0.32 T07:空结果出提示', !!document.querySelector('#archive-modal-list .archive-modal-empty'), document.querySelector('#archive-modal-list').textContent);
+      setTagFilter('');
+      filterArchives('测试乙');
+      t('v0.32 T08:搜索与标签筛选叠加', document.querySelectorAll('#archive-modal-list .archive-modal-row').length === 1, document.querySelectorAll('#archive-modal-list .archive-modal-row').length);
+      filterArchives('');
+      setDefaultTag('自在班');
+      t('v0.32 T08:默认标签存在时命中', resolveDefaultFilter() === '自在班', resolveDefaultFilter());
+      setDefaultTag('不存在的标签');
+      t('v0.32 T08:默认标签失效回落全部', resolveDefaultFilter() === '', resolveDefaultFilter());
+    } catch (e) {
+      t('v0.32 T06:渲染冒烟异常', false, String(e));
+    } finally {
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      setDefaultTag(bakDefault);
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+    }
+  }
+  if (/[\?&]test=1(&|$)/.test(location.search)) {
+    if (document.readyState === 'complete') runV032Tests();
+    else window.addEventListener('load', runV032Tests);
+  }
 })();
