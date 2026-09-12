@@ -1,4 +1,4 @@
-/* 八字排盘 v0.32.0 — archive.js */
+/* 八字排盘 v0.33.0 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -934,15 +934,31 @@ function setTagFilter(tag) {
   renderArchiveModal();
 }
 
+// 排序键 = 列表所见的那一行名字（隐私关：小名 / 姓名；隐私开：艺名 → 小名 → 匿名），
+// 保证「看到的顺序 = 拼音顺序」，隐私开关切换后同样成立
+function archiveSortKey(a) {
+  return getDisplayName(a);
+}
+
+// 按名字拼音升序（中文按拼音，localeCompare 'zh'）；同名再按正名、更新时间兜底
+function sortArchivesByName(archives) {
+  archives.sort(function(a, b) {
+    var c = archiveSortKey(a).localeCompare(archiveSortKey(b), 'zh');
+    if (c !== 0) return c;
+    c = String((a && a.name) || '').localeCompare(String((b && b.name) || ''), 'zh');
+    if (c !== 0) return c;
+    return String((b && b.updatedAt) || '').localeCompare(String((a && a.updatedAt) || ''));
+  });
+  return archives;
+}
+
 function renderArchiveModal() {
   var listEl = document.getElementById('archive-modal-list');
   if (!listEl) return;
   var archives = getArchives();
 
-  // Sort by updatedAt desc
-  archives.sort(function(a, b) {
-    return (b.updatedAt || '').localeCompare(a.updatedAt || '');
-  });
+  // 落盘顺序 = 显示顺序：行内 ✏️修改/🗑️删除/排盘 都按数组索引定位，两者必须一致
+  sortArchivesByName(archives);
   saveArchives(archives);
 
   renderTagBar();
@@ -1080,6 +1096,9 @@ function loadFromArchive(idx) {
     hideDefaultTagPicker: hideDefaultTagPicker,
     setTagFilter: setTagFilter,
     archiveRowHtml: archiveRowHtml,
+    // v0.33.0 按名字拼音排序
+    archiveSortKey: archiveSortKey,
+    sortArchivesByName: sortArchivesByName,
     getActiveTagFilter: function() { return _activeTag; },
     getPrivacyMode: getPrivacyMode,
     setPrivacyMode: setPrivacyMode,
@@ -1181,8 +1200,92 @@ function loadFromArchive(idx) {
       renderArchiveModal();
     }
   }
+  // ===== v0.33.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）：档案按名字拼音排序 =====
+  function runV033Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var idsOf = function(arr) { return arr.map(function(x) { return x && x.id; }).join(','); };
+    var shownNames = function() {
+      return [].map.call(document.querySelectorAll('#archive-modal-list .archive-row-name'), function(el) { return el.textContent; }).join(',');
+    };
+    var syncPrivacyBtns = function() {
+      var on = getPrivacyMode();
+      [document.getElementById('btnPrivacy'), document.getElementById('btnPrivacy2')].forEach(function(b) {
+        if (!b) return;
+        b.textContent = on ? '🔒 隐私' : '🔓 隐私';
+        if (on) b.classList.add('privacy-on'); else b.classList.remove('privacy-on');
+      });
+    };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakPrivacy = localStorage.getItem(PRIVACY_KEY);
+    var bakDefault = getDefaultTag();
+    try {
+      // T01 纯汉字按读音升序（非 UTF-16 码位序：码位序会得 张,李,王,陈）
+      var hz = [{ id: 'h1', name: '张伟' }, { id: 'h2', name: '李娜' }, { id: 'h3', name: '王芳' }, { id: 'h4', name: '陈晨' }];
+      sortArchivesByName(hz);
+      t('v0.33 T01:汉字按拼音升序', idsOf(hz) === 'h4,h2,h3,h1', idsOf(hz));
+      var byCode = [{ name: '张伟' }, { name: '李娜' }, { name: '王芳' }, { name: '陈晨' }]
+        .sort(function(x, y) { return x.name < y.name ? -1 : 1; }).map(function(x) { return x.name; }).join(',');
+      t('v0.33 T01:与码位序不同（真按读音）', idsOf(hz) === 'h4,h2,h3,h1' && byCode !== '陈晨,李娜,王芳,张伟', byCode);
+
+      // T02 排序键 = 列表所见显示名（隐私关：小名 / 姓名；隐私开：小名）
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 's1', name: '李帛锴', nickname: '想想', gender: '男', year: 2019, month: 8, day: 9, hour: 14, min: 0, updatedAt: '2020-01-03T00:00:00.000Z' },
+        { id: 's2', name: '杨禹赫', nickname: '六一', gender: '男', year: 2021, month: 6, day: 1, hour: 22, min: 0, updatedAt: '2020-01-01T00:00:00.000Z' },
+        { id: 's3', name: '熊朗翔', nickname: '糯米', gender: '男', year: 2020, month: 8, day: 6, hour: 6, min: 0, updatedAt: '2020-01-02T00:00:00.000Z' }
+      ]));
+      setPrivacyMode(false);
+      renderArchiveModal();
+      t('v0.33 T02:隐私关按小名升序', shownNames() === '六一 / 杨禹赫,糯米 / 熊朗翔,想想 / 李帛锴', shownNames());
+      setPrivacyMode(true);
+      renderArchiveModal();
+      t('v0.33 T02:隐私开仍按小名升序', shownNames() === '六一,糯米,想想', shownNames());
+
+      // T03 落盘顺序 = 显示顺序（行内 ✏️修改/🗑️删除/排盘 都按数组索引定位，此为前提）
+      var storedIds = idsOf(getArchives());
+      t('v0.33 T03:落盘顺序=显示顺序', storedIds === 's2,s3,s1', storedIds);
+      t('v0.33 T03:不再按修改时间排', storedIds !== 's1,s3,s2', storedIds);
+
+      // T04 行内索引取到的就是那一行的人
+      var rows = document.querySelectorAll('#archive-modal-list .archive-modal-row');
+      var oc3 = rows[2] ? rows[2].querySelector('.archive-row-edit').getAttribute('onclick') : '';
+      var idx3 = Number((oc3.match(/openEditPanel\((\d+)\)/) || [])[1]);
+      t('v0.33 T04:第3行索引=2', idx3 === 2, oc3);
+      t('v0.33 T04:索引取到同一条档案', (getArchives()[idx3] || {}).id === 's1', 'idx=' + idx3);
+
+      // T05 同名兜底（按更新时间新在前）+ 幂等
+      var dup = [{ name: '张伟', updatedAt: '2020-01-01T00:00:00.000Z' }, { id: 'd2', name: '张伟', updatedAt: '2020-02-01T00:00:00.000Z' }];
+      sortArchivesByName(dup);
+      t('v0.33 T05:同名按更新时间新在前', dup[0].id === 'd2', dup.map(function(x) { return x.updatedAt; }).join(','));
+      var idem = [{ id: 'i1', name: '王芳' }, { id: 'i2', name: '李娜' }, { id: 'i3', name: '张伟' }, { id: 'i4', name: '陈晨' }];
+      sortArchivesByName(idem);
+      var once = idsOf(idem);
+      sortArchivesByName(idem);
+      t('v0.33 T05:排序幂等', idsOf(idem) === once, once);
+
+      // T06 脏数据兜底（缺字段 / null 不抛错，空名回落匿名）
+      var okDirty = true;
+      try { sortArchivesByName([null, {}, { name: '' }, { nickname: null, name: '阿三' }]); } catch (e) { okDirty = false; }
+      t('v0.33 T06:脏数据不抛错', okDirty);
+      setPrivacyMode(true);
+      t('v0.33 T06:无名字段回落 匿名/空', archiveSortKey({}) === '匿名' && archiveSortKey(null) === '', JSON.stringify([archiveSortKey({}), archiveSortKey(null)]));
+    } catch (e) {
+      t('v0.33 T00:测试异常', false, String(e));
+    } finally {
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      if (bakPrivacy === null) localStorage.removeItem(PRIVACY_KEY); else localStorage.setItem(PRIVACY_KEY, bakPrivacy);
+      setDefaultTag(bakDefault);
+      syncPrivacyBtns();
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    if (document.readyState === 'complete') runV032Tests();
-    else window.addEventListener('load', runV032Tests);
+    var runAllTests = function() { runV032Tests(); runV033Tests(); };
+    if (document.readyState === 'complete') runAllTests();
+    else window.addEventListener('load', runAllTests);
   }
 })();
