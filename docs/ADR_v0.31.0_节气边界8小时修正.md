@@ -51,7 +51,7 @@ v0.23.4 在修复「节气当天零点截断」时，把比较式写成 `birthMs
 | 门禁 | 内容 |
 |---|---|
 | `?test=1` T05–T11（10 条） | 以 HKO / DE421 真值为基准的边界断言：节气前 1 分钟 → 节气分钟双向换月、乙巳–丙午立春边界、1987 立夏 09:05 / 09:06、节气名与换月同源、起运回归 |
-| `scripts/check-term-truth.js` | 无浏览器；vm 加载 `constants.js` + `algorithm.js`。12 节气 × {1987, 2026} × 3 采样点边界扫描 + 4 条显示层真值 + 10 条锚点。**以 v0.30.0 代码运行：24/24 边界项报警**（显示层全绿，证明该门禁方向正确） |
+| `scripts/check-term-truth.js` | 无浏览器；vm 加载 `constants.js` + `algorithm.js`。12 节气 × {1987, 2026} × 3 采样点边界扫描 + 4 条显示层真值 + 10 条锚点。**以 v0.30.0 代码运行：30 项失败（24 个换月边界点 + 6 条锚点；显示层 4 条全绿，证明该门禁方向正确）** |
 | `scripts/sync-module-inline.py` | 以「下一个模块标记」为切段边界（不能按 `<script>` 切，五个大模块共用同一块），比对 constants / algorithm / archive / render / main「外部 ≡ index 内联 ≡ standalone 内联」 |
 | `scripts/check-release.sh` | 4 步 → 6 步（并入上述两项；任一失败退出码非 0） |
 
@@ -80,4 +80,4 @@ v0.23.4 在修复「节气当天零点截断」时，把比较式写成 `birthMs
 - `bash scripts/check-release.sh .` → 6/6 全绿，退出码 0
 - `?test=1` 双环境（`index.html` / `standalone.html`）：664 → 674 条断言通过
 - 跨源比对：1987 立夏、2026 立春、2026 立夏、1988 立夏、均时差（43.9s / 15.2s 两项）逐项与 HKO / DE421 一致（秒级，误差 ≤1s）
-- 反向验证：v0.30.0 代码跑 `check-term-truth.js` → 24/24 边界报警；跑 `sync-module-inline.py` → 检出 algorithm / archive 漂移
+- 反向验证：v0.30.0 代码跑 `check-term-truth.js` → 30 项失败（24 边界点 + 6 锚点）；跑 `sync-module-inline.py` → 检出 algorithm / archive 漂移

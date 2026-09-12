@@ -15,7 +15,7 @@
 
 ### 测试与门禁
 - `?test=1` 内建回归：**664 → 674 条**（新增 T05–T11 共 10 条），`standalone.html` / `index.html` 双环境全绿
-- 新增 `scripts/check-term-truth.js`（无浏览器；vm 加载 constants.js + algorithm.js）：12 节气 × {1987, 2026} × 3 采样点边界扫描 + 4 条显示层真值 + 10 条锚点断言。**以 v0.30.0 代码跑该门禁：24/24 边界项全部报警**（显示层全绿 —— 正是缺陷隐身的原因），修复后全绿
+- 新增 `scripts/check-term-truth.js`（无浏览器；vm 加载 constants.js + algorithm.js）：12 节气 × {1987, 2026} × 3 采样点边界扫描 + 4 条显示层真值 + 10 条锚点断言。**以 v0.30.0 代码跑该门禁：30 项失败（24 个换月边界点 + 6 条锚点；显示层 4 条全绿 —— 正是缺陷隐身的原因）**，修复后全绿
 - 新增 `scripts/sync-module-inline.py`：以「下一个模块标记」为切段边界，比对 constants / algorithm / archive / render / main 五模块「外部文件 ≡ index 内联 ≡ standalone 内联」（旧脚本按 `<script>` 切段，对共用同一块的 5 个模块会误判为一致）
 - `scripts/check-release.sh` 由 4 步扩为 6 步（新增上述两项门禁，任一失败即退出码非 0）
 - 观察项（不阻塞发布）：v0.30 T12 星曜设置页的 2 条几何断言（60 行态免纵向滚动 ≤2px）依赖视口高度 —— 在 1512×771 下稳定溢出 11px（`scrollHeight 582 / clientHeight 571`），更高视口下通过；**以 v0.30.0 原始字节同样复现，非本版引入**。CI 默认 800×600 视口 `wide()` 为假、不执行该分支，部署门禁不受影响
