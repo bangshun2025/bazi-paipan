@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.30.0 | 2026-09-11 -->
+<!-- 八字排盘 · 从真版 v0.31.0 | 2026-09-12 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
 <!-- v0.28.0: 干支行改月建干支 — 节气区每列最后一行「干支」由交节日柱改为该节月建干支（五虎遁直推；仅换数据源、版式零变化） -->
 <!-- v0.29.0: 星曜 — 盘面新增「星曜」行（「藏气」与「纳音」之间，L2 起显示）+ 工具栏「星曜」按钮/设置页（六十甲子×星曜名称/来源体系，四列 60 行）+ docs/ALGORITHM.md §21 幂等写入 -->
 <!-- v0.30.0: 星曜设置页迭代 — 搜索筛选（含 IME 组合态闸门/命中计数/空提示/✕清空）+ ≥1280px 三栏同屏免滚动（单一 tbody 20/20/20 + 静态栏头）+ 共享表头几何对齐第 1 栏 + 纳音列改完整纳音名（主盘零改动） -->
+<!-- v0.31.0: 节气边界修正 — getSolarTerm 返回的北京钟表时不再被二次 +8h；月柱/人元司令换月判定修正（节气当天与交界分钟内月柱错位）；新增真值门禁 scripts/check-term-truth.js + 三端模块一致性门禁 scripts/sync-module-inline.py -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -4450,14 +4451,14 @@ function yearPillar(y) {
 // ============ 月柱 ============
 function monthPillar(y, m, d, h, mi, yearGan) {
   // 根据出生日期确定在哪个月（基于节气）
-  // v0.23.4 节气当天出生修复：节气边界改用完整时刻（保留时分），统一按
-  // "BJT-as-UTC" 基准比较（出生 Date.UTC 字段 = 北京钟表时间；节气 getTime()+8h 转回北京钟表）。
-  // 修复：节气当天出生被"节气日零点"截断误判下月（如 1987-05-06 立夏 17:05，06:30 错判巳月→起运越界崩溃）
+  // 基准契约（v0.31.0 修正）：getSolarTerm() 返回时刻的 UTC 字段即北京钟表时间
+  // （"BJT-as-UTC"），与下方 birthMs = Date.UTC(...) 同基准 → 两端直接比较，
+  // 切勿再加 8 小时。v0.23.4 曾在此多加 8 小时，令节气后 8 小时窗口内出生
+  // 被误判上月（如 1987-05-06 立夏 09:05:35，09:06~17:05 错给辰月）。
   const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
-  const BJT_OFFSET = 288e5; // 8 小时（节气表存真实 UTC，需转回北京时间基准）
   // 判断出生是否在立春前（用于正确选择大雪/小寒的年份）
   const lc = getSolarTerm(y, 2);
-  const lcMs = lc ? lc.getTime() + BJT_OFFSET : null;
+  const lcMs = lc ? lc.getTime() : null;
   const beforeLC = lcMs !== null && birthMs < lcMs;
   for (let i = 0; i < 12; i++) {
     const termIdx = MONTH_TERM[i];
@@ -4468,7 +4469,7 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     else if (i === 11) stY = beforeLC ? y : y + 1;
     const st = getSolarTerm(stY, termIdx); // 本月起始节气（表外年份可能为 null）
     // null 仅发生在"子月大雪在 999 年"（1000 年年初出生）：大雪已过，视为已进入本月
-    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
+    const stMs = st ? st.getTime() : -8640000000000000;
 
     // 下月起始节气
     const nextI = (i + 1) % 12;
@@ -4477,7 +4478,7 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     if (nextTerm <= termIdx) nextY = stY + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
     // null 仅发生在"下月节气在 2101 年"（2100 年末出生）：节气未到，视为未进下月
-    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+    const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
 
     if (birthMs >= stMs && birthMs < nextMs) {
       const zhi = DZ[(i + 2) % 12]; // 寅月=寅, 卯月=卯...
@@ -4806,10 +4807,9 @@ const REN_YUAN = {
 
 function renYuanSiLing(y, m, d, h, minute) {
   // 遍历月节气找到当前月份，算节后第几天
-  // v0.23.4 节气当天出生修复：与 monthPillar 同基准（BJT-as-UTC 完整时刻），
-  // 修复节气当天零点截断导致错月（如 1987-05-06 立夏 06:30 显示"立夏后 0 日"）
+  // 与 monthPillar 同基准（BJT-as-UTC 完整时刻；基准契约见 monthPillar 内注释），
+  // v0.23.4 修复节气当天零点截断导致错月（如 1987-05-06 立夏 06:30 显示"立夏后 0 日"）
   const birthMs = Date.UTC(y, m - 1, d, h || 0, minute || 0);
-  const BJT_OFFSET = 288e5;
   for (let mi = 0; mi < 12; mi++) {
     const termIdx = MONTH_TERM[mi];
     let stY = y;
@@ -4818,13 +4818,13 @@ function renYuanSiLing(y, m, d, h, minute) {
       stY = (m === 1) ? y : y + 1;
     }
     const st = getSolarTerm(stY, termIdx);
-    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
+    const stMs = st ? st.getTime() : -8640000000000000;
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
     let nextY = y;
     if (nextTerm <= termIdx) nextY = y + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+    const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
     if (birthMs >= stMs && birthMs < nextMs) {
       const daysAfter = Math.floor((birthMs - stMs) / 86400000);
       const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
@@ -4847,7 +4847,7 @@ function paipan(name, gender, y, m, d, h, mi) {
   const birth = new Date(y, m - 1, d, h, mi);
   // v0.23.4 节气当天出生修复：立春边界改用完整时刻（BJT-as-UTC 基准），修复立春当天零点截断导致年柱错判
   const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
-  const lc2Ms = lc2 ? lc2.getTime() + 288e5 : null;
+  const lc2Ms = lc2 ? lc2.getTime() : null;
   const effYear = (lc2Ms !== null && birthMs < lc2Ms) ? y - 1 : y;
   const nian = yearPillar(effYear);
 
@@ -10593,7 +10593,7 @@ function captureScreenshot() {
   (function testSolarTermDayFix() {
     tests.push({ section:'节气当天 — v0.23.4 崩溃修复' });
 
-    // T01: 1987-05-06 06:30（立夏 17:05:35 前）→ 辰月
+    // T01: 1987-05-06 06:30（立夏 09:05:35 前）→ 辰月
     var m1 = monthPillar(1987, 5, 6, 6, 30, '丁');
     tests.push(eq('T01:立夏当天06:30→辰月', m1.zhi, '辰'));
     tests.push(eq('T01:月柱甲辰', m1.gan + m1.zhi, '甲辰'));
@@ -10617,6 +10617,44 @@ function captureScreenshot() {
       renderChart(p4, 1, 'output');
     } catch (e) { threw4 = e; }
     tests.push(eq('T04:交运越界不抛异常', threw4 === null, true));
+  })();
+
+  // ============ v0.31.0 节气边界真值断言（T05-T11） ============
+  // 真值来源（独立于本代码库）：
+  //   · 香港天文台 24 节气（香港时间=北京时间）2026 立春 02-04 04:02 / 2026 立夏 05-05 19:49
+  //   · JPL DE421 + IAU2006 真黄道链：2026 立春 04:02:07 / 1987 立夏 05-06 09:05:34 / 2026 立夏 19:48:43
+  // 断言把「显示时刻」与「边界行为」绑成自洽对：表内 2026 立春 04:01:51、1987 立夏 09:05:35
+  // ⇒ 04:02 / 09:06 必须已换月。若再出现「显示层对、比较基准错」的 8 小时错位（v0.23.4 回归），
+  // 本组断言立即失败。
+  (function testTermBoundaryTruth() {
+    tests.push({ section:'节气边界真值 — v0.31.0' });
+
+    // T05/T06: 2026 立春 04:01:51 前后一分钟分别是丑月 / 寅月
+    var m5 = monthPillar(2026, 2, 4, 4, 1, '乙');
+    var m6 = monthPillar(2026, 2, 4, 4, 2, '丙');
+    tests.push(eq('T05:2026立春04:01→丑月', m5.zhi, '丑'));
+    tests.push(eq('T06:2026立春04:02→庚寅', m6.gan + m6.zhi, '庚寅'));
+
+    // T07: 年柱同刻切换（立春前乙巳 / 立春后丙午）
+    var p1 = paipan('真值T07', '男', 2026, 2, 4, 4, 1);
+    var p2 = paipan('真值T07', '男', 2026, 2, 4, 4, 2);
+    tests.push(eq('T07:立春前04:01年柱乙巳', p1.nian.gan + p1.nian.zhi, '乙巳'));
+    tests.push(eq('T07:立春后04:02年柱丙午', p2.nian.gan + p2.nian.zhi, '丙午'));
+
+    // T08/T09: 1987 立夏 09:05:35 前后一分钟分别是辰月 / 巳月
+    var m8 = monthPillar(1987, 5, 6, 9, 5, '丁');
+    var m9 = monthPillar(1987, 5, 6, 9, 6, '丁');
+    tests.push(eq('T08:1987立夏09:05→甲辰', m8.gan + m8.zhi, '甲辰'));
+    tests.push(eq('T09:1987立夏09:06→乙巳', m9.gan + m9.zhi, '乙巳'));
+
+    // T10: 人元司令随同一时刻换节
+    tests.push(eq('T10:09:05人元司令含清明', renYuanSiLing(1987, 5, 6, 9, 5).indexOf('清明') >= 0, true));
+    tests.push(eq('T10:09:06人元司令含立夏', renYuanSiLing(1987, 5, 6, 9, 6).indexOf('立夏') >= 0, true));
+
+    // T11: 起运量级守卫（8 小时错位曾令此处爆到 121 年）
+    var q11 = paipan('真值T11', '男', 1988, 5, 5, 23, 0);
+    var q11y = q11.qiYun ? q11.qiYun.years : -1;
+    tests.push(eq('T11:1988-05-05 23:00男起运∈[5,20]年', q11y >= 5 && q11y <= 20, true));
   })();
 
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============

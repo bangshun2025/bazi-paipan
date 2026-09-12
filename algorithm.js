@@ -1,4 +1,4 @@
-/* 八字排盘 v0.23.4 — algorithm.js */
+/* 八字排盘 v0.31.0 — algorithm.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -110,7 +110,8 @@ function updateSolarPreview() {
   if (!el) return;
   const lng = getLng();
   const y = parseInt(document.getElementById('inYear').value);
-  const m = parseInt(document.getElementById('inMonth').value);
+  // v0.23.1 农历模式 inMonth 被替换为 inMonthSelect，DOM 自适应取值
+  const m = parseInt((document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value);
   const d = parseInt(document.getElementById('inDay').value);
   const h = parseInt(document.getElementById('inHour').value);
   const mi = parseInt(document.getElementById('inMin').value) || 0;
@@ -202,14 +203,14 @@ function yearPillar(y) {
 // ============ 月柱 ============
 function monthPillar(y, m, d, h, mi, yearGan) {
   // 根据出生日期确定在哪个月（基于节气）
-  // v0.23.4 节气当天出生修复：节气边界改用完整时刻（保留时分），统一按
-  // "BJT-as-UTC" 基准比较（出生 Date.UTC 字段 = 北京钟表时间；节气 getTime()+8h 转回北京钟表）。
-  // 修复：节气当天出生被"节气日零点"截断误判下月（如 1987-05-06 立夏 17:05，06:30 错判巳月→起运越界崩溃）
+  // 基准契约（v0.31.0 修正）：getSolarTerm() 返回时刻的 UTC 字段即北京钟表时间
+  // （"BJT-as-UTC"），与下方 birthMs = Date.UTC(...) 同基准 → 两端直接比较，
+  // 切勿再加 8 小时。v0.23.4 曾在此多加 8 小时，令节气后 8 小时窗口内出生
+  // 被误判上月（如 1987-05-06 立夏 09:05:35，09:06~17:05 错给辰月）。
   const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
-  const BJT_OFFSET = 288e5; // 8 小时（节气表存真实 UTC，需转回北京时间基准）
   // 判断出生是否在立春前（用于正确选择大雪/小寒的年份）
   const lc = getSolarTerm(y, 2);
-  const lcMs = lc ? lc.getTime() + BJT_OFFSET : null;
+  const lcMs = lc ? lc.getTime() : null;
   const beforeLC = lcMs !== null && birthMs < lcMs;
   for (let i = 0; i < 12; i++) {
     const termIdx = MONTH_TERM[i];
@@ -220,7 +221,7 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     else if (i === 11) stY = beforeLC ? y : y + 1;
     const st = getSolarTerm(stY, termIdx); // 本月起始节气（表外年份可能为 null）
     // null 仅发生在"子月大雪在 999 年"（1000 年年初出生）：大雪已过，视为已进入本月
-    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
+    const stMs = st ? st.getTime() : -8640000000000000;
 
     // 下月起始节气
     const nextI = (i + 1) % 12;
@@ -229,7 +230,7 @@ function monthPillar(y, m, d, h, mi, yearGan) {
     if (nextTerm <= termIdx) nextY = stY + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
     // null 仅发生在"下月节气在 2101 年"（2100 年末出生）：节气未到，视为未进下月
-    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+    const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
 
     if (birthMs >= stMs && birthMs < nextMs) {
       const zhi = DZ[(i + 2) % 12]; // 寅月=寅, 卯月=卯...
@@ -558,10 +559,9 @@ const REN_YUAN = {
 
 function renYuanSiLing(y, m, d, h, minute) {
   // 遍历月节气找到当前月份，算节后第几天
-  // v0.23.4 节气当天出生修复：与 monthPillar 同基准（BJT-as-UTC 完整时刻），
-  // 修复节气当天零点截断导致错月（如 1987-05-06 立夏 06:30 显示"立夏后 0 日"）
+  // 与 monthPillar 同基准（BJT-as-UTC 完整时刻；基准契约见 monthPillar 内注释），
+  // v0.23.4 修复节气当天零点截断导致错月（如 1987-05-06 立夏 06:30 显示"立夏后 0 日"）
   const birthMs = Date.UTC(y, m - 1, d, h || 0, minute || 0);
-  const BJT_OFFSET = 288e5;
   for (let mi = 0; mi < 12; mi++) {
     const termIdx = MONTH_TERM[mi];
     let stY = y;
@@ -570,13 +570,13 @@ function renYuanSiLing(y, m, d, h, minute) {
       stY = (m === 1) ? y : y + 1;
     }
     const st = getSolarTerm(stY, termIdx);
-    const stMs = st ? st.getTime() + BJT_OFFSET : -8640000000000000;
+    const stMs = st ? st.getTime() : -8640000000000000;
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
     let nextY = y;
     if (nextTerm <= termIdx) nextY = y + 1;
     const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextMs = nextSt ? nextSt.getTime() + BJT_OFFSET : 8640000000000000;
+    const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
     if (birthMs >= stMs && birthMs < nextMs) {
       const daysAfter = Math.floor((birthMs - stMs) / 86400000);
       const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
@@ -597,9 +597,9 @@ function paipan(name, gender, y, m, d, h, mi) {
   // 1. 年柱（考虑立春）
   const lc2 = getSolarTerm(y, 2); // 立春（表外年份可能为 null）
   const birth = new Date(y, m - 1, d, h, mi);
-  // v0.23.4 节气当天出生修复：立春边界改用完整时刻（BJT-as-UTC 基准），修复立春当天零点截断导致年柱错
+  // v0.23.4 节气当天出生修复：立春边界改用完整时刻（BJT-as-UTC 基准），修复立春当天零点截断导致年柱错判
   const birthMs = Date.UTC(y, m - 1, d, h || 0, mi || 0);
-  const lc2Ms = lc2 ? lc2.getTime() + 288e5 : null;
+  const lc2Ms = lc2 ? lc2.getTime() : null;
   const effYear = (lc2Ms !== null && birthMs < lc2Ms) ? y - 1 : y;
   const nian = yearPillar(effYear);
 

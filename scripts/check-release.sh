@@ -7,6 +7,11 @@
 #   2. index.html vs standalone.html 六模块段（constants/algorithm/
 #      archive/gongwei/render/main）逐段一致
 #   3. 三文件 HTML 关键结构 id 全部存在（防 tab 等结构漏同步）
+#   4. 外部 JS vs 单体版内联段（7 个小模块）
+#   5. 外部 JS vs 单体版内联段（5 个核心模块，v0.31.0 新增；v0.23.1/P0-01
+#      修复曾只落内联、外部落后 → 由本步兜底）
+#   6. 节气边界真值门禁（v0.31.0 新增；独立真值源 HKO / JPL DE421，
+#      防「显示层对、比较基准错」的 8 小时错位回归）
 # 全部通过退出码 0，任一失败退出码 1。
 # ============================================================
 set -u
@@ -23,7 +28,7 @@ trap 'rm -rf "$TMP"' EXIT
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAIL=1; }
 
-echo "【1/4】三文件内联 JS 语法检查（node --check）"
+echo "【1/6】三文件内联 JS 语法检查（node --check）"
 for f in $FILES; do
   [ -f "$f" ] || { fail "缺少文件: $f"; continue; }
   # 提取无 src 的内联 <script> 内容
@@ -41,7 +46,7 @@ PYEOF
   fi
 done
 
-echo "【2/4】index.html vs standalone.html 模块段一致性"
+echo "【2/6】index.html vs standalone.html 模块段一致性"
 if [ -f index.html ] && [ -f standalone.html ]; then
   for m in $MODULES; do
     python3 - "$m" "index.html" "standalone.html" "$TMP/i_$m.js" "$TMP/s_$m.js" <<'PYEOF'
@@ -75,7 +80,7 @@ else
   fail "缺少 index.html 或 standalone.html，跳过六模块对比"
 fi
 
-echo "【3/4】三文件 HTML 关键 id 存在性"
+echo "【3/6】三文件 HTML 关键 id 存在性"
 # 运行时生成的 DOM key（在 render.js/main.js 代码里而非静态 HTML），
 # standalone-split.html 用外部 render.js，故允许在 JS 源码中兜底命中。
 RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger"
@@ -95,7 +100,7 @@ for f in $FILES; do
   done
 done
 
-echo "【4/4】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
+echo "【4/6】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
 for m in gongwei xingyao gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
@@ -141,6 +146,30 @@ PYEOF
     fail "$m.js 外部 vs 内联不一致（漂移！）"
   fi
 done
+
+echo "【5/6】外部 JS vs 内联段一致性（5 个核心模块）"
+if [ ! -f scripts/sync-module-inline.py ]; then
+  fail "缺少 scripts/sync-module-inline.py"
+else
+  python3 scripts/sync-module-inline.py . > "$TMP/module_sync.log" 2>&1 && rc=0 || rc=$?
+  if [ "${rc:-0}" -eq 0 ]; then
+    pass "constants/algorithm/archive/render/main 外部与内联一致"
+  else
+    fail "核心模块漂移：$(grep -m3 '❌' "$TMP/module_sync.log" | tr '\n' ' ')（用 python3 scripts/sync-module-inline.py --apply 同步）"
+  fi
+fi
+
+echo "【6/6】节气边界真值门禁（独立真值源：香港天文台 / JPL DE421）"
+if [ ! -f scripts/check-term-truth.js ]; then
+  fail "缺少 scripts/check-term-truth.js"
+else
+  node scripts/check-term-truth.js . > "$TMP/term_truth.log" 2>&1 && rc=0 || rc=$?
+  if [ "${rc:-0}" -eq 0 ]; then
+    pass "节气显示层与 24 个换月边界点全部符合真值"
+  else
+    fail "节气真值门禁失败：$(grep -m3 '❌' "$TMP/term_truth.log" | tr '\n' ' ')"
+  fi
+fi
 
 echo "----------------------------------------"
 if [ $FAIL -eq 0 ]; then

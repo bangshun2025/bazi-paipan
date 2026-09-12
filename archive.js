@@ -1,4 +1,4 @@
-/* 八字排盘 v0.22.0 — archive.js */
+/* 八字排盘 v0.31.0 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -232,8 +232,9 @@ function togglePrivacy() {
   // 重渲染档案面板（若开）
   refreshArchiveModalIfOpen();
   // 重排当前标题（若 output 有数据）
-  if (window.RENDER && document.getElementById('output') && document.getElementById('output').innerHTML.indexOf('person-info') >= 0) {
-    window.RENDER.doPaipan();
+  if (window.APP && document.getElementById('output') && document.getElementById('output').innerHTML.indexOf('person-info') >= 0) {
+    // P0-01 修复：统一走守卫入口（原直连 RENDER.doPaipan 可绕过未登录拦截）
+    window.APP.doPaipan();
   }
 }
 

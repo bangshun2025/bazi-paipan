@@ -1,4 +1,4 @@
-/* 八字排盘 v0.30.0 — main.js */
+/* 八字排盘 v0.31.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1112,7 +1112,7 @@ function captureScreenshot() {
   (function testSolarTermDayFix() {
     tests.push({ section:'节气当天 — v0.23.4 崩溃修复' });
 
-    // T01: 1987-05-06 06:30（立夏 17:05:35 前）→ 辰月
+    // T01: 1987-05-06 06:30（立夏 09:05:35 前）→ 辰月
     var m1 = monthPillar(1987, 5, 6, 6, 30, '丁');
     tests.push(eq('T01:立夏当天06:30→辰月', m1.zhi, '辰'));
     tests.push(eq('T01:月柱甲辰', m1.gan + m1.zhi, '甲辰'));
@@ -1136,6 +1136,44 @@ function captureScreenshot() {
       renderChart(p4, 1, 'output');
     } catch (e) { threw4 = e; }
     tests.push(eq('T04:交运越界不抛异常', threw4 === null, true));
+  })();
+
+  // ============ v0.31.0 节气边界真值断言（T05-T11） ============
+  // 真值来源（独立于本代码库）：
+  //   · 香港天文台 24 节气（香港时间=北京时间）2026 立春 02-04 04:02 / 2026 立夏 05-05 19:49
+  //   · JPL DE421 + IAU2006 真黄道链：2026 立春 04:02:07 / 1987 立夏 05-06 09:05:34 / 2026 立夏 19:48:43
+  // 断言把「显示时刻」与「边界行为」绑成自洽对：表内 2026 立春 04:01:51、1987 立夏 09:05:35
+  // ⇒ 04:02 / 09:06 必须已换月。若再出现「显示层对、比较基准错」的 8 小时错位（v0.23.4 回归），
+  // 本组断言立即失败。
+  (function testTermBoundaryTruth() {
+    tests.push({ section:'节气边界真值 — v0.31.0' });
+
+    // T05/T06: 2026 立春 04:01:51 前后一分钟分别是丑月 / 寅月
+    var m5 = monthPillar(2026, 2, 4, 4, 1, '乙');
+    var m6 = monthPillar(2026, 2, 4, 4, 2, '丙');
+    tests.push(eq('T05:2026立春04:01→丑月', m5.zhi, '丑'));
+    tests.push(eq('T06:2026立春04:02→庚寅', m6.gan + m6.zhi, '庚寅'));
+
+    // T07: 年柱同刻切换（立春前乙巳 / 立春后丙午）
+    var p1 = paipan('真值T07', '男', 2026, 2, 4, 4, 1);
+    var p2 = paipan('真值T07', '男', 2026, 2, 4, 4, 2);
+    tests.push(eq('T07:立春前04:01年柱乙巳', p1.nian.gan + p1.nian.zhi, '乙巳'));
+    tests.push(eq('T07:立春后04:02年柱丙午', p2.nian.gan + p2.nian.zhi, '丙午'));
+
+    // T08/T09: 1987 立夏 09:05:35 前后一分钟分别是辰月 / 巳月
+    var m8 = monthPillar(1987, 5, 6, 9, 5, '丁');
+    var m9 = monthPillar(1987, 5, 6, 9, 6, '丁');
+    tests.push(eq('T08:1987立夏09:05→甲辰', m8.gan + m8.zhi, '甲辰'));
+    tests.push(eq('T09:1987立夏09:06→乙巳', m9.gan + m9.zhi, '乙巳'));
+
+    // T10: 人元司令随同一时刻换节
+    tests.push(eq('T10:09:05人元司令含清明', renYuanSiLing(1987, 5, 6, 9, 5).indexOf('清明') >= 0, true));
+    tests.push(eq('T10:09:06人元司令含立夏', renYuanSiLing(1987, 5, 6, 9, 6).indexOf('立夏') >= 0, true));
+
+    // T11: 起运量级守卫（8 小时错位曾令此处爆到 121 年）
+    var q11 = paipan('真值T11', '男', 1988, 5, 5, 23, 0);
+    var q11y = q11.qiYun ? q11.qiYun.years : -1;
+    tests.push(eq('T11:1988-05-05 23:00男起运∈[5,20]年', q11y >= 5 && q11y <= 20, true));
   })();
 
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============
