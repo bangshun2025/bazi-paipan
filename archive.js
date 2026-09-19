@@ -1,4 +1,4 @@
-/* 八字排盘 v0.33.0 — archive.js */
+/* 八字排盘 v0.34.0 — archive.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -298,15 +298,27 @@ function setFormData(d) {
   document.getElementById('inMin').value = d.min || 0;
   document.getElementById('useSolar').checked = d.useSolar;
   APP.toggleSolar();
-  if (d.useSolar) {
-    if (d.prov) { document.getElementById('inProv').value = d.prov; onProvChange(); }
-    setTimeout(() => {
-      if (d.city) { document.getElementById('inCity').value = d.city; onCityChange(); }
-      setTimeout(() => {
-        if (d.dist) document.getElementById('inDist').value = d.dist;
-      }, 50);
-    }, 50);
+  // v0.34.0 同步回填地址：onProvChange/onCityChange 都是同步建 option，
+  // 原先 50ms 两级 setTimeout 会让紧随其后的排盘拿不到 市/区县（真太阳时失准），
+  // 且跨模块裸调用 onProvChange/onCityChange 在 IIFE 下是 ReferenceError（中断排盘）。
+  if (d.useSolar && d.prov) {
+    document.getElementById('inProv').value = d.prov;
+    APP.onProvChange();
+    var cSel = document.getElementById('inCity');
+    if (d.city && hasOption(cSel, d.city)) cSel.value = d.city;
+    APP.onCityChange();
+    var dSel = document.getElementById('inDist');
+    if (d.dist && hasOption(dSel, d.dist)) dSel.value = d.dist;
   }
+}
+
+// 下拉框里没有该选项时保持原值，避免回填出列表里不存在的地址
+function hasOption(sel, val) {
+  if (!sel) return false;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) return true;
+  }
+  return false;
 }
 
 function autoSaveArchive() {
@@ -1283,8 +1295,60 @@ function loadFromArchive(idx) {
       renderArchiveModal();
     }
   }
+  // ===== v0.34.0 回归测试段：点档案行「排盘」必须立即排盘（出生地回填要同步、且不得抛错） =====
+  function runV034Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var val = function(id) { var el = document.getElementById(id); return el ? el.value : null; };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakForm = getFormData();
+    try {
+      // T01 回填含出生地的档案不得抛错（旧版裸调 onProvChange/onCityChange → ReferenceError，中断排盘）
+      var threw = null;
+      try {
+        setFormData({ name: '回归出生地', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+                      useSolar: true, prov: '四川省', city: '乐山市', dist: '市中区', calendarType: 'solar' });
+      } catch (e) { threw = String(e); }
+      t('v0.34 T01:回填出生地不抛错', threw === null, threw || 'ok');
+
+      // T02 省/市/区县同步就位（旧版 50ms 两级定时器 → setFormData 返回时仍是上一条档案的地址）
+      t('v0.34 T02:省市区同步就位',
+        val('inProv') === '四川省' && val('inCity') === '乐山市' && val('inDist') === '市中区',
+        [val('inProv'), val('inCity'), val('inDist')].join('/'));
+
+      // T03 列表里不存在的区县不写入，省/市保持合法值
+      setFormData({ name: '回归脏地址', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+                    useSolar: true, prov: '四川省', city: '乐山市', dist: '不存在的区', calendarType: 'solar' });
+      t('v0.34 T03:未知区县不写入', val('inDist') !== '不存在的区' && val('inProv') === '四川省' && val('inCity') === '乐山市',
+        [val('inProv'), val('inCity'), val('inDist')].join('/'));
+
+      // T04 端到端：档案行「排盘」→ 立刻出该档案的结果（含真太阳时）
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'v34e2e', name: '回归真太阳时', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+          useSolar: true, prov: '四川省', city: '乐山市', dist: '市中区', calendarType: 'solar',
+          updatedAt: '2026-09-19T00:00:00.000Z' }
+      ]));
+      loadFromArchive(0);
+      var outEl = document.getElementById('output');
+      var txt = outEl ? outEl.innerText : '';
+      t('v0.34 T04:点档案立即排该档案', val('inName') === '回归真太阳时' && txt.indexOf('2000年1月1日') >= 0,
+        txt.replace(/\s+/g, ' ').slice(0, 48));
+      t('v0.34 T04:真太阳时随出生地生效', txt.indexOf('真太阳时') >= 0);
+      t('v0.34 T04:点击后排盘弹窗已关闭', !document.getElementById('archiveOverlay').classList.contains('show'));
+    } catch (e) {
+      t('v0.34 T00:测试异常', false, String(e));
+    } finally {
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      setFormData(bakForm);
+      APP.doPaipan();
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    var runAllTests = function() { runV032Tests(); runV033Tests(); };
+    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); };
     if (document.readyState === 'complete') runAllTests();
     else window.addEventListener('load', runAllTests);
   }

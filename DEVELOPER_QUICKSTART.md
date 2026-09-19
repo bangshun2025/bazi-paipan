@@ -108,21 +108,24 @@
 | 601-629 | **主计算**：`calc()`（排盘主入口） |
 | 630-672 | `window.ALGO` 命名空间导出（20 个函数） |
 
-### archive.js（866 行）— 档案管理
+### archive.js（1355 行）— 档案管理
 
 | 行号 | 内容 |
 |------|------|
-| 1-84 | 别名声明（从 CONST 引用的常量） |
-| 85-104 | **预置档案数据**（`PRESET_ARCHIVES`：自在班 16 孩） |
-| 105-174 | 数据迁移：`migrateFromV1()` |
-| 175-270 | 档案 CRUD：`getArchives()`、`saveArchives()`、`deleteArchive()`、`restoreArchive()` |
-| 271-400 | 档案搜索/过滤/排序 |
-| 401-500 | 档案卡片渲染：卡片列表 |
-| 501-612 | 档案展开排盘（手风琴模式）、加载到表单 |
-| 613-700 | 回收站：`renderTrash()` |
-| 701-750 | 档案面板：`openArchivePanel()`、`closeArchivePanel()` |
-| 751-823 | 归档模态框：`renderArchiveModal()` |
-| 824-866 | `window.ARCHIVE` 命名空间导出（20 个函数） |
+| 1-90 | 别名声明（从 CONST 引用的常量） |
+| 91-110 | **预置档案数据**（`PRESET_ARCHIVES`：自在班 16 孩） |
+| 111-180 | 数据迁移与预置灌入：`migrateFromV1()`、`initPresetArchives()` |
+| 181-253 | 档案 CRUD：`getArchives()`、`saveArchives()`、`getTrash()`、隐私开关 |
+| 254-323 | 表单读写：`getFormData()`、`setFormData()`（**v0.34 起地址同步回填**）、`hasOption()` |
+| 324-402 | 保存与载入：`autoSaveArchive()`、`saveArchive()`、`loadArchive()`、`delArchive()`、`moveToTrash()` |
+| 403-666 | 编辑面板：`openEditPanel()`、`saveEdit()`、`editProvChange()` 等编辑专用事件 |
+| 667-763 | 回收站：`showTrash()`、`renderTrash()`、`restoreFromTrash()`、`emptyTrash()` |
+| 764-792 | 弹窗开合：`openArchivePanel()`、`closeArchivePanel()`、`escHtml()` |
+| 791-966 | 标签：解析、行内保存、默认标签、标签栏渲染与筛选、拼音排序（`sortArchivesByName()`） |
+| 967-1039 | 模态框渲染：`renderArchiveModal()`、`archiveRowHtml()`、搜索过滤 |
+| 1040-1051 | **档案行「排盘」**：`loadFromArchive()`（关弹窗 → 填表 → 立即 `APP.doPaipan()`） |
+| 1053-1123 | `window.ARCHIVE` 命名空间导出（20+ 函数） |
+| 1125-1355 | **回归测试段**（`?test=1`）：v0.32 标签 12 条、v0.33 拼音排序 12 条、v0.34 档案立即排盘 6 条 |
 
 ### gongwei.js（860 行）— 宫位自定义数据层
 
@@ -204,6 +207,7 @@
 |---|-----|----------|
 | 5 | Popover 排序后勾选状态不同步 | v0.13.2 |
 | 6 | 双胞胎流年行高亮边界条件（hiDy/hiLn 边界修复） | v0.9.2 |
+| 7 | 点档案行「排盘」没反应（`archive.js` 裸调 `onProvChange()` → IIFE 内 `ReferenceError`，中断 `closeArchivePanel()` + `doPaipan()`） | v0.34.0 |
 
 ### 开发原则
 
@@ -212,6 +216,8 @@
 3. **改渲染要验证双胞胎模式**（单表 vs 双胞布局不同）
 4. **CSS 精简模式**（`简`按钮）记得同步隐藏新行（`[data-row-type~="xxx"]`）
 5. **GitHub 推送前确认 worktree 干净**（`git status`）
+6. **跨模块调用只走 `window.APP.*` / `window.ARCHIVE.*`**：每个模块是独立 IIFE，裸调别的模块内部函数在本模块内不可解析（`ReferenceError`）。改完模块跑一遍 `?test=1` 兜底
+7. **表单回填要同步**：`setFormData()` 之后通常紧跟 `doPaipan()`，地址类回填不要用 `setTimeout` 异步写，否则排盘读到上一条数据（真太阳时失准）
 
 ---
 

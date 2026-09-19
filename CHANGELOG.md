@@ -4,6 +4,27 @@
 
 ---
 
+## v0.34.0 — 档案行「排盘」立即排盘 (2026-09-19)
+
+### 修复
+- **点档案行的「排盘」按钮没反应**：此前点带出生地档案的「排盘」，弹窗不关、盘面不出，必须先关弹窗再回主界面点一次「排 盘」才出结果。根因是 `archive.js` 的 `setFormData(d)` 在 `prov` 分支里**裸调用 `onProvChange()` / `onCityChange()`**——这两个函数定义在 `main.js` 的 IIFE 内，只经 `window.APP.onProvChange` / `APP.onCityChange` 暴露，在 `archive.js` 自己的 IIFE 里是 `ReferenceError: onProvChange is not defined`。异常抛出后，`loadFromArchive()` 里的 `closeArchivePanel()` 与 `APP.doPaipan()` 都不再执行，表现就是「点了没反应」
+- **真太阳时随出生地漏算**：地址回填原本是两级 `setTimeout(..., 50)` 异步写 `city` / `dist`，而 `loadFromArchive()` 紧接着同步调用 `doPaipan()`，排盘常常拿不到市/区县
+
+### 变更
+- `setFormData()` 的地址回填改为**同步**：`inProv.value → APP.onProvChange() → inCity.value → APP.onCityChange() → inDist.value`（两者内部本来就是同步建 `option`，定时器多余）
+- 新增 `hasOption(sel, val)`：下拉框里没有该选项时保持原值，不写入列表里不存在的地址
+- 行为对齐紫微斗数排盘档案的「载入并排盘」语义：**点行内「排盘」= 关弹窗 + 立即按该档案排盘**
+
+### 验证
+- `archive.js` 新增 `?test=1` 断言 6 条（v0.34 T01–T04：回填出生地不抛错 / 省市区同步就位（四川省·乐山市·市中区）/ 未知区县不写入 / 点档案立即排该档案（输出含 `2000年1月1日`）/ 真太阳时随出生地生效（输出含「真太阳时」）/ 点击后排盘弹窗已关闭）
+- **干净 origin A/B 对照**：v0.33.0 基线 713 条断言全绿；v0.34.0 719 条断言全绿（713 + 新增 6）
+- **真实环境端到端**（Clacky 扩展 `127.0.0.1:7070`，真实 26 条档案）：点「冯际州」（广西/南宁市，`useSolar=true`）行内「排盘」，250 ms 后盘头为「冯际州 乾造 男 · 2006年11月20日 01:06 ☀ 真太阳时 01:06 (-32分)」，弹窗已关闭，表单省市区就位；修复前同一点击：输出仍为上一个人、弹窗不关、`APP.doPaipan` 调用次数 0、控制台 `ReferenceError`
+- `bash scripts/check-release.sh .` 6 步全绿；`index.html` ≡ `standalone.html`（逐字节）
+
+> 备注：`v0.30 T12:空查询 60 行态免纵向滚动` 断言依赖浏览器窗口高度，窗口偏矮时会在**任何版本**上失败（已用 v0.33.0 基线在同一 origin 复现），与本版无关。
+
+---
+
 ## v0.33.0 — 档案列表按名字拼音排序 (2026-09-12)
 
 ### 新增

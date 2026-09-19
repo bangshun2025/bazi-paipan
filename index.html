@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.33.0 | 2026-09-12 -->
+<!-- 八字排盘 · 从真版 v0.34.0 | 2026-09-19 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
@@ -9,6 +9,7 @@
 <!-- v0.31.0: 节气边界修正 — getSolarTerm 返回的北京钟表时不再被二次 +8h；月柱/人元司令换月判定修正（节气当天与交界分钟内月柱错位）；新增真值门禁 scripts/check-term-truth.js + 三端模块一致性门禁 scripts/sync-module-inline.py -->
 <!-- v0.32.0: 档案标签 — 每行「✏️ 修改」前新增行内标签框（空格分隔多标签，失焦/回车即存；不刷新列表以免吞掉点击）+ 标签栏筛选（全部/各标签/未分类）+ 默认标签（打开档案默认只看该标签，可随时点标签切换；档案弹窗加宽 420→880px） -->
 <!-- v0.33.0: 档案列表按名字拼音排序 — 排序键 = 列表所见的显示名（隐私关：小名 / 姓名；隐私开：艺名 → 小名 → 匿名），中文按读音（localeCompare 'zh'）；同名按更新时间新在前；落盘顺序与显示顺序保持一致（行内 ✏️修改 / 🗑️删除 / 排盘 按数组索引定位） -->
+<!-- v0.34.0: 档案行「排盘」立即排盘修复 — setFormData 回填出生地时不再裸调 onProvChange/onCityChange（模块 IIFE 内为 ReferenceError，异常中断后续 closeArchivePanel + doPaipan，表现为「点了排盘没反应、要回主界面再点一次」）；改走 APP.* 并把两级 50ms setTimeout 改为同步回填，排盘时省/市/区县已全部就位（真太阳时不再漏算） -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
 <!-- v0.18.0: 简0级别(五层级极简→简→中→详→全) + 四柱三垣间隔 + 龙凤胎三垣间距 + 三垣冗余纳运修复 -->
@@ -5273,15 +5274,27 @@ function setFormData(d) {
   document.getElementById('inMin').value = d.min || 0;
   document.getElementById('useSolar').checked = d.useSolar;
   APP.toggleSolar();
-  if (d.useSolar) {
-    if (d.prov) { document.getElementById('inProv').value = d.prov; onProvChange(); }
-    setTimeout(() => {
-      if (d.city) { document.getElementById('inCity').value = d.city; onCityChange(); }
-      setTimeout(() => {
-        if (d.dist) document.getElementById('inDist').value = d.dist;
-      }, 50);
-    }, 50);
+  // v0.34.0 同步回填地址：onProvChange/onCityChange 都是同步建 option，
+  // 原先 50ms 两级 setTimeout 会让紧随其后的排盘拿不到 市/区县（真太阳时失准），
+  // 且跨模块裸调用 onProvChange/onCityChange 在 IIFE 下是 ReferenceError（中断排盘）。
+  if (d.useSolar && d.prov) {
+    document.getElementById('inProv').value = d.prov;
+    APP.onProvChange();
+    var cSel = document.getElementById('inCity');
+    if (d.city && hasOption(cSel, d.city)) cSel.value = d.city;
+    APP.onCityChange();
+    var dSel = document.getElementById('inDist');
+    if (d.dist && hasOption(dSel, d.dist)) dSel.value = d.dist;
   }
+}
+
+// 下拉框里没有该选项时保持原值，避免回填出列表里不存在的地址
+function hasOption(sel, val) {
+  if (!sel) return false;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) return true;
+  }
+  return false;
 }
 
 function autoSaveArchive() {
@@ -6258,8 +6271,60 @@ function loadFromArchive(idx) {
       renderArchiveModal();
     }
   }
+  // ===== v0.34.0 回归测试段：点档案行「排盘」必须立即排盘（出生地回填要同步、且不得抛错） =====
+  function runV034Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var val = function(id) { var el = document.getElementById(id); return el ? el.value : null; };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakForm = getFormData();
+    try {
+      // T01 回填含出生地的档案不得抛错（旧版裸调 onProvChange/onCityChange → ReferenceError，中断排盘）
+      var threw = null;
+      try {
+        setFormData({ name: '回归出生地', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+                      useSolar: true, prov: '四川省', city: '乐山市', dist: '市中区', calendarType: 'solar' });
+      } catch (e) { threw = String(e); }
+      t('v0.34 T01:回填出生地不抛错', threw === null, threw || 'ok');
+
+      // T02 省/市/区县同步就位（旧版 50ms 两级定时器 → setFormData 返回时仍是上一条档案的地址）
+      t('v0.34 T02:省市区同步就位',
+        val('inProv') === '四川省' && val('inCity') === '乐山市' && val('inDist') === '市中区',
+        [val('inProv'), val('inCity'), val('inDist')].join('/'));
+
+      // T03 列表里不存在的区县不写入，省/市保持合法值
+      setFormData({ name: '回归脏地址', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+                    useSolar: true, prov: '四川省', city: '乐山市', dist: '不存在的区', calendarType: 'solar' });
+      t('v0.34 T03:未知区县不写入', val('inDist') !== '不存在的区' && val('inProv') === '四川省' && val('inCity') === '乐山市',
+        [val('inProv'), val('inCity'), val('inDist')].join('/'));
+
+      // T04 端到端：档案行「排盘」→ 立刻出该档案的结果（含真太阳时）
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'v34e2e', name: '回归真太阳时', gender: '男', year: 2000, month: 1, day: 1, hour: 12, min: 0,
+          useSolar: true, prov: '四川省', city: '乐山市', dist: '市中区', calendarType: 'solar',
+          updatedAt: '2026-09-19T00:00:00.000Z' }
+      ]));
+      loadFromArchive(0);
+      var outEl = document.getElementById('output');
+      var txt = outEl ? outEl.innerText : '';
+      t('v0.34 T04:点档案立即排该档案', val('inName') === '回归真太阳时' && txt.indexOf('2000年1月1日') >= 0,
+        txt.replace(/\s+/g, ' ').slice(0, 48));
+      t('v0.34 T04:真太阳时随出生地生效', txt.indexOf('真太阳时') >= 0);
+      t('v0.34 T04:点击后排盘弹窗已关闭', !document.getElementById('archiveOverlay').classList.contains('show'));
+    } catch (e) {
+      t('v0.34 T00:测试异常', false, String(e));
+    } finally {
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      setFormData(bakForm);
+      APP.doPaipan();
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    var runAllTests = function() { runV032Tests(); runV033Tests(); };
+    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); };
     if (document.readyState === 'complete') runAllTests();
     else window.addEventListener('load', runAllTests);
   }
