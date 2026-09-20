@@ -42,6 +42,15 @@
       url: "/api/ext/qimen-paipan/standalone"
     },
     {
+      id: "liuyao-paipan",
+      name: "六爻排盘",
+      subtitle: "测事体系 v2.1",
+      desc: "京房纳甲 · 卦宫定六亲 · 手动/时间/报数三式起卦 · 八步断事流程 + 四层判断框架。",
+      icon: "爻",
+      iconColor: "#8c6b1f",
+      url: "/api/ext/liuyao-paipan/standalone"
+    },
+    {
       id: "ziwei-online",
       name: "紫微斗数排盘 · 正式",
       subtitle: "线上正式版",
