@@ -1,4 +1,4 @@
-/* 八字排盘 v0.35.0 — algorithm.js */
+/* 八字排盘 v0.36.0 — algorithm.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -441,6 +441,15 @@ function taiYuan(yueGan, yueZhi) {
   return { gan: TG[gIdx], zhi: DZ[zIdx] };
 }
 
+// ============ 胎年（v0.36.0） ============
+// 口径A：胎元所在年的干支。胎元=出生月往前第 9 个节气月（60 月环，即月干进一、月支进三），
+// 胎年=该月所属 eff 年的年柱。k=月支序（寅=0..丑=11），回退 9 个月跨年界次数=floor((k-9)/12)：
+// 亥/子/丑月生人胎年=生年干支（亥月由邦顺 2026-09-20 裁决），其余生月=前一年干支。
+function taiNianGZ(effYear, yueZhi) {
+  const k = (DZ.indexOf(yueZhi) - 2 + 12) % 12;
+  return yearPillar(effYear + Math.floor((k - 9) / 12));
+}
+
 // 地支序号：寅=1, 卯=2, ..., 子=11, 丑=12
 function dzNum(zhi) { return ((DZ.indexOf(zhi) + 10) % 12) + 1; }
 // 序号→地支
@@ -616,6 +625,9 @@ function paipan(name, gender, y, m, d, h, mi) {
   // 5. 胎元
   const tai = taiYuan(yue.gan, yue.zhi);
 
+  // 5b. 胎年（v0.36.0 口径A：胎元所在年的干支）
+  const taiNian = taiNianGZ(effYear, yue.zhi);
+
   // 6. 命宫
   const ming = mingGong(yue.zhi, shi.zhi, nian.gan);
 
@@ -631,7 +643,7 @@ function paipan(name, gender, y, m, d, h, mi) {
   const sx = shengXiao[DZ.indexOf(nian.zhi)];
 
   return { name, gender, y, m, d, h, mi,
-    nian, yue, ri, shi, tai, ming, shen,
+    nian, yue, ri, shi, tai, taiNian, ming, shen,
     shengXiao: sx, daYun, qiYun, sanyuanBar: null };
 }
 
@@ -684,6 +696,7 @@ function buildShunLabel(shun, gender, nianGan) {
     kongWang: kongWang,
     shenSha: shenSha,
     taiYuan: taiYuan,
+    taiNianGZ: taiNianGZ,
     dzNum: dzNum,
     numZhi: numZhi,
     mingGong: mingGong,

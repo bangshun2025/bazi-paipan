@@ -1,4 +1,4 @@
-/* 八字排盘 v0.22.0 — constants.js */
+/* 八字排盘 v0.36.0 — constants.js */
 (function() {
 
 const LOC_DATA = {
@@ -407,8 +407,8 @@ const GONGWEI_MAP = {
   '生理':  ['底层生理','感官输入','认知加工','记忆决策','情志喜恶','语言输出','身体执行'],
   '记忆':  ['记忆生理','感觉记忆','工作记忆','长时记忆','情绪记忆','记忆提取','程序记忆']
 };
-// data-gw → 数组索引查找
-const GW_INDEX = { tai: 0, nian: 1, yue: 2, ri: 3, ming: 4, shi: 5, shen: 6 };
+// data-gw → 数组索引查找（taiNian = v0.36.0 胎年槽位，可留空）
+const GW_INDEX = { tai: 0, nian: 1, yue: 2, ri: 3, ming: 4, shi: 5, shen: 6, taiNian: 7 };
 
 // ===== v0.10.0 宫位多选颜色映射 =====
 const GONGWEI_COLORS = {

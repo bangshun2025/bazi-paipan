@@ -1,4 +1,4 @@
-/* 八字排盘 v0.25.0 — gongwei.js */
+/* 八字排盘 v0.36.0 — gongwei.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -160,6 +160,14 @@ function persistFav(arr) {
   localStorage.setItem('bz_gongwei_fav', JSON.stringify(arr));
   if (window.GONGWEI_CLOUD && window.GONGWEI_CLOUD.markDirty) window.GONGWEI_CLOUD.markDirty();
 }
+// ===== v0.36.0 胎年宫位显示开关 =====
+// 胎年标签可留空；默认不显示，由宫位面板勾选控制（本地显示偏好，不入导出/云同步载荷）
+function loadShowTaiNian() {
+  try { return localStorage.getItem('bz_gongwei_show_tainian') === '1'; } catch (e) { return false; }
+}
+function persistShowTaiNian() {
+  try { localStorage.setItem('bz_gongwei_show_tainian', showTaiNian ? '1' : '0'); } catch (e) {}
+}
 function isFav(name) { var fav = loadFav(); for (var i = 0; i < fav.length; i++) { if (fav[i] === name) return true; } return false; }
 function getFavGroups() { var fav = loadFav(); var result = []; for (var i = 0; i < fav.length; i++) { var g = findGroupByName(fav[i]); if (g) result.push(g); } return result; }
 function nowISO() { return new Date().toISOString(); }
@@ -199,7 +207,7 @@ function addGroup(name, labels) {
   if (!name || name.trim().length === 0) return { ok: false, error: '组名不能为空' };
   if (name.length > 6) return { ok: false, error: '组名不能超过6个字' };
   if (findGroupByName(name)) return { ok: false, error: '该名称已存在' };
-  for (var i = 0; i < 7; i++) {
+  for (var i = 0; i < 8; i++) {
     if (labels[i] && labels[i].length > 12) return { ok: false, error: '标签不能超过12个字' };
   }
   var now = nowISO();
@@ -222,7 +230,7 @@ function updateGroup(id, newName, newLabels) {
   if (newName.length > 6) return { ok: false, error: '组名不能超过6个字' };
   var conflict = findGroupByName(newName);
   if (conflict && conflict.id !== id) return { ok: false, error: '该名称已存在' };
-  for (var i = 0; i < 7; i++) {
+  for (var i = 0; i < 8; i++) {
     if (newLabels[i] && newLabels[i].length > 12) return { ok: false, error: '标签不能超过12个字' };
   }
   var oldName = group.name;
@@ -343,6 +351,20 @@ function resetToDefaults() {
 // 全局选中状态（运行时变量，初始化时从 localStorage 恢复）
 let selectedGongWei = [];
 
+// ===== v0.36.0 胎年宫位显示开关（运行时变量，initGongWeiData 从 localStorage 恢复） =====
+let showTaiNian = false;
+function getShowTaiNian() { return showTaiNian; }
+function syncTaiNianCheckboxes() {
+  var cbs = document.querySelectorAll('#gzShowTaiNian');
+  for (var i = 0; i < cbs.length; i++) cbs[i].checked = showTaiNian;
+}
+function toggleShowTaiNian(checked) {
+  showTaiNian = !!checked;
+  persistShowTaiNian();
+  updateGongWeiTags();
+  syncTaiNianCheckboxes();
+}
+
 // ===== v0.10.0 宫位多选 — 标签行生成（纯函数） =====
 // area: 'main' | 'sanyuan'
 // colCount: 5 | 7（普通5列 / 含大运流年7列）
@@ -364,8 +386,11 @@ function buildGongWeiTagRows(area, colCount) {
     var html = '<tr class="' + cls + '" data-gw-type="' + gwName + '">';
     // rl 列：显示宫位名称，左边框色
     html += '<td class="rl" style="border-left:3px solid ' + color + ';padding-left:5px;">' + gwName + '</td>';
-    // area为main时有rl列，area为sanyuan时rl后还需一个空td
-    if (area === 'sanyuan') { html += '<td></td>'; }
+    // area为main时有rl列，area为sanyuan时rl后是胎年格（v0.36.0：标签可留空，默认留空）
+    if (area === 'sanyuan') {
+      var tnWord = showTaiNian ? (labels[GW_INDEX.taiNian] || '') : '';
+      html += '<td data-gw="taiNian">' + tnWord + '</td>';
+    }
     for (var j = 0; j < cols.length; j++) {
       var gw = cols[j];
       var idx = GW_INDEX[gw];
@@ -426,6 +451,7 @@ function updateGongWeiTags() {
   updateGzTriggerText();
   // 4. 同步 checkbox 状态
   syncGzCheckboxes();
+  syncTaiNianCheckboxes();
 }
 
 // 更新面板按钮文字
@@ -449,9 +475,9 @@ function updateGzTriggerText() {
   }
 }
 
-// 同步 popover checkbox 状态
+// 同步 popover checkbox 状态（.gz-tn-opt 是胎年显示开关，由 syncTaiNianCheckboxes 单独同步）
 function syncGzCheckboxes() {
-  var cbs = document.querySelectorAll('#gz-popover .gz-cb-item input[type="checkbox"]');
+  var cbs = document.querySelectorAll('#gz-popover .gz-cb-item:not(.gz-tn-opt) input[type="checkbox"]');
   for (var i = 0; i < cbs.length; i++) {
     var val = cbs[i].value;
     cbs[i].checked = selectedGongWei.indexOf(val) >= 0;
@@ -502,7 +528,12 @@ function renderGongWeiPanel() {
     + '<button onclick="GONGWEI.selectAllGongWei()">全选</button>'
     + '<button onclick="GONGWEI.clearAllGongWei()">清空</button>'
     + '<button class="gz-settings-btn" onclick="GONGWEI.closeGzPopover();GONGWEI.openGzSettings();">⚙ 宫位设置</button>'
-    + '</div></div></div>';
+    + '</div>'
+    + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--c-line);">'
+    + '<label class="gz-cb-item gz-tn-opt" style="margin:0;"><input type="checkbox" id="gzShowTaiNian" onchange="GONGWEI.toggleShowTaiNian(this.checked)"' + (showTaiNian ? ' checked' : '') + '><span>胎年宫位</span></label>'
+    + '<span style="margin-left:8px;font-size:11px;color:var(--c-gray);">标签可留空 · 默认不显示</span>'
+    + '</div>'
+    + '</div></div>';
 }
 
 // ===== v0.10.0/v0.13.0 宫位多选 — 交互函数 =====
@@ -869,13 +900,13 @@ function openGzEdit(id) {
     if (!group) return;
     titleEl.textContent = '编辑「' + group.name + '宫位」';
     nameEl.value = group.name;
-    for (var j = 0; j < 7; j++) {
+    for (var j = 0; j < 8; j++) {
       document.getElementById('gzEditL' + j).value = group.labels[j] || '';
     }
   } else {
     titleEl.textContent = '新增宫位组';
     nameEl.value = '';
-    for (var k = 0; k < 7; k++) {
+    for (var k = 0; k < 8; k++) {
       document.getElementById('gzEditL' + k).value = '';
     }
   }
@@ -903,7 +934,7 @@ function checkGzEditValid() {
 // 监听输入变化以启用/禁用保存按钮
 (function() {
   var inputs = [document.getElementById('gzEditName')];
-  for (var i = 0; i < 7; i++) inputs.push(document.getElementById('gzEditL' + i));
+  for (var i = 0; i < 8; i++) inputs.push(document.getElementById('gzEditL' + i));
   for (var j = 0; j < inputs.length; j++) {
     inputs[j].addEventListener('input', checkGzEditValid);
   }
@@ -912,7 +943,7 @@ function checkGzEditValid() {
 function saveGzEdit() {
   var name = document.getElementById('gzEditName').value.trim();
   var labels = [];
-  for (var i = 0; i < 7; i++) {
+  for (var i = 0; i < 8; i++) {
     labels.push(document.getElementById('gzEditL' + i).value.trim());
   }
 
@@ -1205,6 +1236,7 @@ function handleImportFile(event) {
   gongWeiGroups = loadGroups();
   gongWeiTrash = loadTrash();
   selectedGongWei = loadSelected();
+  showTaiNian = loadShowTaiNian();
   // 清理无效选中（已删除的宫位组名称）
   selectedGongWei = selectedGongWei.filter(function(name) {
     for (var i = 0; i < gongWeiGroups.length; i++) {
@@ -1239,6 +1271,11 @@ function handleImportFile(event) {
     persistGroups: persistGroups,
     persistTrash: persistTrash,
     persistSelected: persistSelected,
+    // v0.36.0 胎年宫位显示开关
+    loadShowTaiNian: loadShowTaiNian,
+    getShowTaiNian: getShowTaiNian,
+    toggleShowTaiNian: toggleShowTaiNian,
+    syncTaiNianCheckboxes: syncTaiNianCheckboxes,
     // v0.20.0 常用宫位
     loadFav: loadFav,
     persistFav: persistFav,

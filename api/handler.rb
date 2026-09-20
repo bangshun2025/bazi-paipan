@@ -346,6 +346,14 @@ class BaziPaipanExt < Clacky::ApiExtension
     { gan: TG[g_idx], zhi: DZ[z_idx] }
   end
 
+  # ========== 胎年（v0.36.0 口径A：胎元所在年的干支） ==========
+  # 胎元=出生月往前第 9 个节气月；k=月支序（寅=0..丑=11），
+  # 回退 9 个月跨年界次数=(k-9)/12（Ruby 整除向下取整）：亥/子/丑月胎年=生年，其余=前一年
+  def self.tai_nian(eff_year, yue_zhi)
+    k = (DZ.index(yue_zhi) - 2) % 12
+    year_pillar(eff_year + (k - 9) / 12)
+  end
+
   # 地支序号：寅=1...丑=12
   def self.dz_num(zhi)
     ((DZ.index(zhi) + 10) % 12) + 1
@@ -530,6 +538,9 @@ class BaziPaipanExt < Clacky::ApiExtension
     # 胎元
     tai = tai_yuan(yue[:gan], yue[:zhi])
 
+    # 胎年（v0.36.0 口径A：胎元所在年的干支）
+    tn = tai_nian(eff_year, yue[:zhi])
+
     # 命宫
     ming = ming_gong(yue[:zhi], shi[:zhi], nian[:gan])
 
@@ -549,7 +560,7 @@ class BaziPaipanExt < Clacky::ApiExtension
       name: name, gender: gender,
       year: y, month: m, day: d, hour: h, min: mi,
       nian: nian, yue: yue, ri: ri, shi: shi,
-      tai: tai, ming: ming, shen: shen,
+      tai: tai, tai_nian: tn, ming: ming, shen: shen,
       sheng_xiao: sx,
       da_yun: dy_result[:da_yun],
       qi_yun: dy_result[:qi_yun],
@@ -637,6 +648,7 @@ class BaziPaipanExt < Clacky::ApiExtension
       ri:   self.class.pillar_info(data[:ri][:gan],   data[:ri][:zhi],   ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :ri,   twin: twin),
       shi:  self.class.pillar_info(data[:shi][:gan],  data[:shi][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :shi,  twin: twin),
       tai:  self.class.pillar_info(data[:tai][:gan],  data[:tai][:zhi],  ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :tai,  twin: twin),
+      tai_nian: self.class.pillar_info(data[:tai_nian][:gan], data[:tai_nian][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :tai_nian, twin: twin),
       ming: self.class.pillar_info(data[:ming][:gan], data[:ming][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :ming, twin: twin),
       shen: self.class.pillar_info(data[:shen][:gan], data[:shen][:zhi], ri_gan, ri_zhi, nian_zhi, yue_zhi, pillar_type: :shen, twin: twin)
     }

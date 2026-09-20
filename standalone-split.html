@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.33.0 | 2026-09-12 -->
+<!-- 八字排盘 · 从真版 v0.36.0 | 2026-09-20 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
@@ -8,6 +8,9 @@
 <!-- v0.31.0: 节气边界修正 — getSolarTerm 返回的北京钟表时不再被二次 +8h；月柱/人元司令换月判定修正（节气当天与交界分钟内月柱错位）；新增真值门禁 scripts/check-term-truth.js + 三端模块一致性门禁 scripts/sync-module-inline.py -->
 <!-- v0.32.0: 档案标签 — 每行「✏️ 修改」前新增行内标签框（空格分隔多标签，失焦/回车即存；不刷新列表以免吞掉点击）+ 标签栏筛选（全部/各标签/未分类）+ 默认标签（打开档案默认只看该标签，可随时点标签切换；档案弹窗加宽 420→880px） -->
 <!-- v0.33.0: 档案列表按名字拼音排序 — 排序键 = 列表所见的显示名（隐私关：小名 / 姓名；隐私开：艺名 → 小名 → 匿名），中文按读音（localeCompare 'zh'）；同名按更新时间新在前；落盘顺序与显示顺序保持一致（行内 ✏️修改 / 🗑️删除 / 排盘 按数组索引定位） -->
+<!-- v0.34.0: 档案行「排盘」立即排盘修复 — setFormData 回填出生地时不再裸调 onProvChange/onCityChange（模块 IIFE 内为 ReferenceError，异常中断后续 closeArchivePanel + doPaipan，表现为「点了排盘没反应、要回主界面再点一次」）；改走 APP.* 并把两级 50ms setTimeout 改为同步回填，排盘时省/市/区县已全部就位（真太阳时不再漏算） -->
+<!-- v0.35.0: 人元司令边界修正 — daysAfter 为 0 起算的完整天数（节后第 N 日 ⇔ daysAfter = N-1），REN_YUAN 段边界判断由 <= 改 <（旧口径令每段多占 1 日：如 1982-10-18 卯时 寒露后第 10 日本应丁司令、误报辛）；?test=1 新增 6 条司令边界断言 -->
+<!-- v0.36.0: 三垣新增胎年宫 — 三垣区由胎元/命宫/身宫增为胎年/胎元/命宫/身宫（胎年=胎元所在年的干支，口径A；胎元=出生月往前第9个节气月，亥/子/丑月生人胎年=生年干支、其余=前一年，亥月口径经邦顺裁决）；胎年占用三垣区原「年柱下空列」，表格总列数不变；宫位面板新增「胎年宫位」显示开关（默认不显示；本地显示偏好，不入导出/云同步）+ 宫位设置第 8 槽「胎年」标签（可留空）；?test=1 新增胎年断言（函数级 9 条 + 全盘 7 案例含 2 条亥月锚点 + 宫位开关 TN01-TN09） -->
 <!-- v0.25.0: 宫位配置保护 — 容错(损坏备份+提示) + 导出/导入JSON + schema版本化 + Supabase上云(user_gongwei_config) -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记 + 常用排序联动标签行 + 下拉面板只显示常用 -->
 <!-- v0.19.0: 隐私模式（艺名）— 全局隐私开关(默认开启/持久化) + 档案艺名字段 + 显示层脱敏(降级链 艺名→小名→匿名) -->
@@ -1027,6 +1030,7 @@
         <div class="gz-edit-row"><label>日柱</label><input type="text" id="gzEditL3" maxlength="12" placeholder="日柱标签"></div>
         <div class="gz-edit-row"><label>时柱</label><input type="text" id="gzEditL5" maxlength="12" placeholder="时柱标签"></div>
         <div class="gz-edit-row"><label>胎元</label><input type="text" id="gzEditL0" maxlength="12" placeholder="胎元标签"></div>
+        <div class="gz-edit-row"><label>胎年</label><input type="text" id="gzEditL7" maxlength="12" placeholder="胎年标签（可留空）"></div>
         <div class="gz-edit-row"><label>命宫</label><input type="text" id="gzEditL4" maxlength="12" placeholder="命宮标签"></div>
         <div class="gz-edit-row"><label>身宫</label><input type="text" id="gzEditL6" maxlength="12" placeholder="身宫标签"></div>
       </div>

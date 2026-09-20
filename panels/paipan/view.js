@@ -259,11 +259,11 @@
       '<tr class="rm">'+tds('空亡','rl')+tds(p.nian.kong_wang)+tds(p.yue.kong_wang)+tds(p.ri.kong_wang)+tds(p.shi.kong_wang)+tds(cd.kong_wang,'sep')+tds(cl.kong_wang)+'</tr>',
       '<tr class="rm">'+tds('神煞','rl')+tds(p.nian.shen_sha)+tds(p.yue.shen_sha)+tds(p.ri.shen_sha)+tds(p.shi.shen_sha)+tds(cd.shen_sha,'sep')+tds(cl.shen_sha)+'</tr>',
       // 三垣
-      '<tr class="hd"><th class="rl">三垣</th><th></th><th>胎元</th><th>命宫</th><th>身宫</th><th class="sep"></th><th></th></tr>',
-      '<tr class="rs">'+tds('主星','rl')+'<td></td>'+tds(p.tai.shi_shen)+tds(p.ming.shi_shen)+tds(p.shen.shi_shen)+'<td class="sep"></td><td></td></tr>',
-      '<tr class="rg"><td class="rl"></td><td></td>'+tc2(p.tai.gan,WX[p.tai.gan])+tc2(p.ming.gan,WX[p.ming.gan])+tc2(p.shen.gan,WX[p.shen.gan])+'<td class="sep"></td><td></td></tr>',
-      '<tr class="rg"><td class="rl"></td><td></td>'+tc2(p.tai.zhi,WX[p.tai.zhi])+tc2(p.ming.zhi,WX[p.ming.zhi])+tc2(p.shen.zhi,WX[p.shen.zhi])+'<td class="sep"></td><td></td></tr>',
-      '<tr class="rh">'+tds('藏气','rl')+'<td></td>'+tds(p.tai.cang_gan)+tds(p.ming.cang_gan)+tds(p.shen.cang_gan)+'<td class="sep"></td><td></td></tr>'
+      '<tr class="hd"><th class="rl">三垣</th><th>胎年</th><th>胎元</th><th>命宫</th><th>身宫</th><th class="sep"></th><th></th></tr>',
+      '<tr class="rs">'+tds('主星','rl')+tds(p.tai_nian.shi_shen)+tds(p.tai.shi_shen)+tds(p.ming.shi_shen)+tds(p.shen.shi_shen)+'<td class="sep"></td><td></td></tr>',
+      '<tr class="rg"><td class="rl"></td>'+tc2(p.tai_nian.gan,WX[p.tai_nian.gan])+tc2(p.tai.gan,WX[p.tai.gan])+tc2(p.ming.gan,WX[p.ming.gan])+tc2(p.shen.gan,WX[p.shen.gan])+'<td class="sep"></td><td></td></tr>',
+      '<tr class="rg"><td class="rl"></td>'+tc2(p.tai_nian.zhi,WX[p.tai_nian.zhi])+tc2(p.tai.zhi,WX[p.tai.zhi])+tc2(p.ming.zhi,WX[p.ming.zhi])+tc2(p.shen.zhi,WX[p.shen.zhi])+'<td class="sep"></td><td></td></tr>',
+      '<tr class="rh">'+tds('藏气','rl')+tds(p.tai_nian.cang_gan)+tds(p.tai.cang_gan)+tds(p.ming.cang_gan)+tds(p.shen.cang_gan)+'<td class="sep"></td><td></td></tr>'
     ];
 
     // 大运流年表

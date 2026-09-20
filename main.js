@@ -1,4 +1,4 @@
-/* 八字排盘 v0.35.0 — main.js */
+/* 八字排盘 v0.36.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -64,6 +64,7 @@
   var kongWang = ALGO.kongWang;
   var shenSha = ALGO.shenSha;
   var taiYuan = ALGO.taiYuan;
+  var taiNianGZ = ALGO.taiNianGZ;
   var dzNum = ALGO.dzNum;
   var numZhi = ALGO.numZhi;
   var mingGong = ALGO.mingGong;
@@ -869,14 +870,15 @@ function captureScreenshot() {
     'ri.gan+ri.zhi': '甲戌', 'shi.gan+shi.zhi': '丁卯',
     'ri.gan': '甲', 'ming.gan+ming.zhi': '甲辰',
     'daYun.0.gan+daYun.0.zhi': '辛亥', 'daYun.1.gan+daYun.1.zhi': '壬子',
-    'shen.gan+shen.zhi': '壬寅', 'tai.gan+tai.zhi': '辛丑'
+    'shen.gan+shen.zhi': '壬寅', 'tai.gan+tai.zhi': '辛丑', 'taiNian.gan+taiNian.zhi': '辛酉'
   });
 
   testChart('芝晓', '芝晓', '女', 1983,5,15,9,45, {
     'nian.gan+nian.zhi': '癸亥', 'yue.gan+yue.zhi': '丁巳',
     'ri.gan+ri.zhi': '癸卯', 'shi.gan+shi.zhi': '丁巳',
     'ri.gan': '癸', 'ming.gan+ming.zhi': '己未', 'tai.gan+tai.zhi': '戊申',
-    'shen.gan+shen.zhi': '癸亥', 'daYun.0.gan+daYun.0.zhi': '戊午'
+    'shen.gan+shen.zhi': '癸亥', 'daYun.0.gan+daYun.0.zhi': '戊午',
+    'taiNian.gan+taiNian.zhi': '壬戌'
   });
 
   testChart('素素', '素素', '女', 1986,1,1,12,0, {
@@ -896,42 +898,57 @@ function captureScreenshot() {
 
   testChart('新善', '新善', '男', 1989,12,12,7,30, {
     'ri.gan+ri.zhi': '丙午', 'ri.gan': '丙',
-    'ming.gan+ming.zhi': '丁丑', 'shen.gan+shen.zhi': '己巳', 'tai.gan+tai.zhi': '丁卯'
+    'ming.gan+ming.zhi': '丁丑', 'shen.gan+shen.zhi': '己巳', 'tai.gan+tai.zhi': '丁卯',
+    'taiNian.gan+taiNian.zhi': '己巳'
   });
 
   testChart('冯际州', '冯际州', '男', 2010,2,14,15,0, {
     'ri.gan+ri.zhi': '乙未', 'ri.gan': '乙',
-    'ming.gan+ming.zhi': '癸未', 'shen.gan+shen.zhi': '丁亥', 'tai.gan+tai.zhi': '己巳'
+    'ming.gan+ming.zhi': '癸未', 'shen.gan+shen.zhi': '丁亥', 'tai.gan+tai.zhi': '己巳',
+    'taiNian.gan+taiNian.zhi': '己丑'
   });
 
   testChart('吴星宝', '吴星宝', '男', 2012,6,8,11,0, {
     'ri.gan+ri.zhi': '庚子', 'ri.gan': '庚',
-    'ming.gan+ming.zhi': '乙巳', 'shen.gan+shen.zhi': '癸丑', 'tai.gan+tai.zhi': '丁酉'
+    'ming.gan+ming.zhi': '乙巳', 'shen.gan+shen.zhi': '癸丑', 'tai.gan+tai.zhi': '丁酉',
+    'taiNian.gan+taiNian.zhi': '辛卯'
   });
 
   testChart('邵凡语', '邵凡语', '女', 2014,9,19,18,30, {
     'ri.gan+ri.zhi': '癸巳', 'ri.gan': '癸',
-    'ming.gan+ming.zhi': '乙亥', 'shen.gan+shen.zhi': '辛未', 'tai.gan+tai.zhi': '甲子'
+    'ming.gan+ming.zhi': '乙亥', 'shen.gan+shen.zhi': '辛未', 'tai.gan+tai.zhi': '甲子',
+    'taiNian.gan+taiNian.zhi': '癸巳'
   });
 
-  // ============ 函数级测试: 直接用干支验证 mingGong/shenGong/taiYuan ============
+  // === v0.36.0 胎年（口径A）亥月锚点：胎元落生年正月，胎年=生年干支 ===
+  testChart('胎年亥月锚点·甲子', '胎年亥月锚点', '男', 1984,11,15,12,0, {
+    'nian.gan+nian.zhi': '甲子', 'yue.gan+yue.zhi': '乙亥',
+    'tai.gan+tai.zhi': '丙寅', 'taiNian.gan+taiNian.zhi': '甲子'
+  });
+  testChart('胎年亥月锚点·庚午', '胎年亥月锚点', '男', 1990,11,15,12,0, {
+    'nian.gan+nian.zhi': '庚午', 'yue.gan+yue.zhi': '丁亥',
+    'tai.gan+tai.zhi': '戊寅', 'taiNian.gan+taiNian.zhi': '庚午'
+  });
+
+  // ============ 函数级测试: 直接用干支验证 mingGong/shenGong/taiYuan/taiNianGZ ============
   (function testFuncs() {
-    tests.push({ section:'函数级 — 命宫/身宫/胎元 干支直入' });
+    tests.push({ section:'函数级 — 命宫/身宫/胎元/胎年 干支直入' });
     const cases = [
-      { label:'邦顺', yg:'庚', yz:'戌', sz:'卯', ng:'壬', mg:'甲辰', sg:'壬寅', ty:'辛丑' },
-      { label:'芝晓', yg:'壬', yz:'辰', sz:'子', ng:'辛', mg:'辛丑', sg:'癸巳', ty:'癸未' },
-      { label:'素素', yg:'戊', yz:'寅', sz:'巳', ng:'庚', mg:'丙戌', sg:'甲申', ty:'己巳' },
-      { label:'小龙', yg:'癸', yz:'酉', sz:'戌', ng:'己', mg:'甲戌', sg:'壬申', ty:'甲子' },
-      { label:'苓菲', yg:'壬', yz:'子', sz:'子', ng:'壬', mg:'乙巳', sg:'癸丑', ty:'癸卯' },
-      { label:'新善', yg:'丁', yz:'酉', sz:'辰', ng:'辛', mg:'壬辰', sg:'庚寅', ty:'戊子' },
-      { label:'冯际州', yg:'己', yz:'亥', sz:'丑', ng:'丙', mg:'癸巳', sg:'辛丑', ty:'庚寅' },
-      { label:'吴星宝', yg:'乙', yz:'巳', sz:'酉', ng:'丁', mg:'癸卯', sg:'癸卯', ty:'丙申' },
-      { label:'邵凡语', yg:'丁', yz:'未', sz:'寅', ng:'丁', mg:'戊申', sg:'庚戌', ty:'戊戌' },
+      { label:'邦顺', yg:'庚', yz:'戌', sz:'卯', ng:'壬', mg:'甲辰', sg:'壬寅', ty:'辛丑', ey:1982, tn:'辛酉' },
+      { label:'芝晓', yg:'壬', yz:'辰', sz:'子', ng:'辛', mg:'辛丑', sg:'癸巳', ty:'癸未', ey:1981, tn:'庚申' },
+      { label:'素素', yg:'戊', yz:'寅', sz:'巳', ng:'庚', mg:'丙戌', sg:'甲申', ty:'己巳', ey:1980, tn:'己未' },
+      { label:'小龙', yg:'癸', yz:'酉', sz:'戌', ng:'己', mg:'甲戌', sg:'壬申', ty:'甲子', ey:1989, tn:'戊辰' },
+      { label:'苓菲', yg:'壬', yz:'子', sz:'子', ng:'壬', mg:'乙巳', sg:'癸丑', ty:'癸卯', ey:1982, tn:'壬戌' },
+      { label:'新善', yg:'丁', yz:'酉', sz:'辰', ng:'辛', mg:'壬辰', sg:'庚寅', ty:'戊子', ey:1981, tn:'庚申' },
+      { label:'冯际州', yg:'己', yz:'亥', sz:'丑', ng:'丙', mg:'癸巳', sg:'辛丑', ty:'庚寅', ey:1986, tn:'丙寅' },
+      { label:'吴星宝', yg:'乙', yz:'巳', sz:'酉', ng:'丁', mg:'癸卯', sg:'癸卯', ty:'丙申', ey:1987, tn:'丙寅' },
+      { label:'邵凡语', yg:'丁', yz:'未', sz:'寅', ng:'丁', mg:'戊申', sg:'庚戌', ty:'戊戌', ey:1987, tn:'丙寅' },
     ];
     for (const c of cases) {
       const ty = taiYuan(c.yg, c.yz); tests.push(eq('胎元:'+c.label, ty.gan+ty.zhi, c.ty));
       const mg = mingGong(c.yz, c.sz, c.ng); tests.push(eq('命宫:'+c.label, mg.gan+mg.zhi, c.mg));
       const sg = shenGong(c.yz, c.sz, c.ng); tests.push(eq('身宫:'+c.label, sg.gan+sg.zhi, c.sg));
+      const tn = taiNianGZ(c.ey, c.yz); tests.push(eq('胎年:'+c.label, tn.gan+tn.zhi, c.tn));
     }
   })();
 
@@ -1105,6 +1122,80 @@ function captureScreenshot() {
     var selAfterDel = GONGWEI.loadSelected();
     tests.push(eq('GWFav:A6b 删除后fav清理', favAfterDel.indexOf('测试A6b') === -1, true));
     tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
+  })();
+
+  // ============ v0.36.0 胎年宫位显示开关断言（TN01-TN09） ============
+  // 胎年标签可留空；默认不显示，由宫位面板勾选框控制（本地显示偏好）
+  (function testTaiNianGongWei() {
+    tests.push({ section:'胎年宫位 — v0.36.0 开关' });
+
+    // TN01: GW_INDEX 新增胎年槽位（第 8 槽，索引 7）
+    tests.push(eq('v0.36 TN01:GW_INDEX.taiNian=7', CONST.GW_INDEX.taiNian, 7));
+
+    // TN02: 默认不显示（localStorage 无键 → false）
+    localStorage.removeItem('bz_gongwei_show_tainian');
+    tests.push(eq('v0.36 TN02:缺省不显示', GONGWEI.loadShowTaiNian(), false));
+
+    // TN03: 编辑器第 8 槽输入存在（三文件 HTML 同步保护）
+    tests.push(eq('v0.36 TN03:编辑器含 gzEditL7', !!document.getElementById('gzEditL7'), true));
+
+    var preShow = GONGWEI.getShowTaiNian();
+    var preFav = GONGWEI.loadFav().slice();
+    var preSel = GONGWEI.loadSelected().slice();
+    var g = GONGWEI.addGroup('胎年测试', ['天','地','玄','黄','宇','宙','洪','荒']);
+    GONGWEI.persistFav(preFav.concat(['胎年测试']));
+    GONGWEI.clearSelection();
+    GONGWEI.toggleSelect('胎年测试');
+
+    // TN04: 关闭时三垣标签行胎年格留空
+    GONGWEI.toggleShowTaiNian(false);
+    var offRows = GONGWEI.buildGongWeiTagRows('sanyuan', 7).join('');
+    tests.push(eq('v0.36 TN04:关闭时胎年格为空', offRows.indexOf('data-gw="taiNian"></td>') >= 0, true));
+
+    // TN05: 打开后显示组标签第 8 槽 + 持久化
+    GONGWEI.toggleShowTaiNian(true);
+    var onRows = GONGWEI.buildGongWeiTagRows('sanyuan', 7).join('');
+    tests.push(eq('v0.36 TN05:打开后显示胎年词', onRows.indexOf('data-gw="taiNian">荒</td>') >= 0, true));
+    tests.push(eq('v0.36 TN05:持久化=1', localStorage.getItem('bz_gongwei_show_tainian'), '1'));
+
+    // TN06: 第 8 槽留空 → 空串，不得渲染 undefined
+    GONGWEI.updateGroup(g.group.id, '胎年测试', ['天','地','玄','黄','宇','宙','洪','']);
+    var blankRows = GONGWEI.buildGongWeiTagRows('sanyuan', 7).join('');
+    tests.push(eq('v0.36 TN06:留空无 undefined', blankRows.indexOf('undefined') === -1, true));
+    tests.push(eq('v0.36 TN06:留空格为空', blankRows.indexOf('data-gw="taiNian"></td>') >= 0, true));
+
+    // TN07/TN08: 真实 DOM — 渲染盘 + 勾选/取消后胎年格内容
+    GONGWEI.updateGroup(g.group.id, '胎年测试', ['天','地','玄','黄','宇','宙','洪','荒']);
+    var tn = document.createElement('div');
+    tn.id = 'tn36-out';
+    tn.style.display = 'none';
+    document.body.appendChild(tn);
+    renderChart(paipan('胎年宫位DOM', '男', 1984, 11, 15, 12, 0), undefined, 'tn36-out');
+    GONGWEI.toggleShowTaiNian(true);
+    var cellOn = tn.querySelector('tr.gz-tags-sy td[data-gw="taiNian"]');
+    tests.push(eq('v0.36 TN07:DOM 胎年格=荒', cellOn ? cellOn.textContent : '(未找到)', '荒'));
+    GONGWEI.toggleShowTaiNian(false);
+    var cellOff = tn.querySelector('tr.gz-tags-sy td[data-gw="taiNian"]');
+    tests.push(eq('v0.36 TN08:DOM 关闭后为空', cellOff ? cellOff.textContent : '(未找到)', ''));
+    tn.parentNode.removeChild(tn);
+
+    // TN09: 编辑器保存贯通第 8 槽
+    GONGWEI.openGzEdit();
+    document.getElementById('gzEditName').value = '八槽贯通';
+    for (var i = 0; i < 7; i++) document.getElementById('gzEditL' + i).value = 'x' + i;
+    document.getElementById('gzEditL7').value = '胎年八槽';
+    GONGWEI.saveGzEdit();
+    var g9 = GONGWEI.findGroupByName('八槽贯通');
+    tests.push(eq('v0.36 TN09:编辑器保存胎年槽', g9 ? g9.labels[7] : '(未找到)', '胎年八槽'));
+
+    // 清理：删测试组、还原常用/勾选/开关
+    if (g9) GONGWEI.deleteGroup(g9.id);
+    if (g && g.ok) GONGWEI.deleteGroup(g.group.id);
+    GONGWEI.persistFav(preFav);
+    GONGWEI.clearSelection();
+    for (var pi = 0; pi < preSel.length; pi++) GONGWEI.toggleSelect(preSel[pi]);
+    GONGWEI.toggleShowTaiNian(preShow);
+    if (!preShow) localStorage.removeItem('bz_gongwei_show_tainian');
   })();
 
 
