@@ -276,6 +276,25 @@ function refreshXingyaoRows() {
   return tds.length;
 }
 
+// v0.36.1 胎年柱整体显隐：三垣表头起向后遍历兄弟行，rl 行第 2 格即胎年列。
+// 盘式表头与三垣表头同表，且四柱行首格也是 rl —— 必须从三垣表头起向后走，避免误伤盘式区
+function applyTaiNianColumn(root) {
+  var show = !!(window.GONGWEI && typeof GONGWEI.getShowTaiNian === 'function' && GONGWEI.getShowTaiNian());
+  var scope = (root && root.querySelectorAll) ? root : document;
+  var hds = scope.querySelectorAll('tr.hd');
+  for (var h = 0; h < hds.length; h++) {
+    if (!hds[h].children[0] || hds[h].children[0].textContent.indexOf('三垣') !== 0) continue;
+    var row = hds[h];
+    while (row) {
+      var cells = row.cells;
+      if (cells.length > 1 && /(^|\s)rl(\s|$)/.test(cells[0].className)) {
+        cells[1].style.visibility = show ? '' : 'hidden';
+      }
+      row = row.nextElementSibling;
+    }
+  }
+}
+
 // ============ buildPillarRows：抽取四柱+三垣行生成逻辑 ============
 // 返回 { main: [string], sanyuan: [string] }，每行 5 列（盘式+四柱）
 // diffMap: { 'nian.gan':true, ... } — 差异高亮标记
@@ -765,6 +784,7 @@ function renderChart(data, twin, targetId) {
   // 存储数据用于交互
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 节气区默认出生年（D6）
   container._jieqiLng = data.lng; // v0.27.0 D1/D5: 节气区经度（refreshJieqi 回退源）
@@ -1330,6 +1350,7 @@ function renderTwinCardsHtml(data, targetId) {
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 同卵默认出生年（D6/D8）
   container._jieqiLng = data.lng; // v0.27.0 D5: 同卵经度（同址同值）
@@ -1441,6 +1462,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   window._paipanData = d1;
   window._paipanData2 = d2;
   window._twinType = 'longfeng';
@@ -1698,6 +1720,7 @@ function renderExpandedChart(arch, containerEl) {
   try {
     var html = renderChartToHtml(data, arch);
     containerEl.innerHTML = html;
+    applyTaiNianColumn(containerEl);
   } catch(e) {
     containerEl.innerHTML = '<div style="color:var(--c-red);padding:10px;">排盘渲染出错: ' + e.message + '</div>';
   }
@@ -1772,6 +1795,7 @@ function renderChartToHtml(data, arch) {
   window.RENDER = {
     toggleLevel: toggleLevel,
     refreshXingyaoRows: refreshXingyaoRows,
+    applyTaiNianColumn: applyTaiNianColumn,
     insertBeforeNayin: insertBeforeNayin,
     buildPillarRows: buildPillarRows,
     buildJieqiHtml: buildJieqiHtml,

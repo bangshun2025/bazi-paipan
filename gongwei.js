@@ -363,6 +363,8 @@ function toggleShowTaiNian(checked) {
   persistShowTaiNian();
   updateGongWeiTags();
   syncTaiNianCheckboxes();
+  // v0.36.1 语义升级：开关控制胎年柱整体显隐（表头/干支/宫位词），零重排切换
+  if (window.RENDER && typeof RENDER.applyTaiNianColumn === 'function') RENDER.applyTaiNianColumn();
 }
 
 // ===== v0.10.0 宫位多选 — 标签行生成（纯函数） =====
@@ -530,8 +532,8 @@ function renderGongWeiPanel() {
     + '<button class="gz-settings-btn" onclick="GONGWEI.closeGzPopover();GONGWEI.openGzSettings();">⚙ 宫位设置</button>'
     + '</div>'
     + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--c-line);">'
-    + '<label class="gz-cb-item gz-tn-opt" style="margin:0;"><input type="checkbox" id="gzShowTaiNian" onchange="GONGWEI.toggleShowTaiNian(this.checked)"' + (showTaiNian ? ' checked' : '') + '><span>胎年宫位</span></label>'
-    + '<span style="margin-left:8px;font-size:11px;color:var(--c-gray);">标签可留空 · 默认不显示</span>'
+    + '<label class="gz-cb-item gz-tn-opt" style="margin:0;"><input type="checkbox" id="gzShowTaiNian" onchange="GONGWEI.toggleShowTaiNian(this.checked)"' + (showTaiNian ? ' checked' : '') + '><span>显示胎年</span></label>'
+    + '<span style="margin-left:8px;font-size:11px;color:var(--c-gray);">勾选显示胎年柱 · 默认隐藏</span>'
     + '</div>'
     + '</div></div>';
 }

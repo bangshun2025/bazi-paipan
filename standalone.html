@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.36.0 | 2026-09-20 -->
+<!-- 八字排盘 · 从真版 v0.36.1 | 2026-09-21 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
@@ -6713,6 +6713,8 @@ function toggleShowTaiNian(checked) {
   persistShowTaiNian();
   updateGongWeiTags();
   syncTaiNianCheckboxes();
+  // v0.36.1 语义升级：开关控制胎年柱整体显隐（表头/干支/宫位词），零重排切换
+  if (window.RENDER && typeof RENDER.applyTaiNianColumn === 'function') RENDER.applyTaiNianColumn();
 }
 
 // ===== v0.10.0 宫位多选 — 标签行生成（纯函数） =====
@@ -8474,6 +8476,25 @@ function refreshXingyaoRows() {
   return tds.length;
 }
 
+// v0.36.1 胎年柱整体显隐：三垣表头起向后遍历兄弟行，rl 行第 2 格即胎年列。
+// 盘式表头与三垣表头同表，且四柱行首格也是 rl —— 必须从三垣表头起向后走，避免误伤盘式区
+function applyTaiNianColumn(root) {
+  var show = !!(window.GONGWEI && typeof GONGWEI.getShowTaiNian === 'function' && GONGWEI.getShowTaiNian());
+  var scope = (root && root.querySelectorAll) ? root : document;
+  var hds = scope.querySelectorAll('tr.hd');
+  for (var h = 0; h < hds.length; h++) {
+    if (!hds[h].children[0] || hds[h].children[0].textContent.indexOf('三垣') !== 0) continue;
+    var row = hds[h];
+    while (row) {
+      var cells = row.cells;
+      if (cells.length > 1 && /(^|\s)rl(\s|$)/.test(cells[0].className)) {
+        cells[1].style.visibility = show ? '' : 'hidden';
+      }
+      row = row.nextElementSibling;
+    }
+  }
+}
+
 // ============ buildPillarRows：抽取四柱+三垣行生成逻辑 ============
 // 返回 { main: [string], sanyuan: [string] }，每行 5 列（盘式+四柱）
 // diffMap: { 'nian.gan':true, ... } — 差异高亮标记
@@ -8963,6 +8984,7 @@ function renderChart(data, twin, targetId) {
   // 存储数据用于交互
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 节气区默认出生年（D6）
   container._jieqiLng = data.lng; // v0.27.0 D1/D5: 节气区经度（refreshJieqi 回退源）
@@ -9528,6 +9550,7 @@ function renderTwinCardsHtml(data, targetId) {
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 同卵默认出生年（D6/D8）
   container._jieqiLng = data.lng; // v0.27.0 D5: 同卵经度（同址同值）
@@ -9639,6 +9662,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyTaiNianColumn(container);
   window._paipanData = d1;
   window._paipanData2 = d2;
   window._twinType = 'longfeng';
@@ -9896,6 +9920,7 @@ function renderExpandedChart(arch, containerEl) {
   try {
     var html = renderChartToHtml(data, arch);
     containerEl.innerHTML = html;
+    applyTaiNianColumn(containerEl);
   } catch(e) {
     containerEl.innerHTML = '<div style="color:var(--c-red);padding:10px;">排盘渲染出错: ' + e.message + '</div>';
   }
@@ -9970,6 +9995,7 @@ function renderChartToHtml(data, arch) {
   window.RENDER = {
     toggleLevel: toggleLevel,
     refreshXingyaoRows: refreshXingyaoRows,
+    applyTaiNianColumn: applyTaiNianColumn,
     insertBeforeNayin: insertBeforeNayin,
     buildPillarRows: buildPillarRows,
     buildJieqiHtml: buildJieqiHtml,
@@ -11126,7 +11152,7 @@ function captureScreenshot() {
     tests.push(eq('GWFav:A6b 删除后selected清理', selAfterDel.indexOf('测试A6b') === -1, true));
   })();
 
-  // ============ v0.36.0 胎年宫位显示开关断言（TN01-TN09） ============
+  // ============ v0.36.1 胎年柱级显隐断言（TN01-TN11） ============
   // 胎年标签可留空；默认不显示，由宫位面板勾选框控制（本地显示偏好）
   (function testTaiNianGongWei() {
     tests.push({ section:'胎年宫位 — v0.36.0 开关' });
@@ -11176,9 +11202,28 @@ function captureScreenshot() {
     GONGWEI.toggleShowTaiNian(true);
     var cellOn = tn.querySelector('tr.gz-tags-sy td[data-gw="taiNian"]');
     tests.push(eq('v0.36 TN07:DOM 胎年格=荒', cellOn ? cellOn.textContent : '(未找到)', '荒'));
+    // TN07b: 开 → 胎年柱整体可见（v0.36.1 柱级显隐）
+    var hds = tn.querySelectorAll('table tr.hd'), hdOn = null;
+    for (var hi = 0; hi < hds.length; hi++) {
+      if (hds[hi].children[0].textContent.indexOf('三垣') === 0) { hdOn = hds[hi]; break; }
+    }
+    tests.push(eq('v0.36 TN07b:开·表头胎年可见', hdOn && hdOn.children[1].style.visibility, ''));
+    tests.push(eq('v0.36 TN07b:开·表头胎年字', hdOn ? hdOn.children[1].textContent : '(未找到)', '胎年'));
     GONGWEI.toggleShowTaiNian(false);
     var cellOff = tn.querySelector('tr.gz-tags-sy td[data-gw="taiNian"]');
     tests.push(eq('v0.36 TN08:DOM 关闭后为空', cellOff ? cellOff.textContent : '(未找到)', ''));
+    // TN08b: 关 → 柱级隐藏（v0.36.1）
+    var hds2 = tn.querySelectorAll('table tr.hd'), hdOff = null;
+    for (var hj = 0; hj < hds2.length; hj++) {
+      if (hds2[hj].children[0].textContent.indexOf('三垣') === 0) { hdOff = hds2[hj]; break; }
+    }
+    tests.push(eq('v0.36 TN08b:关·表头胎年隐藏', hdOff && hdOff.children[1].style.visibility, 'hidden'));
+    tests.push(eq('v0.36 TN08b:关·胎元列不动', hdOff.children[2].textContent, '胎元'));
+    var rgRow = tn.querySelector('tr.gz-tags-sy').nextElementSibling;
+    while (rgRow && !/(^|\s)rg(\s|$)/.test(rgRow.className)) rgRow = rgRow.nextElementSibling;
+    var rgCell = rgRow && rgRow.cells.length > 1 ? rgRow.cells[1] : null;
+    tests.push(eq('v0.36 TN08b:关·干支行隐藏', rgCell && rgCell.style.visibility, 'hidden'));
+    tests.push(eq('v0.36 TN08b:关·年柱表头不动', tn.querySelector('table tr.hd').children[1].textContent, '年柱'));
     tn.parentNode.removeChild(tn);
 
     // TN09: 编辑器保存贯通第 8 槽
@@ -11189,6 +11234,24 @@ function captureScreenshot() {
     GONGWEI.saveGzEdit();
     var g9 = GONGWEI.findGroupByName('八槽贯通');
     tests.push(eq('v0.36 TN09:编辑器保存胎年槽', g9 ? g9.labels[7] : '(未找到)', '胎年八槽'));
+
+    // TN10: 清键后重渲新容器 → 默认整柱隐藏（v0.36.1）
+    localStorage.removeItem('bz_gongwei_show_tainian');
+    var tn2 = document.createElement('div');
+    tn2.id = 'tn36-out2';
+    tn2.style.display = 'none';
+    document.body.appendChild(tn2);
+    renderChart(paipan('胎年宫位DOM2', '男', 1984, 11, 15, 12, 0), undefined, 'tn36-out2');
+    var hds3 = tn2.querySelectorAll('table tr.hd'), hdDft = null;
+    for (var hk = 0; hk < hds3.length; hk++) {
+      if (hds3[hk].children[0].textContent.indexOf('三垣') === 0) { hdDft = hds3[hk]; break; }
+    }
+    tests.push(eq('v0.36 TN10:重渲默认隐藏', hdDft && hdDft.children[1].style.visibility, 'hidden'));
+
+    // TN11: 开（零重排）→ 同一表头恢复可见
+    GONGWEI.toggleShowTaiNian(true);
+    tests.push(eq('v0.36 TN11:开零重排恢复', hdDft.children[1].style.visibility, ''));
+    tn2.parentNode.removeChild(tn2);
 
     // 清理：删测试组、还原常用/勾选/开关
     if (g9) GONGWEI.deleteGroup(g9.id);
