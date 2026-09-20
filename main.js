@@ -1,4 +1,4 @@
-/* 八字排盘 v0.31.0 — main.js */
+/* 八字排盘 v0.35.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1174,6 +1174,21 @@ function captureScreenshot() {
     var q11 = paipan('真值T11', '男', 1988, 5, 5, 23, 0);
     var q11y = q11.qiYun ? q11.qiYun.years : -1;
     tests.push(eq('T11:1988-05-05 23:00男起运∈[5,20]年', q11y >= 5 && q11y <= 20, true));
+  })();
+
+  // ============ v0.35.0 人元司令边界断言（daysAfter 0 起算，边界 < 判断） ============
+  (function testSiLingBoundary() {
+    tests.push({ section:'司令 — v0.35.0 边界' });
+
+    // 寒露 1982-10-08 23:02（BJT）。daysAfter = floor((birth-st)/86400000)，节后第 N 日 ⇔ daysAfter = N-1
+    // 辛第1-9日(daysAfter 0-8) / 丁第10-12日(9-11) / 戊第13-30日(12+)
+    tests.push(eq('SL:戌10-17 23:02→辛(节后第9日)', renYuanSiLing(1982, 10, 17, 23, 2).charAt(5), '辛'));
+    tests.push(eq('SL:戌10-17 23:03→丁(节后第10日)', renYuanSiLing(1982, 10, 17, 23, 3).charAt(5), '丁'));
+    tests.push(eq('SL:戌10-20 23:02→丁(节后第12日)', renYuanSiLing(1982, 10, 20, 23, 2).charAt(5), '丁'));
+    tests.push(eq('SL:戌10-20 23:03→戊(节后第13日)', renYuanSiLing(1982, 10, 20, 23, 3).charAt(5), '戊'));
+    // 邦顺锚点：1982-10-18 卯时 = 寒露后第 10 日 → 丁（<= 时代误报辛）
+    tests.push(eq('SL:邦顺1982-10-18卯时→丁', renYuanSiLing(1982, 10, 18, 6, 0).charAt(5), '丁'));
+    tests.push(eq('SL:邦顺锚点含寒露', renYuanSiLing(1982, 10, 18, 6, 0).indexOf('寒露') >= 0, true));
   })();
 
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============

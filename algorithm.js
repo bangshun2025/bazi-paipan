@@ -1,4 +1,4 @@
-/* 八字排盘 v0.31.0 — algorithm.js */
+/* 八字排盘 v0.35.0 — algorithm.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -541,7 +541,8 @@ function liuNianJZ(y) {
 
 // ============ 人元司令 ============
 // 每月节后第几天开始，由哪个天干司令
-// 格式：[天数累计, 天干] — 例如 [[9,'辛'],[12,'丁'],[30,'戊']] 表示辛司令1-9日，丁10-12日，戊13-30日
+// 格式：[天数累计, 天干] — 例如 [[9,'辛'],[12,'丁'],[30,'戊']] 表示节后第1-9日辛司令、第10-12日丁、第13-30日戊
+// daysAfter 为 0 起算的完整天数（节后第 N 日 ⇔ daysAfter = N-1），边界用 < 判断（<= 会让每段多占 1 日）
 const REN_YUAN = {
   '寅':[[7,'戊'],[14,'丙'],[30,'甲']],
   '卯':[[10,'甲'],[30,'乙']],
@@ -584,7 +585,7 @@ function renYuanSiLing(y, m, d, h, minute) {
       const ry = REN_YUAN[monthZhi];
       if (!ry) return '';
       for (const [maxDay, gan] of ry) {
-        if (daysAfter <= maxDay) return '人元司令：' + gan + '（' + termName + '后 ' + daysAfter + ' 日）';
+        if (daysAfter < maxDay) return '人元司令：' + gan + '（' + termName + '后 ' + daysAfter + ' 日）';
       }
       return '人元司令：' + ry[ry.length-1][1] + '（' + termName + '后 ' + daysAfter + ' 日）';
     }
