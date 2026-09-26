@@ -964,6 +964,21 @@ function sortArchivesByName(archives) {
   return archives;
 }
 
+// v0.38.0 档案行勾选 → 盘面对比选盘（与 COMPARE.pickToggle 同键，语义为置位而非翻转）
+function cmpPick(id, checked) {
+  var entries;
+  try { entries = JSON.parse(localStorage.getItem('bz_cmp_state')); } catch(e) { entries = null; }
+  if (!Array.isArray(entries)) entries = [];
+  var found = -1;
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i] && entries[i].type === 'arch' && String(entries[i].id) === String(id)) { found = i; break; }
+  }
+  if (checked && found < 0) entries.push({ type: 'arch', id: id });
+  if (!checked && found >= 0) entries.splice(found, 1);
+  localStorage.setItem('bz_cmp_state', JSON.stringify(entries));
+  if (window.COMPARE && COMPARE.isOpen && COMPARE.isOpen()) COMPARE.refresh();
+}
+
 function renderArchiveModal() {
   var listEl = document.getElementById('archive-modal-list');
   if (!listEl) return;
@@ -1003,7 +1018,12 @@ function archiveMatchesKeyword(a, k) {
 function archiveRowHtml(a, idx) {
   var genderIcon = a.gender === '男' ? '♂' : '♀';
   var genderCls = a.gender === '男' ? 'male' : 'female';
+  // v0.38.0 行首勾选 = 盘面对比选盘（按 id 记入 bz_cmp_state，与列表排序无关）
+  var picked = !!(window.COMPARE && typeof COMPARE.isPicked === 'function' && COMPARE.isPicked('arch', a.id));
   return '<div class="archive-modal-row">'
+    + '<input type="checkbox" class="archive-row-cmp" data-id="' + String(a.id).replace(/"/g, '') + '" title="勾选加入盘面对比"'
+    + (picked ? ' checked' : '')
+    + ' onchange="ARCHIVE.cmpPick(\'' + String(a.id).replace(/'/g, '') + '\', this.checked)">'
     + '<div class="archive-row-info">'
     + '<span class="archive-row-name">' + escHtml(getDisplayName(a)) + '</span>'
     + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
@@ -1088,6 +1108,7 @@ function loadFromArchive(idx) {
     openArchivePanel: openArchivePanel,
     closeArchivePanel: closeArchivePanel,
     renderArchiveModal: renderArchiveModal,
+    cmpPick: cmpPick,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
     // v0.32.0 标签

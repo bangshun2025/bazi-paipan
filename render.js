@@ -186,32 +186,87 @@
   var filterArchives = ARCHIVE.filterArchives;
   var loadFromArchive = ARCHIVE.loadFromArchive;
 
-var _currentLevel = 0;
-var LEVEL_LABELS = ['极简','简','中','详','全'];
-var LEVEL_TITLES = [
-  '简分级别：仅四柱干支骨架（点击展开）',
-  '简分级别：星运自坐（点击展开）',
-  '简分级别：星运自坐纳运纳音星曜（点击展开）',
-  '简分级别：星运自坐纳运纳音空亡（点击展开）',
-  '简分级别：全部信息（点击收起）'
+var LEVEL_LABELS = ['少','简','中','详','全'];
+var LEVEL_ROW_KEYS = ['xingyao','nayin','nayun','xingyun','zizuo','kongwang','shensha'];
+var LEVEL_ROW_LABELS = { xingyao:'星曜', nayin:'纳音', nayun:'纳运', xingyun:'星运', zizuo:'自坐', kongwang:'空亡', shensha:'神煞' };
+var LEVEL_PRESETS = [
+  { xingyao:0, nayin:0, nayun:0, xingyun:0, zizuo:0, kongwang:0, shensha:0 },
+  { xingyao:0, nayin:0, nayun:0, xingyun:1, zizuo:1, kongwang:0, shensha:0 },
+  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:0, shensha:0 },
+  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:1, shensha:0 },
+  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:1, shensha:1 }
 ];
+var _levelRows = { xingyao:false, nayin:false, nayun:false, xingyun:false, zizuo:false, kongwang:false, shensha:false };
 
-function toggleLevel() {
-  _currentLevel = (_currentLevel + 1) % 5;
-  var tables = document.querySelectorAll('.chart');
-  var btn = document.querySelector('.btn-simple');
-  
-  tables.forEach(function(t) {
-    t.classList.remove('level-0','level-1','level-2','level-3','level-4');
-    t.classList.add('level-' + _currentLevel);
-  });
-  
-  if (btn) {
-    btn.textContent = LEVEL_LABELS[_currentLevel];
-    btn.title = LEVEL_TITLES[_currentLevel];
-    btn.classList.add('active');
+function matchLevelPreset() {
+  for (var i = 0; i < 5; i++) {
+    var p = LEVEL_PRESETS[i], ok = true;
+    for (var k in p) { if (!!p[k] !== !!_levelRows[k]) { ok = false; break; } }
+    if (ok) return i;
   }
+  return -1;
 }
+
+function applyLevelRows() {
+  document.querySelectorAll('table.chart').forEach(function(t) {
+    t.classList.remove('level-0','level-1','level-2','level-3','level-4');
+    LEVEL_ROW_KEYS.forEach(function(k) {
+      t.querySelectorAll('tr[data-row-type~="' + k + '"]').forEach(function(tr) {
+        tr.style.display = _levelRows[k] ? '' : 'none';
+      });
+    });
+  });
+  var m = matchLevelPreset();
+  var label = '简分：' + (m >= 0 ? LEVEL_LABELS[m] : '自定义');
+  document.querySelectorAll('.cmp-level-wrap > .btn-simple').forEach(function(b) { b.textContent = label; });
+}
+
+function levelPopHTML() {
+  var cur = matchLevelPreset();
+  var h = '<div class="clp-levels">';
+  for (var i = 0; i < 5; i++)
+    h += '<button class="clp-lv' + (i === cur ? ' active' : '') + '" onclick="RENDER.setLevelPreset(' + i + ')">' + LEVEL_LABELS[i] + '</button>';
+  h += '</div><div class="clp-rowbar">';
+  LEVEL_ROW_KEYS.forEach(function(k) {
+    h += '<label class="clp-item"><input type="checkbox"' + (_levelRows[k] ? ' checked' : '') + ' onchange="RENDER.setRowVisible(\'' + k + '\', this.checked)">' + LEVEL_ROW_LABELS[k] + '</label>';
+  });
+  return h + '</div>';
+}
+
+function toggleLevelPop(e) {
+  if (e) e.stopPropagation();
+  var wrap = (e && e.target && e.target.closest) ? e.target.closest('.cmp-level-wrap') : null;
+  var pop = wrap ? wrap.querySelector('.cmp-level-pop') : null;
+  if (!pop) return;
+  var wasOpen = pop.classList.contains('open');
+  closeAllLevelPops();
+  if (!wasOpen) { pop.innerHTML = levelPopHTML(); pop.classList.add('open'); }
+}
+
+function closeAllLevelPops() {
+  document.querySelectorAll('.cmp-level-pop.open').forEach(function(p) { p.classList.remove('open'); });
+}
+
+function refreshOpenLevelPops() {
+  document.querySelectorAll('.cmp-level-pop.open').forEach(function(p) { p.innerHTML = levelPopHTML(); });
+}
+
+function setLevelPreset(n) {
+  if (!(n >= 0 && n <= 4)) return;
+  var p = LEVEL_PRESETS[n];
+  LEVEL_ROW_KEYS.forEach(function(k) { _levelRows[k] = !!p[k]; });
+  applyLevelRows();
+  refreshOpenLevelPops();
+}
+
+function setRowVisible(k, v) {
+  if (!(k in _levelRows)) return;
+  _levelRows[k] = !!v;
+  applyLevelRows();
+  refreshOpenLevelPops();
+}
+
+function toggleLevel(e) { toggleLevelPop(e); }
 
 // ============ v0.29.0 星曜行渲染（index-independent 插入，勿改既有 magic index） ============
 // 星曜行恒在 DOM；L0/L1 由 CSS 隐藏，L2 起显示（累积展开）。单元格带 data-xy-gz 供值级刷新。
@@ -497,9 +552,10 @@ function refreshJieqi(root, year, lng) {
   if (neu) sec.parentNode.replaceChild(neu, sec);
 }
 
-function renderChart(data, twin, targetId) {
+function renderChart(data, twin, targetId, opts) {
   twin = twin || 1;
   targetId = targetId || 'output';
+  opts = opts || {};
   const { name, gender, y, m, d, h, mi, nian, yue, ri, shi, tai, taiNian, ming, shen, shengXiao, daYun, qiYun, renYuan } = data;
   const riGan = ri.gan, riZhi = ri.zhi;
 
@@ -754,13 +810,14 @@ function renderChart(data, twin, targetId) {
   // ---- 组装完整 HTML ----
   const nowYearCn = '（当前 ' + nowYear + ' 年）';
   const shunLabel = data.qiYun ? buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan) : '';
-  const html = `
+  const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
-    </div>
-
-    <div class="body-cols">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+    </div>`;
+  const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
+  const html = topBarHtml + `
+    <div class="${bodyCls}">
       <div class="main-col">
         <div class="chart-wrap">
         <table class="chart level-0">${chartRows.join('\n')}</table>
@@ -772,7 +829,7 @@ function renderChart(data, twin, targetId) {
           <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
             <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>
           </div>
-          <button class="btn-back" onclick="RENDER.scrollToNow()" title="定位今年">📍 今年</button>
+          <button class="btn-back" onclick="RENDER.scrollToNow(this.closest('.cmp-card'))" title="定位今年">📍 今年</button>
         </div>
         <div class="luck-section">
           <div class="luck-table">${luckRows.join('\n')}</div>
@@ -784,6 +841,7 @@ function renderChart(data, twin, targetId) {
   // 存储数据用于交互
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
+  applyLevelRows();
   applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 节气区默认出生年（D6）
@@ -1343,13 +1401,14 @@ function renderTwinCardsHtml(data, targetId) {
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyLevelRows();
   applyTaiNianColumn(container);
   container._paipanData = data;
   container._jieqiYear = y; // v0.26.0 v2: 同卵默认出生年（D6/D8）
@@ -1455,13 +1514,14 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><button class="btn-simple active" onclick="RENDER.toggleLevel()" title="简分级别：仅四柱干支骨架（点击展开）">极简</button><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  applyLevelRows();
   applyTaiNianColumn(container);
   window._paipanData = d1;
   window._paipanData2 = d2;
@@ -1720,6 +1780,7 @@ function renderExpandedChart(arch, containerEl) {
   try {
     var html = renderChartToHtml(data, arch);
     containerEl.innerHTML = html;
+    applyLevelRows();
     applyTaiNianColumn(containerEl);
   } catch(e) {
     containerEl.innerHTML = '<div style="color:var(--c-red);padding:10px;">排盘渲染出错: ' + e.message + '</div>';
@@ -1791,9 +1852,423 @@ function renderChartToHtml(data, arch) {
 
 // ============================================================
 
+// ============================================================
+// 盘面对比 (v0.37.0) — 多盘同屏、大运流年下移、横向滚动、拖动排序
+// ============================================================
+var CMP_KEY = 'bz_cmp_state';
+var CMP_ZOOM_KEY = 'bz_cmp_zoom';
+var _cmpDragIdx = -1;
+var _cmpChipDrag = null;
+var _cmpZoom = (function() { var z = parseInt(localStorage.getItem(CMP_ZOOM_KEY), 10); return (z >= 50 && z <= 200) ? z : 100; })();
+
+// 人元司令（v0.38.0）：按出生钟表时口径现算，仅对比卡展示
+function _cmpSiLing(m) {
+  try {
+    if (!window.ALGO || typeof ALGO.renYuanSiLing !== 'function') return '';
+    if (!m.year || !m.month || !m.day) return '';
+    return ALGO.renYuanSiLing(m.year, m.month, m.day, m.hour, m.min || 0) || '';
+  } catch(e) { return ''; }
+}
+
+function _cmpEntries() {
+  try {
+    var arr = JSON.parse(localStorage.getItem(CMP_KEY));
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(function(e) { return e && (e.type === 'current' || e.type === 'arch'); });
+  } catch(e) { return []; }
+}
+
+function _cmpSave(entries) {
+  localStorage.setItem(CMP_KEY, JSON.stringify(entries));
+}
+
+function _cmpArchById(id) {
+  var ars = ARCHIVE.getArchives();
+  for (var i = 0; i < ars.length; i++) {
+    if (String(ars[i].id) === String(id)) return ars[i];
+  }
+  return null;
+}
+
+function _cmpCurrentForm() {
+  if (typeof ARCHIVE.getFormData !== 'function') return null;
+  try { return ARCHIVE.getFormData(); } catch(e) { return null; }
+}
+
+function _cmpEntryMeta(e) {
+  if (e.type === 'current') {
+    var f = _cmpCurrentForm();
+    var mCur = {
+      key: 'current',
+      name: (f && (f.nickname || f.name)) || '当前盘',
+      gender: (f && f.gender) || '男',
+      year: (f && f.year) || '', month: (f && f.month) || '', day: (f && f.day) || '',
+      hour: (f && f.hour) || 0, min: (f && f.min) || 0
+    };
+    mCur.siLing = _cmpSiLing(mCur);
+    return mCur;
+  }
+  var a = _cmpArchById(e.id);
+  if (!a) return null;
+  var m = { key: 'arch:' + a.id, name: ARCHIVE.getDisplayName(a), gender: a.gender,
+    year: a.year, month: a.month, day: a.day, hour: a.hour, min: a.min };
+  m.siLing = _cmpSiLing(m);
+  return m;
+}
+
+function _cmpDataFor(e) {
+  // 当前盘优先用主页面最近一次排盘结果（含真太阳时），与所见面貌一致
+  if (e.type === 'current') {
+    if (window._paipanData && window._paipanData.nian) return window._paipanData;
+    var f = _cmpCurrentForm();
+    if (!f || !f.year || !f.month || !f.day) return null;
+    return buildChartDataFromArchive(f);
+  }
+  var a = _cmpArchById(e.id);
+  if (!a) return null;
+  return buildChartDataFromArchive(a);
+}
+
+function _cmpEsc(s) { return (window.ARCHIVE && ARCHIVE.escHtml) ? ARCHIVE.escHtml(s) : String(s == null ? '' : s); }
+
+function _cmpCardHtml(meta, idx) {
+  return '<div class="cmp-card" data-idx="' + idx + '" data-key="' + meta.key + '" data-name="' + _cmpEsc(meta.name) + '">'
+    + '<div class="cmp-card-head">'
+    + '<span class="cmp-drag-handle" title="拖动调整顺序">⠿</span>'
+    + '<span class="cmp-card-pos">' + (idx + 1) + '</span>'
+    + '<span class="cmp-card-name">' + _cmpEsc(meta.name) + '</span>'
+    + '<span class="sex-tag">' + (meta.gender === '男' ? '乾造' : '坤造') + '</span>'
+    + '<span class="cmp-card-meta">' + meta.year + '年' + meta.month + '月' + meta.day + '日 ' + pad(meta.hour) + ':' + pad(meta.min || 0) + '</span>'
+    + (meta.siLing ? '<span class="cmp-card-siling">' + _cmpEsc(meta.siLing) + '</span>' : '')
+    + '<button class="cmp-card-close" onclick="COMPARE.removeAt(' + idx + ')" title="移除此盘">✕ 移除</button>'
+    + '</div>'
+    + '<div class="cmp-card-body"></div>'
+    + '</div>';
+}
+
+function renderCmpTrack() {
+  var track = document.getElementById('cmpTrack');
+  if (!track) return;
+  var entries = _cmpEntries();
+  var alive = [], metas = [];
+  for (var i = 0; i < entries.length; i++) {
+    var m = _cmpEntryMeta(entries[i]);
+    if (m) { alive.push(entries[i]); metas.push(m); }
+  }
+  if (alive.length !== entries.length) _cmpSave(alive);
+  var count = document.getElementById('cmpCount');
+  if (count) count.textContent = alive.length ? ('已选 ' + alive.length + ' 盘 · 上方名字条可拖动调序') : '未选盘';
+  if (!alive.length) {
+    track.innerHTML = '<div class="cmp-empty">尚未选择盘面 —— 点上方「📋 档案」，在档案面板勾选记录加入对比</div>';
+    renderCmpBar();
+    return;
+  }
+  var html = '';
+  for (var c = 0; c < alive.length; c++) html += _cmpCardHtml(metas[c], c);
+  track.innerHTML = html;
+  applyLevelRows();
+  var cards = track.querySelectorAll('.cmp-card');
+  for (var k = 0; k < cards.length; k++) {
+    _cmpBindCard(cards[k]);
+    var body = cards[k].querySelector('.cmp-card-body');
+    var data = _cmpDataFor(alive[k]);
+    if (data) {
+      renderChart(data, 1, body, { luckBelow: true, noTopBar: true });
+    } else {
+      body.innerHTML = '<div style="color:var(--c-red);padding:8px;">档案数据缺失</div>';
+    }
+  }
+  if (window.GONGWEI && typeof GONGWEI.updateGongWeiTags === 'function') GONGWEI.updateGongWeiTags();
+  applyLevelRows();
+  _cmpApplyZoom();
+  renderCmpBar();
+}
+
+function _cmpBindCard(card) {
+  var handle = card.querySelector('.cmp-drag-handle');
+  if (handle) {
+    handle.addEventListener('mousedown', function() { card.draggable = true; });
+  }
+  card.addEventListener('mousedown', function(ev) {
+    if (ev.target.closest && ev.target.closest('.cmp-drag-handle')) return;
+    card.draggable = false;
+  });
+  card.addEventListener('dragstart', function(ev) {
+    _cmpDragIdx = parseInt(card.getAttribute('data-idx'), 10);
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', card.getAttribute('data-key')); } catch(e) {}
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', function() {
+    card.classList.remove('dragging');
+    card.draggable = false;
+    _cmpDragIdx = -1;
+    _cmpSyncOrderFromDom();
+  });
+  card.addEventListener('dragover', function(ev) {
+    if (_cmpDragIdx < 0) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+    var track = document.getElementById('cmpTrack');
+    if (!track) return;
+    var dragged = track.querySelector('.cmp-card.dragging');
+    if (!dragged || dragged === card) return;
+    var r = card.getBoundingClientRect();
+    var ref = (ev.clientX < r.left + r.width / 2) ? card : card.nextSibling;
+    if (ref === dragged) return;
+    if (!ref) { if (track.lastElementChild !== dragged) track.appendChild(dragged); return; }
+    if (ref.previousSibling === dragged) return;
+    track.insertBefore(dragged, ref);
+  });
+}
+
+function _cmpSyncOrderFromDom() {
+  var track = document.getElementById('cmpTrack');
+  if (!track) return;
+  var keys = [];
+  track.querySelectorAll('.cmp-card').forEach(function(c) { keys.push(c.getAttribute('data-key')); });
+  _cmpApplyKeyOrder(keys);
+}
+
+function _cmpSyncBarOrderFromDom() {
+  var bar = document.getElementById('cmpBar');
+  if (!bar) return;
+  var keys = [];
+  bar.querySelectorAll('.cmp-chip').forEach(function(c) { keys.push(c.getAttribute('data-key')); });
+  _cmpApplyKeyOrder(keys);
+}
+
+function _cmpApplyKeyOrder(keys) {
+  var entries = _cmpEntries();
+  entries.sort(function(a, b) {
+    var ka = a.type === 'current' ? 'current' : 'arch:' + a.id;
+    var kb = b.type === 'current' ? 'current' : 'arch:' + b.id;
+    return keys.indexOf(ka) - keys.indexOf(kb);
+  });
+  _cmpSave(entries);
+  renderCmpTrack();
+}
+
+// ===== v0.38.0 名字条：横排 chip，拖动调序、点击定位卡片 =====
+function renderCmpBar() {
+  var bar = document.getElementById('cmpBar');
+  if (!bar) return;
+  var entries = _cmpEntries();
+  var metas = [];
+  for (var i = 0; i < entries.length; i++) {
+    var m = _cmpEntryMeta(entries[i]);
+    if (m) metas.push(m);
+  }
+  if (!metas.length) {
+    bar.innerHTML = '<span class="cmp-bar-empty">名字条：加入盘后在此拖动调序，点击名字定位卡片</span>';
+    return;
+  }
+  var html = '';
+  for (var c = 0; c < metas.length; c++) {
+    html += '<span class="cmp-chip" draggable="true" data-key="' + metas[c].key + '" title="拖动调整下方排盘顺序 · 点击定位该卡">'
+      + '<span class="cmp-chip-pos">' + (c + 1) + '</span>' + _cmpEsc(metas[c].name) + '</span>';
+  }
+  bar.innerHTML = html;
+  bar.querySelectorAll('.cmp-chip').forEach(function(chip) {
+    chip.addEventListener('dragstart', function(ev) {
+      _cmpChipDrag = chip.getAttribute('data-key');
+      ev.dataTransfer.effectAllowed = 'move';
+      try { ev.dataTransfer.setData('text/plain', _cmpChipDrag); } catch(e) {}
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', function() {
+      chip.classList.remove('dragging');
+      _cmpChipDrag = null;
+      _cmpSyncBarOrderFromDom();
+    });
+    chip.addEventListener('dragover', function(ev) {
+      if (!_cmpChipDrag) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      var b = document.getElementById('cmpBar');
+      var dragged = b.querySelector('.cmp-chip.dragging');
+      if (!dragged || dragged === chip) return;
+      var r = chip.getBoundingClientRect();
+      var ref = (ev.clientX < r.left + r.width / 2) ? chip : chip.nextSibling;
+      if (ref === dragged) return;
+      if (!ref) { if (b.lastElementChild !== dragged) b.appendChild(dragged); return; }
+      if (ref.previousSibling === dragged) return;
+      b.insertBefore(dragged, ref);
+    });
+    chip.addEventListener('click', function() {
+      var track = document.getElementById('cmpTrack');
+      if (!track) return;
+      var card = track.querySelector('.cmp-card[data-key="' + chip.getAttribute('data-key') + '"]');
+      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  });
+}
+
+// ===== v0.38.0 对比页简分面板（与首页共用状态/渲染，见顶层 LEVEL_* 与 toggleLevelPop）=====
+function cmpToggleLevel(e) { toggleLevelPop(e); }
+
+// ===== v0.38.0 对比卡缩放 =====
+function cmpSetZoom(v) {
+  var z = parseInt(v, 10);
+  if (!(z >= 50 && z <= 200)) z = 100;
+  _cmpZoom = z;
+  try { localStorage.setItem(CMP_ZOOM_KEY, String(z)); } catch(e) {}
+  _cmpApplyZoom();
+}
+
+function _cmpApplyZoom() {
+  var track = document.getElementById('cmpTrack');
+  if (!track) return;
+  var z = (_cmpZoom || 100) + '%';
+  track.querySelectorAll('.cmp-card').forEach(function(c) { c.style.zoom = z; });
+  var slider = document.getElementById('cmpZoom');
+  if (slider && String(slider.value) !== String(_cmpZoom)) slider.value = String(_cmpZoom);
+  var zv = document.getElementById('cmpZoomVal');
+  if (zv) zv.textContent = _cmpZoom + '%';
+}
+
+function cmpOpen() {
+  var ov = document.getElementById('cmpOverlay');
+  if (!ov) return;
+  ov.classList.add('show');
+  cmpClosePicker();
+  closeAllLevelPops();
+  var gzHost = document.getElementById('cmpGzPanel');
+  if (gzHost && !gzHost.innerHTML && window.GONGWEI && typeof GONGWEI.renderGongWeiPanel === 'function') {
+    gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
+  }
+  _cmpApplyZoom();
+  renderCmpTrack();
+  if (!_cmpEntries().length) cmpTogglePicker();
+}
+
+function cmpClose() {
+  var ov = document.getElementById('cmpOverlay');
+  if (ov) ov.classList.remove('show');
+  cmpClosePicker();
+  closeAllLevelPops();
+}
+
+function cmpIsOpen() {
+  var ov = document.getElementById('cmpOverlay');
+  return !!(ov && ov.classList.contains('show'));
+}
+
+function cmpTogglePicker() {
+  var p = document.getElementById('cmpPicker');
+  if (!p) return;
+  if (p.classList.contains('show')) { p.classList.remove('show'); return; }
+  renderCmpPicker();
+  p.classList.add('show');
+}
+
+function cmpClosePicker() {
+  var p = document.getElementById('cmpPicker');
+  if (p) p.classList.remove('show');
+}
+
+function renderCmpPicker() {
+  var p = document.getElementById('cmpPicker');
+  if (!p) return;
+  var entries = _cmpEntries();
+  function has(type, id) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].type !== type) continue;
+      if (type === 'current' || String(entries[i].id) === String(id)) return true;
+    }
+    return false;
+  }
+  var html = '<div class="cmp-picker-tip">勾选加入对比 / 再点取消；顺序在下方卡片拖 ⠿ 调整</div>';
+  var curOn = has('current');
+  html += '<div class="cmp-pick-row' + (curOn ? ' on' : '') + '" onclick="COMPARE.pickToggle(\'current\')">'
+    + '<input type="checkbox"' + (curOn ? ' checked' : '') + '>'
+    + '<span class="cmp-pick-name"><b>当前盘</b></span>'
+    + '<span class="cmp-pick-meta">主页面正在看的盘</span></div>';
+  var ars = ARCHIVE.getArchives();
+  for (var i = 0; i < ars.length; i++) {
+    var a = ars[i];
+    var on = has('arch', a.id);
+    html += '<div class="cmp-pick-row' + (on ? ' on' : '') + '" onclick="COMPARE.pickToggle(\'arch\',\'' + String(a.id).replace(/'/g, '') + '\')">'
+      + '<input type="checkbox"' + (on ? ' checked' : '') + '>'
+      + '<span class="cmp-pick-name">' + _cmpEsc(ARCHIVE.getDisplayName(a)) + '</span>'
+      + '<span class="sex-tag">' + (a.gender === '男' ? '乾造' : '坤造') + '</span>'
+      + '<span class="cmp-pick-meta">' + a.year + '年' + a.month + '月' + a.day + '日 ' + pad(a.hour) + ':' + pad(a.min || 0) + '</span>'
+      + '</div>';
+  }
+  p.innerHTML = html;
+}
+
+function cmpIsPicked(type, id) {
+  var entries = _cmpEntries();
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].type !== type) continue;
+    if (type === 'current' || String(entries[i].id) === String(id)) return true;
+  }
+  return false;
+}
+
+function cmpPickToggle(type, id) {
+  var entries = _cmpEntries();
+  var found = -1;
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].type !== type) continue;
+    if (type === 'current' || String(entries[i].id) === String(id)) { found = i; break; }
+  }
+  if (found >= 0) entries.splice(found, 1);
+  else entries.push(type === 'current' ? { type: 'current' } : { type: 'arch', id: id });
+  _cmpSave(entries);
+  // 对比页未打开时（档案面板勾选）只存状态，不渲染隐藏 DOM；打开时会全量渲染
+  if (cmpIsOpen()) {
+    renderCmpTrack();
+    renderCmpPicker();
+  }
+}
+
+function cmpAddCurrent() {
+  var entries = _cmpEntries();
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].type === 'current') { renderCmpTrack(); return; }
+  }
+  entries.push({ type: 'current' });
+  _cmpSave(entries);
+  renderCmpTrack();
+}
+
+function cmpRemoveAt(idx) {
+  var entries = _cmpEntries();
+  if (idx < 0 || idx >= entries.length) return;
+  entries.splice(idx, 1);
+  _cmpSave(entries);
+  renderCmpTrack();
+  if (cmpIsOpen()) renderCmpPicker();
+}
+
+function cmpMove(from, to) {
+  var entries = _cmpEntries();
+  if (from < 0 || from >= entries.length || to < 0 || to >= entries.length) return;
+  var it = entries.splice(from, 1)[0];
+  entries.splice(to, 0, it);
+  _cmpSave(entries);
+  renderCmpTrack();
+}
+
+function cmpClear() {
+  _cmpSave([]);
+  renderCmpTrack();
+  if (cmpIsOpen()) renderCmpPicker();
+}
+
+function cmpSetState(entries) {
+  _cmpSave(entries || []);
+  renderCmpTrack();
+}
+
   // ===== 挂载到全局命名空间 =====
   window.RENDER = {
     toggleLevel: toggleLevel,
+    setLevelPreset: setLevelPreset,
+    setRowVisible: setRowVisible,
+    applyLevelRows: applyLevelRows,
     refreshXingyaoRows: refreshXingyaoRows,
     applyTaiNianColumn: applyTaiNianColumn,
     insertBeforeNayin: insertBeforeNayin,
@@ -1822,5 +2297,31 @@ function renderChartToHtml(data, arch) {
     buildChartDataFromArchive: buildChartDataFromArchive,
     renderExpandedChart: renderExpandedChart,
     renderChartToHtml: renderChartToHtml,
+  };
+
+  // ===== 盘面对比 (v0.37.0) =====
+  document.addEventListener('click', function(e) {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('.cmp-level-wrap')) return;
+    closeAllLevelPops();
+  });
+
+  window.COMPARE = {
+    open: cmpOpen,
+    close: cmpClose,
+    isOpen: cmpIsOpen,
+    refresh: renderCmpTrack,
+    togglePicker: cmpTogglePicker,
+    closePicker: cmpClosePicker,
+    pickToggle: cmpPickToggle,
+    isPicked: cmpIsPicked,
+    addCurrent: cmpAddCurrent,
+    removeAt: cmpRemoveAt,
+    move: cmpMove,
+    clear: cmpClear,
+    toggleLevel: cmpToggleLevel,
+    setLevel: setLevelPreset,
+    setZoom: cmpSetZoom,
+    _setState: cmpSetState,
   };
 })();

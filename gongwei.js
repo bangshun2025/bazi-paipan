@@ -456,30 +456,33 @@ function updateGongWeiTags() {
   syncTaiNianCheckboxes();
 }
 
-// 更新面板按钮文字
+// 更新面板按钮文字（v0.38.0 起支持多实例：主页面 + 盘面对比工具栏各一份）
 function updateGzTriggerText() {
-  var trigger = document.getElementById('gz-trigger');
-  if (!trigger) return;
-  var count = selectedGongWei.length;
-  var countSpan = trigger.querySelector('.gz-count');
-  var summarySpan = trigger.querySelector('.gz-summary');
-  if (countSpan) {
-    countSpan.textContent = count > 0 ? '(' + count + ')' : '';
-  }
-  if (summarySpan) {
-    if (count === 0) {
-      summarySpan.textContent = '';
-    } else if (count <= 3) {
-      summarySpan.textContent = selectedGongWei.join('·');
-    } else {
-      summarySpan.textContent = selectedGongWei.slice(0, 2).join('·') + ' +' + (count - 2);
+  var triggers = document.querySelectorAll('.gz-trigger');
+  for (var t = 0; t < triggers.length; t++) {
+    var trigger = triggers[t];
+    var count = selectedGongWei.length;
+    var countSpan = trigger.querySelector('.gz-count');
+    var summarySpan = trigger.querySelector('.gz-summary');
+    if (countSpan) {
+      countSpan.textContent = count > 0 ? '(' + count + ')' : '';
+    }
+    if (summarySpan) {
+      if (count === 0) {
+        summarySpan.textContent = '';
+      } else if (count <= 3) {
+        summarySpan.textContent = selectedGongWei.join('·');
+      } else {
+        summarySpan.textContent = selectedGongWei.slice(0, 2).join('·') + ' +' + (count - 2);
+      }
     }
   }
 }
 
 // 同步 popover checkbox 状态（.gz-tn-opt 是胎年显示开关，由 syncTaiNianCheckboxes 单独同步）
+// v0.38.0 起扫所有 .gz-popover 实例（主页面 + 盘面对比工具栏）
 function syncGzCheckboxes() {
-  var cbs = document.querySelectorAll('#gz-popover .gz-cb-item:not(.gz-tn-opt) input[type="checkbox"]');
+  var cbs = document.querySelectorAll('.gz-popover .gz-cb-item:not(.gz-tn-opt) input[type="checkbox"]');
   for (var i = 0; i < cbs.length; i++) {
     var val = cbs[i].value;
     cbs[i].checked = selectedGongWei.indexOf(val) >= 0;
@@ -492,22 +495,22 @@ function syncGzCheckboxes() {
   }
 }
 
-// ===== v0.13.2 重建 popover 勾选网格（排序后顺序联动）=====
+// ===== v0.13.2 重建 popover 勾选网格（排序后顺序联动；v0.38.0 起重建全部实例）=====
 function rebuildGzCbGrid() {
-  var grid = document.querySelector('.gz-cb-grid');
-  if (!grid) return;
-  var items = '';
+  var grids = document.querySelectorAll('.gz-cb-grid');
+  if (!grids.length) return;
   var favGroups = getFavGroups();
+  var items = '';
   if (favGroups.length === 0) {
     items = '<div style="text-align:center;color:var(--c-gray);padding:16px 0;font-size:12px;grid-column:1/-1;">暂无常用宫位，点击 ⚙ 宫位设置添加</div>';
   } else {
     for (var i = 0; i < favGroups.length; i++) {
-      var g = favGroups[i];
-      var checked = selectedGongWei.indexOf(g.name) >= 0 ? ' checked' : '';
-      items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + g.name + '" onchange="GONGWEI.toggleGongWei(\'' + g.name + '\', this.checked)"' + checked + '><span>' + g.name + '宫位</span></label>';
+      var grp = favGroups[i];
+      var checked = selectedGongWei.indexOf(grp.name) >= 0 ? ' checked' : '';
+      items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '"><input type="checkbox" value="' + grp.name + '" onchange="GONGWEI.toggleGongWei(\'' + grp.name + '\', this.checked)"' + checked + '><span>' + grp.name + '宫位</span></label>';
     }
   }
-  grid.innerHTML = items;
+  for (var gi = 0; gi < grids.length; gi++) grids[gi].innerHTML = items;
 }
 
 // ===== v0.10.0/v0.13.0 宫位多选 — Popover 面板生成 =====
@@ -568,7 +571,9 @@ function clearAllGongWei() {
 
 function toggleGzPopover(e) {
   if (e) e.stopPropagation();
-  var popover = document.getElementById('gz-popover');
+  // v0.38.0 就近定位：对比页有自己的 popover 实例，按触发按钮所在 wrapper 打开
+  var wrapper = (e && e.target && e.target.closest) ? e.target.closest('.gz-panel-wrapper') : null;
+  var popover = wrapper ? wrapper.querySelector('.gz-popover') : document.getElementById('gz-popover');
   if (!popover) return;
   // 每次打开前同步 checkbox（数据可能已在设置面板中变化）
   syncGzCheckboxes();
@@ -576,8 +581,8 @@ function toggleGzPopover(e) {
 }
 
 function closeGzPopover() {
-  var popover = document.getElementById('gz-popover');
-  if (popover) popover.classList.remove('open');
+  var popovers = document.querySelectorAll('.gz-popover');
+  for (var i = 0; i < popovers.length; i++) popovers[i].classList.remove('open');
 }
 
 // 全局事件委托：popover 外部点击关闭
