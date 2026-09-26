@@ -765,8 +765,19 @@
   .clp-item input[type="checkbox"] { appearance:none; -webkit-appearance:none; width:14px; height:14px; border:1.5px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; flex-shrink:0; position:relative; margin:0; }
   .clp-item input[type="checkbox"]:checked { background:var(--c-ink); border-color:var(--c-ink); }
   .clp-item input[type="checkbox"]:checked::after { content:''; position:absolute; left:3.5px; top:0.5px; width:4px; height:8px; border:solid var(--c-paper); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
-  .cmp-track { flex:1 1 auto; display:flex; gap:14px; overflow-x:auto; overflow-y:auto; padding:14px 16px; align-items:flex-start; }
-  .cmp-card { flex:0 0 800px; width:800px; background:var(--bz-card-bg); border:1px solid var(--c-line); border-radius:4px; padding:10px 12px; box-shadow:var(--bz-card-shadow); }
+  .cmp-secbar { display:flex; align-items:center; gap:16px; padding:7px 16px; border-bottom:1px solid var(--c-line); font-size:12.5px; color:var(--c-gray); flex-wrap:wrap; }
+  .cmp-secbar label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap; }
+  .cmp-card.sec-yunxiang-off { overflow-x:auto; }
+  .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
+  .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
+  .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .cmp-card.sec-cangqi-off tr[data-sec~="cangqi"] { display:none !important; }
+  .cmp-card.sec-sanyuan-off tr[data-sec~="sanyuan"], .cmp-card.sec-sanyuan-off tr.gz-tags-sy { display:none !important; }
+  .cmp-card.sec-yunliu-off .luck-section, .cmp-card.sec-yunliu-off .luck-head { display:none !important; }
+  .cmp-card.sec-jieqi-off .jieqi-section { display:none !important; }
+  .cmp-track { flex:1 1 auto; display:flex; flex-wrap:wrap; gap:14px; overflow-x:auto; overflow-y:auto; padding:14px 16px; align-items:flex-start; align-content:flex-start; }
+  .cmp-card { flex:0 0 auto; width:calc((100% - (var(--cmp-cols,3) - 1) * 14px) / var(--cmp-cols,3)); min-width:0; overflow-x:auto; background:var(--bz-card-bg); border:1px solid var(--c-line); border-radius:4px; padding:10px 12px; box-shadow:var(--bz-card-shadow); }
+  .cmp-card tr[data-sec~="cangqi"] td { height:calc(4.8em + 11px); }
   .cmp-card.dragging { opacity:.35; }
   .cmp-card-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .cmp-drag-handle { cursor:grab; color:var(--c-gray); font-size:15px; user-select:none; padding:0 2px; }
@@ -784,7 +795,6 @@
   .cmp-pick-row.on { background:#f3ede2; }
   .cmp-pick-name { font-family:var(--font-display); font-size:14px; color:var(--c-ink); min-width:110px; }
   .cmp-pick-meta { font-size:12px; color:var(--c-gray); margin-left:auto; white-space:nowrap; }
-  @media (max-width:860px){ .cmp-card { flex-basis:94vw; width:94vw; } }
   /* ===== v0.38.0 盘面对比：名字条/级别/缩放/司令行/档案勾选 ===== */
   .cmp-bar { display:flex; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--c-line); flex-wrap:wrap; flex:0 0 auto; min-height:20px; }
   .cmp-bar-empty { font-size:11px; color:var(--c-gray); }
@@ -794,6 +804,12 @@
   .cmp-chip:hover { border-color:var(--c-ink); }
   .cmp-zoom-wrap { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--c-gray); }
   .cmp-zoom-wrap input[type=range] { width:110px; accent-color:var(--c-ink); }
+  .cmp-cols-wrap { display:inline-flex; align-items:center; gap:3px; font-size:12px; color:var(--c-gray); }
+  .cmp-cols-btn { width:22px; height:22px; padding:0; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); font-size:12px; cursor:pointer; font-family:var(--font-body); }
+  .cmp-cols-btn.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .cmp-bar-toggle { height:22px; padding:0 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); font-size:12px; cursor:pointer; font-family:var(--font-body); }
+  .cmp-bar-toggle.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
   .cmp-gz-host .gz-popover { z-index:30; }
@@ -908,10 +924,11 @@
         <button class="btn" onclick="ARCHIVE.openArchivePanel()">📋 档案</button>
         <span class="cmp-level-wrap"><button class="btn-simple" id="btnCmpLevel" onclick="COMPARE.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" id="cmpLevelPop" onclick="event.stopPropagation()"></div></span>
         <span class="cmp-gz-host" id="cmpGzPanel"></span>
-        <span class="cmp-zoom-wrap"><label>缩放</label><input type="range" id="cmpZoom" min="60" max="150" step="5" value="100" oninput="COMPARE.setZoom(this.value)"><span class="cmp-zoom-val" id="cmpZoomVal">100%</span></span>
+        <span class="cmp-zoom-wrap"><label>缩放</label><input type="range" id="cmpZoom" min="60" max="150" step="5" value="100" oninput="COMPARE.setZoom(this.value)"><span class="cmp-zoom-val" id="cmpZoomVal">100%</span></span><span class="cmp-cols-wrap"><label>布局</label><button class="cmp-cols-btn" data-cols="1" onclick="COMPARE.setCols(1)">1</button><button class="cmp-cols-btn" data-cols="2" onclick="COMPARE.setCols(2)">2</button><button class="cmp-cols-btn" data-cols="3" onclick="COMPARE.setCols(3)">3</button><button class="cmp-cols-btn" data-cols="4" onclick="COMPARE.setCols(4)">4</button><button class="cmp-cols-btn" data-cols="5" onclick="COMPARE.setCols(5)">5</button><button class="cmp-cols-btn" data-cols="6" onclick="COMPARE.setCols(6)">6</button></span><button class="cmp-bar-toggle" onclick="COMPARE.toggleBar()">名字</button>
         <button class="btn" onclick="COMPARE.clear()">清 空</button>
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
       </div>
+      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
       <div class="cmp-picker" id="cmpPicker"></div>
       <div class="cmp-track" id="cmpTrack"></div>

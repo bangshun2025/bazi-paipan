@@ -219,6 +219,7 @@ function applyLevelRows() {
   var m = matchLevelPreset();
   var label = '简分：' + (m >= 0 ? LEVEL_LABELS[m] : '自定义');
   document.querySelectorAll('.cmp-level-wrap > .btn-simple').forEach(function(b) { b.textContent = label; });
+  applyCmpSecs();
 }
 
 function levelPopHTML() {
@@ -268,6 +269,32 @@ function setRowVisible(k, v) {
 
 function toggleLevel(e) { toggleLevelPop(e); }
 
+// ===== v0.38 对比卡区显隐（运流项=时柱右侧大运/流年列、藏气/三垣/运流/节气，仅作用于 .cmp-card） =====
+var SEC_KEYS = ['yunxiang', 'cangqi', 'sanyuan', 'yunliu', 'jieqi'];
+var SEC_LABELS = { yunxiang: '运流项', cangqi: '藏气区', sanyuan: '三垣区', yunliu: '运流区', jieqi: '节气区' };
+var _cmpSecs = { yunxiang: false, cangqi: false, sanyuan: true, yunliu: false, jieqi: false };
+
+function applyCmpSecs() {
+  document.querySelectorAll('.cmp-card').forEach(function(card) {
+    SEC_KEYS.forEach(function(k) {
+      card.classList.toggle('sec-' + k + '-off', !_cmpSecs[k]);
+    });
+  });
+  var bar = document.getElementById('cmpSecBar');
+  if (bar) {
+    SEC_KEYS.forEach(function(k) {
+      var cb = bar.querySelector('input[data-sec="' + k + '"]');
+      if (cb) cb.checked = !!_cmpSecs[k];
+    });
+  }
+}
+
+function setSecVisible(k, v) {
+  if (!(k in _cmpSecs)) return;
+  _cmpSecs[k] = !!v;
+  applyCmpSecs();
+}
+
 // ============ v0.29.0 星曜行渲染（index-independent 插入，勿改既有 magic index） ============
 // 星曜行恒在 DOM；L0/L1 由 CSS 隐藏，L2 起显示（累积展开）。单元格带 data-xy-gz 供值级刷新。
 function _xyEscText(s) {
@@ -307,12 +334,12 @@ function xyRowMainNoLuck(ps) {
 }
 // 三垣区核心 5 列（尾部 sep/col-ln 由调用方或 si 循环补）；不带 xy1，避免 _applyDLUpdates 误命中
 function xyRowSyCore(ps) {
-  return '<tr class="rx" data-row-type="xingyao"><td class="rl">星曜</td>'
+  return '<tr class="rx" data-sec="sanyuan" data-row-type="xingyao"><td class="rl">星曜</td>'
     + _xyCell(ps.taiNian.gan + ps.taiNian.zhi) + _xyCell(ps.tai.gan + ps.tai.zhi) + _xyCell(ps.ming.gan + ps.ming.zhi) + _xyCell(ps.shen.gan + ps.shen.zhi) + '</tr>';
 }
 // 三垣区 7 列（单人 syRows，自带尾部空列）
 function xyRowSy7(ps) {
-  return '<tr class="rx" data-row-type="xingyao"><td class="rl">星曜</td>'
+  return '<tr class="rx" data-sec="sanyuan" data-row-type="xingyao"><td class="rl">星曜</td>'
     + _xyCell(ps.taiNian.gan + ps.taiNian.zhi) + _xyCell(ps.tai.gan + ps.tai.zhi) + _xyCell(ps.ming.gan + ps.ming.zhi) + _xyCell(ps.shen.gan + ps.shen.zhi)
     + '<td class="sep"></td><td class="col-ln"></td></tr>';
 }
@@ -654,7 +681,7 @@ function renderChart(data, twin, targetId, opts) {
   const chartRows = [];
   // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
   // 柱名头
-  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep','大运')+th('col-ln','流年')+'</tr>');
+  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
 
   // 生成四柱行（5列），再拼接大运/流年列
   var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen });
@@ -675,7 +702,7 @@ function renderChart(data, twin, targetId, opts) {
   // 地支行(2)
   mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
-  mainRows[3] = '<tr class="rh" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
+  mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
   // 纳音 — splice 后索引从 6 偏移至 4
   mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
@@ -700,23 +727,23 @@ function renderChart(data, twin, targetId, opts) {
   chartRows.push.apply(chartRows, mainRows);
 
   // 四柱-三垣分隔行
-  chartRows.push('<tr class="sanyuan-sep"><td colspan="7"></td></tr>');
+  chartRows.push('<tr class="sanyuan-sep" data-sec="sanyuan"><td colspan="7"></td></tr>');
 
   // 三垣行
   var syRows = [];
   // v0.10.0 三垣宫位标签行由 updateGongWeiTags() 动态生成
-  syRows.push('<tr class="hd">'+th('rl','三垣')+th('','胎年')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
-  syRows.push('<tr class="rs">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg">'+rl('')+td(pTaiNian.wg,pTaiNian.gan)+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg">'+rl('')+td(pTaiNian.wz,pTaiNian.zhi)+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rh">'+rl('藏气')+td('',pTaiNian.cg)+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rn" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="xingyun">'+rl('星运')+td('',pTaiNian.xy)+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="zizuo">'+rl('自坐')+td('',pTaiNian.zz)+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="kongwang">'+rl('空亡')+td('',pTaiNian.kw)+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-row-type="shensha">'+rl('神煞')+td('',pTaiNian.sh)+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rs" data-sec="sanyuan">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wg,pTaiNian.gan)+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wz,pTaiNian.zhi)+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rh" data-sec="sanyuan cangqi">'+rl('藏气')+td('',pTaiNian.cg)+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="xingyun">'+rl('星运')+td('',pTaiNian.xy)+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="zizuo">'+rl('自坐')+td('',pTaiNian.zz)+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="kongwang">'+rl('空亡')+td('',pTaiNian.kw)+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="shensha">'+rl('神煞')+td('',pTaiNian.sh)+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
   // v0.29.0 星曜行（三垣区）：插入「藏气」与「纳音」之间
   insertBeforeNayin(syRows, xyRowSy7({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen }));
   chartRows.push.apply(chartRows, syRows);
@@ -825,7 +852,7 @@ function renderChart(data, twin, targetId, opts) {
       </div>
 
       <div class="luck-col">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
             <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>
           </div>
@@ -1860,6 +1887,10 @@ var CMP_ZOOM_KEY = 'bz_cmp_zoom';
 var _cmpDragIdx = -1;
 var _cmpChipDrag = null;
 var _cmpZoom = (function() { var z = parseInt(localStorage.getItem(CMP_ZOOM_KEY), 10); return (z >= 50 && z <= 200) ? z : 100; })();
+var CMP_COLS_KEY = 'bz_cmp_layout';
+var _cmpCols = (function() { var n = parseInt(localStorage.getItem(CMP_COLS_KEY), 10); return (n >= 1 && n <= 6) ? n : 3; })();
+var CMP_BAR_KEY = 'bz_cmp_bar';
+var _cmpBarOn = localStorage.getItem(CMP_BAR_KEY) !== '0';
 
 // 人元司令（v0.38.0）：按出生钟表时口径现算，仅对比卡展示
 function _cmpSiLing(m) {
@@ -2014,12 +2045,35 @@ function _cmpBindCard(card) {
     var dragged = track.querySelector('.cmp-card.dragging');
     if (!dragged || dragged === card) return;
     var r = card.getBoundingClientRect();
-    var ref = (ev.clientX < r.left + r.width / 2) ? card : card.nextSibling;
+    var before = ev.clientX < r.left + r.width / 2;
+    var ref = before ? card : card.nextSibling;
     if (ref === dragged) return;
-    if (!ref) { if (track.lastElementChild !== dragged) track.appendChild(dragged); return; }
-    if (ref.previousSibling === dragged) return;
-    track.insertBefore(dragged, ref);
+    if (before && ref.previousSibling === dragged) return;
+    if (!before && !ref && track.lastElementChild === dragged) return;
+    _cmpPairMove(dragged.getAttribute('data-key'), ref ? ref.getAttribute('data-key') : null, before);
   });
+}
+
+function _cmpMvInsert(parent, dragged, ref, before) {
+  if (!dragged) return;
+  if (ref) {
+    if (ref === dragged) return;
+    if (before && ref.previousSibling === dragged) return;
+    if (!before && ref.nextSibling === dragged) return;
+    parent.insertBefore(dragged, before ? ref : ref.nextSibling);
+  } else if (parent.lastElementChild !== dragged) {
+    parent.appendChild(dragged);
+  }
+}
+
+function _cmpPairMove(draggedKey, refKey, before) {
+  var bar = document.getElementById('cmpBar');
+  var track = document.getElementById('cmpTrack');
+  if (!bar || !track) return;
+  var refChip = refKey ? bar.querySelector('.cmp-chip[data-key="' + refKey + '"]') : null;
+  var refCard = refKey ? track.querySelector('.cmp-card[data-key="' + refKey + '"]') : null;
+  _cmpMvInsert(bar, bar.querySelector('.cmp-chip[data-key="' + draggedKey + '"]'), refChip, before);
+  _cmpMvInsert(track, track.querySelector('.cmp-card[data-key="' + draggedKey + '"]'), refCard, before);
 }
 
 function _cmpSyncOrderFromDom() {
@@ -2089,11 +2143,12 @@ function renderCmpBar() {
       var dragged = b.querySelector('.cmp-chip.dragging');
       if (!dragged || dragged === chip) return;
       var r = chip.getBoundingClientRect();
-      var ref = (ev.clientX < r.left + r.width / 2) ? chip : chip.nextSibling;
+      var before = ev.clientX < r.left + r.width / 2;
+      var ref = before ? chip : chip.nextSibling;
       if (ref === dragged) return;
-      if (!ref) { if (b.lastElementChild !== dragged) b.appendChild(dragged); return; }
-      if (ref.previousSibling === dragged) return;
-      b.insertBefore(dragged, ref);
+      if (before && ref.previousSibling === dragged) return;
+      if (!before && !ref && b.lastElementChild === dragged) return;
+      _cmpPairMove(dragged.getAttribute('data-key'), ref ? ref.getAttribute('data-key') : null, before);
     });
     chip.addEventListener('click', function() {
       var track = document.getElementById('cmpTrack');
@@ -2120,11 +2175,42 @@ function _cmpApplyZoom() {
   var track = document.getElementById('cmpTrack');
   if (!track) return;
   var z = (_cmpZoom || 100) + '%';
-  track.querySelectorAll('.cmp-card').forEach(function(c) { c.style.zoom = z; });
+  track.style.zoom = z;
   var slider = document.getElementById('cmpZoom');
   if (slider && String(slider.value) !== String(_cmpZoom)) slider.value = String(_cmpZoom);
   var zv = document.getElementById('cmpZoomVal');
   if (zv) zv.textContent = _cmpZoom + '%';
+}
+
+function cmpSetCols(n) {
+  n = parseInt(n, 10);
+  if (!(n >= 1 && n <= 6)) n = 3;
+  _cmpCols = n;
+  try { localStorage.setItem(CMP_COLS_KEY, String(n)); } catch(e) {}
+  _cmpApplyCols();
+}
+
+function _cmpApplyCols() {
+  var track = document.getElementById('cmpTrack');
+  if (track) track.style.setProperty('--cmp-cols', String(_cmpCols));
+  var bar = document.getElementById('cmpBar');
+  if (bar) bar.style.setProperty('--cmp-cols', String(_cmpCols));
+  document.querySelectorAll('.cmp-cols-btn').forEach(function(b) {
+    if (parseInt(b.getAttribute('data-cols'), 10) === _cmpCols) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+}
+
+function cmpToggleBar() {
+  _cmpBarOn = !_cmpBarOn;
+  try { localStorage.setItem(CMP_BAR_KEY, _cmpBarOn ? '1' : '0'); } catch(e) {}
+  _cmpApplyBar();
+}
+
+function _cmpApplyBar() {
+  var bar = document.getElementById('cmpBar');
+  if (bar) bar.style.display = _cmpBarOn ? '' : 'none';
+  document.querySelectorAll('.cmp-bar-toggle').forEach(function(b) { b.classList.toggle('active', _cmpBarOn); });
 }
 
 function cmpOpen() {
@@ -2138,6 +2224,7 @@ function cmpOpen() {
     gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
   }
   _cmpApplyZoom();
+  _cmpApplyCols();
   renderCmpTrack();
   if (!_cmpEntries().length) cmpTogglePicker();
 }
@@ -2268,6 +2355,7 @@ function cmpSetState(entries) {
     toggleLevel: toggleLevel,
     setLevelPreset: setLevelPreset,
     setRowVisible: setRowVisible,
+    setSecVisible: setSecVisible,
     applyLevelRows: applyLevelRows,
     refreshXingyaoRows: refreshXingyaoRows,
     applyTaiNianColumn: applyTaiNianColumn,
@@ -2322,6 +2410,10 @@ function cmpSetState(entries) {
     toggleLevel: cmpToggleLevel,
     setLevel: setLevelPreset,
     setZoom: cmpSetZoom,
+    setCols: cmpSetCols,
+    toggleBar: cmpToggleBar,
     _setState: cmpSetState,
   };
+  _cmpApplyCols();
+  _cmpApplyBar();
 })();
