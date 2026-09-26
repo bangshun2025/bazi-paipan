@@ -51,6 +51,15 @@
       url: "/api/ext/liuyao-paipan/standalone"
     },
     {
+      id: "fengshui-paipan",
+      name: "风水排盘",
+      subtitle: "玄空飞星 v0.1.14",
+      desc: "玄空飞星 · 下卦/替卦 · 二十四山坐向全称 · 手动/水口/度数三式定向 · 九星星色盘面。",
+      icon: "风",
+      iconColor: "#1f6f5c",
+      url: "/api/ext/fengshui-paipan/standalone"
+    },
+    {
       id: "ziwei-online",
       name: "紫微斗数排盘 · 正式",
       subtitle: "线上正式版",
