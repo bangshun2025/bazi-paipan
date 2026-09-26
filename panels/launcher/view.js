@@ -53,7 +53,7 @@
     {
       id: "fengshui-paipan",
       name: "风水排盘",
-      subtitle: "玄空飞星 v0.1.14",
+      subtitle: "玄空飞星 v0.1.20",
       desc: "玄空飞星 · 下卦/替卦 · 二十四山坐向全称 · 手动/水口/度数三式定向 · 九星星色盘面。",
       icon: "风",
       iconColor: "#1f6f5c",
