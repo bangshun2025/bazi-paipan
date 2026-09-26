@@ -2756,6 +2756,73 @@ function captureScreenshot() {
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
   })();
 
+  // ===== 对比页专注模式(v0.39.0) =====
+  tests.push({ section:'对比页专注模式(v0.39.0)' });
+  (function() {
+    var C = window.COMPARE;
+    var dlg = document.querySelector('#cmpOverlay .cmp-dialog');
+    var btn = document.getElementById('btnCmpFocus');
+    var savedFocus = localStorage.getItem('bz_cmp_focus');
+    var savedCols = localStorage.getItem('bz_cmp_layout');
+    var savedBar = localStorage.getItem('bz_cmp_bar');
+    var savedZoom = localStorage.getItem('bz_cmp_zoom');
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    localStorage.removeItem('bz_cmp_focus');
+    if (dlg.classList.contains('focus-on')) C.toggleFocus();
+    tests.push(eq('专注按钮在工具栏且在关闭按钮右侧', btn && btn.closest('.cmp-toolbar') && btn.previousElementSibling && btn.previousElementSibling.textContent.indexOf('关') >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('默认非专注（无 focus-on 类）', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'N'));
+    var ars = ARCHIVE.getArchives();
+    var a1 = null, a2 = null;
+    for (var i = 0; i < ars.length; i++) {
+      if (!a1 && ars[i].name === '杨禹赫') a1 = ars[i];
+      if (!a2 && ars[i].name === '彭子旭') a2 = ars[i];
+    }
+    C._setState([{ type:'current' }, { type:'arch', id:a1.id }, { type:'arch', id:a2.id }]);
+    C.setCols(3);
+    C.setZoom(100);
+    C.open();
+    var track = document.getElementById('cmpTrack');
+    var hBefore = track.getBoundingClientRect().height;
+    C.toggleFocus();
+    tests.push(eq('开专注后 focus-on 类落 dialog', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('按钮变退出专注', btn.textContent, '⛶ 退出专注'));
+    var tb = document.querySelector('#cmpOverlay .cmp-toolbar');
+    tests.push(eq('专注隐藏关闭按钮', getComputedStyle(tb.querySelector('[onclick*="COMPARE.close"]')).display, 'none'));
+    tests.push(eq('专注隐藏档案按钮', getComputedStyle(tb.querySelector('[onclick*="openArchivePanel"]')).display, 'none'));
+    tests.push(eq('专注隐藏清空按钮', getComputedStyle(tb.querySelector('[onclick*="COMPARE.clear"]')).display, 'none'));
+    tests.push(eq('专注隐藏标题与计数', getComputedStyle(tb.querySelector('.cmp-toolbar-title')).display + '/' + getComputedStyle(tb.querySelector('.cmp-count')).display, 'none/none'));
+    tests.push(eq('专注保留缩放控件', getComputedStyle(tb.querySelector('.cmp-zoom-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留布局按钮组', getComputedStyle(tb.querySelector('.cmp-cols-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留简分', getComputedStyle(tb.querySelector('.cmp-level-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留宫位', getComputedStyle(tb.querySelector('.cmp-gz-host')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留名字开关', getComputedStyle(tb.querySelector('.cmp-bar-toggle')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留五区勾选栏', getComputedStyle(document.getElementById('cmpSecBar')).display, 'flex'));
+    tests.push(eq('专注时勾选栏并入工具栏一行', document.getElementById('cmpSecBar').parentNode.classList.contains('cmp-toolbar') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('进专注自动收名字条', getComputedStyle(document.getElementById('cmpBar')).display, 'none'));
+    var nameBtn = tb.querySelector('.cmp-bar-toggle');
+    nameBtn.click();
+    tests.push(eq('专注中名字开关可展开名字条', getComputedStyle(document.getElementById('cmpBar')).display, 'flex'));
+    nameBtn.click();
+    tests.push(eq('专注中名字开关可再收起', getComputedStyle(document.getElementById('cmpBar')).display, 'none'));
+    tests.push(eq('盘面轨道变高', track.getBoundingClientRect().height > hBefore ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注持久化 bz_cmp_focus=1', localStorage.getItem('bz_cmp_focus'), '1'));
+    C.close();
+    C.open();
+    tests.push(eq('关开页面专注状态保持', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'Y'));
+    C.toggleFocus();
+    tests.push(eq('再点恢复关闭按钮显示', getComputedStyle(tb.querySelector('[onclick*="COMPARE.close"]')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('退出后名字条保持收起（点名字可展开）', localStorage.getItem('bz_cmp_bar'), '0'));
+    tests.push(eq('退出后勾选栏回到工具栏外原位', document.getElementById('cmpSecBar').parentNode.classList.contains('cmp-dialog') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('关闭专注持久化 bz_cmp_focus=0', localStorage.getItem('bz_cmp_focus'), '0'));
+    C.clear(); C.close();
+    if (savedFocus === null) localStorage.removeItem('bz_cmp_focus'); else localStorage.setItem('bz_cmp_focus', savedFocus);
+    if (savedCols === null) localStorage.removeItem('bz_cmp_layout'); else localStorage.setItem('bz_cmp_layout', savedCols);
+    if (savedBar === null) localStorage.removeItem('bz_cmp_bar'); else localStorage.setItem('bz_cmp_bar', savedBar);
+    if (savedZoom === null) localStorage.removeItem('bz_cmp_zoom'); else localStorage.setItem('bz_cmp_zoom', savedZoom);
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    if (dlg.classList.contains('focus-on')) C.toggleFocus();
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

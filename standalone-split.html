@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.38.0 | 2026-09-26 -->
+<!-- 八字排盘 · 从真版 v0.39.0 | 2026-09-26 -->
+<!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
@@ -809,6 +810,10 @@
   .cmp-cols-btn.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
   .cmp-bar-toggle { height:22px; padding:0 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); font-size:12px; cursor:pointer; font-family:var(--font-body); }
   .cmp-bar-toggle.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  #btnCmpFocus.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .cmp-dialog.focus-on .cmp-toolbar .cmp-toolbar-title, .cmp-dialog.focus-on .cmp-toolbar .cmp-count, .cmp-dialog.focus-on .cmp-toolbar [onclick*="openArchivePanel"], .cmp-dialog.focus-on .cmp-toolbar [onclick*="COMPARE.clear"], .cmp-dialog.focus-on .cmp-toolbar [onclick*="COMPARE.close"] { display:none !important; }
+  .cmp-dialog.focus-on .cmp-picker { display:none !important; }
+  .cmp-dialog.focus-on .cmp-toolbar .cmp-secbar { border-bottom:none; padding:0; gap:14px; margin-left:8px; }
   .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
@@ -927,6 +932,7 @@
         <span class="cmp-zoom-wrap"><label>缩放</label><input type="range" id="cmpZoom" min="60" max="150" step="5" value="100" oninput="COMPARE.setZoom(this.value)"><span class="cmp-zoom-val" id="cmpZoomVal">100%</span></span><span class="cmp-cols-wrap"><label>布局</label><button class="cmp-cols-btn" data-cols="1" onclick="COMPARE.setCols(1)">1</button><button class="cmp-cols-btn" data-cols="2" onclick="COMPARE.setCols(2)">2</button><button class="cmp-cols-btn" data-cols="3" onclick="COMPARE.setCols(3)">3</button><button class="cmp-cols-btn" data-cols="4" onclick="COMPARE.setCols(4)">4</button><button class="cmp-cols-btn" data-cols="5" onclick="COMPARE.setCols(5)">5</button><button class="cmp-cols-btn" data-cols="6" onclick="COMPARE.setCols(6)">6</button></span><button class="cmp-bar-toggle" onclick="COMPARE.toggleBar()">名字</button>
         <button class="btn" onclick="COMPARE.clear()">清 空</button>
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
+        <button class="btn" id="btnCmpFocus" onclick="COMPARE.toggleFocus()" title="专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行">⛶ 专注</button>
       </div>
       <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>

@@ -1890,7 +1890,9 @@ var _cmpZoom = (function() { var z = parseInt(localStorage.getItem(CMP_ZOOM_KEY)
 var CMP_COLS_KEY = 'bz_cmp_layout';
 var _cmpCols = (function() { var n = parseInt(localStorage.getItem(CMP_COLS_KEY), 10); return (n >= 1 && n <= 6) ? n : 3; })();
 var CMP_BAR_KEY = 'bz_cmp_bar';
+var CMP_FOCUS_KEY = 'bz_cmp_focus';
 var _cmpBarOn = localStorage.getItem(CMP_BAR_KEY) !== '0';
+var _cmpFocusOn = localStorage.getItem(CMP_FOCUS_KEY) === '1';
 
 // 人元司令（v0.38.0）：按出生钟表时口径现算，仅对比卡展示
 function _cmpSiLing(m) {
@@ -2213,6 +2215,38 @@ function _cmpApplyBar() {
   document.querySelectorAll('.cmp-bar-toggle').forEach(function(b) { b.classList.toggle('active', _cmpBarOn); });
 }
 
+// ===== v0.39.0 专注模式：收起管理工具栏项与名字条，缩放/布局/简分/宫位/名字/五区勾选保留可用 =====
+function cmpToggleFocus() {
+  _cmpFocusOn = !_cmpFocusOn;
+  try { localStorage.setItem(CMP_FOCUS_KEY, _cmpFocusOn ? '1' : '0'); } catch(e) {}
+  if (_cmpFocusOn && _cmpBarOn) cmpToggleBar();
+  _cmpApplyFocus();
+}
+
+var _cmpSecbarAnchor = null;
+function _cmpApplyFocus() {
+  var dlg = document.querySelector('#cmpOverlay .cmp-dialog');
+  if (dlg) dlg.classList.toggle('focus-on', _cmpFocusOn);
+  var btn = document.getElementById('btnCmpFocus');
+  if (btn) {
+    btn.classList.toggle('active', _cmpFocusOn);
+    btn.textContent = _cmpFocusOn ? '⛶ 退出专注' : '⛶ 专注';
+    btn.title = _cmpFocusOn ? '退出专注：恢复标题/档案/清空/关闭与名字条' : '专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行';
+  }
+  var bar = document.getElementById('cmpSecBar');
+  if (bar) {
+    if (_cmpFocusOn) {
+      var tb = document.querySelector('#cmpOverlay .cmp-toolbar');
+      if (tb && bar.parentNode !== tb) {
+        _cmpSecbarAnchor = bar.nextSibling;
+        if (btn) tb.insertBefore(bar, btn); else tb.appendChild(bar);
+      }
+    } else if (_cmpSecbarAnchor && _cmpSecbarAnchor.parentNode && bar.parentNode !== _cmpSecbarAnchor.parentNode) {
+      _cmpSecbarAnchor.parentNode.insertBefore(bar, _cmpSecbarAnchor);
+    }
+  }
+}
+
 function cmpOpen() {
   var ov = document.getElementById('cmpOverlay');
   if (!ov) return;
@@ -2225,6 +2259,7 @@ function cmpOpen() {
   }
   _cmpApplyZoom();
   _cmpApplyCols();
+  _cmpApplyFocus();
   renderCmpTrack();
   if (!_cmpEntries().length) cmpTogglePicker();
 }
@@ -2412,8 +2447,10 @@ function cmpSetState(entries) {
     setZoom: cmpSetZoom,
     setCols: cmpSetCols,
     toggleBar: cmpToggleBar,
+    toggleFocus: cmpToggleFocus,
     _setState: cmpSetState,
   };
   _cmpApplyCols();
   _cmpApplyBar();
+  _cmpApplyFocus();
 })();

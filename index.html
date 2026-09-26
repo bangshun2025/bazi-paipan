@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.38.0 | 2026-09-26 -->
+<!-- 八字排盘 · 从真版 v0.39.0 | 2026-09-26 -->
+<!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
 <!-- v0.27.0: 节气真太阳时 — 每列新增 ☀ 真太阳日月/时间（出生地经度换算；未选出生地=—） -->
@@ -809,6 +810,10 @@
   .cmp-cols-btn.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
   .cmp-bar-toggle { height:22px; padding:0 8px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); font-size:12px; cursor:pointer; font-family:var(--font-body); }
   .cmp-bar-toggle.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  #btnCmpFocus.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .cmp-dialog.focus-on .cmp-toolbar .cmp-toolbar-title, .cmp-dialog.focus-on .cmp-toolbar .cmp-count, .cmp-dialog.focus-on .cmp-toolbar [onclick*="openArchivePanel"], .cmp-dialog.focus-on .cmp-toolbar [onclick*="COMPARE.clear"], .cmp-dialog.focus-on .cmp-toolbar [onclick*="COMPARE.close"] { display:none !important; }
+  .cmp-dialog.focus-on .cmp-picker { display:none !important; }
+  .cmp-dialog.focus-on .cmp-toolbar .cmp-secbar { border-bottom:none; padding:0; gap:14px; margin-left:8px; }
   .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
@@ -939,6 +944,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <span class="cmp-zoom-wrap"><label>缩放</label><input type="range" id="cmpZoom" min="60" max="150" step="5" value="100" oninput="COMPARE.setZoom(this.value)"><span class="cmp-zoom-val" id="cmpZoomVal">100%</span></span><span class="cmp-cols-wrap"><label>布局</label><button class="cmp-cols-btn" data-cols="1" onclick="COMPARE.setCols(1)">1</button><button class="cmp-cols-btn" data-cols="2" onclick="COMPARE.setCols(2)">2</button><button class="cmp-cols-btn" data-cols="3" onclick="COMPARE.setCols(3)">3</button><button class="cmp-cols-btn" data-cols="4" onclick="COMPARE.setCols(4)">4</button><button class="cmp-cols-btn" data-cols="5" onclick="COMPARE.setCols(5)">5</button><button class="cmp-cols-btn" data-cols="6" onclick="COMPARE.setCols(6)">6</button></span><button class="cmp-bar-toggle" onclick="COMPARE.toggleBar()">名字</button>
         <button class="btn" onclick="COMPARE.clear()">清 空</button>
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
+        <button class="btn" id="btnCmpFocus" onclick="COMPARE.toggleFocus()" title="专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行">⛶ 专注</button>
       </div>
       <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
@@ -10206,7 +10212,9 @@ var _cmpZoom = (function() { var z = parseInt(localStorage.getItem(CMP_ZOOM_KEY)
 var CMP_COLS_KEY = 'bz_cmp_layout';
 var _cmpCols = (function() { var n = parseInt(localStorage.getItem(CMP_COLS_KEY), 10); return (n >= 1 && n <= 6) ? n : 3; })();
 var CMP_BAR_KEY = 'bz_cmp_bar';
+var CMP_FOCUS_KEY = 'bz_cmp_focus';
 var _cmpBarOn = localStorage.getItem(CMP_BAR_KEY) !== '0';
+var _cmpFocusOn = localStorage.getItem(CMP_FOCUS_KEY) === '1';
 
 // 人元司令（v0.38.0）：按出生钟表时口径现算，仅对比卡展示
 function _cmpSiLing(m) {
@@ -10529,6 +10537,38 @@ function _cmpApplyBar() {
   document.querySelectorAll('.cmp-bar-toggle').forEach(function(b) { b.classList.toggle('active', _cmpBarOn); });
 }
 
+// ===== v0.39.0 专注模式：收起管理工具栏项与名字条，缩放/布局/简分/宫位/名字/五区勾选保留可用 =====
+function cmpToggleFocus() {
+  _cmpFocusOn = !_cmpFocusOn;
+  try { localStorage.setItem(CMP_FOCUS_KEY, _cmpFocusOn ? '1' : '0'); } catch(e) {}
+  if (_cmpFocusOn && _cmpBarOn) cmpToggleBar();
+  _cmpApplyFocus();
+}
+
+var _cmpSecbarAnchor = null;
+function _cmpApplyFocus() {
+  var dlg = document.querySelector('#cmpOverlay .cmp-dialog');
+  if (dlg) dlg.classList.toggle('focus-on', _cmpFocusOn);
+  var btn = document.getElementById('btnCmpFocus');
+  if (btn) {
+    btn.classList.toggle('active', _cmpFocusOn);
+    btn.textContent = _cmpFocusOn ? '⛶ 退出专注' : '⛶ 专注';
+    btn.title = _cmpFocusOn ? '退出专注：恢复标题/档案/清空/关闭与名字条' : '专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行';
+  }
+  var bar = document.getElementById('cmpSecBar');
+  if (bar) {
+    if (_cmpFocusOn) {
+      var tb = document.querySelector('#cmpOverlay .cmp-toolbar');
+      if (tb && bar.parentNode !== tb) {
+        _cmpSecbarAnchor = bar.nextSibling;
+        if (btn) tb.insertBefore(bar, btn); else tb.appendChild(bar);
+      }
+    } else if (_cmpSecbarAnchor && _cmpSecbarAnchor.parentNode && bar.parentNode !== _cmpSecbarAnchor.parentNode) {
+      _cmpSecbarAnchor.parentNode.insertBefore(bar, _cmpSecbarAnchor);
+    }
+  }
+}
+
 function cmpOpen() {
   var ov = document.getElementById('cmpOverlay');
   if (!ov) return;
@@ -10541,6 +10581,7 @@ function cmpOpen() {
   }
   _cmpApplyZoom();
   _cmpApplyCols();
+  _cmpApplyFocus();
   renderCmpTrack();
   if (!_cmpEntries().length) cmpTogglePicker();
 }
@@ -10728,10 +10769,12 @@ function cmpSetState(entries) {
     setZoom: cmpSetZoom,
     setCols: cmpSetCols,
     toggleBar: cmpToggleBar,
+    toggleFocus: cmpToggleFocus,
     _setState: cmpSetState,
   };
   _cmpApplyCols();
   _cmpApplyBar();
+  _cmpApplyFocus();
 })();
 </script></script></script></script></script>
 <script>
@@ -13491,6 +13534,73 @@ function captureScreenshot() {
     if (savedBar === null) localStorage.removeItem('bz_cmp_bar'); else localStorage.setItem('bz_cmp_bar', savedBar);
     if (savedZoomL === null) localStorage.removeItem('bz_cmp_zoom'); else localStorage.setItem('bz_cmp_zoom', savedZoomL);
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+  })();
+
+  // ===== 对比页专注模式(v0.39.0) =====
+  tests.push({ section:'对比页专注模式(v0.39.0)' });
+  (function() {
+    var C = window.COMPARE;
+    var dlg = document.querySelector('#cmpOverlay .cmp-dialog');
+    var btn = document.getElementById('btnCmpFocus');
+    var savedFocus = localStorage.getItem('bz_cmp_focus');
+    var savedCols = localStorage.getItem('bz_cmp_layout');
+    var savedBar = localStorage.getItem('bz_cmp_bar');
+    var savedZoom = localStorage.getItem('bz_cmp_zoom');
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    localStorage.removeItem('bz_cmp_focus');
+    if (dlg.classList.contains('focus-on')) C.toggleFocus();
+    tests.push(eq('专注按钮在工具栏且在关闭按钮右侧', btn && btn.closest('.cmp-toolbar') && btn.previousElementSibling && btn.previousElementSibling.textContent.indexOf('关') >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('默认非专注（无 focus-on 类）', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'N'));
+    var ars = ARCHIVE.getArchives();
+    var a1 = null, a2 = null;
+    for (var i = 0; i < ars.length; i++) {
+      if (!a1 && ars[i].name === '杨禹赫') a1 = ars[i];
+      if (!a2 && ars[i].name === '彭子旭') a2 = ars[i];
+    }
+    C._setState([{ type:'current' }, { type:'arch', id:a1.id }, { type:'arch', id:a2.id }]);
+    C.setCols(3);
+    C.setZoom(100);
+    C.open();
+    var track = document.getElementById('cmpTrack');
+    var hBefore = track.getBoundingClientRect().height;
+    C.toggleFocus();
+    tests.push(eq('开专注后 focus-on 类落 dialog', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('按钮变退出专注', btn.textContent, '⛶ 退出专注'));
+    var tb = document.querySelector('#cmpOverlay .cmp-toolbar');
+    tests.push(eq('专注隐藏关闭按钮', getComputedStyle(tb.querySelector('[onclick*="COMPARE.close"]')).display, 'none'));
+    tests.push(eq('专注隐藏档案按钮', getComputedStyle(tb.querySelector('[onclick*="openArchivePanel"]')).display, 'none'));
+    tests.push(eq('专注隐藏清空按钮', getComputedStyle(tb.querySelector('[onclick*="COMPARE.clear"]')).display, 'none'));
+    tests.push(eq('专注隐藏标题与计数', getComputedStyle(tb.querySelector('.cmp-toolbar-title')).display + '/' + getComputedStyle(tb.querySelector('.cmp-count')).display, 'none/none'));
+    tests.push(eq('专注保留缩放控件', getComputedStyle(tb.querySelector('.cmp-zoom-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留布局按钮组', getComputedStyle(tb.querySelector('.cmp-cols-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留简分', getComputedStyle(tb.querySelector('.cmp-level-wrap')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留宫位', getComputedStyle(tb.querySelector('.cmp-gz-host')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留名字开关', getComputedStyle(tb.querySelector('.cmp-bar-toggle')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注保留五区勾选栏', getComputedStyle(document.getElementById('cmpSecBar')).display, 'flex'));
+    tests.push(eq('专注时勾选栏并入工具栏一行', document.getElementById('cmpSecBar').parentNode.classList.contains('cmp-toolbar') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('进专注自动收名字条', getComputedStyle(document.getElementById('cmpBar')).display, 'none'));
+    var nameBtn = tb.querySelector('.cmp-bar-toggle');
+    nameBtn.click();
+    tests.push(eq('专注中名字开关可展开名字条', getComputedStyle(document.getElementById('cmpBar')).display, 'flex'));
+    nameBtn.click();
+    tests.push(eq('专注中名字开关可再收起', getComputedStyle(document.getElementById('cmpBar')).display, 'none'));
+    tests.push(eq('盘面轨道变高', track.getBoundingClientRect().height > hBefore ? 'Y' : 'N', 'Y'));
+    tests.push(eq('专注持久化 bz_cmp_focus=1', localStorage.getItem('bz_cmp_focus'), '1'));
+    C.close();
+    C.open();
+    tests.push(eq('关开页面专注状态保持', dlg.classList.contains('focus-on') ? 'Y' : 'N', 'Y'));
+    C.toggleFocus();
+    tests.push(eq('再点恢复关闭按钮显示', getComputedStyle(tb.querySelector('[onclick*="COMPARE.close"]')).display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('退出后名字条保持收起（点名字可展开）', localStorage.getItem('bz_cmp_bar'), '0'));
+    tests.push(eq('退出后勾选栏回到工具栏外原位', document.getElementById('cmpSecBar').parentNode.classList.contains('cmp-dialog') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('关闭专注持久化 bz_cmp_focus=0', localStorage.getItem('bz_cmp_focus'), '0'));
+    C.clear(); C.close();
+    if (savedFocus === null) localStorage.removeItem('bz_cmp_focus'); else localStorage.setItem('bz_cmp_focus', savedFocus);
+    if (savedCols === null) localStorage.removeItem('bz_cmp_layout'); else localStorage.setItem('bz_cmp_layout', savedCols);
+    if (savedBar === null) localStorage.removeItem('bz_cmp_bar'); else localStorage.setItem('bz_cmp_bar', savedBar);
+    if (savedZoom === null) localStorage.removeItem('bz_cmp_zoom'); else localStorage.setItem('bz_cmp_zoom', savedZoom);
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    if (dlg.classList.contains('focus-on')) C.toggleFocus();
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
