@@ -4,6 +4,35 @@
 
 ---
 
+## v0.38.0（2026-09-26）盘面对比升级：档案勾选选盘、名字条拖序、简分/宫位/司令/缩放
+
+- **入口迁移 + 档案勾选**：主操作行「▦ 排盘对比」按钮移除，入口移入档案面板头部（「🏷 默认标签」旁「▦ 盘面对比」）；每条档案记录行首新增勾选框（按档案 id 写入 `bz_cmp_state`，与列表排序无关），勾选即选盘——搜索、标签筛选等档案功能自然可用于挑选对比盘。对比页未打开时勾选只存状态（不渲染隐藏 DOM），打开对比页时全量渲染。对比页工具栏旧「＋ 添加盘」「加入当前盘」按钮移除，换「📋 档案」按钮直开首页档案面板（`ARCHIVE.openArchivePanel()`；档案层 z-index 999→1001，盖过对比页 1000，勾选联动实时增减卡片）；空态提示文案同步指向该按钮。
+- **名字条**：对比页工具栏下方横排名字 chip（序号 + 显示名），**拖动名字即调整下方排盘顺序**（HTML5 DnD，dragend 按 DOM 顺序回写状态并同步重渲卡片与编号）；点击名字平滑滚动定位对应卡片。卡片 ⠿ 手柄拖序保留，两条路径共用同一状态。
+- **简分级别**：首页与对比页工具栏各有一个「简分」按钮（宫位式点击下拉面板 `cmpLevelPop`），按钮文本实时显示当前档位（「简分：少/简/中/详/全」或自由组合时「简分：自定义」）。面板上半部五档按钮并排（少=全部隐藏、简=星运+自坐、中=+纳音纳运星曜、详=+空亡、全=+神煞），下半部七项横排勾选（星曜/纳音/纳运/星运/自坐/空亡/神煞，checkbox 用户直接勾）——点档位=按预设勾、手动勾=自定义状态、再点档位回预设档文本。**全文档一个状态**（`_levelRows` 七布尔 + `LEVEL_PRESETS`）：首页排盘表与对比卡内 `table.chart` 的行显隐实时同步（`applyLevelRows` 按 `data-row-type` 设行内联 display），两个按钮文本同步；点面板外自动关闭。档位不持久化，刷新回「少」。
+- **宫位功能**：对比工具栏注入 `renderGongWeiPanel()` 第二实例。为支持多实例，gongwei.js 四处 id 依赖改为就近/全量定位——`toggleGzPopover` 按 `e.target.closest('.gz-panel-wrapper')` 找自己的 popover、`closeGzPopover` 关全部实例、`syncGzCheckboxes`/`updateGzTriggerText`/`rebuildGzCbGrid` 扫全部 `.gz-popover`/`.gz-trigger`/`.gz-cb-grid`（`syncTaiNianCheckboxes` 本就走 querySelectorAll('#gzShowTaiNian') 天然多实例）。实测：对比页勾选宫位 → 8 行宫位标签行入对比卡，主页面 popover 状态不受影响。
+- **人元司令**：卡片头生辰一行内、位于生辰与「✕ 移除」按钮之间（如「曾国藩 乾造 1811年11月26日 22:00　人元司令：壬（立冬后 18 日）　✕ 移除」），按档案出生钟表时口径用 `ALGO.renYuanSiLing` 现算（主排盘页此前无此显示，属对比页新增展示项）。
+- **缩放滑条**：工具栏 range 滑条（60–150%，步进 5）实时 `style.zoom` 缩放对比卡，值持久化 `bz_cmp_zoom`，重开对比页自动恢复；`cmpZoomVal` 同步显示百分数。
+- **实现**：render.js COMPARE 模块扩展（`renderCmpBar`/`toggleLevelPop`/`setLevelPreset`/`setRowVisible`/`matchLevelPreset`/`applyLevelRows`/`cmpIsPicked`/`_cmpApplyKeyOrder` 统一排序回写）；archive.js `cmpPick`（置位语义，非翻转）+ 行首勾选框（带 `data-id`）并导出。静态层三文件同步（按钮迁移 + 工具栏扩充 + CSS + 版本头 v0.38.0），`check-release.sh` KEYS 移除 `btnCompare`、新增 `btnArchiveCompare cmpBar cmpZoom cmpZoomVal btnCmpLevel cmpGzPanel`。
+- **测试**：?test=1「盘面对比·档案勾选与工具栏(v0.38.0)」46 条断言（入口迁移/勾选写入与取消/isPicked/重绘保持/chip 数与序/chip 卡序一致/move 联动/司令行与算法值一致/司令并入生辰行且位于生辰与移除之间/添加盘与加入当前盘移除/档案按钮接入/空态提示指向档案/简分按钮初始文本/面板开合/五档并排/七项横排可勾/初始全不勾/手动勾行显示且主表同步/自由组合文本自定义/点详勾 6 项空亡显示神煞隐藏/文本回档位/setLevel(0) 回少/外点关闭/zoom 应用与持久化/第二实例 popover 开合/状态还原），总计 833 条全绿（v0.29 T04 主页面 .btn-simple 邻接断言同步适配 wrapper 包裹）；
+- **实测**：真实浏览器——档案面板勾选杨禹赫+彭子旭（32 行勾选框可见）→「▦ 盘面对比」进对比页 → 名字条完整 DataTransfer 拖拽链拖 chip 翻转（chips、卡片 DOM、localStorage 三处同步）→ 级别按钮点至 level-1/level-4 回 level-0 → 宫位勾「脑区」标签行入卡 → 缩放 120%/115% 生效 → 司令行数值与 REN_YUAN 表核对（2021-06-01 立夏后 27 日→丙 ✓）。补测（按钮替换后）：对比页点「📋 档案」→ 面板以 z=1001 弹出于对比页之上（32 行可见）→ 勾选「邦顺」行 state 2 条、卡片实时变 2 张，取消后还原 1 条 1 卡；工具栏按钮序列核验（档案/简分/宫位/全选/清空/缩放/清空/关闭）。补测（简分可勾设置面板）：点「简分」→ 面板弹出（五档按钮并排、七项横排 checkbox、初始全不勾、按钮文本「简分：少」）→ 勾「星运」→ 主页表与对比卡星运行同步显示、文本变「简分：自定义」→ 点「详」→ 六项勾、空亡显示神煞隐藏、文本「简分：详」→ 点「少」→ 七行全隐、文本回「简分：少」→ 点面板外关闭。现场已还原：宫位勾选恢复原状（认知·场景·客户）、对比页已关闭，`bz_cmp_state` 保留曾国藩勾选。
+- **门禁**：node --check 四模块全过；check-release.sh 6/6；index.html ≡ standalone.html（md5 f78b181252d6f6e52220d4d35c841a57，1,228,309 B）。
+
+---
+
+## v0.37.0（2026-09-26）盘面对比：多盘同屏、大运流年下移、横向滚动、拖动排序
+
+- **新增「▦ 排盘对比」入口**：主操作行（📋 档案 旁）新增按钮，进入全屏对比页；添加盘 / 加入当前盘 / 清空 / 关闭 / 调序等功能全部收在对比页顶栏内，主页面只保留这一个入口。
+- **多盘同屏**：对比页「＋ 添加盘」弹出档案勾选面板（复用档案数据，显示名遵循隐私模式），可勾选任意多个盘；「加入当前盘」把主页面正在看的盘（含真太阳时口径的 `window._paipanData`）作为一张卡加入。选择与顺序持久化到 localStorage `bz_cmp_state`，关闭浏览器后再开仍保留。
+- **大运流年区下移**：`renderChart` 新增第 4 参 `opts`（`luckBelow` / `noTopBar`）。对比卡内 `.body-cols` 加 `luck-below` 类（`display:block`），大运流年全表（大运/始于/流年/止于 + 起运交运 + 节气区）从时柱右侧移到盘面表（三垣/胎元区）下方；**时柱右侧的当前大运/流年两列原样保留**。主排盘页不受任何影响（不带 opts 时组装路径逐字节不变）。📍 今年 按钮改为 `scrollToNow(this.closest('.cmp-card'))`，普通页传 null 仍回退 document，行为不变。
+- **横向滑动**：`.cmp-track` 为 `overflow-x:auto` 的横向卡片轨道，每卡定宽 800px（窄屏 94vw），盘多时左右滑动；轨道同时支持纵向滚动查看每卡下方的大运流年区。
+- **拖动排序**：每卡头部 ⠿ 手柄，按下手柄才将卡片置 `draggable`（不干扰盘面点击/选择）；HTML5 DnD 实时挪动 DOM（dragover 按左右半区判定插入点），dragend 按 DOM 顺序回写状态并重渲染编号；另提供 `COMPARE.move(from,to)` 程序化调序。
+- **实现**：全部收在 render.js（COMPARE 模块，`window.COMPARE` 挂载）；卡片经 `renderChart(data,1,body,{luckBelow:true,noTopBar:true})` 渲染并沿用 `applyTaiNianColumn` / 星曜行 / `bindEvents`（点击大运流年高亮为卡片内隔离）；渲染后统一 `updateGongWeiTags()`，宫位标签行照常入对比卡。静态层（按钮 + `cmpOverlay/cmpTrack/cmpPicker/cmpCount` + CSS）三文件同步，新 id 已入 check-release.sh KEYS。
+- **测试**：?test=1 新增「盘面对比(v0.37.0)」20 条断言（模块挂载/双卡渲染/隐私显示名/luck-below 类与 block 布局/无 top-bar/大运流年区在表下方 DOM 序/表头 7 列含大运流年/当前大运流年列有值/轨道横向滚动/手柄存在/move 调序/持久化/removeAt/状态还原自恢复），总计 788 条；断言用例自身清理 `bz_cmp_state`，不污染真实配置。
+- **实测**：真实浏览器点击——入口按钮进对比页（空态自动弹选盘面板）→ 勾选两档案出双卡（卡宽 800、轨道 scrollWidth>clientWidth、luck 区 top 771 > 表底）→ 加入当前盘出第三卡（邦顺 1982-10-18）→ ⠿ 拖拽 swap 后 DOM 顺序与 localStorage 同步翻转 → ✕ 移除/清空/关闭 → 现场还原（键删除、主页面盘面不受影响）。
+- **门禁**：node --check 全过；check-release.sh 6/6（含新增 KEYS 五项、render/main 内联一致、节气真值 24 边界点）；index.html ≡ standalone.html（md5 ac64893a7b90a15c503ee69c47ac5c0f，1,206,990 B）。
+
+---
+
 ## v0.36.1（2026-09-21）胎年显示开关语义升级：勾选控制整柱显隐
 
 - **语义升级**：「显示胎年」开关由 v0.36.0 的「仅宫位词留空/填词」升级为**胎年柱整体显隐**——关闭时表头「胎年」格与三垣段所有数据行（主星/干支/藏气/星曜/纳音/纳运/星运/自坐/空亡/神煞/宫位标签行）的第 2 格一并隐藏（`visibility:hidden`，列宽保持、零重排）；开启时恢复。
