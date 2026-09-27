@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.39.0 | 2026-09-26 -->
+<!-- 八字排盘 · 从真版 v0.40.0 | 2026-09-27 -->
 <!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
@@ -5131,6 +5131,7 @@ function buildShunLabel(shun, gender, nianGan) {
   var ARCH_TAG_KEY = 'bz_archive_default_tag';  // 默认标签（打开档案时默认只显示该标签）
   var TAG_MAX = 12;                             // 单条档案标签上限
   var TAG_UNTAGGED = '__untagged__';            // 「未分类」伪标签
+  var CMP_PICK_TAG = '盘面对比';                 // v0.40.0 选盘自动标签（与选盘状态互为镜像）
 
   // ===== 别名：来自 algorithm.js =====
   var monthDays = ALGO.monthDays;
@@ -6065,7 +6066,32 @@ function cmpPick(id, checked) {
   if (checked && found < 0) entries.push({ type: 'arch', id: id });
   if (!checked && found >= 0) entries.splice(found, 1);
   localStorage.setItem('bz_cmp_state', JSON.stringify(entries));
+  syncCmpTag(id, checked);
   if (window.COMPARE && COMPARE.isOpen && COMPARE.isOpen()) COMPARE.refresh();
+}
+
+// v0.40.0 选盘状态与「盘面对比」标签互为镜像：勾上补标、取消摘标（手动标签不受影响）
+function syncCmpTag(id, on) {
+  var archives = getArchives();
+  for (var i = 0; i < archives.length; i++) {
+    if (String(archives[i].id) !== String(id)) continue;
+    var tags = getArchiveTags(archives[i]);
+    var at = tags.indexOf(CMP_PICK_TAG);
+    if (on && at < 0) {
+      tags.push(CMP_PICK_TAG);
+      archives[i].tags = tags;
+      saveArchives(archives);
+      renderTagBar();
+      refreshArchiveModalIfOpen();
+    } else if (!on && at >= 0) {
+      tags.splice(at, 1);
+      archives[i].tags = tags;
+      saveArchives(archives);
+      renderTagBar();
+      refreshArchiveModalIfOpen();
+    }
+    break;
+  }
 }
 
 function renderArchiveModal() {
@@ -6198,6 +6224,7 @@ function loadFromArchive(idx) {
     closeArchivePanel: closeArchivePanel,
     renderArchiveModal: renderArchiveModal,
     cmpPick: cmpPick,
+    syncCmpTag: syncCmpTag,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
     // v0.32.0 标签
@@ -10573,6 +10600,7 @@ function cmpOpen() {
   var ov = document.getElementById('cmpOverlay');
   if (!ov) return;
   ov.classList.add('show');
+  if (window.ARCHIVE && typeof ARCHIVE.closeArchivePanel === 'function') ARCHIVE.closeArchivePanel();
   cmpClosePicker();
   closeAllLevelPops();
   var gzHost = document.getElementById('cmpGzPanel');
@@ -10583,7 +10611,6 @@ function cmpOpen() {
   _cmpApplyCols();
   _cmpApplyFocus();
   renderCmpTrack();
-  if (!_cmpEntries().length) cmpTogglePicker();
 }
 
 function cmpClose() {
@@ -10661,6 +10688,7 @@ function cmpPickToggle(type, id) {
   if (found >= 0) entries.splice(found, 1);
   else entries.push(type === 'current' ? { type: 'current' } : { type: 'arch', id: id });
   _cmpSave(entries);
+  if (type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(id, found < 0);
   // 对比页未打开时（档案面板勾选）只存状态，不渲染隐藏 DOM；打开时会全量渲染
   if (cmpIsOpen()) {
     renderCmpTrack();
@@ -10681,8 +10709,9 @@ function cmpAddCurrent() {
 function cmpRemoveAt(idx) {
   var entries = _cmpEntries();
   if (idx < 0 || idx >= entries.length) return;
-  entries.splice(idx, 1);
+  var it = entries.splice(idx, 1)[0];
   _cmpSave(entries);
+  if (it && it.type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(it.id, false);
   renderCmpTrack();
   if (cmpIsOpen()) renderCmpPicker();
 }
@@ -10697,6 +10726,10 @@ function cmpMove(from, to) {
 }
 
 function cmpClear() {
+  var entries = _cmpEntries();
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(entries[i].id, false);
+  }
   _cmpSave([]);
   renderCmpTrack();
   if (cmpIsOpen()) renderCmpPicker();
@@ -13601,6 +13634,76 @@ function captureScreenshot() {
     if (savedZoom === null) localStorage.removeItem('bz_cmp_zoom'); else localStorage.setItem('bz_cmp_zoom', savedZoom);
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     if (dlg.classList.contains('focus-on')) C.toggleFocus();
+  })();
+
+  // ===== 盘面对比·入口与选盘标签(v0.40.0) =====
+  tests.push({ section:'盘面对比·入口与选盘标签(v0.40.0)' });
+  (function() {
+    var C = window.COMPARE;
+    var TAG = '盘面对比';
+    var KEY = window.CONST.ARCH_KEY;
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    var bakArch = localStorage.getItem(KEY);
+    var ovArch = document.getElementById('archiveOverlay');
+    localStorage.removeItem('bz_cmp_state');
+
+    // 零勾选空态：不自动弹名称列表，档案页自动让位
+    ovArch.classList.add('show');
+    C.clear();
+    C.open();
+    tests.push(eq('零勾选进对比页不自动弹名称列表', document.getElementById('cmpPicker').classList.contains('show') ? 'Y' : 'N', 'N'));
+    tests.push(eq('零勾选显示空态提示', document.querySelector('#cmpTrack .cmp-empty') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('进对比页档案页自动关闭', ovArch.classList.contains('show') ? 'Y' : 'N', 'N'));
+    C.close();
+
+    // 档案行勾选 → 自动打「盘面对比」标签（真实 change 事件链）
+    var ars = ARCHIVE.getArchives();
+    ars.push({ id:'t_tag40', name:'选盘标签测试', gender:'男', year:1990, month:1, day:1, hour:12, min:0, tags:['预置标'] });
+    ars.push({ id:'t2_tag40', name:'选盘标签测试二', gender:'女', year:1991, month:2, day:2, hour:1, min:0 });
+    ARCHIVE.saveArchives(ars);
+    ARCHIVE.renderArchiveModal();
+    var cb = document.querySelector('.archive-row-cmp[data-id="t_tag40"]');
+    tests.push(eq('测试档案行勾选框存在', cb ? 'Y' : 'N', 'Y'));
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change'));
+    var arc = null;
+    ARCHIVE.getArchives().forEach(function(a){ if (String(a.id) === 't_tag40') arc = a; });
+    tests.push(eq('勾选后自动打盘面对比标签', arc && (arc.tags || []).indexOf(TAG) >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('已有手动标签保留', arc && (arc.tags || []).indexOf('预置标') >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('标签栏出现盘面对比chip', document.querySelector('#archive-tag-bar [data-tag="' + TAG + '"]') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('勾选写入 bz_cmp_state', (localStorage.getItem('bz_cmp_state') || '').indexOf('t_tag40') >= 0 ? 'Y' : 'N', 'Y'));
+    cb = document.querySelector('.archive-row-cmp[data-id="t_tag40"]');
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change'));
+    arc = null;
+    ARCHIVE.getArchives().forEach(function(a){ if (String(a.id) === 't_tag40') arc = a; });
+    tests.push(eq('取消勾选摘除标签', arc && (arc.tags || []).indexOf(TAG) < 0 ? 'Y' : 'N', 'Y'));
+
+    // 对比页选盘浮层 toggle 同步标签（面板关闭时只存状态不打扰渲染）
+    C.pickToggle('arch', 't_tag40');
+    arc = null;
+    ARCHIVE.getArchives().forEach(function(a){ if (String(a.id) === 't_tag40') arc = a; });
+    tests.push(eq('浮层勾选同步打标', arc && (arc.tags || []).indexOf(TAG) >= 0 ? 'Y' : 'N', 'Y'));
+
+    // 卡片移除摘标
+    C.removeAt(0);
+    arc = null;
+    ARCHIVE.getArchives().forEach(function(a){ if (String(a.id) === 't_tag40') arc = a; });
+    tests.push(eq('移除卡片摘除标签', arc && (arc.tags || []).indexOf(TAG) < 0 ? 'Y' : 'N', 'Y'));
+
+    // 清空摘标（两条档案一起）
+    C.pickToggle('arch', 't_tag40');
+    C.pickToggle('arch', 't2_tag40');
+    C.clear();
+    arc = null; var arc2 = null;
+    ARCHIVE.getArchives().forEach(function(a){ if (String(a.id) === 't_tag40') arc = a; if (String(a.id) === 't2_tag40') arc2 = a; });
+    tests.push(eq('清空后全部摘标', arc && arc2 && (arc.tags || []).indexOf(TAG) < 0 && (arc2.tags || []).indexOf(TAG) < 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('清空后状态为空数组', localStorage.getItem('bz_cmp_state'), '[]'));
+    C.close();
+
+    if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

@@ -42,6 +42,7 @@
   var ARCH_TAG_KEY = 'bz_archive_default_tag';  // 默认标签（打开档案时默认只显示该标签）
   var TAG_MAX = 12;                             // 单条档案标签上限
   var TAG_UNTAGGED = '__untagged__';            // 「未分类」伪标签
+  var CMP_PICK_TAG = '盘面对比';                 // v0.40.0 选盘自动标签（与选盘状态互为镜像）
 
   // ===== 别名：来自 algorithm.js =====
   var monthDays = ALGO.monthDays;
@@ -976,7 +977,32 @@ function cmpPick(id, checked) {
   if (checked && found < 0) entries.push({ type: 'arch', id: id });
   if (!checked && found >= 0) entries.splice(found, 1);
   localStorage.setItem('bz_cmp_state', JSON.stringify(entries));
+  syncCmpTag(id, checked);
   if (window.COMPARE && COMPARE.isOpen && COMPARE.isOpen()) COMPARE.refresh();
+}
+
+// v0.40.0 选盘状态与「盘面对比」标签互为镜像：勾上补标、取消摘标（手动标签不受影响）
+function syncCmpTag(id, on) {
+  var archives = getArchives();
+  for (var i = 0; i < archives.length; i++) {
+    if (String(archives[i].id) !== String(id)) continue;
+    var tags = getArchiveTags(archives[i]);
+    var at = tags.indexOf(CMP_PICK_TAG);
+    if (on && at < 0) {
+      tags.push(CMP_PICK_TAG);
+      archives[i].tags = tags;
+      saveArchives(archives);
+      renderTagBar();
+      refreshArchiveModalIfOpen();
+    } else if (!on && at >= 0) {
+      tags.splice(at, 1);
+      archives[i].tags = tags;
+      saveArchives(archives);
+      renderTagBar();
+      refreshArchiveModalIfOpen();
+    }
+    break;
+  }
 }
 
 function renderArchiveModal() {
@@ -1109,6 +1135,7 @@ function loadFromArchive(idx) {
     closeArchivePanel: closeArchivePanel,
     renderArchiveModal: renderArchiveModal,
     cmpPick: cmpPick,
+    syncCmpTag: syncCmpTag,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
     // v0.32.0 标签

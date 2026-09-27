@@ -2251,6 +2251,7 @@ function cmpOpen() {
   var ov = document.getElementById('cmpOverlay');
   if (!ov) return;
   ov.classList.add('show');
+  if (window.ARCHIVE && typeof ARCHIVE.closeArchivePanel === 'function') ARCHIVE.closeArchivePanel();
   cmpClosePicker();
   closeAllLevelPops();
   var gzHost = document.getElementById('cmpGzPanel');
@@ -2261,7 +2262,6 @@ function cmpOpen() {
   _cmpApplyCols();
   _cmpApplyFocus();
   renderCmpTrack();
-  if (!_cmpEntries().length) cmpTogglePicker();
 }
 
 function cmpClose() {
@@ -2339,6 +2339,7 @@ function cmpPickToggle(type, id) {
   if (found >= 0) entries.splice(found, 1);
   else entries.push(type === 'current' ? { type: 'current' } : { type: 'arch', id: id });
   _cmpSave(entries);
+  if (type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(id, found < 0);
   // 对比页未打开时（档案面板勾选）只存状态，不渲染隐藏 DOM；打开时会全量渲染
   if (cmpIsOpen()) {
     renderCmpTrack();
@@ -2359,8 +2360,9 @@ function cmpAddCurrent() {
 function cmpRemoveAt(idx) {
   var entries = _cmpEntries();
   if (idx < 0 || idx >= entries.length) return;
-  entries.splice(idx, 1);
+  var it = entries.splice(idx, 1)[0];
   _cmpSave(entries);
+  if (it && it.type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(it.id, false);
   renderCmpTrack();
   if (cmpIsOpen()) renderCmpPicker();
 }
@@ -2375,6 +2377,10 @@ function cmpMove(from, to) {
 }
 
 function cmpClear() {
+  var entries = _cmpEntries();
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].type === 'arch' && window.ARCHIVE && typeof ARCHIVE.syncCmpTag === 'function') ARCHIVE.syncCmpTag(entries[i].id, false);
+  }
   _cmpSave([]);
   renderCmpTrack();
   if (cmpIsOpen()) renderCmpPicker();
