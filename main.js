@@ -772,6 +772,9 @@ function captureScreenshot() {
   if (!/[\?&]test=1(&|$)/.test(location.search)) return;
   document.title = '八字排盘 · 回归测试';
 
+  if (window.COMPARE && typeof COMPARE.setZoom === 'function') { COMPARE.setZoom(100); COMPARE.setCols(3); }
+  try { localStorage.removeItem('bz_cmp_focus'); } catch(e) {}
+
   // 隐藏正常 UI
   const page = document.querySelector('.page');
   if (page) page.style.display = 'none';
@@ -818,6 +821,54 @@ function captureScreenshot() {
   tests.push(eq('changSheng("丙","寅")→长生',       changSheng('丙','寅'), '长生'));
   tests.push(eq('changSheng("辛","丑")→养(阴干)',   changSheng('辛','丑'), '养'));
   tests.push(eq('changSheng("辛","子")→长生(阴干)', changSheng('辛','子'), '长生'));
+
+  // 土十二长生新标准：戊随午顺行、己随巳逆行（12 支全表断言）
+  tests.push(eq('changSheng("戊","巳")→养',   changSheng('戊','巳'), '养'));
+  tests.push(eq('changSheng("戊","午")→长生', changSheng('戊','午'), '长生'));
+  tests.push(eq('changSheng("戊","未")→沐浴', changSheng('戊','未'), '沐浴'));
+  tests.push(eq('changSheng("戊","申")→冠带', changSheng('戊','申'), '冠带'));
+  tests.push(eq('changSheng("戊","酉")→临官', changSheng('戊','酉'), '临官'));
+  tests.push(eq('changSheng("戊","戌")→帝旺', changSheng('戊','戌'), '帝旺'));
+  tests.push(eq('changSheng("戊","亥")→衰',   changSheng('戊','亥'), '衰'));
+  tests.push(eq('changSheng("戊","子")→病',   changSheng('戊','子'), '病'));
+  tests.push(eq('changSheng("戊","丑")→死',   changSheng('戊','丑'), '死'));
+  tests.push(eq('changSheng("戊","寅")→墓',   changSheng('戊','寅'), '墓'));
+  tests.push(eq('changSheng("戊","卯")→绝',   changSheng('戊','卯'), '绝'));
+  tests.push(eq('changSheng("戊","辰")→胎',   changSheng('戊','辰'), '胎'));
+  tests.push(eq('changSheng("己","巳")→长生', changSheng('己','巳'), '长生'));
+  tests.push(eq('changSheng("己","午")→养',   changSheng('己','午'), '养'));
+  tests.push(eq('changSheng("己","未")→胎',   changSheng('己','未'), '胎'));
+  tests.push(eq('changSheng("己","申")→绝',   changSheng('己','申'), '绝'));
+  tests.push(eq('changSheng("己","酉")→墓',   changSheng('己','酉'), '墓'));
+  tests.push(eq('changSheng("己","戌")→死',   changSheng('己','戌'), '死'));
+  tests.push(eq('changSheng("己","亥")→病',   changSheng('己','亥'), '病'));
+  tests.push(eq('changSheng("己","子")→衰',   changSheng('己','子'), '衰'));
+  tests.push(eq('changSheng("己","丑")→帝旺', changSheng('己','丑'), '帝旺'));
+  tests.push(eq('changSheng("己","寅")→临官', changSheng('己','寅'), '临官'));
+  tests.push(eq('changSheng("己","卯")→冠带', changSheng('己','卯'), '冠带'));
+  tests.push(eq('changSheng("己","辰")→沐浴', changSheng('己','辰'), '沐浴'));
+
+  // === 儒略历换算（v0.43.0）===
+  tests.push({ section:'儒略历换算' });
+  var jg1 = ALGO.julianToGregorian(1472, 10, 31);
+  tests.push(eq('儒1472-10-31→格1472-11-9 (王阳明)', jg1.y + '-' + jg1.m + '-' + jg1.d, '1472-11-9'));
+  var jg2 = ALGO.julianToGregorian(1582, 10, 4);
+  tests.push(eq('儒1582-10-4→格1582-10-14 (历法切点)', jg2.y + '-' + jg2.m + '-' + jg2.d, '1582-10-14'));
+  var jg3 = ALGO.julianToGregorian(1582, 10, 5);
+  tests.push(eq('儒1582-10-5→格1582-10-15 (切点后一日)', jg3.y + '-' + jg3.m + '-' + jg3.d, '1582-10-15'));
+  var jg4 = ALGO.julianToGregorian(1500, 2, 29);
+  tests.push(eq('儒1500-2-29→格1500-3-10 (儒历闰日)', jg4.y + '-' + jg4.m + '-' + jg4.d, '1500-3-10'));
+  tests.push(eq('DOM: 儒历开关存在', !!document.getElementById('useJulian'), true));
+
+  // 王阳明盘回归（格里 1472-11-9 22:01 = 儒 1472-10-31 22:01）
+  var wy = paipan('王阳明', '男', 1472, 11, 9, 22, 1);
+  tests.push(eq('王阳明盘 年柱→壬辰', wy.nian.gan + wy.nian.zhi, '壬辰'));
+  tests.push(eq('王阳明盘 月柱→辛亥', wy.yue.gan + wy.yue.zhi, '辛亥'));
+  tests.push(eq('王阳明盘 日柱→癸亥', wy.ri.gan + wy.ri.zhi, '癸亥'));
+  tests.push(eq('王阳明盘 时柱→癸亥', wy.shi.gan + wy.shi.zhi, '癸亥'));
+  tests.push(eq('王阳明盘 胎元→壬寅', wy.tai.gan + wy.tai.zhi, '壬寅'));
+  tests.push(eq('王阳明盘 命宫→丁未', wy.ming.gan + wy.ming.zhi, '丁未'));
+  tests.push(eq('王阳明盘 身宫→辛亥', wy.shen.gan + wy.shen.zhi, '辛亥'));
 
   // === 流年 ===
   tests.push({ section:'流年干支' });
@@ -2400,13 +2451,14 @@ function captureScreenshot() {
     tests.push(eq('v0.30 T12:前置·字体已 settled（无 webfont）', !document.fonts || document.fonts.status === 'loaded', true));
     var sb12 = ov.querySelector('.xy-settings-body');
     tests.push(eq('v0.30 T12:取样容器 .xy-settings-body 存在', !!sb12, true));
-    if (wide() && sb12) {
+    var tall12 = window.matchMedia('(min-height:800px)').matches;
+    if (wide() && tall12 && sb12) {
       var sh12 = sb12.scrollHeight, ch12 = sb12.clientHeight;
       tests.push(eq('v0.30 T12:非退化·scrollHeight/clientHeight 均 >0（排除 0≤0）', sh12 > 0 && ch12 > 0, true));
       tests.push(eq('v0.30 T12:空查询 60 行态免纵向滚动 scrollHeight-clientHeight ≤2px', sh12 - ch12 <= 2, true));
       if (sh12 - ch12 > 2) tests.push(fail('v0.30 T12:.xy-settings-body 溢出像素', String(sh12 - ch12)));
     } else {
-      tests.push(eq('v0.30 T12:窄屏单栏允许纵向滚动（E15/已知行为 L）', true, true));
+      tests.push(eq('v0.30 T12:窄屏或矮视口允许纵向滚动（E15/已知行为 L）', true, true));
     }
 
     // ---- T13 三栏并排几何 + 弹层尺寸（AC21/AC22；只断钩子/几何，禁断 grid-auto-flow 字面值）----
@@ -2647,6 +2699,7 @@ function captureScreenshot() {
     tests.push(eq('藏气区隐藏时勾三垣三垣藏气行仍隐藏', (function(){ var r=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); return r && getComputedStyle(r).display === 'none' ? 'Y' : 'N'; })(), 'Y'));
     secBar.querySelector('input[data-sec="cangqi"]').click();
     tests.push(eq('藏气区勾回后三垣藏气行显示', (function(){ var r=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); return r && getComputedStyle(r).display !== 'none' ? 'Y' : 'N'; })(), 'Y'));
+    if (window.COMPARE && typeof COMPARE.setZoom === 'function') COMPARE.setZoom(100);
     tests.push(eq('藏气行高统一四柱三垣同高', (function(){ var r1=document.querySelector('.cmp-card tr.rh[data-sec~="cangqi"]:not([data-sec~="sanyuan"])'); var r2=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); if(!r1||!r2) return 'N'; var h1=r1.getBoundingClientRect().height, h2=r2.getBoundingClientRect().height; return Math.abs(h1-h2)<1 && h1>80 ? 'Y' : 'N'; })(), 'Y'));
     tests.push(eq('藏气行满高calc公式', (function(){ var td=document.querySelector('.cmp-card tr[data-sec~="cangqi"] td:nth-child(2)'); if(!td) return 'N'; var fs=parseFloat(getComputedStyle(td).fontSize); var want=4.8*fs+11; return Math.abs(td.getBoundingClientRect().height-want)<2.5 ? 'Y' : 'N'; })(), 'Y'));
     secBar.querySelector('input[data-sec="yunliu"]').click();
@@ -2888,6 +2941,165 @@ function captureScreenshot() {
     tests.push(eq('清空后状态为空数组', localStorage.getItem('bz_cmp_state'), '[]'));
     C.close();
 
+    if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));
+  })();
+
+  // ===== 盘面对比·关系高亮(v0.43.0) =====
+  tests.push({ section:'盘面对比·关系高亮(v0.43.0)' });
+  (function() {
+    var C = window.COMPARE;
+    var KEY = window.CONST.ARCH_KEY;
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    var bakArch = localStorage.getItem(KEY);
+    var ars = ARCHIVE.getArchives();
+    ars.push({ id:'t_hl42', name:'高亮测试甲', gender:'男', year:1990, month:1, day:1, hour:12, min:0 });
+    ars.push({ id:'t2_hl42', name:'高亮测试乙', gender:'女', year:1984, month:2, day:2, hour:4, min:0 });
+    ARCHIVE.saveArchives(ars);
+    C._setState([{ type:'arch', id:'t_hl42' }, { type:'arch', id:'t2_hl42' }]);
+    C.open();
+    var track = document.getElementById('cmpTrack');
+    var cards = track.querySelectorAll('.cmp-card');
+    var bar = document.getElementById('cmpHLBar');
+    tests.push(eq('静态功能条挂载', bar ? 'Y' : 'N', 'Y'));
+    tests.push(eq('两卡渲染', String(cards.length), '2'));
+    tests.push(eq('柱名th带data-pk共8个', String(cards[0].querySelectorAll('th[data-pk]').length), '8'));
+    tests.push(eq('天干td带data-gk共8个', String(cards[0].querySelectorAll('td[data-gk="gan"]').length), '8'));
+    tests.push(eq('地支td带data-gk共8个', String(cards[0].querySelectorAll('td[data-gk="zhi"]').length), '8'));
+
+    var S = C.hlRelSet;
+    tests.push(eq('甲·同干', S('gan','tong','甲').join(''), '甲'));
+    tests.push(eq('甲·异干9个', String(S('gan','yi','甲').length), '9'));
+    tests.push(eq('甲·主生同=丙', S('gan','sheng_tong','甲').join(''), '丙'));
+    tests.push(eq('甲·主生异=丁', S('gan','sheng_yi','甲').join(''), '丁'));
+    tests.push(eq('甲·被生同=壬', S('gan','beisheng_tong','甲').join(''), '壬'));
+    tests.push(eq('甲·被生异=癸', S('gan','beisheng_yi','甲').join(''), '癸'));
+    tests.push(eq('甲·主克同=戊', S('gan','ke_tong','甲').join(''), '戊'));
+    tests.push(eq('甲·主克异=己', S('gan','ke_yi','甲').join(''), '己'));
+    tests.push(eq('甲·被克同=庚', S('gan','beike_tong','甲').join(''), '庚'));
+    tests.push(eq('甲·被克异=辛', S('gan','beike_yi','甲').join(''), '辛'));
+    tests.push(eq('甲·合=己', S('gan','he','甲').join(''), '己'));
+    tests.push(eq('甲·冲=庚', S('gan','chong','甲').join(''), '庚'));
+    tests.push(eq('戊·冲为空（戊己无冲）', String(S('gan','chong','戊').length), '0'));
+    tests.push(eq('子·同支', S('zhi','tong','子').join(''), '子'));
+    tests.push(eq('子·异支11个', String(S('zhi','yi','子').length), '11'));
+    tests.push(eq('子·主生=寅卯', S('zhi','zhuSheng','子').join(''), '寅卯'));
+    tests.push(eq('子·被生=申酉', S('zhi','beiSheng','子').join(''), '申酉'));
+    tests.push(eq('子·主克=巳午', S('zhi','zhuKe','子').join(''), '巳午'));
+    tests.push(eq('子·被克=辰戌丑未', String(S('zhi','beiKe','子').length), '4'));
+    tests.push(eq('子·刑=子卯', S('zhi','xing','子').join(''), '子卯'));
+    tests.push(eq('寅·刑=寅巳申', S('zhi','xing','寅').sort().join(''), '寅巳申'));
+    tests.push(eq('辰·自刑', S('zhi','xing','辰').join(''), '辰辰'));
+    tests.push(eq('子·冲=子午', S('zhi','chong','子').join(''), '子午'));
+    tests.push(eq('子·六合=子丑', S('zhi','he6','子').join(''), '子丑'));
+    tests.push(eq('子·三合=子申辰', S('zhi','sanhe','子').sort().join(''), '子申辰'));
+    tests.push(eq('子·三会=子亥丑', S('zhi','sanhui','子').sort().join(''), '丑亥子'));
+    tests.push(eq('子·害=子未', S('zhi','hai','子').join(''), '子未'));
+    tests.push(eq('子·破=子酉', S('zhi','po','子').join(''), '子酉'));
+
+    var c1 = cards[0], c2 = cards[1];
+    c1.querySelector('th[data-pk="nian"]').click();
+    tests.push(eq('点柱名功能条出现', bar.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('柱模式8勾选', String(bar.querySelectorAll('input[type="checkbox"]').length), '8'));
+    tests.push(eq('标亮同柱按钮存在', bar.querySelector('.cmp-hl-apply') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('参照文本含年柱', bar.querySelector('.cmp-hl-ref').textContent.indexOf('年柱') >= 0 ? 'Y' : 'N', 'Y'));
+    var riCb = bar.querySelector('input[value="ri"]');
+    riCb.checked = true;
+    riCb.dispatchEvent(new Event('change'));
+    bar.querySelector('.cmp-hl-apply').click();
+    tests.push(eq('标亮同柱：卡1亮4格', String(c1.querySelectorAll('td.bz-hl-on').length), '4'));
+    tests.push(eq('标亮同柱：卡2亮4格', String(c2.querySelectorAll('td.bz-hl-on').length), '4'));
+    tests.push(eq('其余柱变暗：卡1暗12格', String(c1.querySelectorAll('td.bz-hl-off').length), '12'));
+    tests.push(eq('参照柱名有ref标记', String(track.querySelectorAll('th.bz-hl-ref').length), '1'));
+    tests.push(eq('柱模式无锁定键', bar.querySelector('.cmp-hl-lock') ? 'N' : 'Y', 'Y'));
+    bar.querySelector('.cmp-hl-close').click();
+    tests.push(eq('✕后功能条收起', bar.style.display === 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('✕后无高亮类', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref').length), '0'));
+
+    var nianGanTd = c1.querySelector('td[data-gk="gan"][data-pk="nian"]');
+    var g = nianGanTd.getAttribute('data-gz');
+    var nianZhiTd = c1.querySelector('td[data-gk="zhi"][data-pk="nian"]');
+    var z = nianZhiTd.getAttribute('data-gz');
+    nianGanTd.click();
+    tests.push(eq('点天干干支行并存25键', String(bar.querySelectorAll('.cmp-hl-rel[data-rel]').length), '25'));
+    tests.push(eq('解绑：参照文本只含干' + g + '无支参照', bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('支 ') < 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('点击格金圈ref（当前参照）', nianGanTd.classList.contains('bz-hl-ref') && !nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('解绑：同柱支格无任何圈', String((nianZhiTd.classList.contains('bz-hl-ref') ? 1 : 0) + (nianZhiTd.classList.contains('bz-hl-refmark') ? 1 : 0)), '0'));
+    var expSt = S('gan','sheng_tong',g);
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="sheng_tong"]').click();
+    var expOn = 0;
+    track.querySelectorAll('td[data-gk="gan"]').forEach(function(td) { if (expSt.indexOf(td.getAttribute('data-gz')) >= 0) expOn++; });
+    tests.push(eq('主生同干(' + g + '→' + expSt.join('') + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn)));
+    tests.push(eq('只选干键时支行无高亮类', String(track.querySelectorAll('td[data-gk="zhi"].bz-hl-on,td[data-gk="zhi"].bz-hl-off').length), '0'));
+    tests.push(eq('未锁定：键选不产生红圈', nianGanTd.classList.contains('bz-hl-refmark') ? 'N' : 'Y', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="sheng_tong"]').click();
+    tests.push(eq('再点同键取消高亮', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off').length), '0'));
+
+    tests.push(eq('干支行各有锁定键共2个', String(bar.querySelectorAll('.cmp-hl-lock').length), '2'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').click();
+    tests.push(eq('锁定后年干红圈', nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('锁定后金圈让位', !nianGanTd.classList.contains('bz-hl-ref') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('干行锁定键active已锁定', bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').textContent.indexOf('已锁定') >= 0 && bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').classList.contains('active') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('参照文本带🔒', bar.querySelector('.cmp-hl-ref').textContent.indexOf('🔒') >= 0 ? 'Y' : 'N', 'Y'));
+    nianZhiTd.click();
+    tests.push(eq('锁定的年干红圈保持', nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('点支后参照文本只含支' + z, bar.querySelector('.cmp-hl-ref').textContent.indexOf('支 ' + z) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ') < 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('年支当前参照金圈', nianZhiTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="z"]').click();
+    tests.push(eq('年支锁定后两红圈', String(track.querySelectorAll('.bz-hl-refmark').length), '2'));
+    var c2NianGan = c2.querySelector('td[data-gk="gan"][data-pk="nian"]');
+    var g2 = c2NianGan.getAttribute('data-gz');
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    var onLock = track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length;
+    c2NianGan.click();
+    tests.push(eq('锁定干中心：点' + g2 + '盘干亮格不变仍' + onLock, String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(onLock)));
+    tests.push(eq('锁定干中心：参照仍干' + g + '带🔒', bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('🔒') >= 0 ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    nianZhiTd.click();
+    tests.push(eq('锁支格点击焦点切回支不收起', bar.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-close').click();
+    tests.push(eq('✕收起后锁定红圈保留', bar.style.display === 'none' && String(track.querySelectorAll('.bz-hl-refmark').length) === '2' ? 'Y' : 'N', 'Y'));
+    nianGanTd.click();
+    tests.push(eq('收起后再点功能条复现且红圈仍在', bar.style.display !== 'none' && String(track.querySelectorAll('.bz-hl-refmark').length) === '2' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('复现后参照仍锁干' + g, bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').click();
+    tests.push(eq('再点锁定解除年干红圈剩1', String(track.querySelectorAll('.bz-hl-refmark').length), '1'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="z"]').click();
+    tests.push(eq('支行锁定解除后无红圈', String(track.querySelectorAll('.bz-hl-refmark').length), '0'));
+    tests.push(eq('解除后金圈回到焦点年干', nianGanTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+
+    nianZhiTd.click();
+    tests.push(eq('点地支仍干支行并存25键', String(bar.querySelectorAll('.cmp-hl-rel[data-rel]').length), '25'));
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="chong"]').click();
+    var expC = S('zhi','chong',z);
+    var expOn2 = 0;
+    track.querySelectorAll('td[data-gk="zhi"]').forEach(function(td) { if (expC.indexOf(td.getAttribute('data-gz')) >= 0) expOn2++; });
+    tests.push(eq('冲(' + z + '→' + expC.join('') + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn2)));
+    tests.push(eq('未锁定参照格金圈无红圈', nianZhiTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    var expT = S('gan','tong',g);
+    var expOnG = 0;
+    track.querySelectorAll('td[data-gk="gan"]').forEach(function(td) { if (expT.indexOf(td.getAttribute('data-gz')) >= 0) expOnG++; });
+    tests.push(eq('叠加：干行同干亮格数', String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(expOnG)));
+    tests.push(eq('叠加：支行冲仍亮', String(track.querySelectorAll('td[data-gk="zhi"].bz-hl-on').length), String(expOn2)));
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="chong"]').click();
+    tests.push(eq('取消冲后干行保持', String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(expOnG)));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    tests.push(eq('全取消后无高亮类', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off').length), '0'));
+    nianZhiTd.click();
+    tests.push(eq('再点参照物收起', bar.style.display === 'none' && track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-refmark').length === 0 ? 'Y' : 'N', 'Y'));
+
+    nianZhiTd.click();
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="sanhe"]').click();
+    var expH = S('zhi','sanhe',z);
+    var expOn3 = 0;
+    track.querySelectorAll('td[data-gk="zhi"]').forEach(function(td) { if (expH.indexOf(td.getAttribute('data-gz')) >= 0) expOn3++; });
+    tests.push(eq('三合(' + z + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn3)));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape' }));
+    tests.push(eq('Esc清除收起', bar.style.display === 'none' && track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').length === 0 ? 'Y' : 'N', 'Y'));
+
+    C.clear(); C.close();
     if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));

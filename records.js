@@ -47,6 +47,7 @@
       min: parseInt(val('inMin')) || 0,
       prov: val('inProv'), city: val('inCity'), dist: val('inDist'),
       useSolar: !!(document.getElementById('useSolar') && document.getElementById('useSolar').checked),
+      isJulian: !!(calType === 'solar' && document.getElementById('useJulian') && document.getElementById('useJulian').checked),
       calendarType: calType,
       isLeap: !!(document.getElementById('inLeap') && document.getElementById('inLeap').checked),
       lunarMonth: calType === 'lunar' && monthEl ? (parseInt(monthEl.value) || null) : null,

@@ -673,15 +673,16 @@ function renderChart(data, twin, targetId, opts) {
   }
 
   // ---- 上盘 HTML ----
+  // v0.41.0 关系高亮：柱名 th 加 data-pk，天干/地支 td 加 data-gk/data-gz/data-pk（点击参照 + 高亮目标）
   function td(cls, txt, ext='') { return '<td class="'+cls+'"'+ext+'>'+txt+'</td>'; }
-  function th(cls, txt) { return '<th class="'+cls+'">'+txt+'</th>'; }
+  function th(cls, txt, ext='') { return '<th class="'+cls+'"'+(ext||'')+'>'+txt+'</th>'; }
   function rl(lbl) { return '<td class="rl">'+lbl+'</td>'; }
   function emp(cls) { return '<td class="'+cls+'"></td>'; }
 
   const chartRows = [];
   // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
   // 柱名头
-  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
+  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱',' data-pk="nian"')+th('','月柱',' data-pk="yue"')+th('','日柱',' data-pk="ri"')+th('','时柱',' data-pk="shi"')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
 
   // 生成四柱行（5列），再拼接大运/流年列
   var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen });
@@ -698,9 +699,19 @@ function renderChart(data, twin, targetId, opts) {
   // 主星行(0)：用 pDy.rs / pLn.rs 替换占位
   mainRows[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
   // 天干行(1)
-  mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+  mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+
+    td(pNian.wg,pNian.gan,' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
+    td(pYue.wg,pYue.gan,' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
+    td(pRi.wg,pRi.gan,' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
+    td(pShi.wg,pShi.gan,' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
+    td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
   // 地支行(2)
-  mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+  mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+
+    td(pNian.wz,pNian.zhi,' data-gk="zhi" data-gz="'+pNian.zhi+'" data-pk="nian"')+
+    td(pYue.wz,pYue.zhi,' data-gk="zhi" data-gz="'+pYue.zhi+'" data-pk="yue"')+
+    td(pRi.wz,pRi.zhi,' data-gk="zhi" data-gz="'+pRi.zhi+'" data-pk="ri"')+
+    td(pShi.wz,pShi.zhi,' data-gk="zhi" data-gz="'+pShi.zhi+'" data-pk="shi"')+
+    td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
   mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
@@ -732,11 +743,21 @@ function renderChart(data, twin, targetId, opts) {
   // 三垣行
   var syRows = [];
   // v0.10.0 三垣宫位标签行由 updateGongWeiTags() 动态生成
-  syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年',' data-pk="taiNian"')+th('','胎元',' data-pk="tai"')+th('','命宫',' data-pk="ming"')+th('','身宫',' data-pk="shen"')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wg,pTaiNian.gan)+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wz,pTaiNian.zhi)+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+    td(pTaiNian.wg,pTaiNian.gan,' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
+    td(pTai.wg,pTai.gan,' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
+    td(pMing.wg,pMing.gan,' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
+    td(pShen.wg,pShen.gan,' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
+    emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+    td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
+    td(pTai.wz,pTai.zhi,' data-gk="zhi" data-gz="'+pTai.zhi+'" data-pk="tai"')+
+    td(pMing.wz,pMing.zhi,' data-gk="zhi" data-gz="'+pMing.zhi+'" data-pk="ming"')+
+    td(pShen.wz,pShen.zhi,' data-gk="zhi" data-gz="'+pShen.zhi+'" data-pk="shen"')+
+    emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rh" data-sec="sanyuan cangqi">'+rl('藏气')+td('',pTaiNian.cg)+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
@@ -826,9 +847,12 @@ function renderChart(data, twin, targetId, opts) {
   luckRows.push('</div>');
 
   // ---- 额外信息标签 ----
-  let tstTag = '', ryTag = '';
+  let tstTag = '', ryTag = '', jlTag = '';
   if (data.trueSolar) {
     tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 ' + pad(data.trueSolar.h)+':'+pad(data.trueSolar.mi)+' ('+(data.trueSolar.offsetMin>=0?'+':'')+Math.round(data.trueSolar.offsetMin)+'分)</span>';
+  }
+  if (data.julian) {
+    jlTag = '<span class="meta-tag" title="输入日期按儒略历解读，已换算为格里历排盘">📅 儒略历 ' + data.julian.fromY + '年' + data.julian.fromM + '月' + data.julian.fromD + '日</span>';
   }
   if (renYuan) {
     ryTag = '<span class="meta-tag">'+renYuan+'</span>';
@@ -839,7 +863,7 @@ function renderChart(data, twin, targetId, opts) {
   const shunLabel = data.qiYun ? buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan) : '';
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
-      <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
+      <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
@@ -1623,6 +1647,14 @@ function doPaipan() {
     solarY = solar.y; solarM = solar.m; solarD = solar.d;
   }
 
+  // v0.43.0 儒略历开关：1582-10-04 及更早的西历日期按儒略历解读，先换算格里历再排
+  var julianTag = null;
+  if (APP.calendarType === 'solar' && document.getElementById('useJulian') && document.getElementById('useJulian').checked) {
+    var g = ALGO.julianToGregorian(solarY, solarM, solarD);
+    julianTag = { fromY: solarY, fromM: solarM, fromD: solarD, toY: g.y, toM: g.m, toD: g.d };
+    solarY = g.y; solarM = g.m; solarD = g.d;
+  }
+
   // v0.27.0 D1：经度无条件取（唯一权威源）——节气区真太阳时与 useSolar 勾选解耦
   const lng = getLng();
   // 真太阳时修正：仅当用户勾选了真太阳时且地址已选（基于转换后的公历日期）
@@ -1647,12 +1679,14 @@ function doPaipan() {
       const d1 = paipan(name, g1, ey, em, ed, eh, emi);
       d1.displayName = displayName;
       d1.trueSolar = tst;
+      d1.julian = julianTag;
       d1.lng = lng; // v0.27.0 D1: 出生地经度（同址同值）
       d1.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d1);
       const d2 = paipan(name, g2, ey, em, ed, eh, emi);
       d2.displayName = displayName;
       d2.trueSolar = tst;
+      d2.julian = julianTag;
       d2.lng = lng; // v0.27.0 D1: 龙凤胎同址 → 同经度
       d2.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d2);
@@ -1663,6 +1697,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
+      data.julian = julianTag;
       data.lng = lng; // v0.27.0 D1: 出生地经度（未选=null）
       data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
@@ -1672,6 +1707,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
+      data.julian = julianTag;
       data.lng = lng; // v0.27.0 D1: 出生地经度（未选=null）
       data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
@@ -2015,6 +2051,7 @@ function renderCmpTrack() {
   applyLevelRows();
   _cmpApplyZoom();
   renderCmpBar();
+  if (_hl) _cmpHlApply();
 }
 
 function _cmpBindCard(card) {
@@ -2258,6 +2295,7 @@ function cmpOpen() {
   if (gzHost && !gzHost.innerHTML && window.GONGWEI && typeof GONGWEI.renderGongWeiPanel === 'function') {
     gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
   }
+  _cmpHlBind();
   _cmpApplyZoom();
   _cmpApplyCols();
   _cmpApplyFocus();
@@ -2267,6 +2305,7 @@ function cmpOpen() {
 function cmpClose() {
   var ov = document.getElementById('cmpOverlay');
   if (ov) ov.classList.remove('show');
+  _cmpHlClearAll();
   cmpClosePicker();
   closeAllLevelPops();
 }
@@ -2428,6 +2467,319 @@ function cmpSetState(entries) {
     renderChartToHtml: renderChartToHtml,
   };
 
+  // ===== v0.41.0 对比页关系高亮：点击柱名/天干/地支 → 上方功能条 → 跨盘标亮，其余变暗 =====
+  var CMP_HL_PKS = ['nian','yue','ri','shi','taiNian','tai','ming','shen'];
+  var CMP_HL_PK_LABEL = { nian:'年柱', yue:'月柱', ri:'日柱', shi:'时柱', taiNian:'胎年', tai:'胎元', ming:'命宫', shen:'身宫' };
+  var CMP_HL_GAN_RELS = ['tong','yi','sheng_tong','sheng_yi','beisheng_tong','beisheng_yi','ke_tong','ke_yi','beike_tong','beike_yi','he','chong'];
+  var CMP_HL_GAN_REL_LABEL = { tong:'同干', yi:'异干', sheng_tong:'主生同干', sheng_yi:'主生异干', beisheng_tong:'被生同干', beisheng_yi:'被生异干', ke_tong:'主克同干', ke_yi:'主克异干', beike_tong:'被克同干', beike_yi:'被克异干', he:'合干', chong:'冲干' };
+  var CMP_HL_ZHI_RELS = ['tong','yi','zhuSheng','beiSheng','zhuKe','beiKe','xing','chong','he6','sanhe','sanhui','hai','po'];
+  var CMP_HL_ZHI_REL_LABEL = { tong:'同支', yi:'异支', zhuSheng:'主生支', beiSheng:'被生支', zhuKe:'主克支', beiKe:'被克支', xing:'刑', chong:'冲', he6:'六合', sanhe:'三合', sanhui:'三会', hai:'害', po:'破' };
+  var _HL_WX_GAN = { '甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水' };
+  var _HL_WX_ZHI = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
+  var _HL_SHENG = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+  var _HL_SHENG_INV = { '木':'水','火':'木','土':'火','金':'土','水':'金' };
+  var _HL_KE = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+  var _HL_KE_INV = { '木':'金','火':'水','土':'木','金':'火','水':'土' };
+  var _HL_WUHE = { '甲':'己','己':'甲','乙':'庚','庚':'乙','丙':'辛','辛':'丙','丁':'壬','壬':'丁','戊':'癸','癸':'戊' };
+  var _HL_GAN_CHONG = { '甲':'庚','庚':'甲','乙':'辛','辛':'乙','丙':'壬','壬':'丙','丁':'癸','癸':'丁' };
+  var _HL_ZHI_CHONG = { '子':'午','午':'子','丑':'未','未':'丑','寅':'申','申':'寅','卯':'酉','酉':'卯','辰':'戌','戌':'辰','巳':'亥','亥':'巳' };
+  var _HL_ZHI_HE6 = { '子':'丑','丑':'子','寅':'亥','亥':'寅','卯':'戌','戌':'卯','辰':'酉','酉':'辰','巳':'申','申':'巳','午':'未','未':'午' };
+  var _HL_ZHI_HAI = { '子':'未','未':'子','丑':'午','午':'丑','寅':'巳','巳':'寅','卯':'辰','辰':'卯','申':'亥','亥':'申','酉':'戌','戌':'酉' };
+  var _HL_ZHI_PO = { '子':'酉','酉':'子','午':'卯','卯':'午','申':'巳','巳':'申','寅':'亥','亥':'寅','辰':'丑','丑':'辰','戌':'未','未':'戌' };
+  var _HL_SANHE = { '子':['申','辰'],'申':['子','辰'],'辰':['申','子'],'寅':['午','戌'],'午':['寅','戌'],'戌':['寅','午'],'巳':['酉','丑'],'酉':['巳','丑'],'丑':['巳','酉'],'亥':['卯','未'],'卯':['亥','未'],'未':['亥','卯'] };
+  var _HL_SANHUI = { '寅':['卯','辰'],'卯':['寅','辰'],'辰':['寅','卯'],'巳':['午','未'],'午':['巳','未'],'未':['巳','午'],'申':['酉','戌'],'酉':['申','戌'],'戌':['申','酉'],'亥':['子','丑'],'子':['亥','丑'],'丑':['亥','子'] };
+
+  function _hlYang(ch) { return TG.indexOf(ch) % 2 === 0; }
+  function _hlGanByWx(wx, yang) {
+    return TG.filter(function(g) { return _HL_WX_GAN[g] === wx && _hlYang(g) === yang; });
+  }
+  function _hlZhiByWx(wx) {
+    return DZ.filter(function(z) { return _HL_WX_ZHI[z] === wx; });
+  }
+  // 寅巳申 / 丑戌未 任意两支相见即刑；子卯互刑；辰午酉亥自刑
+  function _hlZhiXingSet(z) {
+    if (z === '子') return ['卯'];
+    if (z === '卯') return ['子'];
+    if (z === '寅' || z === '巳' || z === '申') return ['寅','巳','申'].filter(function(x) { return x !== z; });
+    if (z === '丑' || z === '戌' || z === '未') return ['丑','戌','未'].filter(function(x) { return x !== z; });
+    return [z];
+  }
+  function _hlGanSet(g, rel) {
+    var w = _HL_WX_GAN[g], y = _hlYang(g);
+    switch (rel) {
+      case 'tong': return [g];
+      case 'yi': return TG.filter(function(x) { return x !== g; });
+      case 'sheng_tong': return _hlGanByWx(_HL_SHENG[w], y);
+      case 'sheng_yi': return _hlGanByWx(_HL_SHENG[w], !y);
+      case 'beisheng_tong': return _hlGanByWx(_HL_SHENG_INV[w], y);
+      case 'beisheng_yi': return _hlGanByWx(_HL_SHENG_INV[w], !y);
+      case 'ke_tong': return _hlGanByWx(_HL_KE[w], y);
+      case 'ke_yi': return _hlGanByWx(_HL_KE[w], !y);
+      case 'beike_tong': return _hlGanByWx(_HL_KE_INV[w], y);
+      case 'beike_yi': return _hlGanByWx(_HL_KE_INV[w], !y);
+      case 'he': return [_HL_WUHE[g]];
+      case 'chong': return _HL_GAN_CHONG[g] ? [_HL_GAN_CHONG[g]] : [];
+      default: return [];
+    }
+  }
+  function _hlZhiSet(z, rel) {
+    var w = _HL_WX_ZHI[z];
+    switch (rel) {
+      case 'tong': return [z];
+      case 'yi': return DZ.filter(function(x) { return x !== z; });
+      case 'zhuSheng': return _hlZhiByWx(_HL_SHENG[w]);
+      case 'beiSheng': return _hlZhiByWx(_HL_SHENG_INV[w]);
+      case 'zhuKe': return _hlZhiByWx(_HL_KE[w]);
+      case 'beiKe': return _hlZhiByWx(_HL_KE_INV[w]);
+      case 'xing': return [z].concat(_hlZhiXingSet(z));
+      case 'chong': return [z, _HL_ZHI_CHONG[z]];
+      case 'he6': return [z, _HL_ZHI_HE6[z]];
+      case 'sanhe': return [z].concat(_HL_SANHE[z]);
+      case 'sanhui': return [z].concat(_HL_SANHUI[z]);
+      case 'hai': return [z, _HL_ZHI_HAI[z]];
+      case 'po': return [z, _HL_ZHI_PO[z]];
+      default: return [];
+    }
+  }
+  function _cmpHlRelSet(mode, rel, ch) {
+    if (mode === 'gan') return _hlGanSet(ch, rel);
+    if (mode === 'zhi') return _hlZhiSet(ch, rel);
+    return [];
+  }
+
+  var _hl = null;
+  var _lockG = null;
+  var _lockZ = null;
+  var _cmpHlBound = false;
+
+  function _hlGanC() { return _lockG || (_hl && _hl.gan) || null; }
+  function _hlZhiC() { return _lockZ || (_hl && _hl.zhi) || null; }
+
+  function _cmpHlClearClasses() {
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref');
+    });
+  }
+  function _cmpHlClearAllClasses() {
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref','bz-hl-refmark');
+    });
+  }
+  function _cmpHlClearHl() {
+    _hl = null;
+    _cmpHlClearClasses();
+    var bar = document.getElementById('cmpHLBar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  }
+  function _cmpHlClearAll() {
+    _hl = null;
+    _lockG = null;
+    _lockZ = null;
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref','bz-hl-refmark');
+    });
+    var bar = document.getElementById('cmpHLBar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  }
+  function _cmpHlRefText() {
+    if (!_hl) return '';
+    if (_hl.focus === 'pillar') {
+      var idxP = 0;
+      var trackP = document.getElementById('cmpTrack');
+      if (trackP) {
+        var cardsP = trackP.querySelectorAll('.cmp-card');
+        for (var i = 0; i < cardsP.length; i++) {
+          if (cardsP[i].getAttribute('data-key') === _hl.refKey) { idxP = i; break; }
+        }
+      }
+      return (idxP + 1) + '号盘 · ' + (CMP_HL_PK_LABEL[_hl.refPk] || _hl.refPk);
+    }
+    var isGan = _hl.focus === 'gan';
+    var c = isGan ? _hlGanC() : _hlZhiC();
+    if (!c) return '';
+    var idx = 0;
+    var track = document.getElementById('cmpTrack');
+    if (track) {
+      var cards = track.querySelectorAll('.cmp-card');
+      for (var j = 0; j < cards.length; j++) {
+        if (cards[j].getAttribute('data-key') === c.key) { idx = j; break; }
+      }
+    }
+    var s = (idx + 1) + '号盘 · ' + (CMP_HL_PK_LABEL[c.pk] || c.pk) + ' ｜ ' + (isGan ? '干 ' : '支 ') + c.ch;
+    if (isGan ? _lockG : _lockZ) s += ' 🔒';
+    return s;
+  }
+  function _cmpHlRenderBar() {
+    var bar = document.getElementById('cmpHLBar');
+    if (!bar || !_hl) return;
+    var html = '<span class="cmp-hl-ref">' + _cmpEsc(_cmpHlRefText()) + '</span>';
+    if (_hl.focus === 'pillar') {
+      for (var i = 0; i < CMP_HL_PKS.length; i++) {
+        var pk = CMP_HL_PKS[i];
+        html += '<label class="cmp-hl-pk"><input type="checkbox" value="' + pk + '"' + (_hl.pillars.indexOf(pk) >= 0 ? ' checked' : '') + '>' + CMP_HL_PK_LABEL[pk] + '</label>';
+      }
+      html += '<button class="cmp-hl-apply" title="所有盘勾选柱位高亮，其余柱变暗">◌ 标亮同柱</button>';
+    } else {
+      var relRow = function(row, rels, labels, kind) {
+        var arr = row === 'g' ? _hl.relsG : _hl.relsZ;
+        var lk = row === 'g' ? _lockG : _lockZ;
+        var h = '<span class="cmp-hl-rowtag">' + kind + '</span>';
+        for (var r = 0; r < rels.length; r++) {
+          var rel = rels[r];
+          h += '<button class="cmp-hl-rel' + (arr.indexOf(rel) >= 0 ? ' active' : '') + '" data-row="' + row + '" data-rel="' + rel + '" title="所有盘符合条件的' + labels[rel] + '高亮，其余' + kind + '变暗；再点一次取消，可与其它键叠加">' + labels[rel] + '</button>';
+        }
+        h += '<button class="cmp-hl-rel cmp-hl-lock' + (lk ? ' active' : '') + '" data-row-lock="' + row + '" title="' + (lk ? '该行已锁定：本行功能只以锁定的' + kind + '（红圈格）为中心计算，点击盘中其他' + kind + '不切换中心；再点一次解除' : '锁定当前' + kind + '为本行计算中心：之后点击盘中任何' + kind + '都不切换，本行功能始终以它为中心') + '">🔒 ' + (lk ? '已锁定' : '锁定') + '</button>';
+        return '<span class="cmp-hl-row">' + h + '</span>';
+      };
+      html += relRow('g', CMP_HL_GAN_RELS, CMP_HL_GAN_REL_LABEL, '干');
+      html += relRow('z', CMP_HL_ZHI_RELS, CMP_HL_ZHI_REL_LABEL, '支');
+    }
+    html += '<button class="cmp-hl-close" title="清除高亮并收起（锁定中心与红圈保留）">✕</button>';
+    bar.innerHTML = html;
+    bar.style.display = '';
+    if (_hl.focus === 'pillar') {
+      bar.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          var sel = [];
+          bar.querySelectorAll('input[type="checkbox"]').forEach(function(c2) { if (c2.checked) sel.push(c2.value); });
+          _hl.pillars = sel;
+        });
+      });
+      bar.querySelector('.cmp-hl-apply').addEventListener('click', function() {
+        _cmpHlApply();
+      });
+    } else {
+      bar.querySelectorAll('.cmp-hl-rel[data-rel]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var rel = btn.getAttribute('data-rel');
+          var arr = btn.getAttribute('data-row') === 'g' ? _hl.relsG : _hl.relsZ;
+          var i = arr.indexOf(rel);
+          if (i >= 0) arr.splice(i, 1); else arr.push(rel);
+          _cmpHlApply();
+        });
+      });
+      bar.querySelectorAll('.cmp-hl-lock').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var row = btn.getAttribute('data-row-lock');
+          if (row === 'g') {
+            if (_lockG) { _hl.gan = _lockG; _lockG = null; }
+            else if (_hlGanC()) _lockG = { face:'gan', ch:_hlGanC().ch, pk:_hlGanC().pk, key:_hlGanC().key };
+          } else {
+            if (_lockZ) { _hl.zhi = _lockZ; _lockZ = null; }
+            else if (_hlZhiC()) _lockZ = { face:'zhi', ch:_hlZhiC().ch, pk:_hlZhiC().pk, key:_hlZhiC().key };
+          }
+          _cmpHlApply();
+        });
+      });
+    }
+    bar.querySelector('.cmp-hl-close').addEventListener('click', _cmpHlClearHl);
+  }
+  function _cmpHlApply() {
+    _cmpHlClearAllClasses();
+    if (!_hl) return;
+    var track = document.getElementById('cmpTrack');
+    if (!track) return;
+    if (_hl.focus === 'pillar') {
+      track.querySelectorAll('.cmp-card').forEach(function(card) {
+        card.querySelectorAll('td[data-gk]').forEach(function(td) {
+          td.classList.add(_hl.pillars.indexOf(td.getAttribute('data-pk')) >= 0 ? 'bz-hl-on' : 'bz-hl-off');
+        });
+      });
+      var refCard = _hl.refKey ? track.querySelector('.cmp-card[data-key="' + _hl.refKey + '"]') : null;
+      if (refCard) {
+        var refTh = refCard.querySelector('th[data-pk="' + _hl.refPk + '"]');
+        if (refTh) refTh.classList.add('bz-hl-ref');
+      }
+    } else {
+      var applyRow = function(gk, ch, rels) {
+        if (!ch || !rels.length) return;
+        var set = [];
+        rels.forEach(function(rel) {
+          (gk === 'gan' ? _hlGanSet(ch, rel) : _hlZhiSet(ch, rel)).forEach(function(x) {
+            if (set.indexOf(x) < 0) set.push(x);
+          });
+        });
+        track.querySelectorAll('.cmp-card td[data-gk="' + gk + '"]').forEach(function(td) {
+          td.classList.add(set.indexOf(td.getAttribute('data-gz')) >= 0 ? 'bz-hl-on' : 'bz-hl-off');
+        });
+      };
+      var gc = _hlGanC(), zc = _hlZhiC();
+      applyRow('gan', gc ? gc.ch : null, _hl.relsG);
+      applyRow('zhi', zc ? zc.ch : null, _hl.relsZ);
+      var fc = _hl.focus === 'gan' ? gc : zc;
+      var fLock = _hl.focus === 'gan' ? _lockG : _lockZ;
+      if (fc && !fLock) {
+        var refCard2 = fc.key ? track.querySelector('.cmp-card[data-key="' + fc.key + '"]') : null;
+        if (refCard2) {
+          var refTd = refCard2.querySelector('td[data-gk="' + _hl.focus + '"][data-gz="' + fc.ch + '"][data-pk="' + fc.pk + '"]');
+          if (refTd) refTd.classList.add('bz-hl-ref');
+        }
+      }
+    }
+    [_lockG, _lockZ].forEach(function(l) {
+      if (!l) return;
+      var card = l.key ? track.querySelector('.cmp-card[data-key="' + l.key + '"]') : null;
+      if (!card) return;
+      var el = card.querySelector('td[data-gk="' + l.face + '"][data-gz="' + l.ch + '"][data-pk="' + l.pk + '"]');
+      if (el) el.classList.add('bz-hl-refmark');
+    });
+    _cmpHlRenderBar();
+  }
+  function _cmpHlBind() {
+    if (_cmpHlBound) return;
+    var track = document.getElementById('cmpTrack');
+    if (!track) return;
+    _cmpHlBound = true;
+    track.addEventListener('click', function(ev) {
+      var t = ev.target;
+      if (!t || t.nodeType !== 1) return;
+      var pk, gk, gz, card, refKey;
+      if (t.tagName === 'TH' && (pk = t.getAttribute('data-pk'))) {
+        card = t.closest('.cmp-card');
+        refKey = card ? card.getAttribute('data-key') : '';
+        if (_hl && _hl.focus === 'pillar' && _hl.refPk === pk && _hl.refKey === refKey) { _cmpHlClearHl(); return; }
+        _cmpHlClearHl();
+        _hl = { focus:'pillar', refPk:pk, refKey:refKey, pillars:[pk] };
+        _cmpHlApply();
+        return;
+      }
+      if (t.tagName === 'TD' && (gk = t.getAttribute('data-gk')) && (gz = t.getAttribute('data-gz'))) {
+        pk = t.getAttribute('data-pk');
+        card = t.closest('.cmp-card');
+        refKey = card ? card.getAttribute('data-key') : '';
+        var isNew = false;
+        if (!_hl) { _hl = { focus:gk, relsG:[], relsZ:[] }; isNew = true; }
+        var lk = gk === 'gan' ? _lockG : _lockZ;
+        var cc = gk === 'gan' ? _hlGanC() : _hlZhiC();
+        if (!isNew && _hl.focus === gk && cc && cc.ch === gz && cc.pk === pk && cc.key === refKey) { _cmpHlClearHl(); return; }
+        if (!lk) {
+          var o = { face:gk, ch:gz, pk:pk, key:refKey };
+          if (gk === 'gan') _hl.gan = o; else _hl.zhi = o;
+        }
+        var other = gk === 'gan' ? 'zhi' : 'gan';
+        var otherC = other === 'gan' ? _hlGanC() : _hlZhiC();
+        var otherLock = other === 'gan' ? _lockG : _lockZ;
+        if (!otherC && !otherLock) {
+          var otherTd = card ? card.querySelector('td[data-gk="' + other + '"][data-pk="' + pk + '"]') : null;
+          if (otherTd) {
+            var oc = { face:other, ch:otherTd.getAttribute('data-gz'), pk:pk, key:refKey };
+            if (other === 'gan') _hl.gan = oc; else _hl.zhi = oc;
+          }
+        }
+        _hl.focus = gk;
+        _cmpHlApply();
+      }
+    });
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Escape' || !_hl) return;
+      var ov = document.getElementById('cmpOverlay');
+      if (ov && ov.classList.contains('show')) _cmpHlClearHl();
+    });
+  }
+
   // ===== 盘面对比 (v0.37.0) =====
   document.addEventListener('click', function(e) {
     if (!e.target || !e.target.closest) return;
@@ -2455,6 +2807,8 @@ function cmpSetState(entries) {
     toggleBar: cmpToggleBar,
     toggleFocus: cmpToggleFocus,
     _setState: cmpSetState,
+    hlRelSet: _cmpHlRelSet,
+    hlClear: _cmpHlClearAll,
   };
   _cmpApplyCols();
   _cmpApplyBar();

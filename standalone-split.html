@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.40.0 | 2026-09-27 -->
+<!-- 八字排盘 · 从真版 v0.43.0 | 2026-09-28 -->
+<!-- v0.43.0: 关系高亮参照解绑+干支行各行锁定键 — 点谁参照谁（参照文本只显点击面，同柱干支仍作关系计算上下文）；干行/支行各一枚🔒锁定键（柱模式不设），锁定即本行计算中心：点盘中任何干支不切换本行中心、红圈保留，再点解除回动态；干支两行可各自锁定、两红圈并存；金圈=未锁定行当前焦点，锁定行让位；✕收起锁定与红圈保留，关闭对比页全清；档案行新增「📝 记录」命盘分析记录——右侧滑出抽屉编辑案例分析，输入防抖自动保存本地（bz_note_<档案id>），改名/隐私模式不影响，彻底删除档案时记录随删 -->
+<!-- v0.42.0: 对比页关系高亮升级 — 点柱名=柱模式（八柱勾选+标亮同柱）；点天干/地支=参照格红圈固定（不随键选择变化），同柱另一面金圈为副参照；功能条干行12键+支行13键并存，两组多选叠加（同干/异干/主生同异干/被生同异干/主克同异干/被克同异干/合干/冲干 × 同支/异支/主生支/被生支/主克支/被克支/刑/冲/六合/三合/三会/害/破），命中并集高亮、其余变暗；✕/Esc/再点参照收起 -->
 <!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
@@ -10,6 +12,7 @@
 <!-- v0.32.0: 档案标签 — 每行「✏️ 修改」前新增行内标签框（空格分隔多标签，失焦/回车即存；不刷新列表以免吞掉点击）+ 标签栏筛选（全部/各标签/未分类）+ 默认标签（打开档案默认只看该标签，可随时点标签切换；档案弹窗加宽 420→880px） -->
 <!-- v0.33.0: 档案列表按名字拼音排序 — 排序键 = 列表所见的显示名（隐私关：小名 / 姓名；隐私开：艺名 → 小名 → 匿名），中文按读音（localeCompare 'zh'）；同名按更新时间新在前；落盘顺序与显示顺序保持一致（行内 ✏️修改 / 🗑️删除 / 排盘 按数组索引定位） -->
 <!-- v0.34.0: 档案行「排盘」立即排盘修复 — setFormData 回填出生地时不再裸调 onProvChange/onCityChange（模块 IIFE 内为 ReferenceError，异常中断后续 closeArchivePanel + doPaipan，表现为「点了排盘没反应、要回主界面再点一次」）；改走 APP.* 并把两级 50ms setTimeout 改为同步回填，排盘时省/市/区县已全部就位（真太阳时不再漏算） -->
+<!-- v0.43.0: 儒略历开关 — 新历模式勾选「儒历」后，1582-10-04 及更早的西历日期按儒略历解读，自动换算格里历再排盘；盘面头部显示「📅 儒略历 原输入日」标注，档案与云端快照带 isJulian 字段可复现（王阳明盘：儒 1472-10-31 = 格 1472-11-09 → 壬辰 辛亥 癸亥 癸亥） -->
 <!-- v0.35.0: 人元司令边界修正 — daysAfter 为 0 起算的完整天数（节后第 N 日 ⇔ daysAfter = N-1），REN_YUAN 段边界判断由 <= 改 <（旧口径令每段多占 1 日：如 1982-10-18 卯时 寒露后第 10 日本应丁司令、误报辛）；?test=1 新增 6 条司令边界断言 -->
 <!-- v0.36.0: 三垣新增胎年宫 — 三垣区由胎元/命宫/身宫增为胎年/胎元/命宫/身宫（胎年=胎元所在年的干支，口径A；胎元=出生月往前第9个节气月，亥/子/丑月生人胎年=生年干支、其余=前一年，亥月口径经邦顺裁决）；胎年占用三垣区原「年柱下空列」，表格总列数不变；宫位面板新增「胎年宫位」显示开关（默认不显示；本地显示偏好，不入导出/云同步）+ 宫位设置第 8 槽「胎年」标签（可留空）；?test=1 新增胎年断言（函数级 9 条 + 全盘 7 案例含 2 条亥月锚点 + 宫位开关 TN01-TN09） -->
 <!-- v0.25.0: 宫位配置保护 — 容错(损坏备份+提示) + 导出/导入JSON + schema版本化 + Supabase上云(user_gongwei_config) -->
@@ -484,8 +487,8 @@
 
   /* v0.12.0 档案行内操作按钮 */
   .archive-row-actions { display:flex; gap:6px; flex-shrink:0; margin-left:8px; }
-  .archive-row-edit, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
-  .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
+  .archive-row-edit, .archive-row-note, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .archive-row-note:hover, .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
   .archive-row-del:hover { background:var(--c-red); color:#fff; border-color:var(--c-red); }
 
   /* v0.12.0 编辑弹窗 */
@@ -509,6 +512,23 @@
   .edit-dialog-footer .btn-save:hover { background:var(--c-red); }
   .edit-dialog-footer .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
   .edit-dialog-footer .btn-cancel:hover { background:var(--c-line); }
+
+  /* ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== */
+  .note-overlay { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1200; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .25s ease; }
+  .note-overlay.show { opacity:1; pointer-events:auto; }
+  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease; display:flex; flex-direction:column; }
+  .note-overlay.show .note-drawer { transform:translateX(0); }
+  .note-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--c-line); }
+  .note-title { font-family:var(--font-display); font-size:16px; color:var(--c-ink); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .note-status { font-size:12px; color:var(--c-gray); white-space:nowrap; }
+  .note-close { background:none; border:none; font-size:20px; color:var(--c-gray); cursor:pointer; padding:0 4px; line-height:1; }
+  .note-close:hover { color:var(--c-red); }
+  .note-text { flex:1; width:100%; box-sizing:border-box; resize:none; border:none; outline:none; padding:16px 18px; font-size:14px; line-height:1.8; font-family:var(--font-body); color:var(--c-ink); background:var(--c-paper); }
+  .note-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 18px; border-top:1px solid var(--c-line); }
+  .note-count { font-size:12px; color:var(--c-gray); }
+  .note-save-btn { font-size:13px; padding:5px 18px; background:var(--c-ink); color:var(--c-paper); border:none; border-radius:2px; cursor:pointer; font-family:var(--font-display); }
+  .note-save-btn:hover { background:var(--c-red); }
+  @media (max-width:640px) { .note-drawer { width:100vw; } }
 
   @media (max-width:900px) {
     .page { padding:10px 6px 14px; max-width:100%; }
@@ -798,6 +818,18 @@
   .cmp-pick-meta { font-size:12px; color:var(--c-gray); margin-left:auto; white-space:nowrap; }
   /* ===== v0.38.0 盘面对比：名字条/级别/缩放/司令行/档案勾选 ===== */
   .cmp-bar { display:flex; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--c-line); flex-wrap:wrap; flex:0 0 auto; min-height:20px; }
+  .cmp-hl-bar { display:flex; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--c-line); flex-wrap:wrap; flex:0 0 auto; }
+  .cmp-hl-ref { font-weight:700; color:var(--c-red); white-space:nowrap; margin-right:2px; }
+  .cmp-hl-bar label { display:inline-flex; align-items:center; gap:3px; font-size:13px; white-space:nowrap; cursor:pointer; }
+  .cmp-hl-rel, .cmp-hl-apply, .cmp-hl-close { font-size:13px; padding:3px 10px; border:1px solid var(--c-line); border-radius:6px; background:var(--bz-card-bg); cursor:pointer; white-space:nowrap; color:var(--c-ink); }
+  .cmp-hl-rel.active { background:var(--c-paper); border-color:var(--c-red); color:var(--c-red); font-weight:700; }
+  .cmp-hl-apply { border-color:var(--c-red); color:var(--c-red); font-weight:700; }
+  td.bz-hl-on, th.bz-hl-on { background:#ffe9b3; box-shadow:inset 0 0 0 2px #d4a017; }
+  td.bz-hl-off { opacity:.22; }
+  .bz-hl-ref { outline:2px solid #d4a017; outline-offset:-2px; }
+  .bz-hl-refmark { outline:2px solid #d0021b; outline-offset:-2px; border-radius:2px; }
+  .cmp-hl-row { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .cmp-hl-rowtag { font-size:12px; font-weight:700; opacity:.6; }
   .cmp-bar-empty { font-size:11px; color:var(--c-gray); }
   .cmp-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); font-size:12px; cursor:grab; user-select:none; color:var(--c-ink); }
   .cmp-chip-pos { color:var(--c-gray); font-size:10px; }
@@ -872,6 +904,7 @@
       <span id="inLeapGroup" style="display:none;"><label style="font-size:12px;"><input type="checkbox" id="inLeap">闰月</label></span>
       <input type="number" id="inHour" value="5" min="0" max="23" style="width:48px;"> <span style="font-size:13px;">时</span>
       <input type="number" id="inMin" value="1" min="0" max="59" style="width:48px;"> <span style="font-size:13px;">分</span>
+      <label style="cursor:pointer;user-select:none;" title="勾选后输入的西历日期按儒略历解读（1582-10-04 及更早的史学界惯例），自动换算为格里历再排盘"><input type="checkbox" id="useJulian" style="vertical-align:middle;margin-right:2px;">儒历</label>
       <label style="cursor:pointer;user-select:none;"><input type="checkbox" id="useSolar" onchange="APP.toggleSolar()" style="vertical-align:middle;margin-right:2px;">真太阳时</label>
       <span id="solarGroup" style="display:none;">
       <label>省</label><select id="inProv" onchange="APP.onProvChange()" style="width:80px;"><option value="">—</option></select>
@@ -936,6 +969,7 @@
       </div>
       <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
+      <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
       <div class="cmp-picker" id="cmpPicker"></div>
       <div class="cmp-track" id="cmpTrack"></div>
     </div>
@@ -1010,6 +1044,22 @@
       <div class="edit-dialog-footer">
         <button class="btn-cancel" onclick="ARCHIVE.closeEditPanel()">取消</button>
         <button class="btn-save" onclick="ARCHIVE.saveEdit()">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== -->
+  <div class="note-overlay" id="noteOverlay" onclick="ARCHIVE.closeNotePanel()">
+    <div class="note-drawer" id="noteDrawer" onclick="event.stopPropagation()">
+      <div class="note-header">
+        <span class="note-title" id="noteTitle">📝 命盘分析记录</span>
+        <span class="note-status" id="noteStatus"></span>
+        <button class="note-close" onclick="ARCHIVE.closeNotePanel()">✕</button>
+      </div>
+      <textarea class="note-text" id="noteText" placeholder="在这里编写案例分析……输入即自动保存到本地" oninput="ARCHIVE.onNoteInput()"></textarea>
+      <div class="note-footer">
+        <span class="note-count" id="noteCount"></span>
+        <button class="note-save-btn" onclick="ARCHIVE.noteSaveNow()">保 存</button>
       </div>
     </div>
   </div>

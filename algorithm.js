@@ -78,6 +78,25 @@ function lunarToSolar(ly, lm, ld, isLeap) {
   return normalizeDate(solarY, solarM, solarD);
 }
 
+// 儒略历→格里历（JD 桥接）：1582-10-04 及更早的西历日期按史学界惯例是儒略历，
+// 排盘需先换算成格里历（如王阳明生：儒 1472-10-31 = 格 1472-11-09）
+function julianToGregorian(y, m, d) {
+  var Y = y, M = m;
+  if (M <= 2) { Y -= 1; M += 12; }
+  var jd = Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + d - 1524.5;
+  var Z = Math.floor(jd + 0.5);
+  var a = Math.floor((Z - 1867216.25) / 36524.25);
+  var A = Z + 1 + a - Math.floor(a / 4);
+  var B = A + 1524;
+  var C = Math.floor((B - 122.1) / 365.25);
+  var D = Math.floor(365.25 * C);
+  var E = Math.floor((B - D) / 30.6001);
+  var gd = B - D - Math.floor(30.6001 * E);
+  var gm = E < 14 ? E - 1 : E - 13;
+  var gy = gm > 2 ? C - 4716 : C - 4715;
+  return { y: gy, m: gm, d: gd };
+}
+
 // 新历/农历切换
 function toggleCalendar(type) {
   if (calendarType === type) return;
@@ -672,6 +691,7 @@ function buildShunLabel(shun, gender, nianGan) {
     monthDays: monthDays,
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
+    julianToGregorian: julianToGregorian,
     toggleCalendar: toggleCalendar,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,

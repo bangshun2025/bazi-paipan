@@ -273,7 +273,9 @@ function getFormData() {
     // v0.8.0 农历字段
     calendarType: APP.calendarType,
     isLeap: isLunar ? document.getElementById('inLeap').checked : false,
-    lunarMonth: isLunar ? parseInt(document.getElementById('inMonthSelect').value) : null
+    lunarMonth: isLunar ? parseInt(document.getElementById('inMonthSelect').value) : null,
+    // v0.43.0 儒略历开关（仅新历模式有意义）
+    isJulian: !isLunar ? !!(document.getElementById('useJulian') && document.getElementById('useJulian').checked) : false
   };
 }
 
@@ -297,6 +299,7 @@ function setFormData(d) {
   document.getElementById('inDay').value = d.day;
   document.getElementById('inHour').value = d.hour;
   document.getElementById('inMin').value = d.min || 0;
+  document.getElementById('useJulian').checked = !!(calType === 'solar' && d.isJulian);
   document.getElementById('useSolar').checked = d.useSolar;
   APP.toggleSolar();
   // v0.34.0 同步回填地址：onProvChange/onCityChange 都是同步建 option，
@@ -724,6 +727,7 @@ function permanentDelete(idx) {
   const trash = getTrash();
   if (!trash[idx]) return;
   if (!confirm('确定彻底删除「' + getDisplayName(trash[idx]) + '」？此操作不可恢复。')) return;
+  if (trash[idx].id !== undefined && trash[idx].id !== null) deleteNote(trash[idx].id);
   trash.splice(idx, 1);
   saveTrash(trash);
   renderTrash();
@@ -733,6 +737,7 @@ function emptyTrash() {
   const trash = getTrash();
   if (!trash.length) return;
   if (!confirm('确定清空回收站？所有档案将被永久删除。')) return;
+  trash.forEach(function(a) { if (a && a.id !== undefined && a.id !== null) deleteNote(a.id); });
   saveTrash([]);
   hideTrash();
 }
@@ -1060,6 +1065,7 @@ function archiveRowHtml(a, idx) {
     + ' value="' + escHtml(getArchiveTags(a).join(' ')) + '"'
     + ' onchange="ARCHIVE.saveRowTags(' + idx + ', this.value)"'
     + ' onkeydown="if(event.key===\'Enter\'){this.blur();}">'
+    + '<button class="archive-row-note" title="命盘分析记录" onclick="ARCHIVE.openNotePanel(' + idx + ')">📝 记录</button>'
     + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + idx + ')">✏️ 修改</button>'
     + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + idx + ')">🗑️ 删除</button>'
     + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + idx + ')">排盘</button>'
@@ -1095,7 +1101,76 @@ function loadFromArchive(idx) {
 
 // ============================================================
 
-  // ===== 挂载到全局命名空间 =====
+  // ============================================================
+// v0.43.0 命盘分析记录：右侧滑出抽屉，内容按档案 id 存 localStorage
+// ============================================================
+var NOTE_KEY_PREFIX = 'bz_note_';
+var _noteArchId = null;   // 当前抽屉绑定的档案 id（字符串）
+var _noteTimer = null;    // 输入防抖句柄
+
+function noteKey(id) { return NOTE_KEY_PREFIX + id; }
+
+function readNote(id) {
+  try {
+    var v = JSON.parse(localStorage.getItem(noteKey(id)));
+    if (v && typeof v.text === 'string') return v;
+  } catch (e) {}
+  return { text: '', updatedAt: null };
+}
+
+function openNotePanel(idx) {
+  var archives = getArchives();
+  var a = archives[idx];
+  if (!a) return;
+  flushNote();
+  _noteArchId = String(a.id);
+  var data = readNote(_noteArchId);
+  document.getElementById('noteTitle').textContent = '📝 命盘分析记录 · ' + getDisplayName(a);
+  document.getElementById('noteText').value = data.text;
+  updateNoteMeta(data.updatedAt);
+  document.getElementById('noteOverlay').classList.add('show');
+}
+
+function closeNotePanel() {
+  flushNote();
+  document.getElementById('noteOverlay').classList.remove('show');
+  _noteArchId = null;
+}
+
+function onNoteInput() {
+  if (!_noteArchId) return;
+  document.getElementById('noteStatus').textContent = '正在输入…';
+  document.getElementById('noteCount').textContent = document.getElementById('noteText').value.length + ' 字';
+  clearTimeout(_noteTimer);
+  _noteTimer = setTimeout(noteSaveNow, 800);
+}
+
+function noteSaveNow() {
+  if (!_noteArchId) return;
+  clearTimeout(_noteTimer);
+  _noteTimer = null;
+  var ts = new Date().toISOString();
+  localStorage.setItem(noteKey(_noteArchId), JSON.stringify({ text: document.getElementById('noteText').value, updatedAt: ts }));
+  updateNoteMeta(ts);
+}
+
+function flushNote() {
+  if (_noteTimer) noteSaveNow();
+}
+
+function updateNoteMeta(ts) {
+  document.getElementById('noteCount').textContent = document.getElementById('noteText').value.length + ' 字';
+  var st = document.getElementById('noteStatus');
+  if (!ts) { st.textContent = '尚未保存'; return; }
+  var d = new Date(ts);
+  st.textContent = '已自动保存 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function deleteNote(id) {
+  localStorage.removeItem(noteKey(id));
+}
+
+// ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
     migrateFromV1: migrateFromV1,
@@ -1165,6 +1240,14 @@ function loadFromArchive(idx) {
     getDisplayName: getDisplayName,
     togglePrivacy: togglePrivacy,
     loadFromArchive: loadFromArchive,
+    // v0.43.0 命盘分析记录
+    openNotePanel: openNotePanel,
+    closeNotePanel: closeNotePanel,
+    onNoteInput: onNoteInput,
+    noteSaveNow: noteSaveNow,
+    readNote: readNote,
+    deleteNote: deleteNote,
+    noteKey: noteKey,
   };
 
   // ===== v0.32.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
@@ -1220,7 +1303,8 @@ function loadFromArchive(idx) {
       var rows = document.querySelectorAll('#archive-modal-list .archive-modal-row');
       t('v0.32 T06:无标签旧档案照常渲染', rows.length === 2, rows.length);
       var tagInput = document.querySelector('#archive-modal-list .archive-row-tags');
-      t('v0.32 T06:标签框紧邻修改按钮之前', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.className.indexOf('archive-row-edit') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.className);
+      t('v0.32 T06:标签框紧邻记录按钮之前', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.className.indexOf('archive-row-note') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.className);
+      t('v0.32 T06:记录按钮后接修改按钮', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.nextElementSibling.className.indexOf('archive-row-edit') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.nextElementSibling && tagInput.nextElementSibling.nextElementSibling.className);
       t('v0.32 T06:标签框回填多标签', !!tagInput && tagInput.value === '自在班 老大', tagInput && tagInput.value);
       t('v0.32 T06:标签栏 全部+2标签+未分类', document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length === 4, document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length);
 
@@ -1395,8 +1479,84 @@ function loadFromArchive(idx) {
       renderArchiveModal();
     }
   }
+  // ===== v0.43.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）：命盘分析记录 =====
+  function runV043Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var ov = document.getElementById('noteOverlay');
+    var ta = document.getElementById('noteText');
+    if (!ov || !ta) { t('v0.43 T00:记录抽屉 DOM 缺失', false, 'noteOverlay/noteText'); return; }
+    try {
+      // T01 行内按钮：存在、索引正确、位于标签框与修改键之间
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't43note', name: '记录测试', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' }
+      ]));
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var noteBtn = document.querySelector('#archive-modal-list .archive-row-note');
+      t('v0.43 T01:记录按钮存在且索引正确', !!noteBtn && (noteBtn.getAttribute('onclick') || '').indexOf('openNotePanel(0)') >= 0, noteBtn && noteBtn.getAttribute('onclick'));
+
+      // T02 点击滑出抽屉：标题带档案显示名、空白页
+      noteBtn.click();
+      t('v0.43 T02:点击滑出抽屉', ov.classList.contains('show'), ov.className);
+      t('v0.43 T02:标题带档案名', document.getElementById('noteTitle').textContent.indexOf('记录测试') >= 0, document.getElementById('noteTitle').textContent);
+      t('v0.43 T02:新档案空白页', ta.value === '' && document.getElementById('noteStatus').textContent === '尚未保存', document.getElementById('noteStatus').textContent);
+
+      // T03 输入即落盘 bz_note_<id>（JSON 带时间戳）+ 字数统计
+      ta.value = '案例一：乙木生巳月。';
+      onNoteInput();
+      noteSaveNow();
+      var raw = localStorage.getItem(noteKey('t43note'));
+      var parsed = null;
+      try { parsed = JSON.parse(raw); } catch (e) {}
+      t('v0.43 T03:输入落盘 bz_note_<id>', !!parsed && parsed.text === '案例一：乙木生巳月。' && typeof parsed.updatedAt === 'string', raw);
+      t('v0.43 T03:字数统计', document.getElementById('noteCount').textContent === (ta.value.length + ' 字'), document.getElementById('noteCount').textContent);
+
+      // T04 关闭再开：文本回填 + 状态行
+      closeNotePanel();
+      t('v0.43 T04:关闭后抽屉收起', !ov.classList.contains('show'), ov.className);
+      openNotePanel(0);
+      t('v0.43 T04:重开回填已存文本', ta.value === '案例一：乙木生巳月。', ta.value);
+      t('v0.43 T04:状态行显示已保存', document.getElementById('noteStatus').textContent.indexOf('已自动保存') >= 0, document.getElementById('noteStatus').textContent);
+
+      // T05 档案改名（nickname）后记录仍按 id 绑定不丢
+      var arr5 = getArchives();
+      arr5[0].nickname = '改名了';
+      saveArchives(arr5);
+      renderArchiveModal();
+      openNotePanel(0);
+      t('v0.43 T05:改名后记录仍在', ta.value === '案例一：乙木生巳月。', ta.value);
+      t('v0.43 T05:标题随改名', document.getElementById('noteTitle').textContent.indexOf('改名了') >= 0, document.getElementById('noteTitle').textContent);
+
+      // T06 多档案隔离：第二条档案各写各的
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't43note', name: '记录测试', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' },
+        { id: 't43blank', name: '空白测试', gender: '女', year: 2001, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' }
+      ]));
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      document.querySelectorAll('#archive-modal-list .archive-row-note')[1].click();
+      t('v0.43 T06:第二档案是独立空白页', ta.value === '', ta.value);
+      closeNotePanel();
+      openNotePanel(0);
+      t('v0.43 T06:第一档案记录不受干扰', ta.value === '案例一：乙木生巳月。', ta.value);
+      closeNotePanel();
+    } catch (e) {
+      t('v0.43 T00:测试异常', false, String(e));
+    } finally {
+      localStorage.removeItem(noteKey('t43note'));
+      localStorage.removeItem(noteKey('t43blank'));
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); };
+    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); runV043Tests(); };
     if (document.readyState === 'complete') runAllTests();
     else window.addEventListener('load', runAllTests);
   }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 · 从真版 v0.40.0 | 2026-09-27 -->
+<!-- 八字排盘 · 从真版 v0.43.0 | 2026-09-28 -->
 <!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
@@ -11,6 +11,7 @@
 <!-- v0.32.0: 档案标签 — 每行「✏️ 修改」前新增行内标签框（空格分隔多标签，失焦/回车即存；不刷新列表以免吞掉点击）+ 标签栏筛选（全部/各标签/未分类）+ 默认标签（打开档案默认只看该标签，可随时点标签切换；档案弹窗加宽 420→880px） -->
 <!-- v0.33.0: 档案列表按名字拼音排序 — 排序键 = 列表所见的显示名（隐私关：小名 / 姓名；隐私开：艺名 → 小名 → 匿名），中文按读音（localeCompare 'zh'）；同名按更新时间新在前；落盘顺序与显示顺序保持一致（行内 ✏️修改 / 🗑️删除 / 排盘 按数组索引定位） -->
 <!-- v0.34.0: 档案行「排盘」立即排盘修复 — setFormData 回填出生地时不再裸调 onProvChange/onCityChange（模块 IIFE 内为 ReferenceError，异常中断后续 closeArchivePanel + doPaipan，表现为「点了排盘没反应、要回主界面再点一次」）；改走 APP.* 并把两级 50ms setTimeout 改为同步回填，排盘时省/市/区县已全部就位（真太阳时不再漏算） -->
+<!-- v0.43.0: 儒略历开关 — 新历模式勾选「儒历」后，1582-10-04 及更早的西历日期按儒略历解读，自动换算格里历再排盘；盘面头部显示「📅 儒略历 原输入日」标注，档案与云端快照带 isJulian 字段可复现（王阳明盘：儒 1472-10-31 = 格 1472-11-09 → 壬辰 辛亥 癸亥 癸亥） -->
 <!-- v0.35.0: 人元司令边界修正 — daysAfter 为 0 起算的完整天数（节后第 N 日 ⇔ daysAfter = N-1），REN_YUAN 段边界判断由 <= 改 <（旧口径令每段多占 1 日：如 1982-10-18 卯时 寒露后第 10 日本应丁司令、误报辛）；?test=1 新增 6 条司令边界断言 -->
 <!-- v0.36.0: 三垣新增胎年宫 — 三垣区由胎元/命宫/身宫增为胎年/胎元/命宫/身宫（胎年=胎元所在年的干支，口径A；胎元=出生月往前第9个节气月，亥/子/丑月生人胎年=生年干支、其余=前一年，亥月口径经邦顺裁决）；胎年占用三垣区原「年柱下空列」，表格总列数不变；宫位面板新增「胎年宫位」显示开关（默认不显示；本地显示偏好，不入导出/云同步）+ 宫位设置第 8 槽「胎年」标签（可留空）；?test=1 新增胎年断言（函数级 9 条 + 全盘 7 案例含 2 条亥月锚点 + 宫位开关 TN01-TN09） -->
 <!-- v0.20.0: 常用宫位分级 — 设置页双tab(全部/常用) + ☆常用标记
@@ -484,8 +485,8 @@
 
   /* v0.12.0 档案行内操作按钮 */
   .archive-row-actions { display:flex; gap:6px; flex-shrink:0; margin-left:8px; }
-  .archive-row-edit, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
-  .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
+  .archive-row-edit, .archive-row-note, .archive-row-del { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .archive-row-note:hover, .archive-row-edit:hover { background:var(--c-ink); color:var(--c-paper); }
   .archive-row-del:hover { background:var(--c-red); color:#fff; border-color:var(--c-red); }
 
   /* v0.12.0 编辑弹窗 */
@@ -509,6 +510,23 @@
   .edit-dialog-footer .btn-save:hover { background:var(--c-red); }
   .edit-dialog-footer .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
   .edit-dialog-footer .btn-cancel:hover { background:var(--c-line); }
+
+  /* ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== */
+  .note-overlay { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1200; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .25s ease; }
+  .note-overlay.show { opacity:1; pointer-events:auto; }
+  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease; display:flex; flex-direction:column; }
+  .note-overlay.show .note-drawer { transform:translateX(0); }
+  .note-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--c-line); }
+  .note-title { font-family:var(--font-display); font-size:16px; color:var(--c-ink); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .note-status { font-size:12px; color:var(--c-gray); white-space:nowrap; }
+  .note-close { background:none; border:none; font-size:20px; color:var(--c-gray); cursor:pointer; padding:0 4px; line-height:1; }
+  .note-close:hover { color:var(--c-red); }
+  .note-text { flex:1; width:100%; box-sizing:border-box; resize:none; border:none; outline:none; padding:16px 18px; font-size:14px; line-height:1.8; font-family:var(--font-body); color:var(--c-ink); background:var(--c-paper); }
+  .note-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 18px; border-top:1px solid var(--c-line); }
+  .note-count { font-size:12px; color:var(--c-gray); }
+  .note-save-btn { font-size:13px; padding:5px 18px; background:var(--c-ink); color:var(--c-paper); border:none; border-radius:2px; cursor:pointer; font-family:var(--font-display); }
+  .note-save-btn:hover { background:var(--c-red); }
+  @media (max-width:640px) { .note-drawer { width:100vw; } }
 
   @media (max-width:900px) {
     .page { padding:10px 6px 14px; max-width:100%; }
@@ -798,6 +816,18 @@
   .cmp-pick-meta { font-size:12px; color:var(--c-gray); margin-left:auto; white-space:nowrap; }
   /* ===== v0.38.0 盘面对比：名字条/级别/缩放/司令行/档案勾选 ===== */
   .cmp-bar { display:flex; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--c-line); flex-wrap:wrap; flex:0 0 auto; min-height:20px; }
+  .cmp-hl-bar { display:flex; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--c-line); flex-wrap:wrap; flex:0 0 auto; }
+  .cmp-hl-ref { font-weight:700; color:var(--c-red); white-space:nowrap; margin-right:2px; }
+  .cmp-hl-bar label { display:inline-flex; align-items:center; gap:3px; font-size:13px; white-space:nowrap; cursor:pointer; }
+  .cmp-hl-rel, .cmp-hl-apply, .cmp-hl-close { font-size:13px; padding:3px 10px; border:1px solid var(--c-line); border-radius:6px; background:var(--bz-card-bg); cursor:pointer; white-space:nowrap; color:var(--c-ink); }
+  .cmp-hl-rel.active { background:var(--c-paper); border-color:var(--c-red); color:var(--c-red); font-weight:700; }
+  .cmp-hl-apply { border-color:var(--c-red); color:var(--c-red); font-weight:700; }
+  td.bz-hl-on, th.bz-hl-on { background:#ffe9b3; box-shadow:inset 0 0 0 2px #d4a017; }
+  td.bz-hl-off { opacity:.22; }
+  .bz-hl-ref { outline:2px solid #d4a017; outline-offset:-2px; }
+  .bz-hl-refmark { outline:2px solid #d0021b; outline-offset:-2px; border-radius:2px; }
+  .cmp-hl-row { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .cmp-hl-rowtag { font-size:12px; font-weight:700; opacity:.6; }
   .cmp-bar-empty { font-size:11px; color:var(--c-gray); }
   .cmp-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); font-size:12px; cursor:grab; user-select:none; color:var(--c-ink); }
   .cmp-chip-pos { color:var(--c-gray); font-size:10px; }
@@ -885,6 +915,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <span id="inLeapGroup" style="display:none;"><label style="font-size:12px;"><input type="checkbox" id="inLeap">闰月</label></span>
       <input type="number" id="inHour" value="5" min="0" max="23" style="width:48px;"> <span style="font-size:13px;">时</span>
       <input type="number" id="inMin" value="1" min="0" max="59" style="width:48px;"> <span style="font-size:13px;">分</span>
+      <label style="cursor:pointer;user-select:none;" title="勾选后输入的西历日期按儒略历解读（1582-10-04 及更早的史学界惯例），自动换算为格里历再排盘"><input type="checkbox" id="useJulian" style="vertical-align:middle;margin-right:2px;">儒历</label>
       <label style="cursor:pointer;user-select:none;"><input type="checkbox" id="useSolar" onchange="APP.toggleSolar()" style="vertical-align:middle;margin-right:2px;">真太阳时</label>
       <span id="solarGroup" style="display:none;">
       <label>省</label><select id="inProv" onchange="APP.onProvChange()" style="width:80px;"><option value="">—</option></select>
@@ -948,6 +979,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       </div>
       <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
+      <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
       <div class="cmp-picker" id="cmpPicker"></div>
       <div class="cmp-track" id="cmpTrack"></div>
     </div>
@@ -1022,6 +1054,22 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <div class="edit-dialog-footer">
         <button class="btn-cancel" onclick="ARCHIVE.closeEditPanel()">取消</button>
         <button class="btn-save" onclick="ARCHIVE.saveEdit()">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== -->
+  <div class="note-overlay" id="noteOverlay" onclick="ARCHIVE.closeNotePanel()">
+    <div class="note-drawer" id="noteDrawer" onclick="event.stopPropagation()">
+      <div class="note-header">
+        <span class="note-title" id="noteTitle">📝 命盘分析记录</span>
+        <span class="note-status" id="noteStatus"></span>
+        <button class="note-close" onclick="ARCHIVE.closeNotePanel()">✕</button>
+      </div>
+      <textarea class="note-text" id="noteText" placeholder="在这里编写案例分析……输入即自动保存到本地" oninput="ARCHIVE.onNoteInput()"></textarea>
+      <div class="note-footer">
+        <span class="note-count" id="noteCount"></span>
+        <button class="note-save-btn" onclick="ARCHIVE.noteSaveNow()">保 存</button>
       </div>
     </div>
   </div>
@@ -2063,14 +2111,14 @@ const ZHI_TWIN_CANG = {
 };
 var twinPillars = ['ri','shi','ming','shen'];
 
-// 十二长生表
+// 十二长生表（土干按 2026-10 标准：戊长生在午顺行，己长生在巳逆行）
 const CS12_MAP = {
   '甲':['亥','子','丑','寅','卯','辰','巳','午','未','申','酉','戌'],
   '乙':['午','巳','辰','卯','寅','丑','子','亥','戌','酉','申','未'],
   '丙':['寅','卯','辰','巳','午','未','申','酉','戌','亥','子','丑'],
   '丁':['酉','申','未','午','巳','辰','卯','寅','丑','子','亥','戌'],
-  '戊':['寅','卯','辰','巳','午','未','申','酉','戌','亥','子','丑'],
-  '己':['酉','申','未','午','巳','辰','卯','寅','丑','子','亥','戌'],
+  '戊':['午','未','申','酉','戌','亥','子','丑','寅','卯','辰','巳'],
+  '己':['巳','辰','卯','寅','丑','子','亥','戌','酉','申','未','午'],
   '庚':['巳','午','未','申','酉','戌','亥','子','丑','寅','卯','辰'],
   '辛':['子','亥','戌','酉','申','未','午','巳','辰','卯','寅','丑'],
   '壬':['申','酉','戌','亥','子','丑','寅','卯','辰','巳','午','未'],
@@ -4452,6 +4500,25 @@ function lunarToSolar(ly, lm, ld, isLeap) {
   return normalizeDate(solarY, solarM, solarD);
 }
 
+// 儒略历→格里历（JD 桥接）：1582-10-04 及更早的西历日期按史学界惯例是儒略历，
+// 排盘需先换算成格里历（如王阳明生：儒 1472-10-31 = 格 1472-11-09）
+function julianToGregorian(y, m, d) {
+  var Y = y, M = m;
+  if (M <= 2) { Y -= 1; M += 12; }
+  var jd = Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + d - 1524.5;
+  var Z = Math.floor(jd + 0.5);
+  var a = Math.floor((Z - 1867216.25) / 36524.25);
+  var A = Z + 1 + a - Math.floor(a / 4);
+  var B = A + 1524;
+  var C = Math.floor((B - 122.1) / 365.25);
+  var D = Math.floor(365.25 * C);
+  var E = Math.floor((B - D) / 30.6001);
+  var gd = B - D - Math.floor(30.6001 * E);
+  var gm = E < 14 ? E - 1 : E - 13;
+  var gy = gm > 2 ? C - 4716 : C - 4715;
+  return { y: gy, m: gm, d: gd };
+}
+
 // 新历/农历切换
 function toggleCalendar(type) {
   if (calendarType === type) return;
@@ -5046,6 +5113,7 @@ function buildShunLabel(shun, gender, nianGan) {
     monthDays: monthDays,
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
+    julianToGregorian: julianToGregorian,
     toggleCalendar: toggleCalendar,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,
@@ -5362,7 +5430,9 @@ function getFormData() {
     // v0.8.0 农历字段
     calendarType: APP.calendarType,
     isLeap: isLunar ? document.getElementById('inLeap').checked : false,
-    lunarMonth: isLunar ? parseInt(document.getElementById('inMonthSelect').value) : null
+    lunarMonth: isLunar ? parseInt(document.getElementById('inMonthSelect').value) : null,
+    // v0.43.0 儒略历开关（仅新历模式有意义）
+    isJulian: !isLunar ? !!(document.getElementById('useJulian') && document.getElementById('useJulian').checked) : false
   };
 }
 
@@ -5386,6 +5456,7 @@ function setFormData(d) {
   document.getElementById('inDay').value = d.day;
   document.getElementById('inHour').value = d.hour;
   document.getElementById('inMin').value = d.min || 0;
+  document.getElementById('useJulian').checked = !!(calType === 'solar' && d.isJulian);
   document.getElementById('useSolar').checked = d.useSolar;
   APP.toggleSolar();
   // v0.34.0 同步回填地址：onProvChange/onCityChange 都是同步建 option，
@@ -5813,6 +5884,7 @@ function permanentDelete(idx) {
   const trash = getTrash();
   if (!trash[idx]) return;
   if (!confirm('确定彻底删除「' + getDisplayName(trash[idx]) + '」？此操作不可恢复。')) return;
+  if (trash[idx].id !== undefined && trash[idx].id !== null) deleteNote(trash[idx].id);
   trash.splice(idx, 1);
   saveTrash(trash);
   renderTrash();
@@ -5822,6 +5894,7 @@ function emptyTrash() {
   const trash = getTrash();
   if (!trash.length) return;
   if (!confirm('确定清空回收站？所有档案将被永久删除。')) return;
+  trash.forEach(function(a) { if (a && a.id !== undefined && a.id !== null) deleteNote(a.id); });
   saveTrash([]);
   hideTrash();
 }
@@ -6149,6 +6222,7 @@ function archiveRowHtml(a, idx) {
     + ' value="' + escHtml(getArchiveTags(a).join(' ')) + '"'
     + ' onchange="ARCHIVE.saveRowTags(' + idx + ', this.value)"'
     + ' onkeydown="if(event.key===\'Enter\'){this.blur();}">'
+    + '<button class="archive-row-note" title="命盘分析记录" onclick="ARCHIVE.openNotePanel(' + idx + ')">📝 记录</button>'
     + '<button class="archive-row-edit" onclick="ARCHIVE.openEditPanel(' + idx + ')">✏️ 修改</button>'
     + '<button class="archive-row-del" onclick="ARCHIVE.moveToTrash(' + idx + ')">🗑️ 删除</button>'
     + '<button class="archive-row-btn" onclick="ARCHIVE.loadFromArchive(' + idx + ')">排盘</button>'
@@ -6184,7 +6258,76 @@ function loadFromArchive(idx) {
 
 // ============================================================
 
-  // ===== 挂载到全局命名空间 =====
+  // ============================================================
+// v0.43.0 命盘分析记录：右侧滑出抽屉，内容按档案 id 存 localStorage
+// ============================================================
+var NOTE_KEY_PREFIX = 'bz_note_';
+var _noteArchId = null;   // 当前抽屉绑定的档案 id（字符串）
+var _noteTimer = null;    // 输入防抖句柄
+
+function noteKey(id) { return NOTE_KEY_PREFIX + id; }
+
+function readNote(id) {
+  try {
+    var v = JSON.parse(localStorage.getItem(noteKey(id)));
+    if (v && typeof v.text === 'string') return v;
+  } catch (e) {}
+  return { text: '', updatedAt: null };
+}
+
+function openNotePanel(idx) {
+  var archives = getArchives();
+  var a = archives[idx];
+  if (!a) return;
+  flushNote();
+  _noteArchId = String(a.id);
+  var data = readNote(_noteArchId);
+  document.getElementById('noteTitle').textContent = '📝 命盘分析记录 · ' + getDisplayName(a);
+  document.getElementById('noteText').value = data.text;
+  updateNoteMeta(data.updatedAt);
+  document.getElementById('noteOverlay').classList.add('show');
+}
+
+function closeNotePanel() {
+  flushNote();
+  document.getElementById('noteOverlay').classList.remove('show');
+  _noteArchId = null;
+}
+
+function onNoteInput() {
+  if (!_noteArchId) return;
+  document.getElementById('noteStatus').textContent = '正在输入…';
+  document.getElementById('noteCount').textContent = document.getElementById('noteText').value.length + ' 字';
+  clearTimeout(_noteTimer);
+  _noteTimer = setTimeout(noteSaveNow, 800);
+}
+
+function noteSaveNow() {
+  if (!_noteArchId) return;
+  clearTimeout(_noteTimer);
+  _noteTimer = null;
+  var ts = new Date().toISOString();
+  localStorage.setItem(noteKey(_noteArchId), JSON.stringify({ text: document.getElementById('noteText').value, updatedAt: ts }));
+  updateNoteMeta(ts);
+}
+
+function flushNote() {
+  if (_noteTimer) noteSaveNow();
+}
+
+function updateNoteMeta(ts) {
+  document.getElementById('noteCount').textContent = document.getElementById('noteText').value.length + ' 字';
+  var st = document.getElementById('noteStatus');
+  if (!ts) { st.textContent = '尚未保存'; return; }
+  var d = new Date(ts);
+  st.textContent = '已自动保存 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function deleteNote(id) {
+  localStorage.removeItem(noteKey(id));
+}
+
+// ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
     migrateFromV1: migrateFromV1,
@@ -6254,6 +6397,14 @@ function loadFromArchive(idx) {
     getDisplayName: getDisplayName,
     togglePrivacy: togglePrivacy,
     loadFromArchive: loadFromArchive,
+    // v0.43.0 命盘分析记录
+    openNotePanel: openNotePanel,
+    closeNotePanel: closeNotePanel,
+    onNoteInput: onNoteInput,
+    noteSaveNow: noteSaveNow,
+    readNote: readNote,
+    deleteNote: deleteNote,
+    noteKey: noteKey,
   };
 
   // ===== v0.32.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
@@ -6309,7 +6460,8 @@ function loadFromArchive(idx) {
       var rows = document.querySelectorAll('#archive-modal-list .archive-modal-row');
       t('v0.32 T06:无标签旧档案照常渲染', rows.length === 2, rows.length);
       var tagInput = document.querySelector('#archive-modal-list .archive-row-tags');
-      t('v0.32 T06:标签框紧邻修改按钮之前', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.className.indexOf('archive-row-edit') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.className);
+      t('v0.32 T06:标签框紧邻记录按钮之前', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.className.indexOf('archive-row-note') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.className);
+      t('v0.32 T06:记录按钮后接修改按钮', !!tagInput && !!tagInput.nextElementSibling && tagInput.nextElementSibling.nextElementSibling.className.indexOf('archive-row-edit') === 0, tagInput && tagInput.nextElementSibling && tagInput.nextElementSibling.nextElementSibling && tagInput.nextElementSibling.nextElementSibling.className);
       t('v0.32 T06:标签框回填多标签', !!tagInput && tagInput.value === '自在班 老大', tagInput && tagInput.value);
       t('v0.32 T06:标签栏 全部+2标签+未分类', document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length === 4, document.querySelectorAll('#archive-tag-bar .archive-tag-chip').length);
 
@@ -6484,8 +6636,84 @@ function loadFromArchive(idx) {
       renderArchiveModal();
     }
   }
+  // ===== v0.43.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）：命盘分析记录 =====
+  function runV043Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var ov = document.getElementById('noteOverlay');
+    var ta = document.getElementById('noteText');
+    if (!ov || !ta) { t('v0.43 T00:记录抽屉 DOM 缺失', false, 'noteOverlay/noteText'); return; }
+    try {
+      // T01 行内按钮：存在、索引正确、位于标签框与修改键之间
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't43note', name: '记录测试', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' }
+      ]));
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var noteBtn = document.querySelector('#archive-modal-list .archive-row-note');
+      t('v0.43 T01:记录按钮存在且索引正确', !!noteBtn && (noteBtn.getAttribute('onclick') || '').indexOf('openNotePanel(0)') >= 0, noteBtn && noteBtn.getAttribute('onclick'));
+
+      // T02 点击滑出抽屉：标题带档案显示名、空白页
+      noteBtn.click();
+      t('v0.43 T02:点击滑出抽屉', ov.classList.contains('show'), ov.className);
+      t('v0.43 T02:标题带档案名', document.getElementById('noteTitle').textContent.indexOf('记录测试') >= 0, document.getElementById('noteTitle').textContent);
+      t('v0.43 T02:新档案空白页', ta.value === '' && document.getElementById('noteStatus').textContent === '尚未保存', document.getElementById('noteStatus').textContent);
+
+      // T03 输入即落盘 bz_note_<id>（JSON 带时间戳）+ 字数统计
+      ta.value = '案例一：乙木生巳月。';
+      onNoteInput();
+      noteSaveNow();
+      var raw = localStorage.getItem(noteKey('t43note'));
+      var parsed = null;
+      try { parsed = JSON.parse(raw); } catch (e) {}
+      t('v0.43 T03:输入落盘 bz_note_<id>', !!parsed && parsed.text === '案例一：乙木生巳月。' && typeof parsed.updatedAt === 'string', raw);
+      t('v0.43 T03:字数统计', document.getElementById('noteCount').textContent === (ta.value.length + ' 字'), document.getElementById('noteCount').textContent);
+
+      // T04 关闭再开：文本回填 + 状态行
+      closeNotePanel();
+      t('v0.43 T04:关闭后抽屉收起', !ov.classList.contains('show'), ov.className);
+      openNotePanel(0);
+      t('v0.43 T04:重开回填已存文本', ta.value === '案例一：乙木生巳月。', ta.value);
+      t('v0.43 T04:状态行显示已保存', document.getElementById('noteStatus').textContent.indexOf('已自动保存') >= 0, document.getElementById('noteStatus').textContent);
+
+      // T05 档案改名（nickname）后记录仍按 id 绑定不丢
+      var arr5 = getArchives();
+      arr5[0].nickname = '改名了';
+      saveArchives(arr5);
+      renderArchiveModal();
+      openNotePanel(0);
+      t('v0.43 T05:改名后记录仍在', ta.value === '案例一：乙木生巳月。', ta.value);
+      t('v0.43 T05:标题随改名', document.getElementById('noteTitle').textContent.indexOf('改名了') >= 0, document.getElementById('noteTitle').textContent);
+
+      // T06 多档案隔离：第二条档案各写各的
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 't43note', name: '记录测试', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' },
+        { id: 't43blank', name: '空白测试', gender: '女', year: 2001, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' }
+      ]));
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      document.querySelectorAll('#archive-modal-list .archive-row-note')[1].click();
+      t('v0.43 T06:第二档案是独立空白页', ta.value === '', ta.value);
+      closeNotePanel();
+      openNotePanel(0);
+      t('v0.43 T06:第一档案记录不受干扰', ta.value === '案例一：乙木生巳月。', ta.value);
+      closeNotePanel();
+    } catch (e) {
+      t('v0.43 T00:测试异常', false, String(e));
+    } finally {
+      localStorage.removeItem(noteKey('t43note'));
+      localStorage.removeItem(noteKey('t43blank'));
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); };
+    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); runV043Tests(); };
     if (document.readyState === 'complete') runAllTests();
     else window.addEventListener('load', runAllTests);
   }
@@ -9022,15 +9250,16 @@ function renderChart(data, twin, targetId, opts) {
   }
 
   // ---- 上盘 HTML ----
+  // v0.41.0 关系高亮：柱名 th 加 data-pk，天干/地支 td 加 data-gk/data-gz/data-pk（点击参照 + 高亮目标）
   function td(cls, txt, ext='') { return '<td class="'+cls+'"'+ext+'>'+txt+'</td>'; }
-  function th(cls, txt) { return '<th class="'+cls+'">'+txt+'</th>'; }
+  function th(cls, txt, ext='') { return '<th class="'+cls+'"'+(ext||'')+'>'+txt+'</th>'; }
   function rl(lbl) { return '<td class="rl">'+lbl+'</td>'; }
   function emp(cls) { return '<td class="'+cls+'"></td>'; }
 
   const chartRows = [];
   // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
   // 柱名头
-  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱')+th('','月柱')+th('','日柱')+th('','时柱')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
+  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱',' data-pk="nian"')+th('','月柱',' data-pk="yue"')+th('','日柱',' data-pk="ri"')+th('','时柱',' data-pk="shi"')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
 
   // 生成四柱行（5列），再拼接大运/流年列
   var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen });
@@ -9047,9 +9276,19 @@ function renderChart(data, twin, targetId, opts) {
   // 主星行(0)：用 pDy.rs / pLn.rs 替换占位
   mainRows[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
   // 天干行(1)
-  mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(pNian.wg,pNian.gan)+td(pYue.wg,pYue.gan)+td(pRi.wg,pRi.gan)+td(pShi.wg,pShi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+  mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+
+    td(pNian.wg,pNian.gan,' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
+    td(pYue.wg,pYue.gan,' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
+    td(pRi.wg,pRi.gan,' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
+    td(pShi.wg,pShi.gan,' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
+    td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
   // 地支行(2)
-  mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(pNian.wz,pNian.zhi)+td(pYue.wz,pYue.zhi)+td(pRi.wz,pRi.zhi)+td(pShi.wz,pShi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
+  mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+
+    td(pNian.wz,pNian.zhi,' data-gk="zhi" data-gz="'+pNian.zhi+'" data-pk="nian"')+
+    td(pYue.wz,pYue.zhi,' data-gk="zhi" data-gz="'+pYue.zhi+'" data-pk="yue"')+
+    td(pRi.wz,pRi.zhi,' data-gk="zhi" data-gz="'+pRi.zhi+'" data-pk="ri"')+
+    td(pShi.wz,pShi.zhi,' data-gk="zhi" data-gz="'+pShi.zhi+'" data-pk="shi"')+
+    td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
   mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
@@ -9081,11 +9320,21 @@ function renderChart(data, twin, targetId, opts) {
   // 三垣行
   var syRows = [];
   // v0.10.0 三垣宫位标签行由 updateGongWeiTags() 动态生成
-  syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年')+th('','胎元')+th('','命宫')+th('','身宫')+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年',' data-pk="taiNian"')+th('','胎元',' data-pk="tai"')+th('','命宫',' data-pk="ming"')+th('','身宫',' data-pk="shen"')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wg,pTaiNian.gan)+td(pTai.wg,pTai.gan)+td(pMing.wg,pMing.gan)+td(pShen.wg,pShen.gan)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+td(pTaiNian.wz,pTaiNian.zhi)+td(pTai.wz,pTai.zhi)+td(pMing.wz,pMing.zhi)+td(pShen.wz,pShen.zhi)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+    td(pTaiNian.wg,pTaiNian.gan,' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
+    td(pTai.wg,pTai.gan,' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
+    td(pMing.wg,pMing.gan,' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
+    td(pShen.wg,pShen.gan,' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
+    emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+    td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
+    td(pTai.wz,pTai.zhi,' data-gk="zhi" data-gz="'+pTai.zhi+'" data-pk="tai"')+
+    td(pMing.wz,pMing.zhi,' data-gk="zhi" data-gz="'+pMing.zhi+'" data-pk="ming"')+
+    td(pShen.wz,pShen.zhi,' data-gk="zhi" data-gz="'+pShen.zhi+'" data-pk="shen"')+
+    emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rh" data-sec="sanyuan cangqi">'+rl('藏气')+td('',pTaiNian.cg)+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
@@ -9175,9 +9424,12 @@ function renderChart(data, twin, targetId, opts) {
   luckRows.push('</div>');
 
   // ---- 额外信息标签 ----
-  let tstTag = '', ryTag = '';
+  let tstTag = '', ryTag = '', jlTag = '';
   if (data.trueSolar) {
     tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 ' + pad(data.trueSolar.h)+':'+pad(data.trueSolar.mi)+' ('+(data.trueSolar.offsetMin>=0?'+':'')+Math.round(data.trueSolar.offsetMin)+'分)</span>';
+  }
+  if (data.julian) {
+    jlTag = '<span class="meta-tag" title="输入日期按儒略历解读，已换算为格里历排盘">📅 儒略历 ' + data.julian.fromY + '年' + data.julian.fromM + '月' + data.julian.fromD + '日</span>';
   }
   if (renYuan) {
     ryTag = '<span class="meta-tag">'+renYuan+'</span>';
@@ -9188,7 +9440,7 @@ function renderChart(data, twin, targetId, opts) {
   const shunLabel = data.qiYun ? buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan) : '';
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
-      <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${ryTag}${shunLabel}</div>
+      <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
@@ -9972,6 +10224,14 @@ function doPaipan() {
     solarY = solar.y; solarM = solar.m; solarD = solar.d;
   }
 
+  // v0.43.0 儒略历开关：1582-10-04 及更早的西历日期按儒略历解读，先换算格里历再排
+  var julianTag = null;
+  if (APP.calendarType === 'solar' && document.getElementById('useJulian') && document.getElementById('useJulian').checked) {
+    var g = ALGO.julianToGregorian(solarY, solarM, solarD);
+    julianTag = { fromY: solarY, fromM: solarM, fromD: solarD, toY: g.y, toM: g.m, toD: g.d };
+    solarY = g.y; solarM = g.m; solarD = g.d;
+  }
+
   // v0.27.0 D1：经度无条件取（唯一权威源）——节气区真太阳时与 useSolar 勾选解耦
   const lng = getLng();
   // 真太阳时修正：仅当用户勾选了真太阳时且地址已选（基于转换后的公历日期）
@@ -9996,12 +10256,14 @@ function doPaipan() {
       const d1 = paipan(name, g1, ey, em, ed, eh, emi);
       d1.displayName = displayName;
       d1.trueSolar = tst;
+      d1.julian = julianTag;
       d1.lng = lng; // v0.27.0 D1: 出生地经度（同址同值）
       d1.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d1);
       const d2 = paipan(name, g2, ey, em, ed, eh, emi);
       d2.displayName = displayName;
       d2.trueSolar = tst;
+      d2.julian = julianTag;
       d2.lng = lng; // v0.27.0 D1: 龙凤胎同址 → 同经度
       d2.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       injectCurDaYunLiuNian(d2);
@@ -10012,6 +10274,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
+      data.julian = julianTag;
       data.lng = lng; // v0.27.0 D1: 出生地经度（未选=null）
       data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
@@ -10021,6 +10284,7 @@ function doPaipan() {
       const data = paipan(name, gender, ey, em, ed, eh, emi);
       data.displayName = displayName;
       data.trueSolar = tst;
+      data.julian = julianTag;
       data.lng = lng; // v0.27.0 D1: 出生地经度（未选=null）
       data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
       output.innerHTML = '';
@@ -10364,6 +10628,7 @@ function renderCmpTrack() {
   applyLevelRows();
   _cmpApplyZoom();
   renderCmpBar();
+  if (_hl) _cmpHlApply();
 }
 
 function _cmpBindCard(card) {
@@ -10607,6 +10872,7 @@ function cmpOpen() {
   if (gzHost && !gzHost.innerHTML && window.GONGWEI && typeof GONGWEI.renderGongWeiPanel === 'function') {
     gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
   }
+  _cmpHlBind();
   _cmpApplyZoom();
   _cmpApplyCols();
   _cmpApplyFocus();
@@ -10616,6 +10882,7 @@ function cmpOpen() {
 function cmpClose() {
   var ov = document.getElementById('cmpOverlay');
   if (ov) ov.classList.remove('show');
+  _cmpHlClearAll();
   cmpClosePicker();
   closeAllLevelPops();
 }
@@ -10777,6 +11044,319 @@ function cmpSetState(entries) {
     renderChartToHtml: renderChartToHtml,
   };
 
+  // ===== v0.41.0 对比页关系高亮：点击柱名/天干/地支 → 上方功能条 → 跨盘标亮，其余变暗 =====
+  var CMP_HL_PKS = ['nian','yue','ri','shi','taiNian','tai','ming','shen'];
+  var CMP_HL_PK_LABEL = { nian:'年柱', yue:'月柱', ri:'日柱', shi:'时柱', taiNian:'胎年', tai:'胎元', ming:'命宫', shen:'身宫' };
+  var CMP_HL_GAN_RELS = ['tong','yi','sheng_tong','sheng_yi','beisheng_tong','beisheng_yi','ke_tong','ke_yi','beike_tong','beike_yi','he','chong'];
+  var CMP_HL_GAN_REL_LABEL = { tong:'同干', yi:'异干', sheng_tong:'主生同干', sheng_yi:'主生异干', beisheng_tong:'被生同干', beisheng_yi:'被生异干', ke_tong:'主克同干', ke_yi:'主克异干', beike_tong:'被克同干', beike_yi:'被克异干', he:'合干', chong:'冲干' };
+  var CMP_HL_ZHI_RELS = ['tong','yi','zhuSheng','beiSheng','zhuKe','beiKe','xing','chong','he6','sanhe','sanhui','hai','po'];
+  var CMP_HL_ZHI_REL_LABEL = { tong:'同支', yi:'异支', zhuSheng:'主生支', beiSheng:'被生支', zhuKe:'主克支', beiKe:'被克支', xing:'刑', chong:'冲', he6:'六合', sanhe:'三合', sanhui:'三会', hai:'害', po:'破' };
+  var _HL_WX_GAN = { '甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水' };
+  var _HL_WX_ZHI = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
+  var _HL_SHENG = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+  var _HL_SHENG_INV = { '木':'水','火':'木','土':'火','金':'土','水':'金' };
+  var _HL_KE = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+  var _HL_KE_INV = { '木':'金','火':'水','土':'木','金':'火','水':'土' };
+  var _HL_WUHE = { '甲':'己','己':'甲','乙':'庚','庚':'乙','丙':'辛','辛':'丙','丁':'壬','壬':'丁','戊':'癸','癸':'戊' };
+  var _HL_GAN_CHONG = { '甲':'庚','庚':'甲','乙':'辛','辛':'乙','丙':'壬','壬':'丙','丁':'癸','癸':'丁' };
+  var _HL_ZHI_CHONG = { '子':'午','午':'子','丑':'未','未':'丑','寅':'申','申':'寅','卯':'酉','酉':'卯','辰':'戌','戌':'辰','巳':'亥','亥':'巳' };
+  var _HL_ZHI_HE6 = { '子':'丑','丑':'子','寅':'亥','亥':'寅','卯':'戌','戌':'卯','辰':'酉','酉':'辰','巳':'申','申':'巳','午':'未','未':'午' };
+  var _HL_ZHI_HAI = { '子':'未','未':'子','丑':'午','午':'丑','寅':'巳','巳':'寅','卯':'辰','辰':'卯','申':'亥','亥':'申','酉':'戌','戌':'酉' };
+  var _HL_ZHI_PO = { '子':'酉','酉':'子','午':'卯','卯':'午','申':'巳','巳':'申','寅':'亥','亥':'寅','辰':'丑','丑':'辰','戌':'未','未':'戌' };
+  var _HL_SANHE = { '子':['申','辰'],'申':['子','辰'],'辰':['申','子'],'寅':['午','戌'],'午':['寅','戌'],'戌':['寅','午'],'巳':['酉','丑'],'酉':['巳','丑'],'丑':['巳','酉'],'亥':['卯','未'],'卯':['亥','未'],'未':['亥','卯'] };
+  var _HL_SANHUI = { '寅':['卯','辰'],'卯':['寅','辰'],'辰':['寅','卯'],'巳':['午','未'],'午':['巳','未'],'未':['巳','午'],'申':['酉','戌'],'酉':['申','戌'],'戌':['申','酉'],'亥':['子','丑'],'子':['亥','丑'],'丑':['亥','子'] };
+
+  function _hlYang(ch) { return TG.indexOf(ch) % 2 === 0; }
+  function _hlGanByWx(wx, yang) {
+    return TG.filter(function(g) { return _HL_WX_GAN[g] === wx && _hlYang(g) === yang; });
+  }
+  function _hlZhiByWx(wx) {
+    return DZ.filter(function(z) { return _HL_WX_ZHI[z] === wx; });
+  }
+  // 寅巳申 / 丑戌未 任意两支相见即刑；子卯互刑；辰午酉亥自刑
+  function _hlZhiXingSet(z) {
+    if (z === '子') return ['卯'];
+    if (z === '卯') return ['子'];
+    if (z === '寅' || z === '巳' || z === '申') return ['寅','巳','申'].filter(function(x) { return x !== z; });
+    if (z === '丑' || z === '戌' || z === '未') return ['丑','戌','未'].filter(function(x) { return x !== z; });
+    return [z];
+  }
+  function _hlGanSet(g, rel) {
+    var w = _HL_WX_GAN[g], y = _hlYang(g);
+    switch (rel) {
+      case 'tong': return [g];
+      case 'yi': return TG.filter(function(x) { return x !== g; });
+      case 'sheng_tong': return _hlGanByWx(_HL_SHENG[w], y);
+      case 'sheng_yi': return _hlGanByWx(_HL_SHENG[w], !y);
+      case 'beisheng_tong': return _hlGanByWx(_HL_SHENG_INV[w], y);
+      case 'beisheng_yi': return _hlGanByWx(_HL_SHENG_INV[w], !y);
+      case 'ke_tong': return _hlGanByWx(_HL_KE[w], y);
+      case 'ke_yi': return _hlGanByWx(_HL_KE[w], !y);
+      case 'beike_tong': return _hlGanByWx(_HL_KE_INV[w], y);
+      case 'beike_yi': return _hlGanByWx(_HL_KE_INV[w], !y);
+      case 'he': return [_HL_WUHE[g]];
+      case 'chong': return _HL_GAN_CHONG[g] ? [_HL_GAN_CHONG[g]] : [];
+      default: return [];
+    }
+  }
+  function _hlZhiSet(z, rel) {
+    var w = _HL_WX_ZHI[z];
+    switch (rel) {
+      case 'tong': return [z];
+      case 'yi': return DZ.filter(function(x) { return x !== z; });
+      case 'zhuSheng': return _hlZhiByWx(_HL_SHENG[w]);
+      case 'beiSheng': return _hlZhiByWx(_HL_SHENG_INV[w]);
+      case 'zhuKe': return _hlZhiByWx(_HL_KE[w]);
+      case 'beiKe': return _hlZhiByWx(_HL_KE_INV[w]);
+      case 'xing': return [z].concat(_hlZhiXingSet(z));
+      case 'chong': return [z, _HL_ZHI_CHONG[z]];
+      case 'he6': return [z, _HL_ZHI_HE6[z]];
+      case 'sanhe': return [z].concat(_HL_SANHE[z]);
+      case 'sanhui': return [z].concat(_HL_SANHUI[z]);
+      case 'hai': return [z, _HL_ZHI_HAI[z]];
+      case 'po': return [z, _HL_ZHI_PO[z]];
+      default: return [];
+    }
+  }
+  function _cmpHlRelSet(mode, rel, ch) {
+    if (mode === 'gan') return _hlGanSet(ch, rel);
+    if (mode === 'zhi') return _hlZhiSet(ch, rel);
+    return [];
+  }
+
+  var _hl = null;
+  var _lockG = null;
+  var _lockZ = null;
+  var _cmpHlBound = false;
+
+  function _hlGanC() { return _lockG || (_hl && _hl.gan) || null; }
+  function _hlZhiC() { return _lockZ || (_hl && _hl.zhi) || null; }
+
+  function _cmpHlClearClasses() {
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref');
+    });
+  }
+  function _cmpHlClearAllClasses() {
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref','bz-hl-refmark');
+    });
+  }
+  function _cmpHlClearHl() {
+    _hl = null;
+    _cmpHlClearClasses();
+    var bar = document.getElementById('cmpHLBar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  }
+  function _cmpHlClearAll() {
+    _hl = null;
+    _lockG = null;
+    _lockZ = null;
+    var track = document.getElementById('cmpTrack');
+    if (track) track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').forEach(function(el) {
+      el.classList.remove('bz-hl-on','bz-hl-off','bz-hl-ref','bz-hl-refmark');
+    });
+    var bar = document.getElementById('cmpHLBar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  }
+  function _cmpHlRefText() {
+    if (!_hl) return '';
+    if (_hl.focus === 'pillar') {
+      var idxP = 0;
+      var trackP = document.getElementById('cmpTrack');
+      if (trackP) {
+        var cardsP = trackP.querySelectorAll('.cmp-card');
+        for (var i = 0; i < cardsP.length; i++) {
+          if (cardsP[i].getAttribute('data-key') === _hl.refKey) { idxP = i; break; }
+        }
+      }
+      return (idxP + 1) + '号盘 · ' + (CMP_HL_PK_LABEL[_hl.refPk] || _hl.refPk);
+    }
+    var isGan = _hl.focus === 'gan';
+    var c = isGan ? _hlGanC() : _hlZhiC();
+    if (!c) return '';
+    var idx = 0;
+    var track = document.getElementById('cmpTrack');
+    if (track) {
+      var cards = track.querySelectorAll('.cmp-card');
+      for (var j = 0; j < cards.length; j++) {
+        if (cards[j].getAttribute('data-key') === c.key) { idx = j; break; }
+      }
+    }
+    var s = (idx + 1) + '号盘 · ' + (CMP_HL_PK_LABEL[c.pk] || c.pk) + ' ｜ ' + (isGan ? '干 ' : '支 ') + c.ch;
+    if (isGan ? _lockG : _lockZ) s += ' 🔒';
+    return s;
+  }
+  function _cmpHlRenderBar() {
+    var bar = document.getElementById('cmpHLBar');
+    if (!bar || !_hl) return;
+    var html = '<span class="cmp-hl-ref">' + _cmpEsc(_cmpHlRefText()) + '</span>';
+    if (_hl.focus === 'pillar') {
+      for (var i = 0; i < CMP_HL_PKS.length; i++) {
+        var pk = CMP_HL_PKS[i];
+        html += '<label class="cmp-hl-pk"><input type="checkbox" value="' + pk + '"' + (_hl.pillars.indexOf(pk) >= 0 ? ' checked' : '') + '>' + CMP_HL_PK_LABEL[pk] + '</label>';
+      }
+      html += '<button class="cmp-hl-apply" title="所有盘勾选柱位高亮，其余柱变暗">◌ 标亮同柱</button>';
+    } else {
+      var relRow = function(row, rels, labels, kind) {
+        var arr = row === 'g' ? _hl.relsG : _hl.relsZ;
+        var lk = row === 'g' ? _lockG : _lockZ;
+        var h = '<span class="cmp-hl-rowtag">' + kind + '</span>';
+        for (var r = 0; r < rels.length; r++) {
+          var rel = rels[r];
+          h += '<button class="cmp-hl-rel' + (arr.indexOf(rel) >= 0 ? ' active' : '') + '" data-row="' + row + '" data-rel="' + rel + '" title="所有盘符合条件的' + labels[rel] + '高亮，其余' + kind + '变暗；再点一次取消，可与其它键叠加">' + labels[rel] + '</button>';
+        }
+        h += '<button class="cmp-hl-rel cmp-hl-lock' + (lk ? ' active' : '') + '" data-row-lock="' + row + '" title="' + (lk ? '该行已锁定：本行功能只以锁定的' + kind + '（红圈格）为中心计算，点击盘中其他' + kind + '不切换中心；再点一次解除' : '锁定当前' + kind + '为本行计算中心：之后点击盘中任何' + kind + '都不切换，本行功能始终以它为中心') + '">🔒 ' + (lk ? '已锁定' : '锁定') + '</button>';
+        return '<span class="cmp-hl-row">' + h + '</span>';
+      };
+      html += relRow('g', CMP_HL_GAN_RELS, CMP_HL_GAN_REL_LABEL, '干');
+      html += relRow('z', CMP_HL_ZHI_RELS, CMP_HL_ZHI_REL_LABEL, '支');
+    }
+    html += '<button class="cmp-hl-close" title="清除高亮并收起（锁定中心与红圈保留）">✕</button>';
+    bar.innerHTML = html;
+    bar.style.display = '';
+    if (_hl.focus === 'pillar') {
+      bar.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          var sel = [];
+          bar.querySelectorAll('input[type="checkbox"]').forEach(function(c2) { if (c2.checked) sel.push(c2.value); });
+          _hl.pillars = sel;
+        });
+      });
+      bar.querySelector('.cmp-hl-apply').addEventListener('click', function() {
+        _cmpHlApply();
+      });
+    } else {
+      bar.querySelectorAll('.cmp-hl-rel[data-rel]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var rel = btn.getAttribute('data-rel');
+          var arr = btn.getAttribute('data-row') === 'g' ? _hl.relsG : _hl.relsZ;
+          var i = arr.indexOf(rel);
+          if (i >= 0) arr.splice(i, 1); else arr.push(rel);
+          _cmpHlApply();
+        });
+      });
+      bar.querySelectorAll('.cmp-hl-lock').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var row = btn.getAttribute('data-row-lock');
+          if (row === 'g') {
+            if (_lockG) { _hl.gan = _lockG; _lockG = null; }
+            else if (_hlGanC()) _lockG = { face:'gan', ch:_hlGanC().ch, pk:_hlGanC().pk, key:_hlGanC().key };
+          } else {
+            if (_lockZ) { _hl.zhi = _lockZ; _lockZ = null; }
+            else if (_hlZhiC()) _lockZ = { face:'zhi', ch:_hlZhiC().ch, pk:_hlZhiC().pk, key:_hlZhiC().key };
+          }
+          _cmpHlApply();
+        });
+      });
+    }
+    bar.querySelector('.cmp-hl-close').addEventListener('click', _cmpHlClearHl);
+  }
+  function _cmpHlApply() {
+    _cmpHlClearAllClasses();
+    if (!_hl) return;
+    var track = document.getElementById('cmpTrack');
+    if (!track) return;
+    if (_hl.focus === 'pillar') {
+      track.querySelectorAll('.cmp-card').forEach(function(card) {
+        card.querySelectorAll('td[data-gk]').forEach(function(td) {
+          td.classList.add(_hl.pillars.indexOf(td.getAttribute('data-pk')) >= 0 ? 'bz-hl-on' : 'bz-hl-off');
+        });
+      });
+      var refCard = _hl.refKey ? track.querySelector('.cmp-card[data-key="' + _hl.refKey + '"]') : null;
+      if (refCard) {
+        var refTh = refCard.querySelector('th[data-pk="' + _hl.refPk + '"]');
+        if (refTh) refTh.classList.add('bz-hl-ref');
+      }
+    } else {
+      var applyRow = function(gk, ch, rels) {
+        if (!ch || !rels.length) return;
+        var set = [];
+        rels.forEach(function(rel) {
+          (gk === 'gan' ? _hlGanSet(ch, rel) : _hlZhiSet(ch, rel)).forEach(function(x) {
+            if (set.indexOf(x) < 0) set.push(x);
+          });
+        });
+        track.querySelectorAll('.cmp-card td[data-gk="' + gk + '"]').forEach(function(td) {
+          td.classList.add(set.indexOf(td.getAttribute('data-gz')) >= 0 ? 'bz-hl-on' : 'bz-hl-off');
+        });
+      };
+      var gc = _hlGanC(), zc = _hlZhiC();
+      applyRow('gan', gc ? gc.ch : null, _hl.relsG);
+      applyRow('zhi', zc ? zc.ch : null, _hl.relsZ);
+      var fc = _hl.focus === 'gan' ? gc : zc;
+      var fLock = _hl.focus === 'gan' ? _lockG : _lockZ;
+      if (fc && !fLock) {
+        var refCard2 = fc.key ? track.querySelector('.cmp-card[data-key="' + fc.key + '"]') : null;
+        if (refCard2) {
+          var refTd = refCard2.querySelector('td[data-gk="' + _hl.focus + '"][data-gz="' + fc.ch + '"][data-pk="' + fc.pk + '"]');
+          if (refTd) refTd.classList.add('bz-hl-ref');
+        }
+      }
+    }
+    [_lockG, _lockZ].forEach(function(l) {
+      if (!l) return;
+      var card = l.key ? track.querySelector('.cmp-card[data-key="' + l.key + '"]') : null;
+      if (!card) return;
+      var el = card.querySelector('td[data-gk="' + l.face + '"][data-gz="' + l.ch + '"][data-pk="' + l.pk + '"]');
+      if (el) el.classList.add('bz-hl-refmark');
+    });
+    _cmpHlRenderBar();
+  }
+  function _cmpHlBind() {
+    if (_cmpHlBound) return;
+    var track = document.getElementById('cmpTrack');
+    if (!track) return;
+    _cmpHlBound = true;
+    track.addEventListener('click', function(ev) {
+      var t = ev.target;
+      if (!t || t.nodeType !== 1) return;
+      var pk, gk, gz, card, refKey;
+      if (t.tagName === 'TH' && (pk = t.getAttribute('data-pk'))) {
+        card = t.closest('.cmp-card');
+        refKey = card ? card.getAttribute('data-key') : '';
+        if (_hl && _hl.focus === 'pillar' && _hl.refPk === pk && _hl.refKey === refKey) { _cmpHlClearHl(); return; }
+        _cmpHlClearHl();
+        _hl = { focus:'pillar', refPk:pk, refKey:refKey, pillars:[pk] };
+        _cmpHlApply();
+        return;
+      }
+      if (t.tagName === 'TD' && (gk = t.getAttribute('data-gk')) && (gz = t.getAttribute('data-gz'))) {
+        pk = t.getAttribute('data-pk');
+        card = t.closest('.cmp-card');
+        refKey = card ? card.getAttribute('data-key') : '';
+        var isNew = false;
+        if (!_hl) { _hl = { focus:gk, relsG:[], relsZ:[] }; isNew = true; }
+        var lk = gk === 'gan' ? _lockG : _lockZ;
+        var cc = gk === 'gan' ? _hlGanC() : _hlZhiC();
+        if (!isNew && _hl.focus === gk && cc && cc.ch === gz && cc.pk === pk && cc.key === refKey) { _cmpHlClearHl(); return; }
+        if (!lk) {
+          var o = { face:gk, ch:gz, pk:pk, key:refKey };
+          if (gk === 'gan') _hl.gan = o; else _hl.zhi = o;
+        }
+        var other = gk === 'gan' ? 'zhi' : 'gan';
+        var otherC = other === 'gan' ? _hlGanC() : _hlZhiC();
+        var otherLock = other === 'gan' ? _lockG : _lockZ;
+        if (!otherC && !otherLock) {
+          var otherTd = card ? card.querySelector('td[data-gk="' + other + '"][data-pk="' + pk + '"]') : null;
+          if (otherTd) {
+            var oc = { face:other, ch:otherTd.getAttribute('data-gz'), pk:pk, key:refKey };
+            if (other === 'gan') _hl.gan = oc; else _hl.zhi = oc;
+          }
+        }
+        _hl.focus = gk;
+        _cmpHlApply();
+      }
+    });
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Escape' || !_hl) return;
+      var ov = document.getElementById('cmpOverlay');
+      if (ov && ov.classList.contains('show')) _cmpHlClearHl();
+    });
+  }
+
   // ===== 盘面对比 (v0.37.0) =====
   document.addEventListener('click', function(e) {
     if (!e.target || !e.target.closest) return;
@@ -10804,6 +11384,8 @@ function cmpSetState(entries) {
     toggleBar: cmpToggleBar,
     toggleFocus: cmpToggleFocus,
     _setState: cmpSetState,
+    hlRelSet: _cmpHlRelSet,
+    hlClear: _cmpHlClearAll,
   };
   _cmpApplyCols();
   _cmpApplyBar();
@@ -11585,6 +12167,9 @@ function captureScreenshot() {
   if (!/[\?&]test=1(&|$)/.test(location.search)) return;
   document.title = '八字排盘 · 回归测试';
 
+  if (window.COMPARE && typeof COMPARE.setZoom === 'function') { COMPARE.setZoom(100); COMPARE.setCols(3); }
+  try { localStorage.removeItem('bz_cmp_focus'); } catch(e) {}
+
   // 隐藏正常 UI
   const page = document.querySelector('.page');
   if (page) page.style.display = 'none';
@@ -11631,6 +12216,54 @@ function captureScreenshot() {
   tests.push(eq('changSheng("丙","寅")→长生',       changSheng('丙','寅'), '长生'));
   tests.push(eq('changSheng("辛","丑")→养(阴干)',   changSheng('辛','丑'), '养'));
   tests.push(eq('changSheng("辛","子")→长生(阴干)', changSheng('辛','子'), '长生'));
+
+  // 土十二长生新标准：戊随午顺行、己随巳逆行（12 支全表断言）
+  tests.push(eq('changSheng("戊","巳")→养',   changSheng('戊','巳'), '养'));
+  tests.push(eq('changSheng("戊","午")→长生', changSheng('戊','午'), '长生'));
+  tests.push(eq('changSheng("戊","未")→沐浴', changSheng('戊','未'), '沐浴'));
+  tests.push(eq('changSheng("戊","申")→冠带', changSheng('戊','申'), '冠带'));
+  tests.push(eq('changSheng("戊","酉")→临官', changSheng('戊','酉'), '临官'));
+  tests.push(eq('changSheng("戊","戌")→帝旺', changSheng('戊','戌'), '帝旺'));
+  tests.push(eq('changSheng("戊","亥")→衰',   changSheng('戊','亥'), '衰'));
+  tests.push(eq('changSheng("戊","子")→病',   changSheng('戊','子'), '病'));
+  tests.push(eq('changSheng("戊","丑")→死',   changSheng('戊','丑'), '死'));
+  tests.push(eq('changSheng("戊","寅")→墓',   changSheng('戊','寅'), '墓'));
+  tests.push(eq('changSheng("戊","卯")→绝',   changSheng('戊','卯'), '绝'));
+  tests.push(eq('changSheng("戊","辰")→胎',   changSheng('戊','辰'), '胎'));
+  tests.push(eq('changSheng("己","巳")→长生', changSheng('己','巳'), '长生'));
+  tests.push(eq('changSheng("己","午")→养',   changSheng('己','午'), '养'));
+  tests.push(eq('changSheng("己","未")→胎',   changSheng('己','未'), '胎'));
+  tests.push(eq('changSheng("己","申")→绝',   changSheng('己','申'), '绝'));
+  tests.push(eq('changSheng("己","酉")→墓',   changSheng('己','酉'), '墓'));
+  tests.push(eq('changSheng("己","戌")→死',   changSheng('己','戌'), '死'));
+  tests.push(eq('changSheng("己","亥")→病',   changSheng('己','亥'), '病'));
+  tests.push(eq('changSheng("己","子")→衰',   changSheng('己','子'), '衰'));
+  tests.push(eq('changSheng("己","丑")→帝旺', changSheng('己','丑'), '帝旺'));
+  tests.push(eq('changSheng("己","寅")→临官', changSheng('己','寅'), '临官'));
+  tests.push(eq('changSheng("己","卯")→冠带', changSheng('己','卯'), '冠带'));
+  tests.push(eq('changSheng("己","辰")→沐浴', changSheng('己','辰'), '沐浴'));
+
+  // === 儒略历换算（v0.43.0）===
+  tests.push({ section:'儒略历换算' });
+  var jg1 = ALGO.julianToGregorian(1472, 10, 31);
+  tests.push(eq('儒1472-10-31→格1472-11-9 (王阳明)', jg1.y + '-' + jg1.m + '-' + jg1.d, '1472-11-9'));
+  var jg2 = ALGO.julianToGregorian(1582, 10, 4);
+  tests.push(eq('儒1582-10-4→格1582-10-14 (历法切点)', jg2.y + '-' + jg2.m + '-' + jg2.d, '1582-10-14'));
+  var jg3 = ALGO.julianToGregorian(1582, 10, 5);
+  tests.push(eq('儒1582-10-5→格1582-10-15 (切点后一日)', jg3.y + '-' + jg3.m + '-' + jg3.d, '1582-10-15'));
+  var jg4 = ALGO.julianToGregorian(1500, 2, 29);
+  tests.push(eq('儒1500-2-29→格1500-3-10 (儒历闰日)', jg4.y + '-' + jg4.m + '-' + jg4.d, '1500-3-10'));
+  tests.push(eq('DOM: 儒历开关存在', !!document.getElementById('useJulian'), true));
+
+  // 王阳明盘回归（格里 1472-11-9 22:01 = 儒 1472-10-31 22:01）
+  var wy = paipan('王阳明', '男', 1472, 11, 9, 22, 1);
+  tests.push(eq('王阳明盘 年柱→壬辰', wy.nian.gan + wy.nian.zhi, '壬辰'));
+  tests.push(eq('王阳明盘 月柱→辛亥', wy.yue.gan + wy.yue.zhi, '辛亥'));
+  tests.push(eq('王阳明盘 日柱→癸亥', wy.ri.gan + wy.ri.zhi, '癸亥'));
+  tests.push(eq('王阳明盘 时柱→癸亥', wy.shi.gan + wy.shi.zhi, '癸亥'));
+  tests.push(eq('王阳明盘 胎元→壬寅', wy.tai.gan + wy.tai.zhi, '壬寅'));
+  tests.push(eq('王阳明盘 命宫→丁未', wy.ming.gan + wy.ming.zhi, '丁未'));
+  tests.push(eq('王阳明盘 身宫→辛亥', wy.shen.gan + wy.shen.zhi, '辛亥'));
 
   // === 流年 ===
   tests.push({ section:'流年干支' });
@@ -13213,13 +13846,14 @@ function captureScreenshot() {
     tests.push(eq('v0.30 T12:前置·字体已 settled（无 webfont）', !document.fonts || document.fonts.status === 'loaded', true));
     var sb12 = ov.querySelector('.xy-settings-body');
     tests.push(eq('v0.30 T12:取样容器 .xy-settings-body 存在', !!sb12, true));
-    if (wide() && sb12) {
+    var tall12 = window.matchMedia('(min-height:800px)').matches;
+    if (wide() && tall12 && sb12) {
       var sh12 = sb12.scrollHeight, ch12 = sb12.clientHeight;
       tests.push(eq('v0.30 T12:非退化·scrollHeight/clientHeight 均 >0（排除 0≤0）', sh12 > 0 && ch12 > 0, true));
       tests.push(eq('v0.30 T12:空查询 60 行态免纵向滚动 scrollHeight-clientHeight ≤2px', sh12 - ch12 <= 2, true));
       if (sh12 - ch12 > 2) tests.push(fail('v0.30 T12:.xy-settings-body 溢出像素', String(sh12 - ch12)));
     } else {
-      tests.push(eq('v0.30 T12:窄屏单栏允许纵向滚动（E15/已知行为 L）', true, true));
+      tests.push(eq('v0.30 T12:窄屏或矮视口允许纵向滚动（E15/已知行为 L）', true, true));
     }
 
     // ---- T13 三栏并排几何 + 弹层尺寸（AC21/AC22；只断钩子/几何，禁断 grid-auto-flow 字面值）----
@@ -13460,6 +14094,7 @@ function captureScreenshot() {
     tests.push(eq('藏气区隐藏时勾三垣三垣藏气行仍隐藏', (function(){ var r=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); return r && getComputedStyle(r).display === 'none' ? 'Y' : 'N'; })(), 'Y'));
     secBar.querySelector('input[data-sec="cangqi"]').click();
     tests.push(eq('藏气区勾回后三垣藏气行显示', (function(){ var r=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); return r && getComputedStyle(r).display !== 'none' ? 'Y' : 'N'; })(), 'Y'));
+    if (window.COMPARE && typeof COMPARE.setZoom === 'function') COMPARE.setZoom(100);
     tests.push(eq('藏气行高统一四柱三垣同高', (function(){ var r1=document.querySelector('.cmp-card tr.rh[data-sec~="cangqi"]:not([data-sec~="sanyuan"])'); var r2=document.querySelector('.cmp-card tr[data-sec~="sanyuan"][data-sec~="cangqi"]'); if(!r1||!r2) return 'N'; var h1=r1.getBoundingClientRect().height, h2=r2.getBoundingClientRect().height; return Math.abs(h1-h2)<1 && h1>80 ? 'Y' : 'N'; })(), 'Y'));
     tests.push(eq('藏气行满高calc公式', (function(){ var td=document.querySelector('.cmp-card tr[data-sec~="cangqi"] td:nth-child(2)'); if(!td) return 'N'; var fs=parseFloat(getComputedStyle(td).fontSize); var want=4.8*fs+11; return Math.abs(td.getBoundingClientRect().height-want)<2.5 ? 'Y' : 'N'; })(), 'Y'));
     secBar.querySelector('input[data-sec="yunliu"]').click();
@@ -13701,6 +14336,165 @@ function captureScreenshot() {
     tests.push(eq('清空后状态为空数组', localStorage.getItem('bz_cmp_state'), '[]'));
     C.close();
 
+    if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));
+  })();
+
+  // ===== 盘面对比·关系高亮(v0.43.0) =====
+  tests.push({ section:'盘面对比·关系高亮(v0.43.0)' });
+  (function() {
+    var C = window.COMPARE;
+    var KEY = window.CONST.ARCH_KEY;
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    var bakArch = localStorage.getItem(KEY);
+    var ars = ARCHIVE.getArchives();
+    ars.push({ id:'t_hl42', name:'高亮测试甲', gender:'男', year:1990, month:1, day:1, hour:12, min:0 });
+    ars.push({ id:'t2_hl42', name:'高亮测试乙', gender:'女', year:1984, month:2, day:2, hour:4, min:0 });
+    ARCHIVE.saveArchives(ars);
+    C._setState([{ type:'arch', id:'t_hl42' }, { type:'arch', id:'t2_hl42' }]);
+    C.open();
+    var track = document.getElementById('cmpTrack');
+    var cards = track.querySelectorAll('.cmp-card');
+    var bar = document.getElementById('cmpHLBar');
+    tests.push(eq('静态功能条挂载', bar ? 'Y' : 'N', 'Y'));
+    tests.push(eq('两卡渲染', String(cards.length), '2'));
+    tests.push(eq('柱名th带data-pk共8个', String(cards[0].querySelectorAll('th[data-pk]').length), '8'));
+    tests.push(eq('天干td带data-gk共8个', String(cards[0].querySelectorAll('td[data-gk="gan"]').length), '8'));
+    tests.push(eq('地支td带data-gk共8个', String(cards[0].querySelectorAll('td[data-gk="zhi"]').length), '8'));
+
+    var S = C.hlRelSet;
+    tests.push(eq('甲·同干', S('gan','tong','甲').join(''), '甲'));
+    tests.push(eq('甲·异干9个', String(S('gan','yi','甲').length), '9'));
+    tests.push(eq('甲·主生同=丙', S('gan','sheng_tong','甲').join(''), '丙'));
+    tests.push(eq('甲·主生异=丁', S('gan','sheng_yi','甲').join(''), '丁'));
+    tests.push(eq('甲·被生同=壬', S('gan','beisheng_tong','甲').join(''), '壬'));
+    tests.push(eq('甲·被生异=癸', S('gan','beisheng_yi','甲').join(''), '癸'));
+    tests.push(eq('甲·主克同=戊', S('gan','ke_tong','甲').join(''), '戊'));
+    tests.push(eq('甲·主克异=己', S('gan','ke_yi','甲').join(''), '己'));
+    tests.push(eq('甲·被克同=庚', S('gan','beike_tong','甲').join(''), '庚'));
+    tests.push(eq('甲·被克异=辛', S('gan','beike_yi','甲').join(''), '辛'));
+    tests.push(eq('甲·合=己', S('gan','he','甲').join(''), '己'));
+    tests.push(eq('甲·冲=庚', S('gan','chong','甲').join(''), '庚'));
+    tests.push(eq('戊·冲为空（戊己无冲）', String(S('gan','chong','戊').length), '0'));
+    tests.push(eq('子·同支', S('zhi','tong','子').join(''), '子'));
+    tests.push(eq('子·异支11个', String(S('zhi','yi','子').length), '11'));
+    tests.push(eq('子·主生=寅卯', S('zhi','zhuSheng','子').join(''), '寅卯'));
+    tests.push(eq('子·被生=申酉', S('zhi','beiSheng','子').join(''), '申酉'));
+    tests.push(eq('子·主克=巳午', S('zhi','zhuKe','子').join(''), '巳午'));
+    tests.push(eq('子·被克=辰戌丑未', String(S('zhi','beiKe','子').length), '4'));
+    tests.push(eq('子·刑=子卯', S('zhi','xing','子').join(''), '子卯'));
+    tests.push(eq('寅·刑=寅巳申', S('zhi','xing','寅').sort().join(''), '寅巳申'));
+    tests.push(eq('辰·自刑', S('zhi','xing','辰').join(''), '辰辰'));
+    tests.push(eq('子·冲=子午', S('zhi','chong','子').join(''), '子午'));
+    tests.push(eq('子·六合=子丑', S('zhi','he6','子').join(''), '子丑'));
+    tests.push(eq('子·三合=子申辰', S('zhi','sanhe','子').sort().join(''), '子申辰'));
+    tests.push(eq('子·三会=子亥丑', S('zhi','sanhui','子').sort().join(''), '丑亥子'));
+    tests.push(eq('子·害=子未', S('zhi','hai','子').join(''), '子未'));
+    tests.push(eq('子·破=子酉', S('zhi','po','子').join(''), '子酉'));
+
+    var c1 = cards[0], c2 = cards[1];
+    c1.querySelector('th[data-pk="nian"]').click();
+    tests.push(eq('点柱名功能条出现', bar.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('柱模式8勾选', String(bar.querySelectorAll('input[type="checkbox"]').length), '8'));
+    tests.push(eq('标亮同柱按钮存在', bar.querySelector('.cmp-hl-apply') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('参照文本含年柱', bar.querySelector('.cmp-hl-ref').textContent.indexOf('年柱') >= 0 ? 'Y' : 'N', 'Y'));
+    var riCb = bar.querySelector('input[value="ri"]');
+    riCb.checked = true;
+    riCb.dispatchEvent(new Event('change'));
+    bar.querySelector('.cmp-hl-apply').click();
+    tests.push(eq('标亮同柱：卡1亮4格', String(c1.querySelectorAll('td.bz-hl-on').length), '4'));
+    tests.push(eq('标亮同柱：卡2亮4格', String(c2.querySelectorAll('td.bz-hl-on').length), '4'));
+    tests.push(eq('其余柱变暗：卡1暗12格', String(c1.querySelectorAll('td.bz-hl-off').length), '12'));
+    tests.push(eq('参照柱名有ref标记', String(track.querySelectorAll('th.bz-hl-ref').length), '1'));
+    tests.push(eq('柱模式无锁定键', bar.querySelector('.cmp-hl-lock') ? 'N' : 'Y', 'Y'));
+    bar.querySelector('.cmp-hl-close').click();
+    tests.push(eq('✕后功能条收起', bar.style.display === 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('✕后无高亮类', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref').length), '0'));
+
+    var nianGanTd = c1.querySelector('td[data-gk="gan"][data-pk="nian"]');
+    var g = nianGanTd.getAttribute('data-gz');
+    var nianZhiTd = c1.querySelector('td[data-gk="zhi"][data-pk="nian"]');
+    var z = nianZhiTd.getAttribute('data-gz');
+    nianGanTd.click();
+    tests.push(eq('点天干干支行并存25键', String(bar.querySelectorAll('.cmp-hl-rel[data-rel]').length), '25'));
+    tests.push(eq('解绑：参照文本只含干' + g + '无支参照', bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('支 ') < 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('点击格金圈ref（当前参照）', nianGanTd.classList.contains('bz-hl-ref') && !nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('解绑：同柱支格无任何圈', String((nianZhiTd.classList.contains('bz-hl-ref') ? 1 : 0) + (nianZhiTd.classList.contains('bz-hl-refmark') ? 1 : 0)), '0'));
+    var expSt = S('gan','sheng_tong',g);
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="sheng_tong"]').click();
+    var expOn = 0;
+    track.querySelectorAll('td[data-gk="gan"]').forEach(function(td) { if (expSt.indexOf(td.getAttribute('data-gz')) >= 0) expOn++; });
+    tests.push(eq('主生同干(' + g + '→' + expSt.join('') + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn)));
+    tests.push(eq('只选干键时支行无高亮类', String(track.querySelectorAll('td[data-gk="zhi"].bz-hl-on,td[data-gk="zhi"].bz-hl-off').length), '0'));
+    tests.push(eq('未锁定：键选不产生红圈', nianGanTd.classList.contains('bz-hl-refmark') ? 'N' : 'Y', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="sheng_tong"]').click();
+    tests.push(eq('再点同键取消高亮', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off').length), '0'));
+
+    tests.push(eq('干支行各有锁定键共2个', String(bar.querySelectorAll('.cmp-hl-lock').length), '2'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').click();
+    tests.push(eq('锁定后年干红圈', nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('锁定后金圈让位', !nianGanTd.classList.contains('bz-hl-ref') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('干行锁定键active已锁定', bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').textContent.indexOf('已锁定') >= 0 && bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').classList.contains('active') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('参照文本带🔒', bar.querySelector('.cmp-hl-ref').textContent.indexOf('🔒') >= 0 ? 'Y' : 'N', 'Y'));
+    nianZhiTd.click();
+    tests.push(eq('锁定的年干红圈保持', nianGanTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    tests.push(eq('点支后参照文本只含支' + z, bar.querySelector('.cmp-hl-ref').textContent.indexOf('支 ' + z) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ') < 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq('年支当前参照金圈', nianZhiTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="z"]').click();
+    tests.push(eq('年支锁定后两红圈', String(track.querySelectorAll('.bz-hl-refmark').length), '2'));
+    var c2NianGan = c2.querySelector('td[data-gk="gan"][data-pk="nian"]');
+    var g2 = c2NianGan.getAttribute('data-gz');
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    var onLock = track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length;
+    c2NianGan.click();
+    tests.push(eq('锁定干中心：点' + g2 + '盘干亮格不变仍' + onLock, String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(onLock)));
+    tests.push(eq('锁定干中心：参照仍干' + g + '带🔒', bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 && bar.querySelector('.cmp-hl-ref').textContent.indexOf('🔒') >= 0 ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    nianZhiTd.click();
+    tests.push(eq('锁支格点击焦点切回支不收起', bar.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-close').click();
+    tests.push(eq('✕收起后锁定红圈保留', bar.style.display === 'none' && String(track.querySelectorAll('.bz-hl-refmark').length) === '2' ? 'Y' : 'N', 'Y'));
+    nianGanTd.click();
+    tests.push(eq('收起后再点功能条复现且红圈仍在', bar.style.display !== 'none' && String(track.querySelectorAll('.bz-hl-refmark').length) === '2' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('复现后参照仍锁干' + g, bar.querySelector('.cmp-hl-ref').textContent.indexOf('干 ' + g) >= 0 ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="g"]').click();
+    tests.push(eq('再点锁定解除年干红圈剩1', String(track.querySelectorAll('.bz-hl-refmark').length), '1'));
+    bar.querySelector('.cmp-hl-lock[data-row-lock="z"]').click();
+    tests.push(eq('支行锁定解除后无红圈', String(track.querySelectorAll('.bz-hl-refmark').length), '0'));
+    tests.push(eq('解除后金圈回到焦点年干', nianGanTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+
+    nianZhiTd.click();
+    tests.push(eq('点地支仍干支行并存25键', String(bar.querySelectorAll('.cmp-hl-rel[data-rel]').length), '25'));
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="chong"]').click();
+    var expC = S('zhi','chong',z);
+    var expOn2 = 0;
+    track.querySelectorAll('td[data-gk="zhi"]').forEach(function(td) { if (expC.indexOf(td.getAttribute('data-gz')) >= 0) expOn2++; });
+    tests.push(eq('冲(' + z + '→' + expC.join('') + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn2)));
+    tests.push(eq('未锁定参照格金圈无红圈', nianZhiTd.classList.contains('bz-hl-ref') && !nianZhiTd.classList.contains('bz-hl-refmark') ? 'Y' : 'N', 'Y'));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    var expT = S('gan','tong',g);
+    var expOnG = 0;
+    track.querySelectorAll('td[data-gk="gan"]').forEach(function(td) { if (expT.indexOf(td.getAttribute('data-gz')) >= 0) expOnG++; });
+    tests.push(eq('叠加：干行同干亮格数', String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(expOnG)));
+    tests.push(eq('叠加：支行冲仍亮', String(track.querySelectorAll('td[data-gk="zhi"].bz-hl-on').length), String(expOn2)));
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="chong"]').click();
+    tests.push(eq('取消冲后干行保持', String(track.querySelectorAll('td[data-gk="gan"].bz-hl-on').length), String(expOnG)));
+    bar.querySelector('.cmp-hl-rel[data-row="g"][data-rel="tong"]').click();
+    tests.push(eq('全取消后无高亮类', String(track.querySelectorAll('.bz-hl-on,.bz-hl-off').length), '0'));
+    nianZhiTd.click();
+    tests.push(eq('再点参照物收起', bar.style.display === 'none' && track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-refmark').length === 0 ? 'Y' : 'N', 'Y'));
+
+    nianZhiTd.click();
+    bar.querySelector('.cmp-hl-rel[data-row="z"][data-rel="sanhe"]').click();
+    var expH = S('zhi','sanhe',z);
+    var expOn3 = 0;
+    track.querySelectorAll('td[data-gk="zhi"]').forEach(function(td) { if (expH.indexOf(td.getAttribute('data-gz')) >= 0) expOn3++; });
+    tests.push(eq('三合(' + z + ')亮格数', String(track.querySelectorAll('td.bz-hl-on').length), String(expOn3)));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape' }));
+    tests.push(eq('Esc清除收起', bar.style.display === 'none' && track.querySelectorAll('.bz-hl-on,.bz-hl-off,.bz-hl-ref,.bz-hl-refmark').length === 0 ? 'Y' : 'N', 'Y'));
+
+    C.clear(); C.close();
     if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));
@@ -14281,12 +15075,6 @@ window.SUPABASE_CONFIG = {
 </script></script>
 <script>
 /* 八字排盘 v0.25.0 — records.js */
-/* 八字排盘 v0.25.0 — records.js（排盘记录云端模块）
- * ------------------------------------------------------------
- * 职责：保存/列表/查看/删除排盘记录 + 首次登录 localStorage 迁移
- * 依赖：auth.js（window.AUTH）+ supabase-js v2 + algorithm.js（迁移现算）
- * 表：paipan_records（id uuid / user_id / input_data jsonb / result_data jsonb / created_at / updated_at）
- */
 (function() {
 
   var sb = null;
@@ -14330,6 +15118,7 @@ window.SUPABASE_CONFIG = {
       min: parseInt(val('inMin')) || 0,
       prov: val('inProv'), city: val('inCity'), dist: val('inDist'),
       useSolar: !!(document.getElementById('useSolar') && document.getElementById('useSolar').checked),
+      isJulian: !!(calType === 'solar' && document.getElementById('useJulian') && document.getElementById('useJulian').checked),
       calendarType: calType,
       isLeap: !!(document.getElementById('inLeap') && document.getElementById('inLeap').checked),
       lunarMonth: calType === 'lunar' && monthEl ? (parseInt(monthEl.value) || null) : null,
