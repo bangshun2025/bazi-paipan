@@ -189,6 +189,9 @@
 var LEVEL_LABELS = ['少','简','中','详','全'];
 var LEVEL_ROW_KEYS = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
 var LEVEL_ROW_LABELS = { xingyao:'星曜', nayin:'纳音', nayun:'纳运', zhuzuo:'主坐', nianzuo:'年坐', yuezuo:'月坐', shizuo:'时坐', taizuo:'胎坐', mingzuo:'命坐', shenzuo:'身坐', zizuo:'自坐', zuonian:'坐年', zuoyue:'坐月', zuori:'坐日', zuoshi:'坐时', zuotai:'坐胎', zuoming:'坐命', zuoshen:'坐身', kongwang:'空亡', shensha:'神煞' };
+var LEVEL_BASE_KEYS = ['xingyao','nayin','nayun','zizuo','kongwang','shensha'];
+var LEVEL_TZ_KEYS_A = ['nianzuo','yuezuo','zhuzuo','shizuo','taizuo','mingzuo','shenzuo'];
+var LEVEL_TZ_KEYS_B = ['zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen'];
 var LEVEL_PRESETS = (function() {
   var steps = [{}, {zhuzuo:1,zizuo:1}, {xingyao:1,nayin:1,nayun:1}, {kongwang:1}, {shensha:1}];
   return steps.map(function(_, lv) {
@@ -244,8 +247,9 @@ function zuoRowSy(p, k, tail) {
     + '<td>' + c(p.taiNian.zhi) + '</td><td>' + c(p.tai.zhi) + '</td><td>' + c(p.ming.zhi) + '</td><td>' + c(p.shen.zhi) + '</td>'
     + (tail ? '<td class="sep"></td><td class="col-ln"></td>' : '') + '</tr>';
 }
-function sitRowSy(p, k, tail) {
-  var zhi = p[SIT_SY_COL[k]] ? p[SIT_SY_COL[k]].zhi : '';
+function sitRowSy(p, k, tail, colMap) {
+  var cm = colMap || SIT_SY_COL;
+  var zhi = p[cm[k]] ? p[cm[k]].zhi : '';
   function v(ck) { return zhi && p[ck] && p[ck].gan ? changSheng(p[ck].gan, zhi) : ''; }
   return '<tr class="rm" data-sec="sanyuan" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
     + '<td>' + v('taiNian') + '</td><td>' + v('tai') + '</td><td>' + v('ming') + '</td><td>' + v('shen') + '</td>'
@@ -278,15 +282,19 @@ function applyLevelRows() {
   applyCmpSecs();
 }
 
+function levelItemHTML(k) {
+  return '<label class="clp-item"><input type="checkbox"' + (_levelRows[k] ? ' checked' : '') + ' onchange="RENDER.setRowVisible(\'' + k + '\', this.checked)">' + LEVEL_ROW_LABELS[k] + '</label>';
+}
 function levelPopHTML() {
   var cur = matchLevelPreset();
   var h = '<div class="clp-levels">';
   for (var i = 0; i < 5; i++)
     h += '<button class="clp-lv' + (i === cur ? ' active' : '') + '" onclick="RENDER.setLevelPreset(' + i + ')">' + LEVEL_LABELS[i] + '</button>';
   h += '</div><div class="clp-rowbar">';
-  LEVEL_ROW_KEYS.forEach(function(k) {
-    h += '<label class="clp-item"><input type="checkbox"' + (_levelRows[k] ? ' checked' : '') + ' onchange="RENDER.setRowVisible(\'' + k + '\', this.checked)">' + LEVEL_ROW_LABELS[k] + '</label>';
-  });
+  LEVEL_BASE_KEYS.forEach(function(k) { h += levelItemHTML(k); });
+  h += '</div><div class="clp-sep"></div><div class="clp-tzgrid">';
+  LEVEL_TZ_KEYS_A.forEach(function(k) { h += levelItemHTML(k); });
+  LEVEL_TZ_KEYS_B.forEach(function(k) { h += levelItemHTML(k); });
   return h + '</div>';
 }
 
@@ -828,9 +836,10 @@ function renderChart(data, twin, targetId, opts) {
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="shensha">'+rl('神煞')+td('',pTaiNian.sh)+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
   // v0.29.0 星曜行（三垣区）：插入「藏气」与「纳音」之间
   insertBeforeNayin(syRows, xyRowSy7({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen }));
-  // v0.43.0 追加：三垣区主坐后插七坐组，自坐后插坐胎/坐命/坐身
+  // v0.43.0 追加：三垣区主坐后插七坐组，自坐后插坐年~坐时（三垣干对四柱支）与坐胎/坐命/坐身
   insertAfterAnchor(syRows, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(pAll, k, true); }));
-  insertAfterAnchor(syRows, /data-row-type="zizuo"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(pAll, k, true); }));
+  insertAfterAnchor(syRows, /data-row-type="zizuo"/, SIT_MAIN_KEYS.map(function(k){ return sitRowSy(pAll, k, true, SIT_MAIN_COL); }));
+  insertAfterAnchor(syRows, /data-row-type="zuoshi"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(pAll, k, true); }));
   chartRows.push.apply(chartRows, syRows);
 
   // ---- 大运流年表 HTML ----
