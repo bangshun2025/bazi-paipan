@@ -187,21 +187,75 @@
   var loadFromArchive = ARCHIVE.loadFromArchive;
 
 var LEVEL_LABELS = ['少','简','中','详','全'];
-var LEVEL_ROW_KEYS = ['xingyao','nayin','nayun','xingyun','zizuo','kongwang','shensha'];
-var LEVEL_ROW_LABELS = { xingyao:'星曜', nayin:'纳音', nayun:'纳运', xingyun:'星运', zizuo:'自坐', kongwang:'空亡', shensha:'神煞' };
-var LEVEL_PRESETS = [
-  { xingyao:0, nayin:0, nayun:0, xingyun:0, zizuo:0, kongwang:0, shensha:0 },
-  { xingyao:0, nayin:0, nayun:0, xingyun:1, zizuo:1, kongwang:0, shensha:0 },
-  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:0, shensha:0 },
-  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:1, shensha:0 },
-  { xingyao:1, nayin:1, nayun:1, xingyun:1, zizuo:1, kongwang:1, shensha:1 }
-];
-var _levelRows = { xingyao:false, nayin:false, nayun:false, xingyun:false, zizuo:false, kongwang:false, shensha:false };
+var LEVEL_ROW_KEYS = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
+var LEVEL_ROW_LABELS = { xingyao:'星曜', nayin:'纳音', nayun:'纳运', zhuzuo:'主坐', nianzuo:'年坐', yuezuo:'月坐', shizuo:'时坐', taizuo:'胎坐', mingzuo:'命坐', shenzuo:'身坐', zizuo:'自坐', zuonian:'坐年', zuoyue:'坐月', zuori:'坐日', zuoshi:'坐时', zuotai:'坐胎', zuoming:'坐命', zuoshen:'坐身', kongwang:'空亡', shensha:'神煞' };
+var LEVEL_PRESETS = (function() {
+  var steps = [{}, {zhuzuo:1,zizuo:1}, {xingyao:1,nayin:1,nayun:1}, {kongwang:1}, {shensha:1}];
+  return steps.map(function(_, lv) {
+    var p = {};
+    LEVEL_ROW_KEYS.forEach(function(k) {
+      for (var i = 1; i <= lv; i++) { if (steps[i][k]) { p[k] = 1; break; } }
+    });
+    return p;
+  });
+})();
+var _levelRows = {};
+LEVEL_ROW_KEYS.forEach(function(k) { _levelRows[k] = false; });
+
+// ===== v0.43.0 追加：主坐/七坐 与 坐X 组行（简分勾选，默认仅主坐） =====
+// X坐 = 以 X 柱天干为参照对各地支求十二长生；坐X = X 柱天干对自身地支（即该柱 zz）
+var ZUO_GROUP = ['nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo'];
+var SIT_MAIN_KEYS = ['zuonian','zuoyue','zuori','zuoshi'];
+var SIT_SY_KEYS = ['zuotai','zuoming','zuoshen'];
+var ZUO_REF = { nianzuo:'nian', yuezuo:'yue', shizuo:'shi', taizuo:'tai', mingzuo:'ming', shenzuo:'shen' };
+var ZUO_TOKEN = { nianzuo:'nz1', yuezuo:'nz2', shizuo:'nz3', taizuo:'nz4', mingzuo:'nz5', shenzuo:'nz6' };
+var SIT_MAIN_COL = { zuonian:'nian', zuoyue:'yue', zuori:'ri', zuoshi:'shi' };
+var SIT_SY_COL = { zuotai:'tai', zuoming:'ming', zuoshen:'shen' };
+
+function insertAfterAnchor(arr, re, htmlArr) {
+  for (var i = 0; i < arr.length; i++) {
+    if (re.test(arr[i])) {
+      arr.splice.apply(arr, [i + 1, 0].concat(htmlArr));
+      return arr;
+    }
+  }
+  return arr;
+}
+function zuoRowMain(p, k, luck) {
+  var ref = p[ZUO_REF[k]] ? p[ZUO_REF[k]].gan : '';
+  function c(z) { return ref ? changSheng(ref, z) : ''; }
+  return '<tr class="rm" data-row-type="' + k + (luck ? ' ' + ZUO_TOKEN[k] : '') + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
+    + '<td>' + c(p.nian.zhi) + '</td><td>' + c(p.yue.zhi) + '</td><td>' + c(p.ri.zhi) + '</td><td>' + c(p.shi.zhi) + '</td>'
+    + (luck ? '<td class="sep col-dy">' + c(luck.dy.zhi) + '</td><td class="col-ln">' + c(luck.ln.zhi) + '</td>' : '') + '</tr>';
+}
+function sitRowMain(p, k, luck) {
+  var col = SIT_MAIN_COL[k];
+  function v(ck) { return ck === col && p[ck] ? p[ck].zz : ''; }
+  return '<tr class="rm" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
+    + '<td>' + v('nian') + '</td><td>' + v('yue') + '</td><td>' + v('ri') + '</td><td>' + v('shi') + '</td>'
+    + (luck ? '<td class="sep col-dy"></td><td class="col-ln"></td>' : '') + '</tr>';
+}
+function zuoRowSy(p, k, tail) {
+  var ref = p[ZUO_REF[k]] ? p[ZUO_REF[k]].gan : '';
+  function c(z) { return ref ? changSheng(ref, z) : ''; }
+  return '<tr class="rm" data-sec="sanyuan" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
+    + '<td>' + c(p.taiNian.zhi) + '</td><td>' + c(p.tai.zhi) + '</td><td>' + c(p.ming.zhi) + '</td><td>' + c(p.shen.zhi) + '</td>'
+    + (tail ? '<td class="sep"></td><td class="col-ln"></td>' : '') + '</tr>';
+}
+function sitRowSy(p, k, tail) {
+  var col = SIT_SY_COL[k];
+  function v(ck) { return ck === col && p[ck] ? p[ck].zz : ''; }
+  return '<tr class="rm" data-sec="sanyuan" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
+    + '<td>' + v('taiNian') + '</td><td>' + v('tai') + '</td><td>' + v('ming') + '</td><td>' + v('shen') + '</td>'
+    + (tail ? '<td class="sep"></td><td class="col-ln"></td>' : '') + '</tr>';
+}
 
 function matchLevelPreset() {
   for (var i = 0; i < 5; i++) {
     var p = LEVEL_PRESETS[i], ok = true;
-    for (var k in p) { if (!!p[k] !== !!_levelRows[k]) { ok = false; break; } }
+    LEVEL_ROW_KEYS.forEach(function(k) {
+      if (ok && !!p[k] !== !!_levelRows[k]) ok = false;
+    });
     if (ok) return i;
   }
   return -1;
@@ -417,8 +471,8 @@ function buildPillarRows(p, options) {
   // 纳运 ← v0.17.0 从自坐下移至纳音下
   main.push('<tr class="rm" data-row-type="nayun">' + rl('纳运') +
     cols.map(function(k){return td(dm(k+'.nayun'), p[k].nayun);}).join('') + '</tr>');
-  // 星运
-  main.push('<tr class="rm" data-row-type="xingyun">' + rl('星运') +
+  // 主坐 ← v0.43.0 追加：原「星运」改名
+  main.push('<tr class="rm" data-row-type="zhuzuo">' + rl('主坐') +
     cols.map(function(k){return td(dm(k+'.xy'), p[k].xy);}).join('') + '</tr>');
   // 自坐
   main.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') +
@@ -449,7 +503,7 @@ function buildPillarRows(p, options) {
       syCols.map(function(k){return td(dm(k+'.ny'), p[k].ny);}).join('') + '</tr>');
     sanyuan.push('<tr class="rm" data-row-type="nayun">' + rl('纳运') +
       syCols.map(function(k){return td(dm(k+'.nayun'), p[k].nayun);}).join('') + '</tr>');
-    sanyuan.push('<tr class="rm" data-row-type="xingyun">' + rl('星运') +
+    sanyuan.push('<tr class="rm" data-row-type="zhuzuo">' + rl('主坐') +
       syCols.map(function(k){return td(dm(k+'.xy'), p[k].xy);}).join('') + '</tr>');
     sanyuan.push('<tr class="rm" data-row-type="zizuo">' + rl('自坐') +
       syCols.map(function(k){return td(dm(k+'.zz'), p[k].zz);}).join('') + '</tr>');
@@ -686,6 +740,8 @@ function renderChart(data, twin, targetId, opts) {
 
   // 生成四柱行（5列），再拼接大运/流年列
   var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen });
+  var pAll = { nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen };
+  var luckCols = { dy:pDy, ln:pLn };
   var suffixMain = td('sep col-dy', '') + td('col-ln', '');
   var suffixSy = emp('sep') + emp('col-ln');
 
@@ -719,8 +775,8 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
   // 纳运 ← v0.17.0 从自坐下移至纳音下
   mainRows[5] = '<tr class="rm" data-row-type="nayun dy4">'+rl('纳运')+td('',pNian.nayun)+td('',pYue.nayun)+td('',pRi.nayun)+td('',pShi.nayun)+td('sep col-dy',pDy.nayun)+td('col-ln',pLn.nayun)+'</tr>';
-  // 星运
-  mainRows[6] = '<tr class="rm" data-row-type="xingyun ln3">'+rl('星运')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
+  // 主坐 ← v0.43.0 追加：原「星运」改名（token ln3 保留，供 _applyDLUpdates 值级刷新）
+  mainRows[6] = '<tr class="rm" data-row-type="zhuzuo ln3">'+rl('主坐')+td('',pNian.xy)+td('',pYue.xy)+td('',pRi.xy)+td('',pShi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
   // 自坐 ← v0.17.0 dy4→dy5
   mainRows[7] = '<tr class="rm" data-row-type="zizuo dy5">'+rl('自坐')+td('',pNian.zz)+td('',pYue.zz)+td('',pRi.zz)+td('',pShi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
   // 空亡
@@ -729,6 +785,9 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // v0.29.0 星曜行：插入「藏气」与「纳音」之间（index-independent，既有索引一字不改）
   insertBeforeNayin(mainRows, xyRowMain({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen }, pDy, pLn));
+  // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时（index-independent 锚点插入，自带 7 列）
+  insertAfterAnchor(mainRows, /data-row-type="zhuzuo ln3"/, ZUO_GROUP.map(function(k){ return zuoRowMain(pAll, k, luckCols); }));
+  insertAfterAnchor(mainRows, /data-row-type="zizuo dy5"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(pAll, k, luckCols); }));
   // 其他行（藏干4,5 等）使用 buildPillarRows 的 + suffix
   for (var fixI = 0; fixI < mainRows.length; fixI++) {
     if (mainRows[fixI] && mainRows[fixI].indexOf('sep col-dy') === -1) {
@@ -761,12 +820,15 @@ function renderChart(data, twin, targetId, opts) {
   syRows.push('<tr class="rh" data-sec="sanyuan cangqi">'+rl('藏气')+td('',pTaiNian.cg)+td('',pTai.cg)+td('',pMing.cg)+td('',pShen.cg)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="xingyun">'+rl('星运')+td('',pTaiNian.xy)+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
+  syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="zhuzuo">'+rl('主坐')+td('',pTaiNian.xy)+td('',pTai.xy)+td('',pMing.xy)+td('',pShen.xy)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="zizuo">'+rl('自坐')+td('',pTaiNian.zz)+td('',pTai.zz)+td('',pMing.zz)+td('',pShen.zz)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="kongwang">'+rl('空亡')+td('',pTaiNian.kw)+td('',pTai.kw)+td('',pMing.kw)+td('',pShen.kw)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="shensha">'+rl('神煞')+td('',pTaiNian.sh)+td('',pTai.sh)+td('',pMing.sh)+td('',pShen.sh)+emp('sep')+emp('col-ln')+'</tr>');
   // v0.29.0 星曜行（三垣区）：插入「藏气」与「纳音」之间
   insertBeforeNayin(syRows, xyRowSy7({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen }));
+  // v0.43.0 追加：三垣区主坐后插七坐组，自坐后插坐胎/坐命/坐身
+  insertAfterAnchor(syRows, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(pAll, k, true); }));
+  insertAfterAnchor(syRows, /data-row-type="zizuo"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(pAll, k, true); }));
   chartRows.push.apply(chartRows, syRows);
 
   // ---- 大运流年表 HTML ----
@@ -1023,6 +1085,13 @@ function hiLn(di, li, scope) {
 
 // ============ v0.6.7 卡片大运流年列互动更新 ============
 // 点击流年时同步更新卡片图表中的大运/流年列
+// v0.43.0 追加：七坐组参照干快照（缺柱时该行不刷新）
+function _zuoRefs(d) {
+  if (!d) return null;
+  var r = {};
+  ZUO_GROUP.forEach(function(k) { var c = d[ZUO_REF[k]]; if (c && c.gan) r[ZUO_REF[k]] = c.gan; });
+  return r;
+}
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   // 确定用哪个卡的数据：从点击元素向上找 .bz-twin-card
   var card = clickedEl.closest('.bz-twin-card');
@@ -1078,13 +1147,13 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   // v0.6.6: 单人模式回退 —— 无 .bz-twin-card 时直接更新主 chart 表格
   if (cards.length === 0) {
     var mainChart = container.querySelector('table.chart');
-    if (mainChart) _applyDLUpdates(mainChart, pDy, pLn, true);
+    if (mainChart) _applyDLUpdates(mainChart, pDy, pLn, true, _zuoRefs(cardData));
     return;
   }
 
   cards.forEach(function(c) {
     var ct = c.querySelector('.chart-wrap table.chart');
-    if (ct) _applyDLUpdates(ct, pDy, pLn, false);
+    if (ct) _applyDLUpdates(ct, pDy, pLn, false, _zuoRefs(cardData));
   });
 }
 
@@ -1092,7 +1161,7 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
 
 // ============ v0.6.6 通用大运/流年列更新函数 ============
 // 双模式行映射：isSingle=true → 9行（藏气合并），isSingle=false → 11行（藏干分层）
-function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
+function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
   // v0.10.4: 语义选择器替代硬编码行索引，宫位标签行不再影响数据定位
   var getRow = function(type) { return tableEl.querySelector('[data-row-type~="' + type + '"]'); };
   var updates;
@@ -1114,6 +1183,13 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
       // v0.29.0 星曜行（大运/流年列；u[5]/u[6] 回写 data-xy-gz）
       ['xy1', _xyName(pDy.gan+pDy.zhi), _xyName(pLn.gan+pLn.zhi), undefined, undefined, pDy.gan+pDy.zhi, pLn.gan+pLn.zhi]
     ];
+    // v0.43.0 追加：七坐组行大运/流年列（参照干由调用方传 refs，缺则不刷新）
+    if (refs) {
+      ZUO_GROUP.forEach(function(k) {
+        var g = refs[ZUO_REF[k]];
+        if (g) updates.push([ZUO_TOKEN[k], changSheng(g, pDy.zhi), changSheng(g, pLn.zhi)]);
+      });
+    }
   } else {
     // 双胞胎模式：藏干分层
     // v0.17.0: dy5→nayun, dy6→zizuo
@@ -1133,6 +1209,13 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle) {
       // v0.29.0 星曜行（大运/流年列；u[5]/u[6] 回写 data-xy-gz）
       ['xy1', _xyName(pDy.gan+pDy.zhi), _xyName(pLn.gan+pLn.zhi), undefined, undefined, pDy.gan+pDy.zhi, pLn.gan+pLn.zhi]
     ];
+    // v0.43.0 追加：七坐组行大运/流年列（龙凤卡 7 列；参照干由调用方传 refs，缺则不刷新）
+    if (refs) {
+      ZUO_GROUP.forEach(function(k) {
+        var g = refs[ZUO_REF[k]];
+        if (g) updates.push([ZUO_TOKEN[k], changSheng(g, pDy.zhi), changSheng(g, pLn.zhi)]);
+      });
+    }
   }
 
   updates.forEach(function(u) {
@@ -1263,8 +1346,8 @@ function buildCardHTML(data, options) {
     rows.main[6] = '<tr class="rn" data-row-type="nayin dy4">'+rl('纳音')+td(dm('nian.ny'),p.nian.ny)+td(dm('yue.ny'),p.yue.ny)+td(dm('ri.ny'),p.ri.ny)+td(dm('shi.ny'),p.shi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
     // 纳运(7) ← v0.17.0 从自坐下移至纳音下
     rows.main[7] = '<tr class="rm" data-row-type="nayun dy5">'+rl('纳运')+td(dm('nian.nayun'),p.nian.nayun)+td(dm('yue.nayun'),p.yue.nayun)+td(dm('ri.nayun'),p.ri.nayun)+td(dm('shi.nayun'),p.shi.nayun)+td('sep col-dy',pDy.nayun)+td('col-ln',pLn.nayun)+'</tr>';
-    // 星运(8) ← v0.17.0 ln4 不变
-    rows.main[8] = '<tr class="rm" data-row-type="xingyun ln4">'+rl('星运')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
+    // 主坐(8) ← v0.43.0 追加：原「星运」改名（token ln4 保留）
+    rows.main[8] = '<tr class="rm" data-row-type="zhuzuo ln4">'+rl('主坐')+td(dm('nian.xy'),p.nian.xy)+td(dm('yue.xy'),p.yue.xy)+td(dm('ri.xy'),p.ri.xy)+td(dm('shi.xy'),p.shi.xy)+td('sep col-dy',pDy.xy)+td('col-ln',pLn.xy)+'</tr>';
     // 自坐(9) ← v0.17.0 dy5→dy6
     rows.main[9] = '<tr class="rm" data-row-type="zizuo dy6">'+rl('自坐')+td(dm('nian.zz'),p.nian.zz)+td(dm('yue.zz'),p.yue.zz)+td(dm('ri.zz'),p.ri.zz)+td(dm('shi.zz'),p.shi.zz)+td('sep col-dy',pDy.zz)+td('col-ln',pLn.zz)+'</tr>';
     // 空亡(10)
@@ -1275,15 +1358,26 @@ function buildCardHTML(data, options) {
     rows.sanyuan[0] = '<tr class="hd">'+rl('三垣')+td('','胎年')+td('','胎元')+td('','命宫')+td('','身宫')+emp('sep')+emp('col-ln')+'</tr>';
     // v0.29.0 星曜行（三垣区）：置于 si 循环之前，自动获得尾部 sep/col-ln 空列
     insertBeforeNayin(rows.sanyuan, xyRowSyCore(p));
+    // v0.43.0 追加：三垣区主坐后插七坐组，自坐后插坐胎/坐命/坐身（si 循环自动补尾列）
+    insertAfterAnchor(rows.sanyuan, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(p, k, false); }));
+    insertAfterAnchor(rows.sanyuan, /data-row-type="zizuo"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(p, k, false); }));
     for (var si = 1; si < rows.sanyuan.length; si++) {
       rows.sanyuan[si] = rows.sanyuan[si].replace('</tr>', emp('sep')+emp('col-ln')+'</tr>');
     }
     // v0.29.0 星曜行（四柱区，7 列含大运/流年）：插入「藏气」与「纳音」之间
     insertBeforeNayin(rows.main, xyRowMain(p, pDy, pLn));
+    // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时
+    insertAfterAnchor(rows.main, /data-row-type="zhuzuo ln4"/, ZUO_GROUP.map(function(k){ return zuoRowMain(p, k, { dy:pDy, ln:pLn }); }));
+    insertAfterAnchor(rows.main, /data-row-type="zizuo dy6"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(p, k, { dy:pDy, ln:pLn }); }));
   } else {
     // v0.29.0 星曜行（无大运/流年列，5 列）
     insertBeforeNayin(rows.main, xyRowMainNoLuck(p));
     insertBeforeNayin(rows.sanyuan, xyRowSyCore(p));
+    // v0.43.0 追加：5 列分支同构插入
+    insertAfterAnchor(rows.sanyuan, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(p, k, false); }));
+    insertAfterAnchor(rows.sanyuan, /data-row-type="zizuo"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(p, k, false); }));
+    insertAfterAnchor(rows.main, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowMain(p, k, null); }));
+    insertAfterAnchor(rows.main, /data-row-type="zizuo"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(p, k, null); }));
   }
 
   var titleHtml = relation ? label+'（'+relation+'）' : label;
@@ -1893,8 +1987,8 @@ function renderChartToHtml(data, arch) {
   rows.push('<tr class="rh">' + rl('藏气') + td('',pNian.cg) + td('',pYue.cg) + td('',pRi.cg) + td('',pShi.cg) + emp() + td('',pTai.cg) + td('',pMing.cg) + td('',pShen.cg) + '</tr>');
   // 纳音
   rows.push('<tr class="rn">' + rl('纳音') + td('',pNian.ny) + td('',pYue.ny) + td('',pRi.ny) + td('',pShi.ny) + emp() + td('',pTai.ny) + td('',pMing.ny) + td('',pShen.ny) + '</tr>');
-  // 星运
-  rows.push('<tr class="rm">' + rl('星运') + td('',pNian.xy) + td('',pYue.xy) + td('',pRi.xy) + td('',pShi.xy) + emp() + td('',pTai.xy) + td('',pMing.xy) + td('',pShen.xy) + '</tr>');
+  // 主坐 ← v0.43.0 追加：原「星运」改名
+  rows.push('<tr class="rm">' + rl('主坐') + td('',pNian.xy) + td('',pYue.xy) + td('',pRi.xy) + td('',pShi.xy) + emp() + td('',pTai.xy) + td('',pMing.xy) + td('',pShen.xy) + '</tr>');
   // 自坐
   rows.push('<tr class="rm">' + rl('自坐') + td('',pNian.zz) + td('',pYue.zz) + td('',pRi.zz) + td('',pShi.zz) + emp() + td('',pTai.zz) + td('',pMing.zz) + td('',pShen.zz) + '</tr>');
   // 空亡

@@ -1944,8 +1944,8 @@ function captureScreenshot() {
     var tbl = firstChart(host);
     tests.push(eq('v0.29 T02:容器含 table.chart', !!tbl, true));
     if (tbl) {
-      var EXP_MAIN = ['dy1','ln1','dy2','ln2','xingyao','nayin','nayun','xingyun','zizuo','kongwang','shensha'];
-      var EXP_SY = ['xingyao','nayin','nayun','xingyun','zizuo','kongwang','shensha'];
+      var EXP_MAIN = ['dy1','ln1','dy2','ln2','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','kongwang','shensha'];
+      var EXP_SY = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuotai','zuoming','zuoshen','kongwang','shensha'];
       var seq = typeSeq(tbl);
       tests.push(eq('v0.29 T02:主表+三垣行序（藏气→星曜→纳音）', seq.join(','), EXP_MAIN.concat(EXP_SY).join(',')));
       tests.push(eq('v0.29 T02:星曜行紧邻于纳音行之前', seq.indexOf('xingyao') === seq.indexOf('nayin') - 1, true));
@@ -2655,12 +2655,13 @@ function captureScreenshot() {
     tests.push(eq('点击后简分面板打开', lvPop && lvPop.classList.contains('open') ? 'Y' : 'N', 'Y'));
     tests.push(eq('面板五档按钮并排', String(lvPop.querySelectorAll('.clp-lv').length), '5'));
     tests.push(eq('五档首字=少', lvPop.querySelector('.clp-lv').textContent, '少'));
-    tests.push(eq('横排七项可勾', String(lvPop.querySelectorAll('.clp-rowbar .clp-item input[type=checkbox]').length), '7'));
+    tests.push(eq('横排二十项可勾', String(lvPop.querySelectorAll('.clp-rowbar .clp-item input[type=checkbox]').length), '20'));
+    tests.push(eq('勾选项序含主坐与坐X', (function(){ var ls=[].slice.call(lvPop.querySelectorAll('.clp-rowbar .clp-item')).map(function(l){ return l.textContent.trim(); }); return [ls[3],ls[4],ls[10],ls[11],ls[17]].join(','); })(), '主坐,年坐,自坐,坐年,坐身'));
     tests.push(eq('初始全不勾', String(lvPop.querySelectorAll('.clp-rowbar .clp-item input:checked').length), '0'));
     [].slice.call(lvPop.querySelectorAll('.clp-rowbar .clp-item input'))[3].click();
-    tests.push(eq('手动勾星运后对比卡行显示', (function(){ var r=document.querySelector('#cmpTrack tr[data-row-type~="xingyun"]'); return r && r.style.display !== 'none' ? 'Y' : 'N'; })(), 'Y'));
+    tests.push(eq('手动勾主坐后对比卡行显示', (function(){ var r=document.querySelector('#cmpTrack tr[data-row-type~="zhuzuo"]'); return r && r.style.display !== 'none' ? 'Y' : 'N'; })(), 'Y'));
     var mainT2 = document.querySelector('#output table.chart');
-    tests.push(eq('主页表星运行同步显示', mainT2 ? (mainT2.querySelector('tr[data-row-type~="xingyun"]').style.display !== 'none' ? 'Y' : 'N') : 'Y', 'Y'));
+    tests.push(eq('主页表主坐行同步显示', mainT2 ? (mainT2.querySelector('tr[data-row-type~="zhuzuo"]').style.display !== 'none' ? 'Y' : 'N') : 'Y', 'Y'));
     tests.push(eq('自由组合按钮文本=自定义', lvBtn.textContent, '简分：自定义'));
     lvPop.querySelectorAll('.clp-lv')[3].click();
     tests.push(eq('点「详」后勾选6项', String(lvPop.querySelectorAll('.clp-rowbar .clp-item input:checked').length), '6'));
@@ -2668,7 +2669,7 @@ function captureScreenshot() {
     tests.push(eq('点「详」后神煞隐藏', (function(){ var r=document.querySelector('#cmpTrack tr[data-row-type~="shensha"]'); return r && r.style.display === 'none' ? 'Y' : 'N'; })(), 'Y'));
     tests.push(eq('按钮文本回档位', lvBtn.textContent, '简分：详'));
     C.setLevel(0);
-    tests.push(eq('回「少」后星运隐藏', (function(){ var r=document.querySelector('#cmpTrack tr[data-row-type~="xingyun"]'); return r && r.style.display === 'none' ? 'Y' : 'N'; })(), 'Y'));
+    tests.push(eq('回「少」后主坐隐藏', (function(){ var r=document.querySelector('#cmpTrack tr[data-row-type~="zhuzuo"]'); return r && r.style.display === 'none' ? 'Y' : 'N'; })(), 'Y'));
     var secBar = document.getElementById('cmpSecBar');
     tests.push(eq('五区勾选栏常驻对比页', secBar ? 'Y' : 'N', 'Y'));
     var secCbs = [].slice.call(secBar.querySelectorAll('input[data-sec]'));
@@ -3103,6 +3104,86 @@ function captureScreenshot() {
     if (bakArch === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bakArch);
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     tests.push(eq('测试后档案与状态还原', localStorage.getItem(KEY) === bakArch && localStorage.getItem('bz_cmp_state') === savedCmp ? 'Y' : 'N', 'Y'));
+  })();
+
+  // ===== 主坐与坐X(v0.43.0追加)：星运改名主坐 + 七坐/坐X 简分勾选（默认仅主坐）=====
+  tests.push({ section:'主坐与坐X(v0.43.0追加)' });
+  (function() {
+    var R = window.RENDER, A = window.ALGO;
+    var host = document.getElementById('t44-zuo');
+    if (!host) { host = document.createElement('div'); host.id = 't44-zuo'; document.body.appendChild(host); }
+    var data44 = paipan('坐组测试', '男', 1980, 1, 6, 12, 0);
+    var threw44 = false;
+    try { R.renderChart(data44, undefined, 't44-zuo'); } catch (e) { threw44 = true; }
+    tests.push(eq('v0.43z:renderChart 不抛', threw44, false));
+    var tbl = host.querySelector('table.chart');
+    tests.push(eq('v0.43z:容器含 table.chart', !!tbl, true));
+    if (!tbl || !data44) { tests.push(fail('v0.43z:前置就绪', '缺失')); return; }
+
+    var riGan = data44.ri.gan;
+    var rls = [].slice.call(tbl.querySelectorAll('td.rl')).map(function(x){ return x.textContent.trim(); });
+    tests.push(eq('v0.43z:行首无「星运」标签', rls.indexOf('星运') >= 0 ? 'Y' : 'N', 'N'));
+    var zzRows = tbl.querySelectorAll('tr[data-row-type~="zhuzuo"]');
+    tests.push(eq('v0.43z:主坐行四柱+三垣共2条', String(zzRows.length), '2'));
+    var zhuzuo = zzRows[0];
+    tests.push(eq('v0.43z:主坐行标签=主坐', zhuzuo.cells[0].textContent.trim(), '主坐'));
+    tests.push(eq('v0.43z:初始(少档)主坐隐藏', zhuzuo.style.display === 'none' ? 'Y' : 'N', 'Y'));
+    R.setLevelPreset(1);
+    tests.push(eq('v0.43z:简档主坐显示', zhuzuo.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('v0.43z:简档自坐显示', tbl.querySelector('tr[data-row-type~="zizuo"]').style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('v0.43z:简档年坐仍隐藏', tbl.querySelector('tr[data-row-type~="nianzuo"]').style.display === 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('v0.43z:简档坐年仍隐藏', tbl.querySelector('tr[data-row-type~="zuonian"]').style.display === 'none' ? 'Y' : 'N', 'Y'));
+    R.setLevelPreset(0);
+    tests.push(eq('v0.43z:主坐年列=changSheng(日干,年支)', zhuzuo.cells[1].textContent, A.changSheng(riGan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:主坐时列=changSheng(日干,时支)', zhuzuo.cells[4].textContent, A.changSheng(riGan, data44.shi.zhi)));
+    var dyZhi44 = tbl.querySelector('tr[data-row-type~="dy2"]').cells[5].textContent;
+    tests.push(eq('v0.43z:主坐大运列=changSheng(日干,当前大运支)', zhuzuo.cells[5].textContent, A.changSheng(riGan, dyZhi44)));
+    tests.push(eq('v0.43z:三垣主坐胎元列=changSheng(日干,胎元支)', zzRows[1].cells[2].textContent, A.changSheng(riGan, data44.tai.zhi)));
+
+    // 年坐（勾选→显隐+值；参照=年干）
+    R.setRowVisible('nianzuo', true);
+    var nzRows = tbl.querySelectorAll('tr[data-row-type~="nianzuo"]');
+    tests.push(eq('v0.43z:勾年坐后行显示×2', String([].slice.call(nzRows).filter(function(r){ return r.style.display !== 'none'; }).length), '2'));
+    tests.push(eq('v0.43z:年坐行标签=年坐', nzRows[0].cells[0].textContent.trim(), '年坐'));
+    tests.push(eq('v0.43z:年坐年列=changSheng(年干,年支)', nzRows[0].cells[1].textContent, A.changSheng(data44.nian.gan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:年坐月列=changSheng(年干,月支)', nzRows[0].cells[2].textContent, A.changSheng(data44.nian.gan, data44.yue.zhi)));
+    tests.push(eq('v0.43z:三垣年坐身宫列=changSheng(年干,身宫支)', nzRows[1].cells[4].textContent, A.changSheng(data44.nian.gan, data44.shen.zhi)));
+    R.setRowVisible('nianzuo', false);
+    tests.push(eq('v0.43z:取消年坐后行隐藏', nzRows[0].style.display === 'none' ? 'Y' : 'N', 'Y'));
+
+    // 坐年（仅年列自坐，余列与大运/流年列空）
+    R.setRowVisible('zuonian', true);
+    var zn = tbl.querySelector('tr[data-row-type~="zuonian"]');
+    tests.push(eq('v0.43z:坐年行显示', zn && zn.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('v0.43z:坐年行仅1条(三垣区无)', String(tbl.querySelectorAll('tr[data-row-type~="zuonian"]').length), '1'));
+    tests.push(eq('v0.43z:坐年行标签=坐年', zn.cells[0].textContent.trim(), '坐年'));
+    tests.push(eq('v0.43z:坐年行=年列自坐', zn.cells[1].textContent, A.changSheng(data44.nian.gan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:坐年月列空', zn.cells[2].textContent, ''));
+    tests.push(eq('v0.43z:坐年大运列空', zn.cells[5].textContent, ''));
+    R.setRowVisible('zuonian', false);
+
+    // 坐胎（只在三垣区，仅胎元列自坐）
+    R.setRowVisible('zuotai', true);
+    tests.push(eq('v0.43z:坐胎行仅1条(只在三垣区)', String(tbl.querySelectorAll('tr[data-row-type~="zuotai"]').length), '1'));
+    var zt = tbl.querySelector('tr[data-row-type~="zuotai"]');
+    tests.push(eq('v0.43z:坐胎行显示', zt.style.display !== 'none' ? 'Y' : 'N', 'Y'));
+    tests.push(eq('v0.43z:坐胎行标签=坐胎', zt.cells[0].textContent.trim(), '坐胎'));
+    tests.push(eq('v0.43z:坐胎行=胎元列自坐', zt.cells[2].textContent, A.changSheng(data44.tai.gan, data44.tai.zhi)));
+    tests.push(eq('v0.43z:坐胎胎年列空', zt.cells[1].textContent, ''));
+    R.setRowVisible('zuotai', false);
+
+    // _applyDLUpdates：七坐行大运/流年列值级刷新（nz token）
+    R.setRowVisible('nianzuo', true);
+    R._applyDLUpdates(tbl, { zhi:'午', xy:'', zz:'' }, { zhi:'子', xy:'', zz:'' }, true, { nian: data44.nian.gan });
+    var nz2 = tbl.querySelector('tr[data-row-type~="nianzuo"]');
+    tests.push(eq('v0.43z:DL刷新年坐大运列=changSheng(年干,午)', nz2.cells[5].textContent, A.changSheng(data44.nian.gan, '午')));
+    tests.push(eq('v0.43z:DL刷新年坐流年列=changSheng(年干,子)', nz2.cells[6].textContent, A.changSheng(data44.nian.gan, '子')));
+    R.setRowVisible('nianzuo', false);
+
+    // 现场还原：勾选全关 + 清容器（_levelRows 不持久化，全关即出厂态）
+    var KEYS44 = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
+    KEYS44.forEach(function(k) { R.setRowVisible(k, false); });
+    host.innerHTML = '';
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
