@@ -1,4 +1,4 @@
-/* 八字排盘 v0.29.0 — render.js */
+/* 八字排盘 v0.43.2 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -203,7 +203,8 @@ var _levelRows = {};
 LEVEL_ROW_KEYS.forEach(function(k) { _levelRows[k] = false; });
 
 // ===== v0.43.0 追加：主坐/七坐 与 坐X 组行（简分勾选，默认仅主坐） =====
-// X坐 = 以 X 柱天干为参照对各地支求十二长生；坐X = X 柱天干对自身地支（即该柱 zz）
+// X坐 = 以 X 柱天干为参照对各地支求十二长生（固定干遍历支）
+// 坐X = 固定 X 支，对每一个天干（四柱/大运/流年干）求十二长生（v0.43.2 裁决口径，与 X坐 互为转置）
 var ZUO_GROUP = ['nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo'];
 var SIT_MAIN_KEYS = ['zuonian','zuoyue','zuori','zuoshi'];
 var SIT_SY_KEYS = ['zuotai','zuoming','zuoshen'];
@@ -211,6 +212,7 @@ var ZUO_REF = { nianzuo:'nian', yuezuo:'yue', shizuo:'shi', taizuo:'tai', mingzu
 var ZUO_TOKEN = { nianzuo:'nz1', yuezuo:'nz2', shizuo:'nz3', taizuo:'nz4', mingzuo:'nz5', shenzuo:'nz6' };
 var SIT_MAIN_COL = { zuonian:'nian', zuoyue:'yue', zuori:'ri', zuoshi:'shi' };
 var SIT_SY_COL = { zuotai:'tai', zuoming:'ming', zuoshen:'shen' };
+var SIT_TOKEN = { zuonian:'sk1', zuoyue:'sk2', zuori:'sk3', zuoshi:'sk4' };
 
 function insertAfterAnchor(arr, re, htmlArr) {
   for (var i = 0; i < arr.length; i++) {
@@ -229,11 +231,11 @@ function zuoRowMain(p, k, luck) {
     + (luck ? '<td class="sep col-dy">' + c(luck.dy.zhi) + '</td><td class="col-ln">' + c(luck.ln.zhi) + '</td>' : '') + '</tr>';
 }
 function sitRowMain(p, k, luck) {
-  var col = SIT_MAIN_COL[k];
-  function v(ck) { return ck === col && p[ck] ? p[ck].zz : ''; }
-  return '<tr class="rm" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
+  var zhi = p[SIT_MAIN_COL[k]] ? p[SIT_MAIN_COL[k]].zhi : '';
+  function v(ck) { return zhi && p[ck] && p[ck].gan ? changSheng(p[ck].gan, zhi) : ''; }
+  return '<tr class="rm" data-row-type="' + k + (luck ? ' ' + SIT_TOKEN[k] : '') + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
     + '<td>' + v('nian') + '</td><td>' + v('yue') + '</td><td>' + v('ri') + '</td><td>' + v('shi') + '</td>'
-    + (luck ? '<td class="sep col-dy"></td><td class="col-ln"></td>' : '') + '</tr>';
+    + (luck ? '<td class="sep col-dy">' + (zhi && luck.dy.gan ? changSheng(luck.dy.gan, zhi) : '') + '</td><td class="col-ln">' + (zhi && luck.ln.gan ? changSheng(luck.ln.gan, zhi) : '') + '</td>' : '') + '</tr>';
 }
 function zuoRowSy(p, k, tail) {
   var ref = p[ZUO_REF[k]] ? p[ZUO_REF[k]].gan : '';
@@ -243,8 +245,8 @@ function zuoRowSy(p, k, tail) {
     + (tail ? '<td class="sep"></td><td class="col-ln"></td>' : '') + '</tr>';
 }
 function sitRowSy(p, k, tail) {
-  var col = SIT_SY_COL[k];
-  function v(ck) { return ck === col && p[ck] ? p[ck].zz : ''; }
+  var zhi = p[SIT_SY_COL[k]] ? p[SIT_SY_COL[k]].zhi : '';
+  function v(ck) { return zhi && p[ck] && p[ck].gan ? changSheng(p[ck].gan, zhi) : ''; }
   return '<tr class="rm" data-sec="sanyuan" data-row-type="' + k + '"><td class="rl">' + LEVEL_ROW_LABELS[k] + '</td>'
     + '<td>' + v('taiNian') + '</td><td>' + v('tai') + '</td><td>' + v('ming') + '</td><td>' + v('shen') + '</td>'
     + (tail ? '<td class="sep"></td><td class="col-ln"></td>' : '') + '</tr>';
@@ -1090,6 +1092,7 @@ function _zuoRefs(d) {
   if (!d) return null;
   var r = {};
   ZUO_GROUP.forEach(function(k) { var c = d[ZUO_REF[k]]; if (c && c.gan) r[ZUO_REF[k]] = c.gan; });
+  SIT_MAIN_KEYS.forEach(function(k) { var c = d[SIT_MAIN_COL[k]]; if (c && c.zhi) r[SIT_MAIN_COL[k] + 'Zhi'] = c.zhi; });
   return r;
 }
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
@@ -1184,10 +1187,15 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
       ['xy1', _xyName(pDy.gan+pDy.zhi), _xyName(pLn.gan+pLn.zhi), undefined, undefined, pDy.gan+pDy.zhi, pLn.gan+pLn.zhi]
     ];
     // v0.43.0 追加：七坐组行大运/流年列（参照干由调用方传 refs，缺则不刷新）
+    // v0.43.2 追加：坐年~坐时行（固定支遍历干，支由 refs 传 nianZhi/yueZhi/riZhi/shiZhi）
     if (refs) {
       ZUO_GROUP.forEach(function(k) {
         var g = refs[ZUO_REF[k]];
         if (g) updates.push([ZUO_TOKEN[k], changSheng(g, pDy.zhi), changSheng(g, pLn.zhi)]);
+      });
+      SIT_MAIN_KEYS.forEach(function(k) {
+        var z = refs[SIT_MAIN_COL[k] + 'Zhi'];
+        if (z) updates.push([SIT_TOKEN[k], changSheng(pDy.gan, z), changSheng(pLn.gan, z)]);
       });
     }
   } else {
@@ -1210,10 +1218,15 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
       ['xy1', _xyName(pDy.gan+pDy.zhi), _xyName(pLn.gan+pLn.zhi), undefined, undefined, pDy.gan+pDy.zhi, pLn.gan+pLn.zhi]
     ];
     // v0.43.0 追加：七坐组行大运/流年列（龙凤卡 7 列；参照干由调用方传 refs，缺则不刷新）
+    // v0.43.2 追加：坐年~坐时行（固定支遍历干，支由 refs 传 nianZhi/yueZhi/riZhi/shiZhi）
     if (refs) {
       ZUO_GROUP.forEach(function(k) {
         var g = refs[ZUO_REF[k]];
         if (g) updates.push([ZUO_TOKEN[k], changSheng(g, pDy.zhi), changSheng(g, pLn.zhi)]);
+      });
+      SIT_MAIN_KEYS.forEach(function(k) {
+        var z = refs[SIT_MAIN_COL[k] + 'Zhi'];
+        if (z) updates.push([SIT_TOKEN[k], changSheng(pDy.gan, z), changSheng(pLn.gan, z)]);
       });
     }
   }

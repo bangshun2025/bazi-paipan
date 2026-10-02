@@ -1,4 +1,4 @@
-/* 八字排盘 v0.36.0 — main.js */
+/* 八字排盘 v0.43.2 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3151,34 +3151,45 @@ function captureScreenshot() {
     R.setRowVisible('nianzuo', false);
     tests.push(eq('v0.43z:取消年坐后行隐藏', nzRows[0].style.display === 'none' ? 'Y' : 'N', 'Y'));
 
-    // 坐年（仅年列自坐，余列与大运/流年列空）
+    // 坐年（v0.43.2 裁决口径：固定年支、遍历各天干，与年坐互为转置）
     R.setRowVisible('zuonian', true);
     var zn = tbl.querySelector('tr[data-row-type~="zuonian"]');
     tests.push(eq('v0.43z:坐年行显示', zn && zn.style.display !== 'none' ? 'Y' : 'N', 'Y'));
     tests.push(eq('v0.43z:坐年行仅1条(三垣区无)', String(tbl.querySelectorAll('tr[data-row-type~="zuonian"]').length), '1'));
     tests.push(eq('v0.43z:坐年行标签=坐年', zn.cells[0].textContent.trim(), '坐年'));
-    tests.push(eq('v0.43z:坐年行=年列自坐', zn.cells[1].textContent, A.changSheng(data44.nian.gan, data44.nian.zhi)));
-    tests.push(eq('v0.43z:坐年月列空', zn.cells[2].textContent, ''));
-    tests.push(eq('v0.43z:坐年大运列空', zn.cells[5].textContent, ''));
+    tests.push(eq('v0.43z:坐年年列=changSheng(年干,年支)', zn.cells[1].textContent, A.changSheng(data44.nian.gan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:坐年月列=changSheng(月干,年支)', zn.cells[2].textContent, A.changSheng(data44.yue.gan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:坐年日列=changSheng(日干,年支)', zn.cells[3].textContent, A.changSheng(data44.ri.gan, data44.nian.zhi)));
+    tests.push(eq('v0.43z:坐年时列=changSheng(时干,年支)', zn.cells[4].textContent, A.changSheng(data44.shi.gan, data44.nian.zhi)));
+    var ln1Row44 = tbl.querySelector('tr[data-row-type~="ln1"]');
+    tests.push(eq('v0.43z:坐年大运列=changSheng(大运干,年支)', zn.cells[5].textContent, A.changSheng(ln1Row44.cells[5].textContent, data44.nian.zhi)));
+    tests.push(eq('v0.43z:坐年流年列=changSheng(流年干,年支)', zn.cells[6].textContent, A.changSheng(ln1Row44.cells[6].textContent, data44.nian.zhi)));
     R.setRowVisible('zuonian', false);
 
-    // 坐胎（只在三垣区，仅胎元列自坐）
+    // 坐胎（v0.43.2 裁决口径：固定胎元支、三垣四干各坐之）
     R.setRowVisible('zuotai', true);
     tests.push(eq('v0.43z:坐胎行仅1条(只在三垣区)', String(tbl.querySelectorAll('tr[data-row-type~="zuotai"]').length), '1'));
     var zt = tbl.querySelector('tr[data-row-type~="zuotai"]');
     tests.push(eq('v0.43z:坐胎行显示', zt.style.display !== 'none' ? 'Y' : 'N', 'Y'));
     tests.push(eq('v0.43z:坐胎行标签=坐胎', zt.cells[0].textContent.trim(), '坐胎'));
-    tests.push(eq('v0.43z:坐胎行=胎元列自坐', zt.cells[2].textContent, A.changSheng(data44.tai.gan, data44.tai.zhi)));
-    tests.push(eq('v0.43z:坐胎胎年列空', zt.cells[1].textContent, ''));
+    tests.push(eq('v0.43z:坐胎胎年列=changSheng(胎年干,胎元支)', zt.cells[1].textContent, A.changSheng(data44.taiNian.gan, data44.tai.zhi)));
+    tests.push(eq('v0.43z:坐胎胎元列=changSheng(胎元干,胎元支)', zt.cells[2].textContent, A.changSheng(data44.tai.gan, data44.tai.zhi)));
+    tests.push(eq('v0.43z:坐胎命宫列=changSheng(命宫干,胎元支)', zt.cells[3].textContent, A.changSheng(data44.ming.gan, data44.tai.zhi)));
+    tests.push(eq('v0.43z:坐胎身宫列=changSheng(身宫干,胎元支)', zt.cells[4].textContent, A.changSheng(data44.shen.gan, data44.tai.zhi)));
     R.setRowVisible('zuotai', false);
 
-    // _applyDLUpdates：七坐行大运/流年列值级刷新（nz token）
+    // _applyDLUpdates：七坐行（nz token）+ 坐年~坐时行（sk token）大运/流年列值级刷新
     R.setRowVisible('nianzuo', true);
-    R._applyDLUpdates(tbl, { zhi:'午', xy:'', zz:'' }, { zhi:'子', xy:'', zz:'' }, true, { nian: data44.nian.gan });
+    R.setRowVisible('zuonian', true);
+    R._applyDLUpdates(tbl, { zhi:'午', gan:'戊', xy:'', zz:'' }, { zhi:'子', gan:'壬', xy:'', zz:'' }, true, { nian: data44.nian.gan, nianZhi: data44.nian.zhi });
     var nz2 = tbl.querySelector('tr[data-row-type~="nianzuo"]');
     tests.push(eq('v0.43z:DL刷新年坐大运列=changSheng(年干,午)', nz2.cells[5].textContent, A.changSheng(data44.nian.gan, '午')));
     tests.push(eq('v0.43z:DL刷新年坐流年列=changSheng(年干,子)', nz2.cells[6].textContent, A.changSheng(data44.nian.gan, '子')));
+    var zn2 = tbl.querySelector('tr[data-row-type~="zuonian"]');
+    tests.push(eq('v0.43z:DL刷新坐年大运列=changSheng(戊,年支)', zn2.cells[5].textContent, A.changSheng('戊', data44.nian.zhi)));
+    tests.push(eq('v0.43z:DL刷新坐年流年列=changSheng(壬,年支)', zn2.cells[6].textContent, A.changSheng('壬', data44.nian.zhi)));
     R.setRowVisible('nianzuo', false);
+    R.setRowVisible('zuonian', false);
 
     // 现场还原：勾选全关 + 清容器（_levelRows 不持久化，全关即出厂态）
     var KEYS44 = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
