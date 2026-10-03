@@ -1368,6 +1368,14 @@ function captureScreenshot() {
     // 邦顺锚点：1982-10-18 卯时 = 寒露后第 10 日 → 丁（<= 时代误报辛）
     tests.push(eq('SL:邦顺1982-10-18卯时→丁', renYuanSiLing(1982, 10, 18, 6, 0).charAt(5), '丁'));
     tests.push(eq('SL:邦顺锚点含寒露', renYuanSiLing(1982, 10, 18, 6, 0).indexOf('寒露') >= 0, true));
+
+    // v0.38.1 跨年子月：1 月小寒前属上年子月（大雪在 y-1），窗口需跨年搜索
+    // 周文强锚点：1988-01-05 05:00，小寒 1988-01-06，大雪 1987-12-07 → 大雪后 28 日 → 癸
+    tests.push(eq('SL:周文强1988-01-05 05:00→癸', renYuanSiLing(1988, 1, 5, 5, 0).charAt(5), '癸'));
+    tests.push(eq('SL:周文强锚点含大雪', renYuanSiLing(1988, 1, 5, 5, 0).indexOf('大雪') >= 0, true));
+    tests.push(eq('SL:周文强锚点28日', renYuanSiLing(1988, 1, 5, 5, 0).indexOf('28') >= 0, true));
+    tests.push(eq('SL:小寒当天丑月→癸', renYuanSiLing(1988, 1, 6, 12, 0).charAt(5), '癸'));
+    tests.push(eq('SL:跨年仍判子月', renYuanSiLing(1988, 1, 1, 0, 0).indexOf('大雪') >= 0, true));
   })();
 
   // ============ v0.23.0 盘面截图断言（T01-T06，承接遗留项 L2 隐私断言） ============

@@ -593,29 +593,26 @@ function renYuanSiLing(y, m, d, h, minute) {
   const birthMs = Date.UTC(y, m - 1, d, h || 0, minute || 0);
   for (let mi = 0; mi < 12; mi++) {
     const termIdx = MONTH_TERM[mi];
-    let stY = y;
-    if (termIdx === 0 && mi === 11) {
-      // 丑月（小寒=termIdx 0）：1月出生→小寒在同一年 y；其他月份→小寒在 y+1
-      stY = (m === 1) ? y : y + 1;
-    }
-    const st = getSolarTerm(stY, termIdx);
-    const stMs = st ? st.getTime() : -8640000000000000;
     const nextMi = (mi + 1) % 12;
     const nextTerm = MONTH_TERM[nextMi];
-    let nextY = y;
-    if (nextTerm <= termIdx) nextY = y + 1;
-    const nextSt = getSolarTerm(nextY, nextTerm);
-    const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
-    if (birthMs >= stMs && birthMs < nextMs) {
-      const daysAfter = Math.floor((birthMs - stMs) / 86400000);
-      const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
-      const termName = S_TERM_NAME[termIdx];
-      const ry = REN_YUAN[monthZhi];
-      if (!ry) return '';
-      for (const [maxDay, gan] of ry) {
-        if (daysAfter < maxDay) return '人元司令：' + gan + '（' + termName + '后 ' + daysAfter + ' 日）';
+    // 起始节气可能在上一年（如 1 月初小寒前属上年子月，大雪在 y-1），需跨年搜索窗口
+    for (let stY = y - 1; stY <= y + 1; stY++) {
+      const st = getSolarTerm(stY, termIdx);
+      const stMs = st ? st.getTime() : -8640000000000000;
+      const nextY = (nextTerm <= termIdx) ? stY + 1 : stY;
+      const nextSt = getSolarTerm(nextY, nextTerm);
+      const nextMs = nextSt ? nextSt.getTime() : 8640000000000000;
+      if (birthMs >= stMs && birthMs < nextMs) {
+        const daysAfter = Math.floor((birthMs - stMs) / 86400000);
+        const monthZhi = DZ[(mi + 2) % 12]; // 寅月=寅...
+        const termName = S_TERM_NAME[termIdx];
+        const ry = REN_YUAN[monthZhi];
+        if (!ry) return '';
+        for (const [maxDay, gan] of ry) {
+          if (daysAfter < maxDay) return '人元司令：' + gan + '（' + termName + '后 ' + daysAfter + ' 日）';
+        }
+        return '人元司令：' + ry[ry.length-1][1] + '（' + termName + '后 ' + daysAfter + ' 日）';
       }
-      return '人元司令：' + ry[ry.length-1][1] + '（' + termName + '后 ' + daysAfter + ' 日）';
     }
   }
   return '';
