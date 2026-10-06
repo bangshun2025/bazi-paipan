@@ -3220,6 +3220,87 @@ function captureScreenshot() {
     host.innerHTML = '';
   })();
 
+  // ===== v0.43.6 分析记录区（记录区占运流原位/运流移左下/写入即存）=====
+  (function() {
+    tests.push({ section:'分析记录区(v0.43.6)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.toggleRecMode !== 'function') {
+      tests.push(fail('REC 前置: RENDER.renderChart/toggleRecMode 已挂载', '缺失'));
+      return;
+    }
+    var savedMode = null, savedNotes = null, keyR = null, oldPd = null;
+    try {
+      savedMode = localStorage.getItem('bz_rec_mode');
+      var pdR = paipan('记录测试', '男', 1982, 10, 18, 5, 1);
+      oldPd = window._paipanData;
+      window._paipanData = pdR;
+      keyR = 'bz_rec_notes_' + [pdR.name, pdR.gender, pdR.y, pdR.m, pdR.d, pdR.h, pdR.mi].join('|');
+      savedNotes = localStorage.getItem(keyR);
+      var tstR = document.createElement('div');
+      tstR.id = 'tst-rec';
+      document.body.appendChild(tstR);
+      localStorage.removeItem('bz_rec_mode');
+      R.renderChart(pdR, undefined, 'tst-rec');
+
+      // T01 默认关：按钮在顶栏最右、未激活；无记录面板；运流区仍在 body-cols 直下（右侧原位）
+      var bodyR = tstR.querySelector('.body-cols');
+      var btnR = tstR.querySelector('.rec-trigger');
+      var luckR = bodyR.querySelector('.luck-col');
+      tests.push(eq('REC T01: 顶栏「分析记录」按钮存在', !!btnR, true));
+      tests.push(eq('REC T01: 默认未激活', btnR.classList.contains('active'), false));
+      tests.push(eq('REC T01: 默认记录面板未展开', !!bodyR.querySelector('.record-panel.open'), false));
+      tests.push(eq('REC T01: 运流区为 body-cols 直接子级', !!luckR && luckR.parentElement === bodyR, true));
+      tests.push(eq('REC T01: onclick 接线 toggleRecMode', (btnR.getAttribute('onclick') || '').indexOf('RENDER.toggleRecMode()') >= 0, true));
+
+      // T02 开启：记录面板占右侧原位、运流移 main-col 左下、开关持久化
+      R.toggleRecMode(true, tstR);
+      var rec2 = bodyR.querySelector('.record-panel');
+      var luck2 = bodyR.querySelector('.luck-col');
+      tests.push(eq('REC T02: 记录面板出现且展开', !!(rec2 && rec2.classList.contains('open')), true));
+      tests.push(eq('REC T02: 记录面板为 body-cols 直接子级（运流原位）', !!rec2 && rec2.parentElement === bodyR, true));
+      tests.push(eq('REC T02: 运流区移入 main-col 左下（主盘下方）', !!luck2 && luck2.parentElement === bodyR.querySelector('.main-col') && luck2.classList.contains('luck-rec-below'), true));
+      tests.push(eq('REC T02: 按钮转激活', btnR.classList.contains('active'), true));
+      tests.push(eq('REC T02: 开关写入 bz_rec_mode=1', localStorage.getItem('bz_rec_mode'), '1'));
+
+      // T03 写入即存：input 事件即落 localStorage，无独立保存按钮
+      var taR = tstR.querySelector('.rec-text');
+      tests.push(eq('REC T03: textarea 存在且无独立保存按钮', !!taR && !tstR.querySelector('.rec-save'), true));
+      taR.value = '丙午年重点：戌库逢辰冲。';
+      taR.dispatchEvent(new Event('input', { bubbles: true }));
+      tests.push(eq('REC T03: input 即写 localStorage', localStorage.getItem(keyR), '丙午年重点：戌库逢辰冲。'));
+      tests.push(eq('REC T03: 「已保存」提示显示', taR.closest('.record-panel').querySelector('.rec-status').classList.contains('show'), true));
+
+      // T04 重渲染（再排盘）：模式保持 + 草稿按命主指纹回填
+      R.renderChart(pdR, undefined, 'tst-rec');
+      var body4 = tstR.querySelector('.body-cols');
+      var ta4 = tstR.querySelector('.rec-text');
+      tests.push(eq('REC T04: 重渲染后记录面板仍开', !!body4.querySelector('.record-panel.open'), true));
+      tests.push(eq('REC T04: 运流区仍在左下', body4.querySelector('.luck-col').parentElement === body4.querySelector('.main-col'), true));
+      tests.push(eq('REC T04: 草稿自动回填', ta4.value, '丙午年重点：戌库逢辰冲。'));
+
+      // T05 关闭：运流回右侧原位、面板关、开关回 0
+      R.toggleRecMode(false, tstR);
+      var body5 = tstR.querySelector('.body-cols');
+      tests.push(eq('REC T05: 关闭后运流区回 body-cols 直下', body5.querySelector('.luck-col').parentElement === body5, true));
+      tests.push(eq('REC T05: 面板关闭', !body5.querySelector('.record-panel.open'), true));
+      tests.push(eq('REC T05: 开关写回 bz_rec_mode=0', localStorage.getItem('bz_rec_mode'), '0'));
+
+      // T06 属狗行缩号：bz-zodiac 13px 单行
+      var zx = tstR.querySelector('.bz-zodiac');
+      tests.push(eq('REC T06: 属狗行带 bz-zodiac 类', !!zx, true));
+      tests.push(eq('REC T06: 字号 13px', zx ? getComputedStyle(zx).fontSize : '', '13px'));
+      tests.push(eq('REC T06: 文案完整（X年生 · 属X （当前 X 年））', zx ? (zx.textContent.indexOf('年生 · 属') >= 0 && zx.textContent.indexOf('当前') >= 0) : false, true));
+    } finally {
+      try {
+        if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);
+        if (keyR) { if (savedNotes === null) localStorage.removeItem(keyR); else localStorage.setItem(keyR, savedNotes); }
+        window._paipanData = oldPd;
+        var tR = document.getElementById('tst-rec'); if (tR && tR.parentNode) tR.parentNode.removeChild(tR);
+      } catch (e) {}
+      tests.push(eq('REC 现场还原: bz_rec_mode/草稿清空', (function() { var m = localStorage.getItem('bz_rec_mode'); return m === savedMode && (keyR === null || localStorage.getItem(keyR) === savedNotes); })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

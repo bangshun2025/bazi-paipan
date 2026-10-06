@@ -937,18 +937,12 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
-  const html = topBarHtml + `
-    <div class="${bodyCls}">
-      <div class="main-col">
-        <div class="chart-wrap">
-        <table class="chart level-0">${chartRows.join('\n')}</table>
-        </div>
-      </div>
-
-      <div class="luck-col">
+  const recOn = !opts.luckBelow && isRecOn();
+  const luckColHtml = `
+      <div class="luck-col${recOn ? ' luck-rec-below' : ''}">
         <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
             <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>
@@ -959,7 +953,22 @@ function renderChart(data, twin, targetId, opts) {
           <div class="luck-table">${luckRows.join('\n')}</div>
         </div>
         ${buildJieqiHtml(y, data.lng)}
+      </div>`;
+  const recPanelHtml = `
+      <div class="record-panel${recOn ? ' open' : ''}">
+        <div class="rec-head"><span class="rec-title">分析记录</span><span class="rec-status" id="bzRecStatus"></span></div>
+        <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
+      </div>`;
+  const html = topBarHtml + `
+    <div class="${bodyCls}">
+      <div class="main-col">
+        <div class="chart-wrap">
+        <table class="chart level-0">${chartRows.join('\n')}</table>
+        </div>
+${recOn ? luckColHtml : ''}
       </div>
+${recOn ? '' : luckColHtml}
+${recPanelHtml}
     </div>`;
 
   // 存储数据用于交互
@@ -978,6 +987,63 @@ function renderChart(data, twin, targetId, opts) {
   // 绑定交互
   container._paipanData = data;
   bindEvents(data, container);
+  bindRecPanel(container);
+}
+
+// ===== v0.43.6 分析记录：记录区占运流区原位，运流移左下；写入即存 localStorage =====
+var LS_REC_MODE = 'bz_rec_mode';
+var LS_REC_NOTES = 'bz_rec_notes_';
+function isRecOn() {
+  try { return localStorage.getItem(LS_REC_MODE) === '1'; } catch (e) { return false; }
+}
+function recNotesKey() {
+  var d = window._paipanData;
+  if (!d) return null;
+  return LS_REC_NOTES + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+}
+function bindRecPanel(container) {
+  var ta = container.querySelector('.rec-text');
+  if (!ta || ta._recBound) return;
+  ta._recBound = true;
+  var key = recNotesKey();
+  if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
+  ta.addEventListener('input', function() {
+    var k = recNotesKey();
+    if (!k) return;
+    try { localStorage.setItem(k, ta.value); } catch (e) {}
+    var st = container.querySelector('.rec-status');
+    if (st) {
+      st.textContent = '已保存 ' + new Date().toTimeString().slice(0, 8);
+      st.classList.add('show');
+      clearTimeout(st._t);
+      st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
+    }
+  });
+}
+function toggleRecMode(force, root) {
+  var on = typeof force === 'boolean' ? force : !isRecOn();
+  try { localStorage.setItem(LS_REC_MODE, on ? '1' : '0'); } catch (e) {}
+  var out = root || (document.getElementById('output'));
+  var body = out && out.querySelector ? out.querySelector('.body-cols') : null;
+  if (body && !body.classList.contains('luck-below')) {
+    var main = body.querySelector('.main-col');
+    var luck = body.querySelector('.luck-col');
+    var rec = body.querySelector('.record-panel');
+    if (main && luck && rec) {
+      if (on) {
+        rec.classList.add('open');
+        luck.classList.add('luck-rec-below');
+        main.appendChild(luck);
+      } else {
+        rec.classList.remove('open');
+        luck.classList.remove('luck-rec-below');
+        body.appendChild(luck);
+      }
+    }
+  }
+  var btn = out ? out.querySelector('.rec-trigger') : null;
+  if (btn) btn.classList.toggle('active', on);
+  return on;
 }
 
 function bindEvents(data, container) {
@@ -1568,7 +1634,7 @@ function renderTwinCardsHtml(data, targetId) {
   if (renYuan) ryTag = '<span class="meta-tag">'+renYuan+'</span>';
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
@@ -1681,7 +1747,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl1 = (g1==='男'?'👦':'👧')+' 老大';
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
-  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
+  var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
     + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
@@ -2564,6 +2630,8 @@ function cmpSetState(entries) {
     refreshJieqi: refreshJieqi,
     renderChart: renderChart,
     bindEvents: bindEvents,
+    toggleRecMode: toggleRecMode,
+    isRecOn: isRecOn,
     hiDy: hiDy,
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,

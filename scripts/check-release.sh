@@ -83,7 +83,7 @@ fi
 echo "【3/6】三文件 HTML 关键 id 存在性"
 # 运行时生成的 DOM key（在 render.js/main.js 代码里而非静态 HTML），
 # standalone-split.html 用外部 render.js，故允许在 JS 源码中兜底命中。
-RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger gzShowTaiNian"
+RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger gzShowTaiNian record-panel rec-text rec-trigger bz-zodiac bzRecText bzRecStatus luck-rec-below"
 for f in $FILES; do
   [ -f "$f" ] || { fail "缺少文件: $f"; continue; }
   for k in $KEYS; do

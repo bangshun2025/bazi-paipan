@@ -4,13 +4,15 @@
 
 ---
 
-## v0.43.6（2026-10-06）农历档案「排盘」无反应修复（农历1979年八月廿五案例）
+## v0.43.6（2026-10-06）农历档案「排盘」无反应修复（农历1979年八月廿五案例）＋分析记录区
 
 - **现象**：档案弹窗里点某农历档案（农历 1979 年八月廿五，海口）的「排盘」毫无反应，其余档案正常。
 - **根因**：`setFormData` 切历法经 `ALGO.toggleCalendar`——该函数是架构拆分时留在 algorithm.js 的重复副本，内部引用未定义的 `calendarType` → `ReferenceError` 中断回填（`closeArchivePanel`/`doPaipan` 不执行，表现为「点了没反应」）。新历档案不触发切换分支故无感；只要档案历法模式与表单当前模式不同即复现（新历表单＋农历档案、农历表单＋新历档案均中招）。v0.34 回归测试段当时只造了新历用例，未覆盖此分支。
 - **修复**：archive.js 改调 `APP.toggleCalendar`（main.js 正身，模块私有 `calendarType` 状态同一份）；algorithm.js 删除重复 `toggleCalendar`、其导出项与孤儿 `LUNAR_MONTH_OPTIONS` 局部变量。render.js/gongwei.js 各余一处 `ALGO.toggleCalendar` 死别名（从不调用、解析为 undefined、无行为影响），本轮不动待后续清理。
 - **断言与实测**：v0.34 回归段新增 3 条（T05 农历回填不抛错＋月控件就位、T06 农历档案点「排盘」端到端出盘），?test=1 实测 **1104** 条全绿。真实 UI 实测：注入该农历档案真实档案行点「排盘」→ 弹窗关闭、表单回填农历八月、盘面显新历 1979-10-15／海口真太阳时 09:36／乙卯日辛巳时；测试注入已还原，现场干净。
-- **门禁**：`scripts/check-release.sh` 6/6；index.html ≡ standalone.html md5 `55bfab9c1b4895c5e350b435ea0e064e`/1,331,859 B；standalone-split.html `d744b1fd743ba52227fdeaf27f3d2e40`/97,070 B；版本头三文件 v0.43.6，ext.yml 0.43.6。
+- **门禁**：`scripts/check-release.sh` 6/6；index.html ≡ standalone.html md5 `4adb9a8959f87456e6240c7e1058e853`/1,341,968 B；standalone-split.html `93cafeb16523ed8ac3e1b44364b07799`/98,553 B；版本头三文件 v0.43.6，ext.yml 0.43.6。
+- **同版追加：分析记录区**——顶栏「阳年男 · 顺排」一行最右新增「分析记录」按钮；点击后记录区占运流区原位（右侧栏 sticky），运流区移至左下角（主盘正下方、左对齐），再点还原默认布局。textarea **写入即存**（input 事件直落 localStorage，无保存按钮）：`bz_rec_mode` 记忆开关、`bz_rec_notes_<命主指纹>`（姓名|性别|生时）分人存稿，重排盘模式与草稿自动保留回填。同顶栏「壬戌年生 · 属狗 （当前 X 年）」17px→13px（`.bz-zodiac`＋nowrap）单行不折行，龙凤胎/双胞胎顶栏同步缩号。
+- **分析记录断言与实测**：新增「分析记录区(v0.43.6)」段 **23 条**（T01 默认态／T02 开启布局／T03 写入即存＋已保存提示／T04 重渲染保持／T05 关闭还原／T06 属狗行缩号＋现场还原），总数 1104→**1127**，?test=1 实测 1127 条全绿。真实 UI 实测（file://）：点按钮 → 激活态、面板开于右侧（sticky top 199px）、运流表移至主盘下方左对齐（rect 对拍：左缘差 <3px、顶缘 ≥ 主盘 bottom）；真实键入草稿 → localStorage 即存全文、「已保存 HH:MM:SS」提示 1.5s 淡出；`APP.doPaipan()` 重排后模式与草稿保留。测试数据已清理（开关/草稿回出厂态）。
 - **待发布**：源已收口，GitHub Pages 发布待邦顺验收后走发版流程。
 
 ## v0.43.5（2026-10-04）排盘记录迁移提示节流：取消后 7 天内不再弹
