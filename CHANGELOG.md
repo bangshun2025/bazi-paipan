@@ -4,6 +4,15 @@
 
 ---
 
+## v0.43.8（2026-10-06）分析记录区增高——上下留白加大＋随内容自动增高
+
+- **需求**：分析记录区上下空间再大些，且高度随内容增多自动变高。
+- **改动**：`.rec-text` 上下内边距 10px→18px、最小高 320px→360px；`resize:vertical`→`none`、加 `overflow:hidden`（自动增高接管，手动拖动不再需要）。render.js 新增 `recAutogrow()`：装载草稿与每次 input 时 `height=auto → scrollHeight`，内容增多面板随之长高，清空回落到最小高 360px。`toggleRecMode` 打开面板瞬间补一次 autogrow——修复长草稿在面板 `display:none` 时装载 `scrollHeight=0` 导致开面板后高度被压到最小高的边界。
+- **断言与实测**：分析记录区段新增 **REC T07×5**（上下内边距 18px、resize none、初始高度自适应且不塌底、内容增多变高、清空回落不塌底），main.js eq 断言 764→769，?test=1 本地实测 **1133** 条全绿。真实 UI 实测（file:// 普通页）：点「分析记录」→ 面板开、初始 360px、padding 18/18；真实键入 3 行 360px（未超最小高正常兜底）→ 15 行 393px → 40 行 **1012px** 随内容线性长高；写入即存正常；全选删除回落 360px；关闭还原、`bz_rec_*` 现场清空。
+- **门禁**：`scripts/check-release.sh` 6/6；index.html ≡ standalone.html md5 `6ccf36e21b268398cdc69c53fb1e1173`/1,343,512 B；standalone-split.html 98,794 B；版本头三文件 v0.43.8，ext.yml 0.43.8。
+
+---
+
 ## v0.43.7（2026-10-06）分析记录区＋属狗行缩号（v0.43.6 农历档案修复随本版一并在线）
 
 - **现象**：档案弹窗里点某农历档案（农历 1979 年八月廿五，海口）的「排盘」毫无反应，其余档案正常。

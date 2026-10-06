@@ -1001,13 +1001,19 @@ function recNotesKey() {
   if (!d) return null;
   return LS_REC_NOTES + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
+function recAutogrow(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
 function bindRecPanel(container) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
   var key = recNotesKey();
   if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
+  recAutogrow(ta);
   ta.addEventListener('input', function() {
+    recAutogrow(ta);
     var k = recNotesKey();
     if (!k) return;
     try { localStorage.setItem(k, ta.value); } catch (e) {}
@@ -1034,6 +1040,8 @@ function toggleRecMode(force, root) {
         rec.classList.add('open');
         luck.classList.add('luck-rec-below');
         main.appendChild(luck);
+        var taOpen = rec.querySelector('.rec-text');
+        if (taOpen) recAutogrow(taOpen);
       } else {
         rec.classList.remove('open');
         luck.classList.remove('luck-rec-below');

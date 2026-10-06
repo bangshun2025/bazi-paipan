@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.43.7 | 2026-10-06 -->
+<!-- 八字排盘 ·  从真版 v0.43.8 | 2026-10-06 -->
+<!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->
 <!-- v0.43.5: 排盘记录迁移提示节流——取消后 7 天内不再弹（bz_migrate_snooze），画布 iframe 内不再被反复卡住 -->
@@ -368,7 +369,7 @@
   .rec-title { font-family:var(--font-display); font-size:13px; letter-spacing:.08em; color:var(--c-ink); }
   .rec-status { font-size:12px; color:var(--c-red); opacity:0; transition:opacity .2s; }
   .rec-status.show { opacity:1; }
-  .rec-text { flex:1; min-height:320px; border:none; outline:none; resize:vertical; padding:10px 12px; font-family:var(--font-body); font-size:14px; line-height:1.7; color:var(--c-ink); background:transparent; }
+  .rec-text { min-height:360px; border:none; outline:none; resize:none; overflow:hidden; padding:18px 12px; font-family:var(--font-body); font-size:14px; line-height:1.7; color:var(--c-ink); background:transparent; }
   .luck-col.luck-rec-below { position:static; margin-top:14px; }
   .luck-section { border:0.5px solid var(--c-line); overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
@@ -9588,13 +9589,19 @@ function recNotesKey() {
   if (!d) return null;
   return LS_REC_NOTES + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
+function recAutogrow(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
 function bindRecPanel(container) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
   var key = recNotesKey();
   if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
+  recAutogrow(ta);
   ta.addEventListener('input', function() {
+    recAutogrow(ta);
     var k = recNotesKey();
     if (!k) return;
     try { localStorage.setItem(k, ta.value); } catch (e) {}
@@ -9621,6 +9628,8 @@ function toggleRecMode(force, root) {
         rec.classList.add('open');
         luck.classList.add('luck-rec-below');
         main.appendChild(luck);
+        var taOpen = rec.querySelector('.rec-text');
+        if (taOpen) recAutogrow(taOpen);
       } else {
         rec.classList.remove('open');
         luck.classList.remove('luck-rec-below');
@@ -14879,6 +14888,23 @@ function captureScreenshot() {
       tests.push(eq('REC T06: 属狗行带 bz-zodiac 类', !!zx, true));
       tests.push(eq('REC T06: 字号 13px', zx ? getComputedStyle(zx).fontSize : '', '13px'));
       tests.push(eq('REC T06: 文案完整（X年生 · 属X （当前 X 年））', zx ? (zx.textContent.indexOf('年生 · 属') >= 0 && zx.textContent.indexOf('当前') >= 0) : false, true));
+
+      // T07 v0.43.8 上下留白加大 + 随内容自动增高
+      R.toggleRecMode(true, tstR);
+      var ta7 = tstR.querySelector('.rec-text');
+      var cs7 = getComputedStyle(ta7);
+      tests.push(eq('REC T07: 上下内边距 18px', cs7.paddingTop + '/' + cs7.paddingBottom, '18px/18px'));
+      tests.push(eq('REC T07: 手动 resize 关闭（自动增高接管）', cs7.resize, 'none'));
+      var h0 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 初始高度自适应且不小于最小高', ta7.style.height.indexOf('px') >= 0 && h0 >= 320, true));
+      ta7.value = new Array(25).join('甲\n') + '甲';
+      ta7.dispatchEvent(new Event('input', { bubbles: true }));
+      var h1 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 内容增多高度变大', h1 > h0 + 60, true));
+      ta7.value = '';
+      ta7.dispatchEvent(new Event('input', { bubbles: true }));
+      var h2 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 320 && h2 < h1 - 60, true));
     } finally {
       try {
         if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);

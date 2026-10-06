@@ -3290,6 +3290,23 @@ function captureScreenshot() {
       tests.push(eq('REC T06: 属狗行带 bz-zodiac 类', !!zx, true));
       tests.push(eq('REC T06: 字号 13px', zx ? getComputedStyle(zx).fontSize : '', '13px'));
       tests.push(eq('REC T06: 文案完整（X年生 · 属X （当前 X 年））', zx ? (zx.textContent.indexOf('年生 · 属') >= 0 && zx.textContent.indexOf('当前') >= 0) : false, true));
+
+      // T07 v0.43.8 上下留白加大 + 随内容自动增高
+      R.toggleRecMode(true, tstR);
+      var ta7 = tstR.querySelector('.rec-text');
+      var cs7 = getComputedStyle(ta7);
+      tests.push(eq('REC T07: 上下内边距 18px', cs7.paddingTop + '/' + cs7.paddingBottom, '18px/18px'));
+      tests.push(eq('REC T07: 手动 resize 关闭（自动增高接管）', cs7.resize, 'none'));
+      var h0 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 初始高度自适应且不小于最小高', ta7.style.height.indexOf('px') >= 0 && h0 >= 320, true));
+      ta7.value = new Array(25).join('甲\n') + '甲';
+      ta7.dispatchEvent(new Event('input', { bubbles: true }));
+      var h1 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 内容增多高度变大', h1 > h0 + 60, true));
+      ta7.value = '';
+      ta7.dispatchEvent(new Event('input', { bubbles: true }));
+      var h2 = ta7.getBoundingClientRect().height;
+      tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 320 && h2 < h1 - 60, true));
     } finally {
       try {
         if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);
