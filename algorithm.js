@@ -13,7 +13,6 @@
   var GONGWEI_COLOR_KEYS = CONST.GONGWEI_COLOR_KEYS;
   var LUNAR_INFO = CONST.LUNAR_INFO;
   var LUNAR_NEW_YEAR = CONST.LUNAR_NEW_YEAR;
-  var LUNAR_MONTH_OPTIONS = CONST.LUNAR_MONTH_OPTIONS;
   var NAYIN = CONST.NAYIN;
   var CANG_GAN = CONST.CANG_GAN;
   var ZHI_TWIN_MAIN = CONST.ZHI_TWIN_MAIN;
@@ -95,31 +94,6 @@ function julianToGregorian(y, m, d) {
   var gm = E < 14 ? E - 1 : E - 13;
   var gy = gm > 2 ? C - 4716 : C - 4715;
   return { y: gy, m: gm, d: gd };
-}
-
-// 新历/农历切换
-function toggleCalendar(type) {
-  if (calendarType === type) return;
-  calendarType = type;
-  var isLunar = (type === 'lunar');
-  var monthCell = document.getElementById('inMonthCell');
-  if (isLunar) {
-    var curMonth = parseInt(document.getElementById('inMonth').value) || 1;
-    monthCell.innerHTML = '<select id="inMonthSelect" style="width:64px;font-family:var(--font-display);font-size:14px;">'
-      + LUNAR_MONTH_OPTIONS + '</select>';
-    document.getElementById('inMonthSelect').value = curMonth;
-    document.getElementById('inLeapGroup').style.display = '';
-    document.getElementById('inDay').max = 30;
-  } else {
-    var curMonth = parseInt(document.getElementById('inMonthSelect').value) || 1;
-    monthCell.innerHTML = '<input type="number" id="inMonth" value="' + curMonth
-      + '" min="1" max="12" style="width:48px;">';
-    document.getElementById('inLeapGroup').style.display = 'none';
-    document.getElementById('inLeap').checked = false;
-    document.getElementById('inDay').max = 31;
-  }
-  document.getElementById('calSolar').checked = !isLunar;
-  document.getElementById('calLunar').checked = isLunar;
 }
 
 function updateSolarPreview() {
@@ -689,7 +663,6 @@ function buildShunLabel(shun, gender, nianGan) {
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
     julianToGregorian: julianToGregorian,
-    toggleCalendar: toggleCalendar,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,
     dayOfYear: dayOfYear,

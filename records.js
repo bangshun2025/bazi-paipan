@@ -273,7 +273,10 @@
       checkPresetMigrate();
       return;
     }
-    // 弹窗确认（本地有数据 → 迁移）
+    // 弹窗确认（本地有数据 → 迁移）；用户取消后 7 天内不再提示
+    var snooze = 0;
+    try { snooze = +(localStorage.getItem('bz_migrate_snooze') || 0); } catch (e) {}
+    if (Date.now() < snooze) { checkPresetMigrate(); return; }
     var n = countLocalRecords();
     if (confirm('检测到本地有 ' + n + ' 条排盘记录，是否迁移到当前账号云端？\n（迁移后可在任何设备登录取回，一条不丢）')) {
       migrateLocalToCloud().then(function(r) {
@@ -283,7 +286,8 @@
         loadAndRenderRecords();
       });
     } else {
-      // 用户取消：本次不迁移，下次登录再提示
+      // 用户取消：7 天内不再弹
+      try { localStorage.setItem('bz_migrate_snooze', String(Date.now() + 7 * 86400000)); } catch (e) {}
       checkPresetMigrate();
     }
   }

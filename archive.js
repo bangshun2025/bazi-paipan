@@ -48,7 +48,6 @@
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
-  var toggleCalendar = ALGO.toggleCalendar;
   var updateSolarPreview = ALGO.updateSolarPreview;
   var getLng = ALGO.getLng;
   var dayOfYear = ALGO.dayOfYear;
@@ -283,7 +282,7 @@ function setFormData(d) {
   // v0.8.0 先切换历法模式（会重建月控件），再回填值
   var calType = d.calendarType || 'solar';
   if (calType !== APP.calendarType) {
-    toggleCalendar(calType);
+    APP.toggleCalendar(calType);
   }
   document.getElementById('inNickname').value = d.nickname || '';
   document.getElementById('inYiming').value = d.yiming || '';
@@ -1470,6 +1469,27 @@ function deleteNote(id) {
         txt.replace(/\s+/g, ' ').slice(0, 48));
       t('v0.34 T04:真太阳时随出生地生效', txt.indexOf('真太阳时') >= 0);
       t('v0.34 T04:点击后排盘弹窗已关闭', !document.getElementById('archiveOverlay').classList.contains('show'));
+
+      // T05/T06 农历档案回填（v0.43.6）：旧版走 ALGO.toggleCalendar（内部引用未定义 calendarType）
+      // → ReferenceError 中断，农历档案点「排盘」无反应
+      var threwLunar = null;
+      try {
+        setFormData({ name: '回归农历', gender: '女', year: 1979, month: 8, day: 25, hour: 10, min: 0,
+                      useSolar: false, calendarType: 'lunar', lunarMonth: 8, isLeap: false });
+      } catch (e) { threwLunar = String(e); }
+      t('v0.34 T05:农历档案回填不抛错', threwLunar === null, threwLunar || 'ok');
+      t('v0.34 T05:农历月控件就位', !!document.getElementById('inMonthSelect') && document.getElementById('inMonthSelect').value === '8' && APP.calendarType === 'lunar',
+        [APP.calendarType, document.getElementById('inMonthSelect') ? document.getElementById('inMonthSelect').value : 'null'].join('/'));
+
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'v34lunar', name: '回归农历档案', gender: '女', year: 1979, month: 8, day: 25, hour: 10, min: 0,
+          useSolar: false, calendarType: 'lunar', lunarMonth: 8, isLeap: false,
+          updatedAt: '2026-10-06T00:00:00.000Z' }
+      ]));
+      loadFromArchive(0);
+      var txtLunar = (document.getElementById('output') || {}).innerText || '';
+      t('v0.34 T06:农历档案点排盘立即出盘', val('inName') === '回归农历档案' && txtLunar.indexOf('乙卯') >= 0,
+        txtLunar.replace(/\s+/g, ' ').slice(0, 48));
     } catch (e) {
       t('v0.34 T00:测试异常', false, String(e));
     } finally {

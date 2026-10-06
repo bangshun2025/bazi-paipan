@@ -4,6 +4,22 @@
 
 ---
 
+## v0.43.6（2026-10-06）农历档案「排盘」无反应修复（农历1979年八月廿五案例）
+
+- **现象**：档案弹窗里点某农历档案（农历 1979 年八月廿五，海口）的「排盘」毫无反应，其余档案正常。
+- **根因**：`setFormData` 切历法经 `ALGO.toggleCalendar`——该函数是架构拆分时留在 algorithm.js 的重复副本，内部引用未定义的 `calendarType` → `ReferenceError` 中断回填（`closeArchivePanel`/`doPaipan` 不执行，表现为「点了没反应」）。新历档案不触发切换分支故无感；只要档案历法模式与表单当前模式不同即复现（新历表单＋农历档案、农历表单＋新历档案均中招）。v0.34 回归测试段当时只造了新历用例，未覆盖此分支。
+- **修复**：archive.js 改调 `APP.toggleCalendar`（main.js 正身，模块私有 `calendarType` 状态同一份）；algorithm.js 删除重复 `toggleCalendar`、其导出项与孤儿 `LUNAR_MONTH_OPTIONS` 局部变量。render.js/gongwei.js 各余一处 `ALGO.toggleCalendar` 死别名（从不调用、解析为 undefined、无行为影响），本轮不动待后续清理。
+- **断言与实测**：v0.34 回归段新增 3 条（T05 农历回填不抛错＋月控件就位、T06 农历档案点「排盘」端到端出盘），?test=1 实测 **1104** 条全绿。真实 UI 实测：注入该农历档案真实档案行点「排盘」→ 弹窗关闭、表单回填农历八月、盘面显新历 1979-10-15／海口真太阳时 09:36／乙卯日辛巳时；测试注入已还原，现场干净。
+- **门禁**：`scripts/check-release.sh` 6/6；index.html ≡ standalone.html md5 `55bfab9c1b4895c5e350b435ea0e064e`/1,331,859 B；standalone-split.html `d744b1fd743ba52227fdeaf27f3d2e40`/97,070 B；版本头三文件 v0.43.6，ext.yml 0.43.6。
+- **待发布**：源已收口，GitHub Pages 发布待邦顺验收后走发版流程。
+
+## v0.43.5（2026-10-04）排盘记录迁移提示节流：取消后 7 天内不再弹
+
+- **背景**：无限画布网页卡 iframe 嵌入本站时，`checkAndMigrate()` 每次加载都弹「检测到本地 17 条记录是否迁移」confirm（取消分支原注释即「下次登录再提示」），在 iframe 里反复卡住操作。
+- **修复**：records.js `checkAndMigrate()` 取消分支写入 `bz_migrate_snooze`（当前时间 + 7 天），弹窗前检查未到期直接跳过迁移检测（预置模板检查不受影响）。迁移确认后照旧设 `MIGRATED_KEY`，逻辑不变。
+- **门禁**：`scripts/check-release.sh` 6/6；index.html ≡ standalone.html md5 `c1c97dad061ed64ea4c1dd0591e76e41`；三产物版本头 v0.43.5，ext.yml 0.43.5。本版为纯 JS 行为改动，无断言增减（1102 条不回归由 6/6 门禁覆盖）。
+- **待发布**：源已收口，GitHub Pages 发布待邦顺验收后走发版流程。
+
 ## v0.43.4（2026-10-03）人元司令跨年子月修复：1月小寒前不显司令（周文强 1988-01-05 锚点）
 
 - **根因与修复**：1 月小寒前属上年子月，原 `renYuanSiLing` 子月起始节气大雪只取当年（stY=y），窗口错为 [当年大雪, 次年小寒]，出生时刻落不进任何节气窗口 → 返回空串 → 对比卡司令行整体不渲染。改为 stY∈[y-1,y+1] 三年候选搜索，原丑月小寒特判并入通用逻辑。司令表口径未动。锚点实测：1988-01-05 05:00 → 癸（大雪后 28 日）。

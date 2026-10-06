@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.43.4 | 2026-10-03 -->
-<!-- v0.43.4: 人元司令跨年子月修复——1月小寒前属上年子月（大雪在y-1），renYuanSiLing 起始节气改三年候选搜索，周文强1988-01-05锚点癸（大雪后28日）不再空串 -->
+<!-- 八字排盘 ·  从真版 v0.43.6 | 2026-10-06 -->
+<!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
+<!-- v0.43.5: 排盘记录迁移提示节流——取消后 7 天内不再弹（bz_migrate_snooze），画布 iframe 内不再被反复卡住 -->
 <!-- v0.39.0: 对比页专注模式 — 「⛶ 专注」收起管理工具栏项(标题/计数/档案/清空/关闭)与名字条，缩放/布局/简分/宫位/名字/五区勾选并入工具栏一行；bz_cmp_focus 持久化 -->
 <!-- v0.26.0: 当年节气数据 — 大运流年区下方 12 节（月日/时间/节名/干支竖排） -->
 <!-- v0.26.0: 节气流年联动 — 默认出生年；点流年/大运/📍今年 节气区跟随切换 -->
@@ -4441,7 +4442,6 @@ const PRIVACY_KEY = 'bz_privacy_mode';
   var GONGWEI_COLOR_KEYS = CONST.GONGWEI_COLOR_KEYS;
   var LUNAR_INFO = CONST.LUNAR_INFO;
   var LUNAR_NEW_YEAR = CONST.LUNAR_NEW_YEAR;
-  var LUNAR_MONTH_OPTIONS = CONST.LUNAR_MONTH_OPTIONS;
   var NAYIN = CONST.NAYIN;
   var CANG_GAN = CONST.CANG_GAN;
   var ZHI_TWIN_MAIN = CONST.ZHI_TWIN_MAIN;
@@ -4523,31 +4523,6 @@ function julianToGregorian(y, m, d) {
   var gm = E < 14 ? E - 1 : E - 13;
   var gy = gm > 2 ? C - 4716 : C - 4715;
   return { y: gy, m: gm, d: gd };
-}
-
-// 新历/农历切换
-function toggleCalendar(type) {
-  if (calendarType === type) return;
-  calendarType = type;
-  var isLunar = (type === 'lunar');
-  var monthCell = document.getElementById('inMonthCell');
-  if (isLunar) {
-    var curMonth = parseInt(document.getElementById('inMonth').value) || 1;
-    monthCell.innerHTML = '<select id="inMonthSelect" style="width:64px;font-family:var(--font-display);font-size:14px;">'
-      + LUNAR_MONTH_OPTIONS + '</select>';
-    document.getElementById('inMonthSelect').value = curMonth;
-    document.getElementById('inLeapGroup').style.display = '';
-    document.getElementById('inDay').max = 30;
-  } else {
-    var curMonth = parseInt(document.getElementById('inMonthSelect').value) || 1;
-    monthCell.innerHTML = '<input type="number" id="inMonth" value="' + curMonth
-      + '" min="1" max="12" style="width:48px;">';
-    document.getElementById('inLeapGroup').style.display = 'none';
-    document.getElementById('inLeap').checked = false;
-    document.getElementById('inDay').max = 31;
-  }
-  document.getElementById('calSolar').checked = !isLunar;
-  document.getElementById('calLunar').checked = isLunar;
 }
 
 function updateSolarPreview() {
@@ -5117,7 +5092,6 @@ function buildShunLabel(shun, gender, nianGan) {
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
     julianToGregorian: julianToGregorian,
-    toggleCalendar: toggleCalendar,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,
     dayOfYear: dayOfYear,
@@ -5208,7 +5182,6 @@ function buildShunLabel(shun, gender, nianGan) {
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
-  var toggleCalendar = ALGO.toggleCalendar;
   var updateSolarPreview = ALGO.updateSolarPreview;
   var getLng = ALGO.getLng;
   var dayOfYear = ALGO.dayOfYear;
@@ -5443,7 +5416,7 @@ function setFormData(d) {
   // v0.8.0 先切换历法模式（会重建月控件），再回填值
   var calType = d.calendarType || 'solar';
   if (calType !== APP.calendarType) {
-    toggleCalendar(calType);
+    APP.toggleCalendar(calType);
   }
   document.getElementById('inNickname').value = d.nickname || '';
   document.getElementById('inYiming').value = d.yiming || '';
@@ -6630,6 +6603,27 @@ function deleteNote(id) {
         txt.replace(/\s+/g, ' ').slice(0, 48));
       t('v0.34 T04:真太阳时随出生地生效', txt.indexOf('真太阳时') >= 0);
       t('v0.34 T04:点击后排盘弹窗已关闭', !document.getElementById('archiveOverlay').classList.contains('show'));
+
+      // T05/T06 农历档案回填（v0.43.6）：旧版走 ALGO.toggleCalendar（内部引用未定义 calendarType）
+      // → ReferenceError 中断，农历档案点「排盘」无反应
+      var threwLunar = null;
+      try {
+        setFormData({ name: '回归农历', gender: '女', year: 1979, month: 8, day: 25, hour: 10, min: 0,
+                      useSolar: false, calendarType: 'lunar', lunarMonth: 8, isLeap: false });
+      } catch (e) { threwLunar = String(e); }
+      t('v0.34 T05:农历档案回填不抛错', threwLunar === null, threwLunar || 'ok');
+      t('v0.34 T05:农历月控件就位', !!document.getElementById('inMonthSelect') && document.getElementById('inMonthSelect').value === '8' && APP.calendarType === 'lunar',
+        [APP.calendarType, document.getElementById('inMonthSelect') ? document.getElementById('inMonthSelect').value : 'null'].join('/'));
+
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'v34lunar', name: '回归农历档案', gender: '女', year: 1979, month: 8, day: 25, hour: 10, min: 0,
+          useSolar: false, calendarType: 'lunar', lunarMonth: 8, isLeap: false,
+          updatedAt: '2026-10-06T00:00:00.000Z' }
+      ]));
+      loadFromArchive(0);
+      var txtLunar = (document.getElementById('output') || {}).innerText || '';
+      t('v0.34 T06:农历档案点排盘立即出盘', val('inName') === '回归农历档案' && txtLunar.indexOf('乙卯') >= 0,
+        txtLunar.replace(/\s+/g, ' ').slice(0, 48));
     } catch (e) {
       t('v0.34 T00:测试异常', false, String(e));
     } finally {
@@ -15578,7 +15572,10 @@ window.SUPABASE_CONFIG = {
       checkPresetMigrate();
       return;
     }
-    // 弹窗确认（本地有数据 → 迁移）
+    // 弹窗确认（本地有数据 → 迁移）；用户取消后 7 天内不再提示
+    var snooze = 0;
+    try { snooze = +(localStorage.getItem('bz_migrate_snooze') || 0); } catch (e) {}
+    if (Date.now() < snooze) { checkPresetMigrate(); return; }
     var n = countLocalRecords();
     if (confirm('检测到本地有 ' + n + ' 条排盘记录，是否迁移到当前账号云端？\n（迁移后可在任何设备登录取回，一条不丢）')) {
       migrateLocalToCloud().then(function(r) {
@@ -15588,7 +15585,8 @@ window.SUPABASE_CONFIG = {
         loadAndRenderRecords();
       });
     } else {
-      // 用户取消：本次不迁移，下次登录再提示
+      // 用户取消：7 天内不再弹
+      try { localStorage.setItem('bz_migrate_snooze', String(Date.now() + 7 * 86400000)); } catch (e) {}
       checkPresetMigrate();
     }
   }
