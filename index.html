@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.44.0 | 2026-10-08 -->
+<!-- 八字排盘 ·  从真版 v0.45.0 | 2026-10-08 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->
@@ -811,6 +811,11 @@
   .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
   .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
   .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .flow-date-picker { display:inline-flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; max-width:100%; }
+  .flow-date-picker label { display:inline-flex; align-items:center; gap:5px; }
+  .flow-date-picker input, .flow-date-picker button { font:inherit; color:inherit; border:1px solid var(--c-border); border-radius:4px; background:transparent; padding:3px 5px; }
+  .flow-date-picker button { cursor:pointer; }
+  .flow-date-status { color:var(--c-gray); white-space:normal; }
   .flow-panel { padding:8px 0; min-width:0; }
   .flow-panel[hidden] { display:none; }
   .flow-table-wrap { max-width:100%; overflow-x:auto; border:0.5px solid var(--c-line); }
@@ -9674,7 +9679,55 @@ function flowMonths(year) {
 }
 
 function flowControlsHTML() {
-  return '<span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+}
+
+function locateFlowDate(input) {
+  var status = input.closest('.flow-date-picker').querySelector('.flow-date-status');
+  if (!input.value || !input.validity.valid) { status.textContent = '请选择有效的新历日期'; return; }
+  var parts = input.value.split('-').map(Number);
+  var date = new Date(0);
+  date.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  var day = date.getTime();
+  var spring = ALGO.getSolarTerm(parts[0], 2);
+  if (!spring) { status.textContent = '所选日期超出节气数据范围'; return; }
+  var year = parts[0] - (day < spring.getTime() ? 1 : 0);
+  var months = flowMonths(year);
+  var month = months.findIndex(function(entry) { return entry.start && entry.end && day >= entry.start.getTime() && day < entry.end.getTime(); });
+  if (month < 0) { status.textContent = '所选日期超出节气数据范围'; return; }
+  var container = input.parentElement;
+  while (container && !container._paipanData) container = container.parentElement;
+  if (!container) return;
+  var cards = Array.from(container.querySelectorAll('.bz-twin-card'));
+  var roots = cards.length ? cards : [container];
+  var targets = roots.map(function(root, index) {
+    var data = root._cardData || container._paipanData;
+    var luckScope = cards.length ? container.querySelectorAll('.bz-card-luck')[index] || container : container;
+    var cell = Array.from(luckScope.querySelectorAll('.li[data-di][data-li]')).find(function(entry) {
+      return liunianYearOf(data, Number(entry.dataset.di), Number(entry.dataset.li)) === year;
+    });
+    return { root: root, data: data, scope: luckScope, cell: cell };
+  });
+  if (targets.some(function(target) { return !target.cell; })) { status.textContent = '所选日期超出当前排盘的流年范围'; return; }
+  targets.forEach(function(target) {
+    var dy = Number(target.cell.dataset.di), li = Number(target.cell.dataset.li);
+    if (dy >= 0) hiDy(dy, target.scope);
+    hiLn(dy, li, target.scope);
+    updateCardDyLnColumns(container, target.root, dy, li);
+    target.root._flowState = { year: year, month: month, day: day };
+  });
+  setFlowVisible('day', true);
+  targets.forEach(function(target) {
+    refreshFlow(target.root, target.data);
+    target.root._flowPanel.querySelectorAll('.flow-table-wrap').forEach(function(wrap) {
+      var selected = wrap.querySelector('.li.cur');
+      if (selected) wrap.scrollTo({ left: Math.max(0, wrap.scrollLeft + selected.getBoundingClientRect().left - wrap.getBoundingClientRect().left - 40), behavior: 'smooth' });
+    });
+    var section = target.cell.closest('.luck-section');
+    if (section) section.scrollTo({ left: Math.max(0, section.scrollLeft + target.cell.getBoundingClientRect().left - section.getBoundingClientRect().left - 40), behavior: 'smooth' });
+  });
+  refreshJieqi(container, year);
+  status.textContent = year + '流年 · ' + months[month].gan + months[month].zhi + '月 · ' + parts[1] + '/' + parts[2] + '日（零点）';
 }
 
 function setFlowVisible(kind, checked) {
@@ -11367,6 +11420,7 @@ function cmpSetState(entries) {
     setFlowVisible: setFlowVisible,
     flowMonths: flowMonths,
     flowControlsHTML: flowControlsHTML,
+    locateFlowDate: locateFlowDate,
     refreshFlow: refreshFlow,
     applyLevelRows: applyLevelRows,
     refreshXingyaoRows: refreshXingyaoRows,
@@ -15120,6 +15174,37 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：取消后面板隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       tests.push(eq('流月：取消后列移除', flowRoot.querySelectorAll('.col-lm,.col-ld').length, 0));
+      var dateInput = flowRoot.querySelector('.flow-date-picker input');
+      dateInput.value = '2027-01-15';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：一月属于上一节气流年', flowRoot._flowState.year, 2026));
+      tests.push(eq('新历定位：一月定位丑月', flowRoot._flowState.month, 11));
+      tests.push(eq('新历定位：保留所选公历日', flowRoot._flowState.day, Date.UTC(2027, 0, 15)));
+      tests.push(eq('新历定位：自动勾选流月日', flowRoot.querySelector('[data-flow="day"]').checked, true));
+      tests.push(eq('新历定位：展开两张表格', flowRoot.querySelectorAll('.flow-table').length, 2));
+      tests.push(eq('新历定位：高亮对应流年', Array.from(flowRoot.querySelectorAll('.li.cur[data-di]')).some(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2026; }), true));
+      tests.push(eq('新历定位：月柱同步辛丑', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent + flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '辛丑'));
+      var locatedDay = ALGO.dayPillar(2027, 1, 15);
+      tests.push(eq('新历定位：日柱同步', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent + flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, locatedDay.gan + locatedDay.zhi));
+      dateInput.value = '2031-08-20';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：跨年重复定位', flowRoot._flowState.year, 2031));
+      tests.push(eq('新历定位：八月定位申月', flowRoot._flowState.month, 6));
+      dateInput.value = '1800-01-01';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：超出范围不改变原选择', flowRoot._flowState.year, 2031));
+      tests.push(eq('新历定位：超出范围提示', flowRoot.querySelector('.flow-date-status').textContent, '所选日期超出当前排盘的流年范围'));
+      dateInput.value = '2026-02-04';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：立春当天零点仍属上一流年', flowRoot._flowState.year, 2025));
+      tests.push(eq('新历定位：立春当天零点仍属丑月', flowRoot._flowState.month, 11));
+      dateInput.value = '2026-02-05';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：立春后属于新流年', flowRoot._flowState.year, 2026));
+      tests.push(eq('新历定位：立春后定位寅月', flowRoot._flowState.month, 0));
+      dateInput.value = '0999-01-01';
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      tests.push(eq('新历定位：节气范围外提示', flowRoot.querySelector('.flow-date-status').textContent, '所选日期超出节气数据范围'));
     } finally {
       RENDER.setFlowVisible('month', false);
       window._paipanData = oldData;

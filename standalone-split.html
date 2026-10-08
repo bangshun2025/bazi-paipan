@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.44.0 | 2026-10-08 -->
+<!-- 八字排盘 ·  从真版 v0.45.0 | 2026-10-08 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->
@@ -813,6 +813,11 @@
   .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
   .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
   .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .flow-date-picker { display:inline-flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; max-width:100%; }
+  .flow-date-picker label { display:inline-flex; align-items:center; gap:5px; }
+  .flow-date-picker input, .flow-date-picker button { font:inherit; color:inherit; border:1px solid var(--c-border); border-radius:4px; background:transparent; padding:3px 5px; }
+  .flow-date-picker button { cursor:pointer; }
+  .flow-date-status { color:var(--c-gray); white-space:normal; }
   .flow-panel { padding:8px 0; min-width:0; }
   .flow-panel[hidden] { display:none; }
   .flow-table-wrap { max-width:100%; overflow-x:auto; border:0.5px solid var(--c-line); }

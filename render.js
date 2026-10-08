@@ -1069,7 +1069,55 @@ function flowMonths(year) {
 }
 
 function flowControlsHTML() {
-  return '<span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+}
+
+function locateFlowDate(input) {
+  var status = input.closest('.flow-date-picker').querySelector('.flow-date-status');
+  if (!input.value || !input.validity.valid) { status.textContent = '请选择有效的新历日期'; return; }
+  var parts = input.value.split('-').map(Number);
+  var date = new Date(0);
+  date.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  var day = date.getTime();
+  var spring = ALGO.getSolarTerm(parts[0], 2);
+  if (!spring) { status.textContent = '所选日期超出节气数据范围'; return; }
+  var year = parts[0] - (day < spring.getTime() ? 1 : 0);
+  var months = flowMonths(year);
+  var month = months.findIndex(function(entry) { return entry.start && entry.end && day >= entry.start.getTime() && day < entry.end.getTime(); });
+  if (month < 0) { status.textContent = '所选日期超出节气数据范围'; return; }
+  var container = input.parentElement;
+  while (container && !container._paipanData) container = container.parentElement;
+  if (!container) return;
+  var cards = Array.from(container.querySelectorAll('.bz-twin-card'));
+  var roots = cards.length ? cards : [container];
+  var targets = roots.map(function(root, index) {
+    var data = root._cardData || container._paipanData;
+    var luckScope = cards.length ? container.querySelectorAll('.bz-card-luck')[index] || container : container;
+    var cell = Array.from(luckScope.querySelectorAll('.li[data-di][data-li]')).find(function(entry) {
+      return liunianYearOf(data, Number(entry.dataset.di), Number(entry.dataset.li)) === year;
+    });
+    return { root: root, data: data, scope: luckScope, cell: cell };
+  });
+  if (targets.some(function(target) { return !target.cell; })) { status.textContent = '所选日期超出当前排盘的流年范围'; return; }
+  targets.forEach(function(target) {
+    var dy = Number(target.cell.dataset.di), li = Number(target.cell.dataset.li);
+    if (dy >= 0) hiDy(dy, target.scope);
+    hiLn(dy, li, target.scope);
+    updateCardDyLnColumns(container, target.root, dy, li);
+    target.root._flowState = { year: year, month: month, day: day };
+  });
+  setFlowVisible('day', true);
+  targets.forEach(function(target) {
+    refreshFlow(target.root, target.data);
+    target.root._flowPanel.querySelectorAll('.flow-table-wrap').forEach(function(wrap) {
+      var selected = wrap.querySelector('.li.cur');
+      if (selected) wrap.scrollTo({ left: Math.max(0, wrap.scrollLeft + selected.getBoundingClientRect().left - wrap.getBoundingClientRect().left - 40), behavior: 'smooth' });
+    });
+    var section = target.cell.closest('.luck-section');
+    if (section) section.scrollTo({ left: Math.max(0, section.scrollLeft + target.cell.getBoundingClientRect().left - section.getBoundingClientRect().left - 40), behavior: 'smooth' });
+  });
+  refreshJieqi(container, year);
+  status.textContent = year + '流年 · ' + months[month].gan + months[month].zhi + '月 · ' + parts[1] + '/' + parts[2] + '日（零点）';
 }
 
 function setFlowVisible(kind, checked) {
@@ -2762,6 +2810,7 @@ function cmpSetState(entries) {
     setFlowVisible: setFlowVisible,
     flowMonths: flowMonths,
     flowControlsHTML: flowControlsHTML,
+    locateFlowDate: locateFlowDate,
     refreshFlow: refreshFlow,
     applyLevelRows: applyLevelRows,
     refreshXingyaoRows: refreshXingyaoRows,
