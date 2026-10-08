@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.43.8 | 2026-10-06 -->
+<!-- 八字排盘 ·  从真版 v0.44.0 | 2026-10-08 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->
@@ -811,6 +811,21 @@
   .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
   .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
   .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .flow-panel { padding:8px 0; min-width:0; }
+  .flow-panel[hidden] { display:none; }
+  .flow-table-wrap { max-width:100%; overflow-x:auto; border:0.5px solid var(--c-line); }
+  .flow-table { min-width:520px; table-layout:fixed; }
+  .flow-table .cell { min-width:0; }
+  .flow-table .rtag { width:48px; }
+  .flow-table .li { width:100%; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:inherit; text-align:center; }
+  .flow-table .li.cur { background:rgba(200,58,58,.04); box-shadow:inset 0 0 0 1px rgba(200,58,58,.3); }
+  .flow-table .li:focus-visible { outline:1px solid var(--c-red); outline-offset:-1px; }
+  .flow-date { display:inline-block; min-width:32px; margin-right:4px; font-size:13px; color:var(--c-gray); font-family:var(--font-body); }
+  .flow-day-label { margin-top:12px; }
+  .flow-note { padding-top:6px; font-size:12px; color:var(--c-gray); }
+  .chart .col-lm, .chart .col-ld { min-width:52px; }
+  .top-bar:has([data-flow]), .top-bar > div:has([data-flow]) { flex-wrap:wrap; gap:8px; }
+  @media (max-width:900px) { .body-cols:has(.flow-panel) > .main-col, .body-cols:has(.flow-panel) .luck-col { width:100%; max-width:100%; min-width:0; } }
   .cmp-card.sec-cangqi-off tr[data-sec~="cangqi"] { display:none !important; }
   .cmp-card.sec-sanyuan-off tr[data-sec~="sanyuan"], .cmp-card.sec-sanyuan-off tr.gz-tags-sy { display:none !important; }
   .cmp-card.sec-yunliu-off .luck-section, .cmp-card.sec-yunliu-off .luck-head { display:none !important; }
@@ -998,7 +1013,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
         <button class="btn" id="btnCmpFocus" onclick="COMPARE.toggleFocus()" title="专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行">⛶ 专注</button>
       </div>
-      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
+      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible('month',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible('day',this.checked)">流月日</label><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
       <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
       <div class="cmp-picker" id="cmpPicker"></div>
@@ -7134,6 +7149,8 @@ function buildGongWeiTagRows(area, colCount) {
     if (hasExt) {
       html += '<td class="sep"></td><td class="col-ln"></td>';
     }
+    if (colCount > 7) html += '<td class="col-lm"></td>';
+    if (colCount > 8) html += '<td class="col-ld"></td>';
     html += '</tr>';
     rows.push(html);
   }
@@ -9525,7 +9542,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
   const recOn = !opts.luckBelow && isRecOn();
@@ -9562,6 +9579,7 @@ ${recPanelHtml}
   // 存储数据用于交互
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
+  container._flowState = null;
   applyLevelRows();
   applyTaiNianColumn(container);
   container._paipanData = data;
@@ -9642,10 +9660,139 @@ function toggleRecMode(force, root) {
   return on;
 }
 
+var flowMonthOn = false;
+var flowDayOn = false;
+
+function flowMonths(year) {
+  return CONST.MONTH_TERM.map(function(term, index) {
+    var start = ALGO.getSolarTerm(year + (index === 11 ? 1 : 0), term);
+    var nextIndex = (index + 1) % 12;
+    var end = ALGO.getSolarTerm(year + (index >= 10 ? 1 : 0), CONST.MONTH_TERM[nextIndex]);
+    var ganStart = CONST.TG.indexOf(CONST.WU_HU_DUN[ALGO.yearPillar(year).gan]);
+    return { start: start, end: end, gan: CONST.TG[(ganStart + index) % 10], zhi: CONST.DZ[(index + 2) % 12] };
+  });
+}
+
+function flowControlsHTML() {
+  return '<span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+}
+
+function setFlowVisible(kind, checked) {
+  if (kind === 'month') { flowMonthOn = checked; if (!checked) flowDayOn = false; }
+  else { flowDayOn = checked; if (checked) flowMonthOn = true; }
+  document.querySelectorAll('[data-flow]').forEach(function(input) {
+    input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn;
+  });
+  document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
+}
+
+function refreshFlow(root, data, year) {
+  if (!root || !data) return;
+  var table = root.querySelector('table.chart');
+  var luck = root.querySelector('.luck-section');
+  if (!luck && root.classList.contains('bz-twin-card')) {
+    var parent = root.closest('.bz-twin-cards').parentElement;
+    var cardIndex = Array.from(parent.querySelectorAll('.bz-twin-card')).indexOf(root);
+    var luckAreas = parent.querySelectorAll('.bz-card-luck .luck-section');
+    luck = luckAreas[cardIndex] || luckAreas[0] || parent.querySelector('.luck-section');
+  }
+  if (!table || !luck) return;
+  var state = root._flowState;
+  if (!state || (year !== undefined && state.year !== year)) {
+    var today = new Date();
+    var yearNow = today.getFullYear();
+    var nowMs = Date.UTC(yearNow, today.getMonth(), today.getDate(), today.getHours(), today.getMinutes());
+    var spring = ALGO.getSolarTerm(yearNow, 2);
+    var targetYear = year === undefined ? yearNow - (spring && nowMs < spring.getTime() ? 1 : 0) : year;
+    var monthsNow = flowMonths(targetYear);
+    var monthIndex = monthsNow.findIndex(function(month) { return month.start && month.end && nowMs >= month.start.getTime() && nowMs < month.end.getTime(); });
+    state = root._flowState = { year: targetYear, month: monthIndex < 0 ? 0 : monthIndex, day: null };
+    if (monthIndex >= 0) state.day = Date.UTC(yearNow, today.getMonth(), today.getDate());
+  }
+  var panel = root._flowPanel;
+  if (!panel || !panel.isConnected) {
+    panel = document.createElement('div');
+    panel.className = 'flow-panel';
+    luck.after(panel);
+    root._flowPanel = panel;
+  }
+  panel._flowRoot = root;
+  panel._flowData = data;
+  panel.hidden = !flowMonthOn;
+  table.querySelectorAll('.col-lm,.col-ld').forEach(function(cell) { cell.remove(); });
+  if (!flowMonthOn) { panel.innerHTML = ''; return; }
+  var months = flowMonths(state.year);
+  var selected = months[state.month];
+  var days = [];
+  if (selected.start && selected.end) {
+    var firstDay = Date.UTC(selected.start.getUTCFullYear(), selected.start.getUTCMonth(), selected.start.getUTCDate());
+    for (var dayMs = firstDay; dayMs < selected.end.getTime(); dayMs += 86400000) {
+      var date = new Date(dayMs);
+      var pillar = ALGO.dayPillar(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+      days.push({ ms: dayMs, date: date, gan: pillar.gan, zhi: pillar.zhi });
+    }
+  }
+  if (!days.some(function(day) { return day.ms === state.day; })) state.day = days.length ? days[0].ms : null;
+  var selectedDay = days.find(function(day) { return day.ms === state.day; });
+  function flowTable(items, kind, title) {
+    var perColumn = Math.ceil(items.length / 6);
+    var cells = [];
+    for (var columnIndex = 0; columnIndex < 6; columnIndex++) {
+      var entries = items.slice(columnIndex * perColumn, (columnIndex + 1) * perColumn);
+      var content = entries.map(function(item, entryIndex) {
+        var index = columnIndex * perColumn + entryIndex;
+        var active = kind === 'month' ? index === state.month : item.ms === state.day;
+        var value = kind === 'month' ? index : item.ms;
+        var label = kind === 'month' ? (index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
+      }).join('');
+      cells.push('<td class="cell">' + content + '</td>');
+    }
+    return '<div class="flow-table-wrap"><table class="luck-table flow-table"><tbody><tr class="luck-row liu-row"><td class="cell rtag">' + title + '</td>' + cells.join('') + '</tr></tbody></table></div>';
+  }
+  panel.innerHTML = '<div class="luck-table-label">' + state.year + ' 年 · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
+  panel.querySelectorAll('[data-flow-month]').forEach(function(buttonEl) {
+    buttonEl.onclick = function() { state.month = Number(buttonEl.dataset.flowMonth); state.day = null; refreshFlow(root, data); };
+  });
+  panel.querySelectorAll('[data-flow-day]').forEach(function(buttonEl) {
+    buttonEl.onclick = function() { state.day = Number(buttonEl.dataset.flowDay); refreshFlow(root, data); };
+  });
+  function appendColumn(pillar, className, title) {
+    var gan = pillar.gan, zhi = pillar.zhi;
+    var layers = cangGanLayers(zhi, data.ri.gan, 1, 'dayun');
+    var computed = { gan:gan, zhi:zhi, rs:shiShen(data.ri.gan,gan), wg:wxClass(gan), wz:wxClass(zhi), cg:cangGanText(zhi,data.ri.gan,1,'dayun'), ly:layers, ny:NAYIN[gan+zhi] || '', nayun:nayunChangSheng(NAYIN[gan+zhi],data.yue.zhi), xy:changSheng(data.ri.gan,zhi), zz:changSheng(gan,zhi), kw:kongWang(gan,zhi), sh:'' };
+    var clone = table.cloneNode(true);
+    clone.querySelectorAll('.col-lm,.col-ld').forEach(function(cell) { cell.remove(); });
+    if (root.classList.contains('bz-twin-card')) {
+      var temporary = document.createElement('div');
+      temporary.innerHTML = buildCardHTML(data, { twin: root.classList.contains('twin-2') ? 2 : 1, includeLuckCols: true, curDaYun: pillar, curLiuNian: pillar });
+      clone = temporary.querySelector('table.chart');
+    } else _applyDLUpdates(clone, computed, computed, true, _zuoRefs(data));
+    Array.from(table.rows).forEach(function(row) {
+      var rowType = row.getAttribute('data-row-type');
+      var matchingRow = rowType ? clone.querySelector('[data-row-type="' + rowType + '"]') : Array.from(clone.rows).find(function(candidate) { return candidate.className === row.className; });
+      if (row.classList.contains('sanyuan-sep')) return;
+      var isSanyuan = (row.getAttribute('data-sec') || '').split(' ').indexOf('sanyuan') >= 0 || row.closest('.bz-sanyuan-area');
+      var source = !isSanyuan && matchingRow && matchingRow.querySelector('.col-ln');
+      var cell = source ? source.cloneNode(true) : document.createElement(row.querySelector('th') ? 'th' : 'td');
+      cell.classList.remove('col-ln');
+      cell.classList.add(className);
+      if (row.classList.contains('hd')) cell.textContent = row.querySelector('[data-pk="nian"]') || row.textContent.indexOf('年柱') >= 0 ? title : '';
+      row.appendChild(cell);
+    });
+  }
+  appendColumn(selected, 'col-lm', '流月');
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日');
+  document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
+}
+
 function bindEvents(data, container) {
   const { daYun, ri, y } = data;
   const riGan = ri.gan;
   container = container || document;
+  var cards = container.querySelectorAll('.bz-twin-card');
+  if (cards.length) cards.forEach(function(card) { refreshFlow(card, card._cardData || data); });
+  else refreshFlow(container, data);
 
   // 大运点击
   container.querySelectorAll('[data-dy]').forEach(c => {
@@ -9805,6 +9952,7 @@ function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   var lnYear = liunianYearOf(cardData, dyIdx, lnIdx); // v0.26.0 v2: 口径单源（与节气区联动同式）
   if (lnYear === null || lnYear === undefined) return;
   var lnGz = liuNianJZ(lnYear);
+  refreshFlow(card || container, cardData, lnYear);
   if (dyIdx === -1) {
     // 运前流年(di=-1): 无对应大运，大运列显示月柱
     pDy = pill(cardData.yue.gan, cardData.yue.zhi);
@@ -10231,12 +10379,13 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  container._flowState = null;
   applyLevelRows();
   applyTaiNianColumn(container);
   container._paipanData = data;
@@ -10344,12 +10493,13 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
   container.innerHTML = html;
+  container._flowState = null;
   applyLevelRows();
   applyTaiNianColumn(container);
   window._paipanData = d1;
@@ -11214,6 +11364,10 @@ function cmpSetState(entries) {
     setLevelPreset: setLevelPreset,
     setRowVisible: setRowVisible,
     setSecVisible: setSecVisible,
+    setFlowVisible: setFlowVisible,
+    flowMonths: flowMonths,
+    flowControlsHTML: flowControlsHTML,
+    refreshFlow: refreshFlow,
     applyLevelRows: applyLevelRows,
     refreshXingyaoRows: refreshXingyaoRows,
     applyTaiNianColumn: applyTaiNianColumn,
@@ -14913,6 +15067,63 @@ function captureScreenshot() {
         var tR = document.getElementById('tst-rec'); if (tR && tR.parentNode) tR.parentNode.removeChild(tR);
       } catch (e) {}
       tests.push(eq('REC 现场还原: bz_rec_mode/草稿清空', (function() { var m = localStorage.getItem('bz_rec_mode'); return m === savedMode && (keyR === null || localStorage.getItem(keyR) === savedNotes); })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  (function() {
+    tests.push({ section: '流月流日选择与显隐' });
+    var flowRoot = document.createElement('div');
+    flowRoot.style.display = 'none';
+    document.body.appendChild(flowRoot);
+    var oldData = window._paipanData;
+    try {
+      var months = RENDER.flowMonths(2026);
+      tests.push(eq('流月：全年十二节气月', months.length, 12));
+      tests.push(eq('流月：丙午年首月庚寅', months[0].gan + months[0].zhi, '庚寅'));
+      tests.push(eq('流月：末月辛丑', months[11].gan + months[11].zhi, '辛丑'));
+      tests.push(eq('流月：末月跨到次年', months[11].start.getUTCFullYear(), 2027));
+      tests.push(eq('流月：立春时刻一致', months[0].start.getTime(), ALGO.getSolarTerm(2026, 2).getTime()));
+      tests.push(eq('流月：相邻月份边界一致', months[10].end.getTime(), months[11].start.getTime()));
+      var data = ALGO.paipan('流月测试', '男', 1982, 10, 26, 6, 0, 116.4, false);
+      RENDER.renderChart(data, 0, flowRoot);
+      tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
+      flowRoot.querySelector('[data-flow="month"]').click();
+      tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
+      tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
+      tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
+      tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
+      tests.push(eq('流月：干支使用五行配色', flowRoot.querySelector('[data-flow-month] span:not(.flow-date)').className, ALGO.wxClass(RENDER.flowMonths(flowRoot._flowState.year)[0].gan)));
+      tests.push(eq('流月：只显示流月列', flowRoot.querySelectorAll('tr.hd .col-lm').length, 2));
+      tests.push(eq('流月：不显示流日列', flowRoot.querySelectorAll('.col-ld').length, 0));
+      flowRoot.querySelector('[data-flow="day"]').click();
+      tests.push(eq('流日：勾选后展开日期', flowRoot.querySelectorAll('[data-flow-day]').length > 27, true));
+      tests.push(eq('流日：勾选后出现列', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld') !== null, true));
+      tests.push(eq('流月日：三垣附加列全部留空', Array.from(flowRoot.querySelectorAll('[data-sec~="sanyuan"] .col-lm,[data-sec~="sanyuan"] .col-ld')).every(function(cell) { return cell.textContent === ''; }), true));
+      tests.push(eq('流月日：三垣主星不串四柱', flowRoot.querySelector('tr.rs[data-sec="sanyuan"] .col-lm').textContent, ''));
+      tests.push(eq('流月日：三垣天干不出现错误柱', flowRoot.querySelector('tr.rg[data-sec="sanyuan"] .col-ld').textContent, ''));
+      tests.push(eq('流月日：三垣分隔行不追加单元格', flowRoot.querySelector('.sanyuan-sep').cells.length, 1));
+      flowRoot.querySelector('[data-flow-month="11"]').click();
+      tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
+      tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
+      var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
+      dayButton.click();
+      var selectedDate = new Date(Number(dayButton.dataset.flowDay));
+      var selectedPillar = ALGO.dayPillar(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, selectedDate.getUTCDate());
+      tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
+      tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
+      var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
+      yearCell.click();
+      tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
+      flowRoot.querySelector('[data-flow="day"]').click();
+      tests.push(eq('流日：取消后只留流月', flowRoot.querySelectorAll('.col-ld').length, 0));
+      tests.push(eq('流日：取消后流月仍可见', flowRoot.querySelector('.flow-panel').hidden, false));
+      flowRoot.querySelector('[data-flow="month"]').click();
+      tests.push(eq('流月：取消后面板隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
+      tests.push(eq('流月：取消后列移除', flowRoot.querySelectorAll('.col-lm,.col-ld').length, 0));
+    } finally {
+      RENDER.setFlowVisible('month', false);
+      window._paipanData = oldData;
+      flowRoot.remove();
     }
   })();
 

@@ -401,6 +401,8 @@ function buildGongWeiTagRows(area, colCount) {
     if (hasExt) {
       html += '<td class="sep"></td><td class="col-ln"></td>';
     }
+    if (colCount > 7) html += '<td class="col-lm"></td>';
+    if (colCount > 8) html += '<td class="col-ld"></td>';
     html += '</tr>';
     rows.push(html);
   }

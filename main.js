@@ -3318,6 +3318,63 @@ function captureScreenshot() {
     }
   })();
 
+  (function() {
+    tests.push({ section: '流月流日选择与显隐' });
+    var flowRoot = document.createElement('div');
+    flowRoot.style.display = 'none';
+    document.body.appendChild(flowRoot);
+    var oldData = window._paipanData;
+    try {
+      var months = RENDER.flowMonths(2026);
+      tests.push(eq('流月：全年十二节气月', months.length, 12));
+      tests.push(eq('流月：丙午年首月庚寅', months[0].gan + months[0].zhi, '庚寅'));
+      tests.push(eq('流月：末月辛丑', months[11].gan + months[11].zhi, '辛丑'));
+      tests.push(eq('流月：末月跨到次年', months[11].start.getUTCFullYear(), 2027));
+      tests.push(eq('流月：立春时刻一致', months[0].start.getTime(), ALGO.getSolarTerm(2026, 2).getTime()));
+      tests.push(eq('流月：相邻月份边界一致', months[10].end.getTime(), months[11].start.getTime()));
+      var data = ALGO.paipan('流月测试', '男', 1982, 10, 26, 6, 0, 116.4, false);
+      RENDER.renderChart(data, 0, flowRoot);
+      tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
+      flowRoot.querySelector('[data-flow="month"]').click();
+      tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
+      tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
+      tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
+      tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
+      tests.push(eq('流月：干支使用五行配色', flowRoot.querySelector('[data-flow-month] span:not(.flow-date)').className, ALGO.wxClass(RENDER.flowMonths(flowRoot._flowState.year)[0].gan)));
+      tests.push(eq('流月：只显示流月列', flowRoot.querySelectorAll('tr.hd .col-lm').length, 2));
+      tests.push(eq('流月：不显示流日列', flowRoot.querySelectorAll('.col-ld').length, 0));
+      flowRoot.querySelector('[data-flow="day"]').click();
+      tests.push(eq('流日：勾选后展开日期', flowRoot.querySelectorAll('[data-flow-day]').length > 27, true));
+      tests.push(eq('流日：勾选后出现列', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld') !== null, true));
+      tests.push(eq('流月日：三垣附加列全部留空', Array.from(flowRoot.querySelectorAll('[data-sec~="sanyuan"] .col-lm,[data-sec~="sanyuan"] .col-ld')).every(function(cell) { return cell.textContent === ''; }), true));
+      tests.push(eq('流月日：三垣主星不串四柱', flowRoot.querySelector('tr.rs[data-sec="sanyuan"] .col-lm').textContent, ''));
+      tests.push(eq('流月日：三垣天干不出现错误柱', flowRoot.querySelector('tr.rg[data-sec="sanyuan"] .col-ld').textContent, ''));
+      tests.push(eq('流月日：三垣分隔行不追加单元格', flowRoot.querySelector('.sanyuan-sep').cells.length, 1));
+      flowRoot.querySelector('[data-flow-month="11"]').click();
+      tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
+      tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
+      var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
+      dayButton.click();
+      var selectedDate = new Date(Number(dayButton.dataset.flowDay));
+      var selectedPillar = ALGO.dayPillar(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, selectedDate.getUTCDate());
+      tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
+      tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
+      var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
+      yearCell.click();
+      tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
+      flowRoot.querySelector('[data-flow="day"]').click();
+      tests.push(eq('流日：取消后只留流月', flowRoot.querySelectorAll('.col-ld').length, 0));
+      tests.push(eq('流日：取消后流月仍可见', flowRoot.querySelector('.flow-panel').hidden, false));
+      flowRoot.querySelector('[data-flow="month"]').click();
+      tests.push(eq('流月：取消后面板隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
+      tests.push(eq('流月：取消后列移除', flowRoot.querySelectorAll('.col-lm,.col-ld').length, 0));
+    } finally {
+      RENDER.setFlowVisible('month', false);
+      window._paipanData = oldData;
+      flowRoot.remove();
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

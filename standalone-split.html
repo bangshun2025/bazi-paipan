@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.43.8 | 2026-10-06 -->
+<!-- 八字排盘 ·  从真版 v0.44.0 | 2026-10-08 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->
@@ -813,6 +813,21 @@
   .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
   .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
   .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .flow-panel { padding:8px 0; min-width:0; }
+  .flow-panel[hidden] { display:none; }
+  .flow-table-wrap { max-width:100%; overflow-x:auto; border:0.5px solid var(--c-line); }
+  .flow-table { min-width:520px; table-layout:fixed; }
+  .flow-table .cell { min-width:0; }
+  .flow-table .rtag { width:48px; }
+  .flow-table .li { width:100%; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:inherit; text-align:center; }
+  .flow-table .li.cur { background:rgba(200,58,58,.04); box-shadow:inset 0 0 0 1px rgba(200,58,58,.3); }
+  .flow-table .li:focus-visible { outline:1px solid var(--c-red); outline-offset:-1px; }
+  .flow-date { display:inline-block; min-width:32px; margin-right:4px; font-size:13px; color:var(--c-gray); font-family:var(--font-body); }
+  .flow-day-label { margin-top:12px; }
+  .flow-note { padding-top:6px; font-size:12px; color:var(--c-gray); }
+  .chart .col-lm, .chart .col-ld { min-width:52px; }
+  .top-bar:has([data-flow]), .top-bar > div:has([data-flow]) { flex-wrap:wrap; gap:8px; }
+  @media (max-width:900px) { .body-cols:has(.flow-panel) > .main-col, .body-cols:has(.flow-panel) .luck-col { width:100%; max-width:100%; min-width:0; } }
   .cmp-card.sec-cangqi-off tr[data-sec~="cangqi"] { display:none !important; }
   .cmp-card.sec-sanyuan-off tr[data-sec~="sanyuan"], .cmp-card.sec-sanyuan-off tr.gz-tags-sy { display:none !important; }
   .cmp-card.sec-yunliu-off .luck-section, .cmp-card.sec-yunliu-off .luck-head { display:none !important; }
@@ -988,7 +1003,7 @@
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
         <button class="btn" id="btnCmpFocus" onclick="COMPARE.toggleFocus()" title="专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行">⛶ 专注</button>
       </div>
-      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
+      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible('month',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible('day',this.checked)">流月日</label><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
       <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
       <div class="cmp-picker" id="cmpPicker"></div>
