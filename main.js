@@ -3302,11 +3302,18 @@ function captureScreenshot() {
       ta7.value = new Array(25).join('甲\n') + '甲';
       ta7.dispatchEvent(new Event('input', { bubbles: true }));
       var h1 = ta7.getBoundingClientRect().height;
-      tests.push(eq('REC T07: 内容增多高度变大', h1 > h0 + 60, true));
+      tests.push(eq('REC T07: 内容增多高度变大或到达上限', h1 > h0 || h1 >= parseFloat(cs7.maxHeight), true));
+      ta7.value = new Array(101).join('滚动记录\n');
+      ta7.dispatchEvent(new Event('input', { bubbles: true }));
+      tests.push(eq('REC T08: 右侧纵向滚动条', getComputedStyle(ta7).overflowY, 'scroll'));
+      tests.push(eq('REC T08: 长记录高度不超过上限', ta7.getBoundingClientRect().height <= parseFloat(getComputedStyle(ta7).maxHeight) + 1, true));
+      tests.push(eq('REC T08: 长记录可滚动', ta7.scrollHeight > ta7.clientHeight, true));
+      ta7.scrollTop = ta7.scrollHeight;
+      tests.push(eq('REC T08: 可下滑至末尾', ta7.scrollTop > 0 && ta7.scrollHeight - ta7.clientHeight - ta7.scrollTop <= 1, true));
       ta7.value = '';
       ta7.dispatchEvent(new Event('input', { bubbles: true }));
       var h2 = ta7.getBoundingClientRect().height;
-      tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 320 && h2 < h1 - 60, true));
+      tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 360 && h2 <= h1 && h2 <= h0 + 1, true));
     } finally {
       try {
         if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);
