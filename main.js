@@ -3413,6 +3413,119 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.46.0 大运起始年改按真实交运时刻定 =====
+  // 旧式 birth.getFullYear() + Math.round(totalMonths/12) 丢掉起运月日：
+  // 余月 ≥6 而不跨日历年 → 整体晚一年；余月 <6 而跨年 → 整体早一年。
+  // 下表 29 条 = 线上 118 条档案中实测错位的全部样本（2026-10-09 对账）。
+  (function() {
+    tests.push({ section:'起运年口径(v0.46.0)' });
+    var A = window.ALGO;
+    if (!A || typeof A.paipan !== 'function' || typeof A.addYMDH !== 'function') {
+      tests.push(fail('v0.46 QY00: 前置 ALGO.paipan/addYMDH 已挂载', '缺失'));
+      return;
+    }
+
+    // 性别, 年, 月, 日, 时, 分, 期望首运年, 期望虚岁, 标签
+    var cases = [
+      ['女',1992,1,18,10,29,1997,6,'龚洁'],
+      ['男',1983,1,9,8,57,1991,9,'俊'],
+      ['男',1983,1,9,8,57,1991,9,'言溪爸'],
+      ['女',1985,1,25,21,30,1991,7,'小繁'],
+      ['女',1985,1,25,21,30,1991,7,'不言成溪妈'],
+      ['女',2010,1,3,0,27,2010,1,'李老师女儿'],
+      ['女',1981,5,26,14,0,1984,4,'李艳'],
+      ['女',1990,2,6,10,2,1990,1,'素素'],
+      ['男',1990,3,16,15,18,1996,7,'许文勇'],
+      ['男',1986,6,30,6,0,1988,3,'杨国辉'],
+      ['男',2020,8,31,8,0,2023,4,'韦环骏'],
+      ['女',1980,11,11,20,0,1982,3,'吉笙'],
+      ['男',2016,10,22,11,45,2022,7,'农家榕'],
+      ['男',2016,10,22,11,45,2022,7,'家榕'],
+      ['男',1940,11,27,7,12,1944,5,'李小龙'],
+      ['女',1996,10,24,0,0,2002,7,'琳琳'],
+      ['女',1983,12,3,16,30,1985,3,'卢敏姣申'],
+      ['女',1983,12,3,18,30,1985,3,'卢敏姣酉'],
+      ['女',1983,12,3,20,30,1985,3,'卢敏姣戌'],
+      ['男',1893,12,26,7,20,1900,8,'毛泽东辰'],
+      ['男',1893,12,26,6,1,1900,8,'毛泽东卯'],
+      ['男',1893,12,26,10,20,1900,8,'毛泽东巳'],
+      ['男',2011,8,2,3,10,2020,10,'潘政熙'],
+      ['男',1974,10,14,1,0,1983,10,'石总'],
+      ['男',2019,8,9,14,0,2020,2,'李帛锴'],
+      ['男',1989,10,2,19,48,1998,10,'小龙'],
+      ['女',1984,12,20,8,20,1989,6,'谢洁'],
+      ['男',2022,12,20,22,12,2028,7,'杨家昀'],
+      ['男',2015,8,18,13,5,2019,5,'罗允健']
+    ];
+    var bad = 0, firstBad = '';
+    for (var ci = 0; ci < cases.length; ci++) {
+      var c = cases[ci];
+      var pc = A.paipan('QY样本' + ci, c[0], c[1], c[2], c[3], c[4], c[5]);
+      var d0 = pc.daYun && pc.daYun[0];
+      if (!d0 || d0.startYear !== c[6] || d0.startAge !== c[7]) {
+        bad++;
+        if (!firstBad) firstBad = c[8] + ' 实际 ' + (d0 ? d0.startYear + '/' + d0.startAge + '岁' : '无大运') + ' ≠ 期望 ' + c[6] + '/' + c[7] + '岁';
+      }
+    }
+    tests.push(eq('v0.46 QY01: 29 条错位样本首运年+虚岁全对', bad, 0));
+    if (firstBad) tests.push(fail('v0.46 QY01b: 首条失败样本', firstBad));
+
+    var gong = A.paipan('龚洁样本', '女', 1992, 1, 18, 10, 29);
+    tests.push(eq('v0.46 QY02: 龚洁首运年 1997（旧算法 1998）', gong.daYun[0].startYear, 1997));
+    tests.push(eq('v0.46 QY03: 龚洁首运虚岁 6（旧算法 7）', gong.daYun[0].startAge, 6));
+    tests.push(eq('v0.46 QY04: qiYun.jyYear 与首运年一致', gong.qiYun.jyYear, gong.daYun[0].startYear));
+    var lee = A.paipan('李小龙样本', '男', 1940, 11, 27, 7, 12);
+    tests.push(eq('v0.46 QY05: 李小龙首运年 1944（旧算法 1943）', lee.daYun[0].startYear, 1944));
+    var su = A.paipan('素素样本', '女', 1990, 2, 6, 10, 2);
+    tests.push(eq('v0.46 QY06: 素素首运年 1990（旧算法 1991）', su.daYun[0].startYear, 1990));
+    tests.push(eq('v0.46 QY07: 十步大运首尾跨 90 年', gong.daYun[9].startYear - gong.daYun[0].startYear, 90));
+    tests.push(eq('v0.46 QY08: 十步虚岁首尾跨 90 岁', gong.daYun[9].startAge - gong.daYun[0].startAge, 90));
+    tests.push(eq('v0.46 QY09: 相邻两步整 10 年', gong.daYun[1].startYear - gong.daYun[0].startYear, 10));
+
+    // 未受影响样本：本就不跨年的盘必须原地不动（防过度修正）
+    var bs = A.paipan('邦顺样本', '男', 1982, 10, 18, 5, 1);
+    tests.push(eq('v0.46 QY10: 未受影响样本首运年保持 1989', bs.daYun[0].startYear, 1989));
+    tests.push(eq('v0.46 QY11: 未受影响样本首运虚岁保持 8', bs.daYun[0].startAge, 8));
+
+    // addYMDH：自然月加法，月末天数不足时对齐月末（不溢出到次月）
+    var mEnd = A.addYMDH(new Date(2001, 0, 31, 0, 0), 0, 1, 0, 0);
+    tests.push(eq('v0.46 QY12: addYMDH(2001-01-31 +1月) → 2/28', (mEnd.getMonth() + 1) * 100 + mEnd.getDate(), 228));
+    var mLeap = A.addYMDH(new Date(2000, 0, 31, 0, 0), 0, 1, 0, 0);
+    tests.push(eq('v0.46 QY13: addYMDH(2000-01-31 +1月) → 2/29（闰年）', (mLeap.getMonth() + 1) * 100 + mLeap.getDate(), 229));
+    var mNormal = A.addYMDH(new Date(2000, 2, 15, 0, 0), 0, 1, 0, 0);
+    tests.push(eq('v0.46 QY14: addYMDH(正常月内日) → 4/15', (mNormal.getMonth() + 1) * 100 + mNormal.getDate(), 415));
+
+    // 渲染层：运前列与首运年必须串成连续年份（旧式 ceil 会与首运年重叠/断裂）
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function') {
+      tests.push(fail('v0.46 QY20: 前置 RENDER.renderChart 已挂载', '缺失'));
+      return;
+    }
+    var host = document.createElement('div');
+    host.id = 'tst-qy-out';
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    try {
+      R.renderChart(gong, undefined, 'tst-qy-out');
+      tests.push(eq('v0.46 QY20: 龚洁运前列格数=5（1992–1996）', host.querySelectorAll('.luck-row .cell.pre-qy').length, 5));
+      var preFirst = host.querySelector('.luck-row.hd .cell.pre-qy .year');
+      tests.push(eq('v0.46 QY21: 运前列首格=出生年 1992', preFirst ? preFirst.textContent : '', '1992'));
+      var hdYears = [];
+      host.querySelectorAll('.luck-row.hd .cell .year').forEach(function(el) { hdYears.push(el.textContent); });
+      tests.push(eq('v0.46 QY22: 首运年列=1997', hdYears[1] || '', '1997'));
+      tests.push(eq('v0.46 QY23: 末运年列=2087', hdYears[10] || '', '2087'));
+      tests.push(eq('v0.46 QY24: 运前流年格数=5（1992–1996）', host.querySelectorAll('.liu-row .li[data-di="-1"]').length, 5));
+
+      R.renderChart(bs, undefined, 'tst-qy-out');
+      tests.push(eq('v0.46 QY25: 邦顺运前流年格数=7（1982–1988）', host.querySelectorAll('.liu-row .li[data-di="-1"]').length, 7));
+      var hdYears2 = [];
+      host.querySelectorAll('.luck-row.hd .cell .year').forEach(function(el) { hdYears2.push(el.textContent); });
+      tests.push(eq('v0.46 QY26: 邦顺首运年列=1989（未受影响）', hdYears2[1] || '', '1989'));
+    } finally {
+      host.remove();
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

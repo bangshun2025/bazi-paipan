@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.45.1 | 2026-10-09 -->
+<!-- 八字排盘 ·  从真版 v0.46.0 | 2026-10-09 -->
+<!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
 <!-- v0.43.6: 分析记录区 — 顶栏最右新增「分析记录」按钮；开启后记录区占运流区原位、运流区移至左下（主盘下方）；textarea 写入即存（bz_rec_mode 记忆开关＋bz_rec_notes_<命主指纹> 分人存稿）；属狗行（壬戌年生·属狗·当前X年）缩 13px 单行不折行 -->

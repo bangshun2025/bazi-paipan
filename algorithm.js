@@ -497,6 +497,21 @@ function qiYunDays(birth, monthZhi, shun) {
   }
 }
 
+// 自然月加法：用于交运时刻（出生 + 起运 年/月/天/小时）。
+// 月进位按日历走；目标月天数不足时对齐到该月末（3/31 + 1月 → 4/30），避免溢出漂到次月。
+function addYMDH(date, y, mo, d, h) {
+  const r = new Date(date.getTime());
+  const day = r.getDate();
+  r.setDate(1);
+  r.setFullYear(r.getFullYear() + y);
+  r.setMonth(r.getMonth() + mo);
+  const dim = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(day, dim));
+  r.setDate(r.getDate() + d);
+  r.setHours(r.getHours() + h);
+  return r;
+}
+
 function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
   // v0.22.0: 1000-1399 年不排大运（节气时刻精度不足以保证起运准确性）
   if (birth.getFullYear() < 1400) {
@@ -520,6 +535,13 @@ function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
   const yGIdx = TG.indexOf(yueGan);
   const yZIdx = DZ.indexOf(yueZhi);
 
+  // 起运后每步十年；起始年取真实交运时刻的日历年。
+  // 旧式 birth.getFullYear() + Math.round(totalMonths/12) 丢掉起运月日：
+  // 余月 ≥6 而不跨年时整体晚一年，余月 <6 而跨年时整体早一年。
+  const jyDate = addYMDH(birth, qyYears, qyMonths, qyDaysFinal, qyHours);
+  const jyYear = jyDate.getFullYear();
+  const ageBase = jyYear - birth.getFullYear() + 1;
+
   const daYun = [];
   for (let i = 0; i < 10; i++) {
     const off = shun ? i + 1 : -(i + 1);
@@ -527,12 +549,12 @@ function computeDaYun(gender, nianGan, yueGan, yueZhi, birth) {
     let zIdx = (yZIdx + off) % 12;
     if (gIdx < 0) gIdx += 10;
     if (zIdx < 0) zIdx += 12;
-    const startAge = Math.round(totalMonths / 12) + 1 + i * 10;
-    const startYear = birth.getFullYear() + startAge - 1;
+    const startAge = ageBase + i * 10;
+    const startYear = jyYear + i * 10;
     daYun.push({ gan: TG[gIdx], zhi: DZ[zIdx], startAge, startYear });
   }
 
-  return { daYun, qiYun: { years: qyYears, months: qyMonths, days: qyDaysFinal, hours: qyHours, totalMonths }, shun };
+  return { daYun, qiYun: { years: qyYears, months: qyMonths, days: qyDaysFinal, hours: qyHours, totalMonths, jyYear }, shun };
 }
 
 // ============ 流年干支 ============
@@ -692,6 +714,7 @@ function buildShunLabel(shun, gender, nianGan) {
     mingGong: mingGong,
     shenGong: shenGong,
     qiYunDays: qiYunDays,
+    addYMDH: addYMDH,
     computeDaYun: computeDaYun,
     liuNianJZ: liuNianJZ,
     REN_YUAN: REN_YUAN,

@@ -38,6 +38,7 @@
   var ARCH_BACKUP_KEY = CONST.ARCH_BACKUP_KEY;
 
   // ===== 别名：来自 algorithm.js =====
+  var addYMDH = ALGO.addYMDH;
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
@@ -699,14 +700,11 @@ function renderChart(data, twin, targetId, opts) {
   if (qiYun) {
     joy = qiYun.years; jom = qiYun.months; jod = qiYun.days; joh = qiYun.hours || 0;
     qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + joh + ' 小时';
-    preQyYears = Math.ceil((qiYun.totalMonths || (qiYun.years * 12 + qiYun.months + qiYun.days / 30)) / 12);
+    // 运前年数 = 交运年 − 出生年：与 daYun[0].startYear 同源，避免两处口径漂移
+    preQyYears = daYun.length > 0 ? Math.max(0, daYun[0].startYear - y) : 0;
     const WUHE = {甲:'己',己:'甲',乙:'庚',庚:'乙',丙:'辛',辛:'丙',丁:'壬',壬:'丁',戊:'癸',癸:'戊'};
     // 起运准确日期
-    const qyStartDate = new Date(y, m-1, d, h || 0, mi || 0);
-    qyStartDate.setFullYear(qyStartDate.getFullYear() + joy);
-    qyStartDate.setMonth(qyStartDate.getMonth() + jom);
-    qyStartDate.setDate(qyStartDate.getDate() + jod);
-    qyStartDate.setHours(qyStartDate.getHours() + joh);
+    const qyStartDate = addYMDH(new Date(y, m-1, d, h || 0, mi || 0), joy, jom, jod, joh);
     // 交运年天干对
     const jyYearGanIdx = (qyStartDate.getFullYear() - 4) % 10;
     const jyNextGan = TG[jyYearGanIdx];
@@ -1686,10 +1684,12 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
   }
 
   var joy = qiYun ? qiYun.years : 0, jom = qiYun ? qiYun.months : 0, jod = qiYun ? qiYun.days : 0;
+  // 运前年数按交运年算（与 daYun[0].startYear 同源；起运不足一年时为 0）
+  var preYears = daYun.length > 0 ? Math.max(0, daYun[0].startYear - data.y) : 0;
   var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
   var jyText = '';
   (function() {
-    var y = data.y, startYear = y + joy;
+    var y = data.y, startYear = y + preYears;
     for (var j = 0; j < 20; j++) {
       var tY = startYear + j;
       if ('己甲'.indexOf(TG[(tY - 4) % 10]) >= 0) { jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天'; return; }
@@ -1700,8 +1700,8 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
   var luckRows = [];
   luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
   // 运前列：qyYears > 0 时渲染
-  if (joy > 0) {
-    luckRows.push('<div class="cell pre-qy"><span class="year">运前</span><span class="age">'+joy+'岁前</span></div>');
+  if (preYears > 0) {
+    luckRows.push('<div class="cell pre-qy"><span class="year">运前</span><span class="age">'+preYears+'岁前</span></div>');
   }
   for (var l = 0; l < daYun.length; l++) {
     var dy = daYun[l], cls = l === curDyIdx ? ' cell cc' : ' cell';
@@ -1711,7 +1711,7 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
 
   luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
   // 运前列：--占位，无 data-dy
-  if (joy > 0) {
+  if (preYears > 0) {
     luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">--</div><div class="dy-branch" style="color:var(--c-gray)">--</div></div>');
   }
   for (var l = 0; l < daYun.length; l++) {
@@ -1723,9 +1723,9 @@ function buildCardLuckHTML(daYun, qiYun, data, options) {
 
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
   // 运前列：出生年至起运前一年的流年干支（无 data-di/data-li）
-  if (joy > 0) {
+  if (preYears > 0) {
     var preLis = '';
-    for (var py = data.y; py < data.y + joy; py++) {
+    for (var py = data.y; py < data.y + preYears; py++) {
       var gz = liuNianJZ(py);
       preLis += '<span class="li"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>';
     }
@@ -1782,6 +1782,8 @@ function renderTwinCardsHtml(data, targetId) {
   var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
   var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 });
   var joy = qiYun ? qiYun.years : 0, jom = qiYun ? qiYun.months : 0, jod = qiYun ? qiYun.days : 0;
+  // 运前年数按交运年算（与 daYun[0].startYear 同源；起运不足一年时为 0）
+  var preYears = daYun.length > 0 ? Math.max(0, daYun[0].startYear - data.y) : 0;
   var qiyunText = '出生后 ' + joy + ' 年 ' + jom + ' 月 ' + jod + ' 天 ' + h + ' 小时 ' + mi + ' 分';
   function nextJYYear(sY) { for (var i = 0; i < 20; i++) { var tY = sY + i; if ('己甲'.includes(TG[(tY - 4) % 10])) return tY; } return sY; }
   var jyText = '逢己、甲年白露后 ' + (jod + jom * 30) + ' 天';
@@ -1792,27 +1794,27 @@ function renderTwinCardsHtml(data, targetId) {
   var luckRows = [];
   // 表头：年份/岁数 + 运前列
   luckRows.push('<div class="luck-row hd"><div class="cell rtag">大运</div>');
-  if (joy > 0) { luckRows.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
+  if (preYears > 0) { luckRows.push('<div class="cell pre-qy"><span class="year">'+y+'</span><span class="age">1岁</span></div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'"><span class="year">'+dy.startYear+'</span><span class="age">'+(dy.startAge+1)+'岁</span></div>'); }
   luckRows.push('</div>');
   // 大运干支 + 运前列
   luckRows.push('<div class="luck-row"><div class="cell rtag">大运</div>');
-  if (joy > 0) { luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
+  if (preYears > 0) { luckRows.push('<div class="cell pre-qy"><div class="dy-stem" style="color:var(--c-gray)">运</div><div class="dy-branch" style="color:var(--c-gray)">前</div></div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var ss = shiShen(riGan, dy.gan), sb = zhiShiShen(riGan, dy.zhi); luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'" data-dy="'+l+'"><div class="dy-stem '+wxClass(dy.gan)+'">'+dy.gan+'<span>'+ss.substr(0,1)+'</span></div><div class="dy-branch '+wxClass(dy.zhi)+'">'+dy.zhi+'<span>'+sb.substr(0,1)+'</span></div></div>'); }
   luckRows.push('</div>');
   // 始于
   luckRows.push('<div class="luck-row start-row"><div class="cell rtag">始于</div>');
-  if (joy > 0) { luckRows.push('<div class="cell pre-qy">'+y+'</div>'); }
+  if (preYears > 0) { luckRows.push('<div class="cell pre-qy">'+y+'</div>'); }
   for (var l = 0; l < daYun.length; l++) { luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+daYun[l].startYear+'</div>'); }
   luckRows.push('</div>');
   // 流年 + 运前列
   luckRows.push('<div class="luck-row liu-row"><div class="cell rtag">流年</div>');
-  if (joy > 0) { var preLis = ''; for (var py = y, liI = 0; py < y + joy; py++, liI++) { var gz = liuNianJZ(py); preLis += '<span class="li" data-di="-1" data-li="'+liI+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell pre-qy">'+preLis+'</div>'); }
+  if (preYears > 0) { var preLis = ''; for (var py = y, liI = 0; py < y + preYears; py++, liI++) { var gz = liuNianJZ(py); preLis += '<span class="li" data-di="-1" data-li="'+liI+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell pre-qy">'+preLis+'</div>'); }
   for (var l = 0; l < daYun.length; l++) { var dy = daYun[l]; var lis = ''; for (var j = 0; j < 10; j++) { var lnY = dy.startYear + j; var gz = liuNianJZ(lnY); lis += '<span class="li'+(l===curDyIdx&&lnY===nowYear?' cur':'')+'" data-di="'+l+'" data-li="'+j+'"><span class="'+wxClass(gz[0])+'">'+gz[0]+'</span><span class="'+wxClass(gz[1])+'">'+gz[1]+'</span></span>'; } luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+lis+'</div>'); }
   luckRows.push('</div>');
   // 止于
   luckRows.push('<div class="luck-row end-row"><div class="cell rtag">止于</div>');
-  if (joy > 0) { luckRows.push('<div class="cell pre-qy">'+(y + joy - 1)+'</div>'); }
+  if (preYears > 0) { luckRows.push('<div class="cell pre-qy">'+(y + preYears - 1)+'</div>'); }
   for (var l = 0; l < daYun.length; l++) { luckRows.push('<div class="cell'+(l===curDyIdx?' cc':'')+'">'+(daYun[l].startYear + 9)+'</div>'); }
   luckRows.push('</div>');
 
