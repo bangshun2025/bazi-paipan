@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.46.0 | 2026-10-09 -->
+<!-- 八字排盘 ·  从真版 v0.47.0 | 2026-10-11 -->
+<!-- v0.47.0: 一键复制盘面 — 工具栏新增「📋 复制盘面」按钮，把当前盘面生成 AI 友好纯文本（基本信息/四柱十神藏干纳音星曜空亡神煞/三垣/起运交运/十步大运/当前大运流年/已勾选宫位标注）写入剪贴板，粘贴即与 AI 对盘；隐私口径与截图一致只出 displayName；clipboard API 优先 execCommand 兜底，浮 tip 反馈 -->
 <!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
@@ -970,6 +971,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
       <button class="btn btn-privacy" id="btnScreenshot" onclick="APP.captureScreenshot()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📷 截图</button>
+      <button class="btn btn-privacy" id="btnCopyChart" onclick="RENDER.copyChartForAi()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 复制盘面</button>
       <button class="btn btn-privacy" id="btnSaveCloud" onclick="window.RECORDS.saveCurrentPaipan()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">💾 保存云端</button>
       <button class="btn btn-privacy" id="btnMyRecords" onclick="window.RECORDS.openRecordsPanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☁️ 我的排盘</button>
       <button class="btn btn-privacy" id="btnLogout" onclick="window.AUTH.doLogout()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-gray);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🚪 登出</button>
@@ -11440,6 +11442,171 @@ function cmpSetState(entries) {
   renderCmpTrack();
 }
 
+  // ============================================================
+  // v0.47.0 一键复制盘面（纯文本导出，粘贴给 AI 用）
+  // ============================================================
+
+  // 浮 tip：锚定复制按钮，复用 screenshot-notify 样式（2.5 秒自毁，拒绝 alert）
+  function notifyCopyChart(msg) {
+    var old = document.getElementById('copyChartNotify');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var btn = document.getElementById('btnCopyChart');
+    if (!btn || !btn.parentNode) return;
+    var div = document.createElement('div');
+    div.id = 'copyChartNotify';
+    div.className = 'screenshot-notify';
+    div.textContent = msg;
+    div.style.left = (btn.offsetLeft + btn.offsetWidth / 2) + 'px';
+    div.style.top = (btn.offsetTop + btn.offsetHeight + 6) + 'px';
+    div.style.transform = 'translateX(-50%)';
+    btn.parentNode.appendChild(div);
+    setTimeout(function() {
+      if (div.parentNode) div.parentNode.removeChild(div);
+    }, 2500);
+  }
+
+  // 柱解析：与 renderChart 内 pillar() 同口径（十神/藏干/纳音/星曜/自坐/空亡/神煞）
+  function _aiPillar(data, gan, zhi, type) {
+    var riGan = data.ri.gan, riZhi = data.ri.zhi;
+    return {
+      gan: gan, zhi: zhi,
+      rs: (type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      cg: cangGanText(zhi, riGan, 1, type),
+      ny: NAYIN[gan + zhi] || '',
+      xy: changSheng(riGan, zhi),
+      zz: changSheng(gan, zhi),
+      kw: kongWang(gan, zhi),
+      sh: (gan + zhi === riGan + riZhi) ? shenSha(riGan, riZhi, data.nian.zhi, data.yue.zhi) : ''
+    };
+  }
+
+  function _aiPillarLine(label, p) {
+    var parts = [label + ' ' + p.gan + p.zhi, '十神 ' + (p.rs || '—')];
+    if (p.cg) parts.push('藏干 ' + p.cg);
+    if (p.ny) parts.push('纳音 ' + p.ny);
+    if (p.xy) parts.push('星曜 ' + p.xy);
+    if (p.zz) parts.push('自坐 ' + p.zz);
+    if (p.kw) parts.push('空亡 ' + p.kw);
+    if (p.sh) parts.push('神煞 ' + p.sh);
+    return '  ' + parts.join(' · ');
+  }
+
+  // 生成 AI 友好的盘面纯文本（隐私口径与截图一致：只出 displayName，不读真名）
+  function buildAiCopyText(data) {
+    if (!data || !data.nian || !data.ri) return '';
+    var lines = [];
+    lines.push('【八字盘面】');
+    var who = data.displayName || data.name || '未命名';
+    var birth = '公历 ' + data.y + '-' + pad(data.m) + '-' + pad(data.d) + ' ' + pad(data.h) + ':' + pad(data.mi);
+    var notes = [];
+    if (data.trueSolar) notes.push('真太阳时' + ((typeof data.lng === 'number' && isFinite(data.lng)) ? '（经度 ' + data.lng + '°）' : ''));
+    if (data.julian) notes.push('输入为儒略历 ' + data.julian.fromY + '-' + pad(data.julian.fromM) + '-' + pad(data.julian.fromD) + '（折算格里历 ' + data.y + '-' + pad(data.m) + '-' + pad(data.d) + '）');
+    lines.push(who + '　' + (data.gender === '男' ? '乾造' : '坤造') + '　' + birth + (notes.length ? '　（' + notes.join(' · ') + '）' : ''));
+
+    lines.push('');
+    lines.push('【四柱】');
+    var cols = [['年柱', 'nian'], ['月柱', 'yue'], ['日柱', 'ri'], ['时柱', 'shi']];
+    for (var i = 0; i < cols.length; i++) {
+      var k = cols[i][1];
+      lines.push(_aiPillarLine(cols[i][0], _aiPillar(data, data[k].gan, data[k].zhi, k)));
+    }
+
+    lines.push('');
+    lines.push('【三垣】');
+    var syCols = [['胎年', 'taiNian'], ['胎元', 'tai'], ['命宫', 'ming'], ['身宫', 'shen']];
+    for (var j = 0; j < syCols.length; j++) {
+      var k2 = syCols[j][1];
+      if (data[k2]) lines.push(_aiPillarLine(syCols[j][0], _aiPillar(data, data[k2].gan, data[k2].zhi, k2)));
+    }
+
+    var misc = [];
+    if (data.shengXiao) misc.push('生肖 ' + data.shengXiao);
+    if (data.renYuan) misc.push(data.renYuan);
+    if (misc.length) { lines.push(''); lines.push('【其他】' + misc.join(' · ')); }
+
+    if (data.qiYun) {
+      var qy = data.qiYun;
+      var yangNian = /^[甲丙戊庚壬]$/.test(data.nian.gan);
+      var shunNi = qy.shun === undefined ? '' : ' · ' + (qy.shun ? '顺排' : '逆排');
+      var qyStart = addYMDH(new Date(data.y, data.m - 1, data.d, data.h || 0, data.mi || 0), qy.years, qy.months, qy.days, qy.hours || 0);
+      lines.push('');
+      lines.push('【起运】出生后 ' + qy.years + ' 年 ' + qy.months + ' 月 ' + qy.days + ' 天 ' + (qy.hours || 0) + ' 小时（' + (yangNian ? '阳' : '阴') + '年' + (data.gender || '') + shunNi + '）　交运 ' + qyStart.getFullYear() + '-' + pad(qyStart.getMonth() + 1) + '-' + pad(qyStart.getDate()) + ' ' + pad(qyStart.getHours()) + ':' + pad(qyStart.getMinutes()));
+    }
+
+    if (data.daYun && data.daYun.length) {
+      lines.push('');
+      lines.push('【大运】');
+      for (var di = 0; di < data.daYun.length; di++) {
+        var dy = data.daYun[di];
+        lines.push('  第' + (di + 1) + '步 ' + dy.gan + dy.zhi + '　' + dy.startAge + '-' + (dy.startAge + 9) + ' 岁　' + dy.startYear + '-' + (dy.startYear + 9));
+      }
+      var nowYear = new Date().getFullYear();
+      var curIdx = 0;
+      for (var x = data.daYun.length - 1; x >= 0; x--) {
+        if (data.daYun[x].startYear <= nowYear) { curIdx = x; break; }
+      }
+      var curDy = data.daYun[curIdx];
+      var ln = liuNianJZ(nowYear);
+      lines.push('');
+      lines.push('【当前】' + nowYear + ' 年　现行大运 ' + curDy.gan + curDy.zhi + '（' + curDy.startYear + ' 年起）　流年 ' + ln[0] + ln[1]);
+    } else if (data.daYun) {
+      var ln2 = liuNianJZ(new Date().getFullYear());
+      lines.push('');
+      lines.push('【当前】' + new Date().getFullYear() + ' 年　流年 ' + ln2[0] + ln2[1]);
+    }
+
+    // 宫位标注（仅列已勾选组；标签数组按 GW_INDEX 槽位取词）
+    if (window.GONGWEI && GONGWEI.selectedGongWei && GONGWEI.selectedGongWei.length && GONGWEI.gongWeiGroups) {
+      var POS = [['nian', '年'], ['yue', '月'], ['ri', '日'], ['shi', '时'], ['tai', '胎元'], ['ming', '命宫'], ['shen', '身宫'], ['taiNian', '胎年']];
+      var gwLines = [];
+      for (var g = 0; g < GONGWEI.selectedGongWei.length; g++) {
+        var gname = GONGWEI.selectedGongWei[g];
+        var grp = null;
+        for (var gg = 0; gg < GONGWEI.gongWeiGroups.length; gg++) {
+          if (GONGWEI.gongWeiGroups[gg].name === gname) { grp = GONGWEI.gongWeiGroups[gg]; break; }
+        }
+        if (!grp || !grp.labels) continue;
+        var cells = [];
+        for (var pk = 0; pk < POS.length; pk++) {
+          var word = grp.labels[CONST.GW_INDEX[POS[pk][0]]];
+          if (word) cells.push(POS[pk][1] + '=' + word);
+        }
+        if (cells.length) gwLines.push('  ' + gname + '：' + cells.join('　'));
+      }
+      if (gwLines.length) { lines.push(''); lines.push('【宫位标注】'); lines = lines.concat(gwLines); }
+    }
+
+    return lines.join('\n');
+  }
+
+  // 复制入口：读 window._paipanData（排盘/切卡时已写入），clipboard API 优先、execCommand 兜底
+  function copyChartForAi() {
+    var data = window._paipanData;
+    if (!data || !data.nian || !data.ri) { notifyCopyChart('请先排盘，再复制盘面'); return; }
+    var text = buildAiCopyText(data);
+    if (!text) { notifyCopyChart('盘面数据为空，无法复制'); return; }
+    var ok = function() { notifyCopyChart('盘面已复制，去粘贴给 AI 吧'); };
+    var ng = function() { notifyCopyChart('复制失败，请手动全选复制'); };
+    var legacy = function() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      return done;
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, function() { legacy() ? ok() : ng(); });
+    } else {
+      legacy() ? ok() : ng();
+    }
+  }
+
   // ===== 挂载到全局命名空间 =====
   window.RENDER = {
     toggleLevel: toggleLevel,
@@ -11482,6 +11649,8 @@ function cmpSetState(entries) {
     buildChartDataFromArchive: buildChartDataFromArchive,
     renderExpandedChart: renderExpandedChart,
     renderChartToHtml: renderChartToHtml,
+    buildAiCopyText: buildAiCopyText,
+    copyChartForAi: copyChartForAi,
   };
 
   // ===== v0.41.0 对比页关系高亮：点击柱名/天干/地支 → 上方功能条 → 跨盘标亮，其余变暗 =====
@@ -15359,6 +15528,88 @@ function captureScreenshot() {
     } finally {
       host.remove();
     }
+  })();
+
+  // ============================================================
+  // v0.47.0 一键复制盘面（AI 文本导出）
+  // ============================================================
+  (function() {
+    var sec = 'v0.47 复制盘面';
+    var A47 = window.ALGO;
+
+    // T01: 按钮存在且 onclick 绑定 copyChartForAi（测试 UI 隐藏 .page 但 DOM 仍在）
+    var cbtn = document.getElementById('btnCopyChart');
+    tests.push(eq(sec + ' T01: 复制按钮存在', !!cbtn, true));
+    tests.push(eq(sec + ' T01b: onclick 绑定 copyChartForAi', cbtn ? (cbtn.getAttribute('onclick') || '').indexOf('copyChartForAi') >= 0 : false, true));
+
+    if (!window.RENDER || typeof RENDER.buildAiCopyText !== 'function') {
+      tests.push(fail(sec + ' T02: RENDER.buildAiCopyText 已挂载', '缺失'));
+      return;
+    }
+
+    // T02: 文本生成——已知盘（1982-10-18 05:01 男，首运 1989）
+    var d47 = A47.paipan('复制测试', '男', 1982, 10, 18, 5, 1);
+    d47.displayName = '复制测试';
+    var txt47 = RENDER.buildAiCopyText(d47);
+    tests.push(eq(sec + ' T02a: 文本非空', txt47.length > 0, true));
+    tests.push(eq(sec + ' T02b: 含显示名', txt47.indexOf('复制测试') >= 0, true));
+    tests.push(eq(sec + ' T02c: 含乾造', txt47.indexOf('乾造') >= 0, true));
+    tests.push(eq(sec + ' T02d: 含四柱区与年柱干支', txt47.indexOf('【四柱】') >= 0 && txt47.indexOf(d47.nian.gan + d47.nian.zhi) >= 0, true));
+    tests.push(eq(sec + ' T02e: 含日主标记', txt47.indexOf('日主') >= 0, true));
+    tests.push(eq(sec + ' T02f: 三垣四槽齐全', ['胎年', '胎元', '命宫', '身宫'].every(function(w) { return txt47.indexOf(w) >= 0; }), true));
+    tests.push(eq(sec + ' T02g: 含大运首步干支', txt47.indexOf('【大运】') >= 0 && txt47.indexOf(d47.daYun[0].gan + d47.daYun[0].zhi) >= 0, true));
+    tests.push(eq(sec + ' T02h: 含起运与 2026 丙午流年', txt47.indexOf('起运') >= 0 && txt47.indexOf('丙午') >= 0, true));
+
+    // T03: 隐私——displayName 优先，真名不落文本
+    var d3 = A47.paipan('真名不该出现', '男', 1982, 10, 18, 5, 1);
+    d3.displayName = '某甲';
+    var t3 = RENDER.buildAiCopyText(d3);
+    tests.push(eq(sec + ' T03a: 文本含显示名', t3.indexOf('某甲') >= 0, true));
+    tests.push(eq(sec + ' T03b: 文本不含真名', t3.indexOf('真名不该出现') < 0, true));
+
+    // T04: 未排盘——不抛异常 + 浮 tip 提示（现场还原 _paipanData）
+    var oldPd47 = window._paipanData;
+    try {
+      window._paipanData = null;
+      var threw47 = false;
+      try { RENDER.copyChartForAi(); } catch (e) { threw47 = true; }
+      tests.push(eq(sec + ' T04a: 无数据不抛异常', threw47, false));
+      var tip47 = document.getElementById('copyChartNotify');
+      tests.push(eq(sec + ' T04b: 提示「请先排盘」', tip47 ? tip47.textContent : '', '请先排盘，再复制盘面'));
+    } finally {
+      window._paipanData = oldPd47;
+    }
+
+    // T05: 宫位标注段——临时组+选中（内存态，不触碰 localStorage；finally 自恢复）
+    if (!window.GONGWEI || !GONGWEI.gongWeiGroups || !GONGWEI.selectedGongWei) {
+      tests.push(fail(sec + ' T05: GONGWEI 已挂载', '缺失'));
+      return;
+    }
+    var gwLabels47 = [];
+    for (var gi = 0; gi < 8; gi++) gwLabels47.push('');
+    gwLabels47[CONST.GW_INDEX.nian] = '印星';
+    gwLabels47[CONST.GW_INDEX.shi] = '食伤';
+    GONGWEI.gongWeiGroups.push({ name: '复制测试组', labels: gwLabels47 });
+    GONGWEI.selectedGongWei.push('复制测试组');
+    try {
+      var t5 = RENDER.buildAiCopyText(d47);
+      tests.push(eq(sec + ' T05a: 含宫位标注区与组名', t5.indexOf('【宫位标注】') >= 0 && t5.indexOf('复制测试组') >= 0, true));
+      tests.push(eq(sec + ' T05b: 槽位取词正确', t5.indexOf('年=印星') >= 0 && t5.indexOf('时=食伤') >= 0, true));
+    } finally {
+      var tmpIdx = -1;
+      for (var gr = 0; gr < GONGWEI.gongWeiGroups.length; gr++) {
+        if (GONGWEI.gongWeiGroups[gr].name === '复制测试组') { tmpIdx = gr; break; }
+      }
+      if (tmpIdx >= 0) GONGWEI.gongWeiGroups.splice(tmpIdx, 1);
+      var selIdx = GONGWEI.selectedGongWei.indexOf('复制测试组');
+      if (selIdx >= 0) GONGWEI.selectedGongWei.splice(selIdx, 1);
+    }
+    tests.push(eq(sec + ' T05c: 现场已还原', GONGWEI.selectedGongWei.indexOf('复制测试组') < 0 && (function() {
+      for (var r = 0; r < GONGWEI.gongWeiGroups.length; r++) {
+        if (GONGWEI.gongWeiGroups[r].name === '复制测试组') return false;
+      }
+      return true;
+    })(), true));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

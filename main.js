@@ -3526,6 +3526,88 @@ function captureScreenshot() {
     }
   })();
 
+  // ============================================================
+  // v0.47.0 一键复制盘面（AI 文本导出）
+  // ============================================================
+  (function() {
+    var sec = 'v0.47 复制盘面';
+    var A47 = window.ALGO;
+
+    // T01: 按钮存在且 onclick 绑定 copyChartForAi（测试 UI 隐藏 .page 但 DOM 仍在）
+    var cbtn = document.getElementById('btnCopyChart');
+    tests.push(eq(sec + ' T01: 复制按钮存在', !!cbtn, true));
+    tests.push(eq(sec + ' T01b: onclick 绑定 copyChartForAi', cbtn ? (cbtn.getAttribute('onclick') || '').indexOf('copyChartForAi') >= 0 : false, true));
+
+    if (!window.RENDER || typeof RENDER.buildAiCopyText !== 'function') {
+      tests.push(fail(sec + ' T02: RENDER.buildAiCopyText 已挂载', '缺失'));
+      return;
+    }
+
+    // T02: 文本生成——已知盘（1982-10-18 05:01 男，首运 1989）
+    var d47 = A47.paipan('复制测试', '男', 1982, 10, 18, 5, 1);
+    d47.displayName = '复制测试';
+    var txt47 = RENDER.buildAiCopyText(d47);
+    tests.push(eq(sec + ' T02a: 文本非空', txt47.length > 0, true));
+    tests.push(eq(sec + ' T02b: 含显示名', txt47.indexOf('复制测试') >= 0, true));
+    tests.push(eq(sec + ' T02c: 含乾造', txt47.indexOf('乾造') >= 0, true));
+    tests.push(eq(sec + ' T02d: 含四柱区与年柱干支', txt47.indexOf('【四柱】') >= 0 && txt47.indexOf(d47.nian.gan + d47.nian.zhi) >= 0, true));
+    tests.push(eq(sec + ' T02e: 含日主标记', txt47.indexOf('日主') >= 0, true));
+    tests.push(eq(sec + ' T02f: 三垣四槽齐全', ['胎年', '胎元', '命宫', '身宫'].every(function(w) { return txt47.indexOf(w) >= 0; }), true));
+    tests.push(eq(sec + ' T02g: 含大运首步干支', txt47.indexOf('【大运】') >= 0 && txt47.indexOf(d47.daYun[0].gan + d47.daYun[0].zhi) >= 0, true));
+    tests.push(eq(sec + ' T02h: 含起运与 2026 丙午流年', txt47.indexOf('起运') >= 0 && txt47.indexOf('丙午') >= 0, true));
+
+    // T03: 隐私——displayName 优先，真名不落文本
+    var d3 = A47.paipan('真名不该出现', '男', 1982, 10, 18, 5, 1);
+    d3.displayName = '某甲';
+    var t3 = RENDER.buildAiCopyText(d3);
+    tests.push(eq(sec + ' T03a: 文本含显示名', t3.indexOf('某甲') >= 0, true));
+    tests.push(eq(sec + ' T03b: 文本不含真名', t3.indexOf('真名不该出现') < 0, true));
+
+    // T04: 未排盘——不抛异常 + 浮 tip 提示（现场还原 _paipanData）
+    var oldPd47 = window._paipanData;
+    try {
+      window._paipanData = null;
+      var threw47 = false;
+      try { RENDER.copyChartForAi(); } catch (e) { threw47 = true; }
+      tests.push(eq(sec + ' T04a: 无数据不抛异常', threw47, false));
+      var tip47 = document.getElementById('copyChartNotify');
+      tests.push(eq(sec + ' T04b: 提示「请先排盘」', tip47 ? tip47.textContent : '', '请先排盘，再复制盘面'));
+    } finally {
+      window._paipanData = oldPd47;
+    }
+
+    // T05: 宫位标注段——临时组+选中（内存态，不触碰 localStorage；finally 自恢复）
+    if (!window.GONGWEI || !GONGWEI.gongWeiGroups || !GONGWEI.selectedGongWei) {
+      tests.push(fail(sec + ' T05: GONGWEI 已挂载', '缺失'));
+      return;
+    }
+    var gwLabels47 = [];
+    for (var gi = 0; gi < 8; gi++) gwLabels47.push('');
+    gwLabels47[CONST.GW_INDEX.nian] = '印星';
+    gwLabels47[CONST.GW_INDEX.shi] = '食伤';
+    GONGWEI.gongWeiGroups.push({ name: '复制测试组', labels: gwLabels47 });
+    GONGWEI.selectedGongWei.push('复制测试组');
+    try {
+      var t5 = RENDER.buildAiCopyText(d47);
+      tests.push(eq(sec + ' T05a: 含宫位标注区与组名', t5.indexOf('【宫位标注】') >= 0 && t5.indexOf('复制测试组') >= 0, true));
+      tests.push(eq(sec + ' T05b: 槽位取词正确', t5.indexOf('年=印星') >= 0 && t5.indexOf('时=食伤') >= 0, true));
+    } finally {
+      var tmpIdx = -1;
+      for (var gr = 0; gr < GONGWEI.gongWeiGroups.length; gr++) {
+        if (GONGWEI.gongWeiGroups[gr].name === '复制测试组') { tmpIdx = gr; break; }
+      }
+      if (tmpIdx >= 0) GONGWEI.gongWeiGroups.splice(tmpIdx, 1);
+      var selIdx = GONGWEI.selectedGongWei.indexOf('复制测试组');
+      if (selIdx >= 0) GONGWEI.selectedGongWei.splice(selIdx, 1);
+    }
+    tests.push(eq(sec + ' T05c: 现场已还原', GONGWEI.selectedGongWei.indexOf('复制测试组') < 0 && (function() {
+      for (var r = 0; r < GONGWEI.gongWeiGroups.length; r++) {
+        if (GONGWEI.gongWeiGroups[r].name === '复制测试组') return false;
+      }
+      return true;
+    })(), true));
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.46.0 | 2026-10-09 -->
+<!-- 八字排盘 ·  从真版 v0.47.0 | 2026-10-11 -->
+<!-- v0.47.0: 一键复制盘面 — 工具栏新增「📋 复制盘面」按钮，把当前盘面生成 AI 友好纯文本（基本信息/四柱十神藏干纳音星曜空亡神煞/三垣/起运交运/十步大运/当前大运流年/已勾选宫位标注）写入剪贴板，粘贴即与 AI 对盘；隐私口径与截图一致只出 displayName；clipboard API 优先 execCommand 兜底，浮 tip 反馈 -->
 <!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
 <!-- v0.43.6: 农历档案「排盘」无反应修复 — setFormData 切历法改走 APP.toggleCalendar：旧版经 ALGO.toggleCalendar（其内部引用未定义的 calendarType）→ ReferenceError 中断回填，农历档案（农历1979年八月廿五案例）点「排盘」无任何反应；algorithm.js 删除该重复死函数；v0.34 回归段补农历断言 T05/T06 -->
@@ -959,6 +960,7 @@
       </span>
       <button class="btn" onclick="APP.doPaipan()">排 盘</button>
       <button class="btn btn-privacy" id="btnScreenshot" onclick="APP.captureScreenshot()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📷 截图</button>
+      <button class="btn btn-privacy" id="btnCopyChart" onclick="RENDER.copyChartForAi()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 复制盘面</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
       <button class="btn btn-privacy" id="btnPrivacy" onclick="ARCHIVE.togglePrivacy()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button>
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>

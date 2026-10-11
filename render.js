@@ -1,4 +1,4 @@
-/* 八字排盘 v0.43.2 — render.js */
+/* 八字排盘 v0.47.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -2803,6 +2803,171 @@ function cmpSetState(entries) {
   renderCmpTrack();
 }
 
+  // ============================================================
+  // v0.47.0 一键复制盘面（纯文本导出，粘贴给 AI 用）
+  // ============================================================
+
+  // 浮 tip：锚定复制按钮，复用 screenshot-notify 样式（2.5 秒自毁，拒绝 alert）
+  function notifyCopyChart(msg) {
+    var old = document.getElementById('copyChartNotify');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var btn = document.getElementById('btnCopyChart');
+    if (!btn || !btn.parentNode) return;
+    var div = document.createElement('div');
+    div.id = 'copyChartNotify';
+    div.className = 'screenshot-notify';
+    div.textContent = msg;
+    div.style.left = (btn.offsetLeft + btn.offsetWidth / 2) + 'px';
+    div.style.top = (btn.offsetTop + btn.offsetHeight + 6) + 'px';
+    div.style.transform = 'translateX(-50%)';
+    btn.parentNode.appendChild(div);
+    setTimeout(function() {
+      if (div.parentNode) div.parentNode.removeChild(div);
+    }, 2500);
+  }
+
+  // 柱解析：与 renderChart 内 pillar() 同口径（十神/藏干/纳音/星曜/自坐/空亡/神煞）
+  function _aiPillar(data, gan, zhi, type) {
+    var riGan = data.ri.gan, riZhi = data.ri.zhi;
+    return {
+      gan: gan, zhi: zhi,
+      rs: (type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      cg: cangGanText(zhi, riGan, 1, type),
+      ny: NAYIN[gan + zhi] || '',
+      xy: changSheng(riGan, zhi),
+      zz: changSheng(gan, zhi),
+      kw: kongWang(gan, zhi),
+      sh: (gan + zhi === riGan + riZhi) ? shenSha(riGan, riZhi, data.nian.zhi, data.yue.zhi) : ''
+    };
+  }
+
+  function _aiPillarLine(label, p) {
+    var parts = [label + ' ' + p.gan + p.zhi, '十神 ' + (p.rs || '—')];
+    if (p.cg) parts.push('藏干 ' + p.cg);
+    if (p.ny) parts.push('纳音 ' + p.ny);
+    if (p.xy) parts.push('星曜 ' + p.xy);
+    if (p.zz) parts.push('自坐 ' + p.zz);
+    if (p.kw) parts.push('空亡 ' + p.kw);
+    if (p.sh) parts.push('神煞 ' + p.sh);
+    return '  ' + parts.join(' · ');
+  }
+
+  // 生成 AI 友好的盘面纯文本（隐私口径与截图一致：只出 displayName，不读真名）
+  function buildAiCopyText(data) {
+    if (!data || !data.nian || !data.ri) return '';
+    var lines = [];
+    lines.push('【八字盘面】');
+    var who = data.displayName || data.name || '未命名';
+    var birth = '公历 ' + data.y + '-' + pad(data.m) + '-' + pad(data.d) + ' ' + pad(data.h) + ':' + pad(data.mi);
+    var notes = [];
+    if (data.trueSolar) notes.push('真太阳时' + ((typeof data.lng === 'number' && isFinite(data.lng)) ? '（经度 ' + data.lng + '°）' : ''));
+    if (data.julian) notes.push('输入为儒略历 ' + data.julian.fromY + '-' + pad(data.julian.fromM) + '-' + pad(data.julian.fromD) + '（折算格里历 ' + data.y + '-' + pad(data.m) + '-' + pad(data.d) + '）');
+    lines.push(who + '　' + (data.gender === '男' ? '乾造' : '坤造') + '　' + birth + (notes.length ? '　（' + notes.join(' · ') + '）' : ''));
+
+    lines.push('');
+    lines.push('【四柱】');
+    var cols = [['年柱', 'nian'], ['月柱', 'yue'], ['日柱', 'ri'], ['时柱', 'shi']];
+    for (var i = 0; i < cols.length; i++) {
+      var k = cols[i][1];
+      lines.push(_aiPillarLine(cols[i][0], _aiPillar(data, data[k].gan, data[k].zhi, k)));
+    }
+
+    lines.push('');
+    lines.push('【三垣】');
+    var syCols = [['胎年', 'taiNian'], ['胎元', 'tai'], ['命宫', 'ming'], ['身宫', 'shen']];
+    for (var j = 0; j < syCols.length; j++) {
+      var k2 = syCols[j][1];
+      if (data[k2]) lines.push(_aiPillarLine(syCols[j][0], _aiPillar(data, data[k2].gan, data[k2].zhi, k2)));
+    }
+
+    var misc = [];
+    if (data.shengXiao) misc.push('生肖 ' + data.shengXiao);
+    if (data.renYuan) misc.push(data.renYuan);
+    if (misc.length) { lines.push(''); lines.push('【其他】' + misc.join(' · ')); }
+
+    if (data.qiYun) {
+      var qy = data.qiYun;
+      var yangNian = /^[甲丙戊庚壬]$/.test(data.nian.gan);
+      var shunNi = qy.shun === undefined ? '' : ' · ' + (qy.shun ? '顺排' : '逆排');
+      var qyStart = addYMDH(new Date(data.y, data.m - 1, data.d, data.h || 0, data.mi || 0), qy.years, qy.months, qy.days, qy.hours || 0);
+      lines.push('');
+      lines.push('【起运】出生后 ' + qy.years + ' 年 ' + qy.months + ' 月 ' + qy.days + ' 天 ' + (qy.hours || 0) + ' 小时（' + (yangNian ? '阳' : '阴') + '年' + (data.gender || '') + shunNi + '）　交运 ' + qyStart.getFullYear() + '-' + pad(qyStart.getMonth() + 1) + '-' + pad(qyStart.getDate()) + ' ' + pad(qyStart.getHours()) + ':' + pad(qyStart.getMinutes()));
+    }
+
+    if (data.daYun && data.daYun.length) {
+      lines.push('');
+      lines.push('【大运】');
+      for (var di = 0; di < data.daYun.length; di++) {
+        var dy = data.daYun[di];
+        lines.push('  第' + (di + 1) + '步 ' + dy.gan + dy.zhi + '　' + dy.startAge + '-' + (dy.startAge + 9) + ' 岁　' + dy.startYear + '-' + (dy.startYear + 9));
+      }
+      var nowYear = new Date().getFullYear();
+      var curIdx = 0;
+      for (var x = data.daYun.length - 1; x >= 0; x--) {
+        if (data.daYun[x].startYear <= nowYear) { curIdx = x; break; }
+      }
+      var curDy = data.daYun[curIdx];
+      var ln = liuNianJZ(nowYear);
+      lines.push('');
+      lines.push('【当前】' + nowYear + ' 年　现行大运 ' + curDy.gan + curDy.zhi + '（' + curDy.startYear + ' 年起）　流年 ' + ln[0] + ln[1]);
+    } else if (data.daYun) {
+      var ln2 = liuNianJZ(new Date().getFullYear());
+      lines.push('');
+      lines.push('【当前】' + new Date().getFullYear() + ' 年　流年 ' + ln2[0] + ln2[1]);
+    }
+
+    // 宫位标注（仅列已勾选组；标签数组按 GW_INDEX 槽位取词）
+    if (window.GONGWEI && GONGWEI.selectedGongWei && GONGWEI.selectedGongWei.length && GONGWEI.gongWeiGroups) {
+      var POS = [['nian', '年'], ['yue', '月'], ['ri', '日'], ['shi', '时'], ['tai', '胎元'], ['ming', '命宫'], ['shen', '身宫'], ['taiNian', '胎年']];
+      var gwLines = [];
+      for (var g = 0; g < GONGWEI.selectedGongWei.length; g++) {
+        var gname = GONGWEI.selectedGongWei[g];
+        var grp = null;
+        for (var gg = 0; gg < GONGWEI.gongWeiGroups.length; gg++) {
+          if (GONGWEI.gongWeiGroups[gg].name === gname) { grp = GONGWEI.gongWeiGroups[gg]; break; }
+        }
+        if (!grp || !grp.labels) continue;
+        var cells = [];
+        for (var pk = 0; pk < POS.length; pk++) {
+          var word = grp.labels[CONST.GW_INDEX[POS[pk][0]]];
+          if (word) cells.push(POS[pk][1] + '=' + word);
+        }
+        if (cells.length) gwLines.push('  ' + gname + '：' + cells.join('　'));
+      }
+      if (gwLines.length) { lines.push(''); lines.push('【宫位标注】'); lines = lines.concat(gwLines); }
+    }
+
+    return lines.join('\n');
+  }
+
+  // 复制入口：读 window._paipanData（排盘/切卡时已写入），clipboard API 优先、execCommand 兜底
+  function copyChartForAi() {
+    var data = window._paipanData;
+    if (!data || !data.nian || !data.ri) { notifyCopyChart('请先排盘，再复制盘面'); return; }
+    var text = buildAiCopyText(data);
+    if (!text) { notifyCopyChart('盘面数据为空，无法复制'); return; }
+    var ok = function() { notifyCopyChart('盘面已复制，去粘贴给 AI 吧'); };
+    var ng = function() { notifyCopyChart('复制失败，请手动全选复制'); };
+    var legacy = function() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      return done;
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, function() { legacy() ? ok() : ng(); });
+    } else {
+      legacy() ? ok() : ng();
+    }
+  }
+
   // ===== 挂载到全局命名空间 =====
   window.RENDER = {
     toggleLevel: toggleLevel,
@@ -2845,6 +3010,8 @@ function cmpSetState(entries) {
     buildChartDataFromArchive: buildChartDataFromArchive,
     renderExpandedChart: renderExpandedChart,
     renderChartToHtml: renderChartToHtml,
+    buildAiCopyText: buildAiCopyText,
+    copyChartForAi: copyChartForAi,
   };
 
   // ===== v0.41.0 对比页关系高亮：点击柱名/天干/地支 → 上方功能条 → 跨盘标亮，其余变暗 =====
