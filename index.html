@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.47.0 | 2026-10-11 -->
+<!-- 八字排盘 ·  从真版 v0.48.0 | 2026-10-15 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
+
 <!-- v0.47.0: 一键复制盘面 — 工具栏新增「📋 复制盘面」按钮，把当前盘面生成 AI 友好纯文本（基本信息/四柱十神藏干纳音星曜空亡神煞/三垣/起运交运/十步大运/当前大运流年/已勾选宫位标注）写入剪贴板，粘贴即与 AI 对盘；隐私口径与截图一致只出 displayName；clipboard API 优先 execCommand 兜底，浮 tip 反馈 -->
 <!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
 <!-- v0.43.8: 分析记录区增高 — 上下内边距 10px→18px、最小高 320→360px；textarea 随内容自动增高（recAutogrow：装载与输入时 height=scrollHeight，resize/overflow 改 none/hidden），清空回落 -->
@@ -816,6 +817,15 @@
   .cmp-card.sec-yunxiang-off table.chart { min-width:0; }
   .cmp-card.sec-yunxiang-off .luck-section { contain: inline-size; }
   .cmp-card.sec-yunxiang-off .col-dy, .cmp-card.sec-yunxiang-off .col-ln { display:none !important; }
+  /* v0.48.0 双胞胎卡区显隐（同步对比卡勾选；运流项=时柱右侧大运/流年列） */
+  .twin-secbar { display:inline-flex; align-items:center; gap:10px; font-size:12.5px; color:var(--c-gray); flex-wrap:wrap; }
+  .twin-secbar label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap; }
+  .bz-twin-card.sec-yunxiang-off { min-width:0 !important; }
+  .bz-twin-card.sec-yunxiang-off .col-dy, .bz-twin-card.sec-yunxiang-off .col-ln { display:none !important; }
+  .bz-twin-card.sec-cangqi-off tr[data-sec~="cangqi"] { display:none !important; }
+  .bz-twin-card.sec-sanyuan-off .bz-sanyuan-area { display:none !important; }
+  .bz-twin-shared.sec-yunliu-off .luck-section { display:none !important; }
+  .bz-twin-shared.sec-jieqi-off .jieqi-section { display:none !important; }
   .flow-date-picker { display:inline-flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; max-width:100%; }
   .flow-date-picker label { display:inline-flex; align-items:center; gap:5px; }
   .flow-date-picker input, .flow-date-picker button { font:inherit; color:inherit; border:1px solid var(--c-border); border-radius:4px; background:transparent; padding:3px 5px; }
@@ -833,6 +843,7 @@
   .flow-date { display:inline-block; min-width:32px; margin-right:4px; font-size:13px; color:var(--c-gray); font-family:var(--font-body); }
   .flow-day-label { margin-top:12px; }
   .flow-note { padding-top:6px; font-size:12px; color:var(--c-gray); }
+  .luck-col.luck-rec-below .flow-table-wrap { contain: inline-size; }
   .chart .col-lm, .chart .col-ld { min-width:52px; }
   .top-bar:has([data-flow]), .top-bar > div:has([data-flow]) { flex-wrap:wrap; gap:8px; }
   @media (max-width:900px) { .body-cols:has(.flow-panel) > .main-col, .body-cols:has(.flow-panel) .luck-col { width:100%; max-width:100%; min-width:0; } }
@@ -8999,6 +9010,40 @@ function setSecVisible(k, v) {
   applyCmpSecs();
 }
 
+// ===== v0.48.0 双胞胎卡区显隐（同步对比卡勾选；状态独立于 _cmpSecs，默认全显示） =====
+// 运流项=时柱右侧大运/流年列；运流区/节气区作用于 .bz-twin-shared（luck-section/jieqi-section 在卡外）
+var _twinSecs = { yunxiang: true, cangqi: true, sanyuan: true, yunliu: true, jieqi: true };
+
+function twinSecControlsHTML() {
+  var defs = [['yunxiang', '运流项'], ['cangqi', '藏气区'], ['sanyuan', '三垣区'], ['yunliu', '运流区'], ['jieqi', '节气区']];
+  var html = '<span class="twin-secbar" id="twinSecBar" title="双胞胎卡区显示（与排盘对比勾选一致）">';
+  for (var i = 0; i < defs.length; i++) {
+    var k = defs[i][0];
+    html += '<label><input type="checkbox" data-tsec="' + k + '"' + (_twinSecs[k] ? ' checked' : '')
+      + ' onchange="RENDER.setTwinSecVisible(\'' + k + '\',this.checked)">' + defs[i][1] + '</label>';
+  }
+  return html + '</span>';
+}
+
+function applyTwinSecs() {
+  document.querySelectorAll('.bz-twin-card').forEach(function(card) {
+    SEC_KEYS.forEach(function(k) { card.classList.toggle('sec-' + k + '-off', !_twinSecs[k]); });
+  });
+  document.querySelectorAll('.bz-twin-shared').forEach(function(sh) {
+    sh.classList.toggle('sec-yunliu-off', !_twinSecs.yunliu);
+    sh.classList.toggle('sec-jieqi-off', !_twinSecs.jieqi);
+  });
+  document.querySelectorAll('#twinSecBar input[data-tsec]').forEach(function(cb) {
+    cb.checked = !!_twinSecs[cb.getAttribute('data-tsec')];
+  });
+}
+
+function setTwinSecVisible(k, v) {
+  if (!(k in _twinSecs)) return;
+  _twinSecs[k] = !!v;
+  applyTwinSecs();
+}
+
 // ============ v0.29.0 星曜行渲染（index-independent 插入，勿改既有 magic index） ============
 // 星曜行恒在 DOM；L0/L1 由 CSS 隐藏，L2 起显示（累积展开）。单元格带 data-xy-gz 供值级刷新。
 function _xyEscText(s) {
@@ -9112,7 +9157,7 @@ function buildPillarRows(p, options) {
     cols.map(function(k){return td(dm(k+'.zhi', p[k].wz), p[k].zhi);}).join('') + '</tr>');
   // 藏干三层
   ['本气','中气','余气'].forEach(function(lv, li) {
-    main.push('<tr class="rh">' + rl(lv) +
+    main.push('<tr class="rh" data-sec="cangqi">' + rl(lv) +
       cols.map(function(k){return td(dm(k+'.cg.'+li), fmtCGLayer((p[k].ly||[])[li]));}).join('') + '</tr>');
   });
   // 纳音
@@ -10240,7 +10285,7 @@ function buildCardHTML(data, options) {
   if (includeLuckCols && curDaYun && curLiuNian) {
     var pDy = pillar(curDaYun.gan, curDaYun.zhi, 'dayun');
     var pLn = pillar(curLiuNian.gan, curLiuNian.zhi, 'liunian');
-    hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep">大运</th><th class="col-ln">流年</th></tr>';
+    hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep col-dy">大运</th><th class="col-ln">流年</th></tr>';
     // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
     // 主星(0)
     rows.main[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
@@ -10249,11 +10294,11 @@ function buildCardHTML(data, options) {
     // 地支(2)
     rows.main[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(dm('nian.zhi',p.nian.wz),p.nian.zhi)+td(dm('yue.zhi',p.yue.wz),p.yue.zhi)+td(dm('ri.zhi',p.ri.wz),p.ri.zhi)+td(dm('shi.zhi',p.shi.wz),p.shi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
     // 本气(3)
-    rows.main[3] = '<tr class="rh" data-row-type="ln2">'+rl('本气')+td(dm('nian.cg.0'),fmtCGLayer((p.nian.ly||[])[0]))+td(dm('yue.cg.0'),fmtCGLayer((p.yue.ly||[])[0]))+td(dm('ri.cg.0'),fmtCGLayer((p.ri.ly||[])[0]))+td(dm('shi.cg.0'),fmtCGLayer((p.shi.ly||[])[0]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[0]))+td('col-ln',fmtCGLayer((pLn.ly||[])[0]))+'</tr>';
+    rows.main[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('本气')+td(dm('nian.cg.0'),fmtCGLayer((p.nian.ly||[])[0]))+td(dm('yue.cg.0'),fmtCGLayer((p.yue.ly||[])[0]))+td(dm('ri.cg.0'),fmtCGLayer((p.ri.ly||[])[0]))+td(dm('shi.cg.0'),fmtCGLayer((p.shi.ly||[])[0]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[0]))+td('col-ln',fmtCGLayer((pLn.ly||[])[0]))+'</tr>';
     // 中气(4)
-    rows.main[4] = '<tr class="rh" data-row-type="dy3">'+rl('中气')+td(dm('nian.cg.1'),fmtCGLayer((p.nian.ly||[])[1]))+td(dm('yue.cg.1'),fmtCGLayer((p.yue.ly||[])[1]))+td(dm('ri.cg.1'),fmtCGLayer((p.ri.ly||[])[1]))+td(dm('shi.cg.1'),fmtCGLayer((p.shi.ly||[])[1]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[1]))+td('col-ln',fmtCGLayer((pLn.ly||[])[1]))+'</tr>';
+    rows.main[4] = '<tr class="rh" data-sec="cangqi" data-row-type="dy3">'+rl('中气')+td(dm('nian.cg.1'),fmtCGLayer((p.nian.ly||[])[1]))+td(dm('yue.cg.1'),fmtCGLayer((p.yue.ly||[])[1]))+td(dm('ri.cg.1'),fmtCGLayer((p.ri.ly||[])[1]))+td(dm('shi.cg.1'),fmtCGLayer((p.shi.ly||[])[1]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[1]))+td('col-ln',fmtCGLayer((pLn.ly||[])[1]))+'</tr>';
     // 余气(5)
-    rows.main[5] = '<tr class="rh" data-row-type="ln3">'+rl('余气')+td(dm('nian.cg.2'),fmtCGLayer((p.nian.ly||[])[2]))+td(dm('yue.cg.2'),fmtCGLayer((p.yue.ly||[])[2]))+td(dm('ri.cg.2'),fmtCGLayer((p.ri.ly||[])[2]))+td(dm('shi.cg.2'),fmtCGLayer((p.shi.ly||[])[2]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[2]))+td('col-ln',fmtCGLayer((pLn.ly||[])[2]))+'</tr>';
+    rows.main[5] = '<tr class="rh" data-sec="cangqi" data-row-type="ln3">'+rl('余气')+td(dm('nian.cg.2'),fmtCGLayer((p.nian.ly||[])[2]))+td(dm('yue.cg.2'),fmtCGLayer((p.yue.ly||[])[2]))+td(dm('ri.cg.2'),fmtCGLayer((p.ri.ly||[])[2]))+td(dm('shi.cg.2'),fmtCGLayer((p.shi.ly||[])[2]))+td('sep col-dy',fmtCGLayer((pDy.ly||[])[2]))+td('col-ln',fmtCGLayer((pLn.ly||[])[2]))+'</tr>';
     // 纳音(6)
     rows.main[6] = '<tr class="rn" data-row-type="nayin dy4">'+rl('纳音')+td(dm('nian.ny'),p.nian.ny)+td(dm('yue.ny'),p.yue.ny)+td(dm('ri.ny'),p.ri.ny)+td(dm('shi.ny'),p.shi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
     // 纳运(7) ← v0.17.0 从自坐下移至纳音下
@@ -10416,10 +10461,14 @@ function renderTwinCardsHtml(data, targetId) {
   var p2 = { nian: pillar(nian.gan, nian.zhi, 2, 'nian'), yue: pillar(data.yue.gan, data.yue.zhi, 2, 'yue'), ri: pillar(data.ri.gan, data.ri.zhi, 2, 'ri'), shi: pillar(data.shi.gan, data.shi.zhi, 2, 'shi'), tai: pillar(data.tai.gan, data.tai.zhi, 2, 'tai'), ming: pillar(data.ming.gan, data.ming.zhi, 2, 'ming'), shen: pillar(data.shen.gan, data.shen.zhi, 2, 'shen') };
   var diffMap = buildDiffMap(p1, p2);
 
-  // 使用共享 builder 生成卡片（不再扩展大运/流年列）
+  // 使用共享 builder 生成卡片（v0.48.0 时柱后加大运/流年列，勾选控制显隐）
+  var _curDy = null;
+  for (var _cdi = daYun.length - 1; _cdi >= 0; _cdi--) { if (daYun[_cdi].startYear <= nowYear) { _curDy = daYun[_cdi]; break; } }
+  var _curLn = liuNianJZ(nowYear);
+  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] } } : {};
   var meta1 = (gender==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan);
-  var card1 = buildCardHTML(data, { twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
-  var card2 = buildCardHTML(data, { twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 });
+  var card1 = buildCardHTML(data, Object.assign({ twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 }, _luckOpts));
+  var card2 = buildCardHTML(data, Object.assign({ twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 }, _luckOpts));
   var joy = qiYun ? qiYun.years : 0, jom = qiYun ? qiYun.months : 0, jod = qiYun ? qiYun.days : 0;
   // 运前年数按交运年算（与 daYun[0].startYear 同源；起运不足一年时为 0）
   var preYears = daYun.length > 0 ? Math.max(0, daYun[0].startYear - data.y) : 0;
@@ -10463,7 +10512,7 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
 
@@ -10480,6 +10529,7 @@ function renderTwinCardsHtml(data, targetId) {
 
   // 给每张卡片绑定数据，供点击流年时更新大运/流年列
   container.querySelectorAll('.bz-twin-card').forEach(function(c) { c._cardData = data; });
+  applyTwinSecs();
   bindEvents(data, container);
 }
 
@@ -10506,9 +10556,15 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
 
   // 老大/老二卡片（不再带内嵌大运表，恢复标准5列四柱表）
   var meta1 = (g1==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d1.qiYun ? d1.qiYun.shun : true, d1.gender, d1.nian.gan);
-  var card1 = buildCardHTML(d1, { twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, meta: meta1 });
+  // v0.48.0 时柱后加大运/流年列（勾选控制显隐）；出生时间相同，大运取 d1
+  var _curDy = null;
+  var _lfDy = d1.daYun || [];
+  for (var _cdi = _lfDy.length - 1; _cdi >= 0; _cdi--) { if (_lfDy[_cdi].startYear <= nowYear) { _curDy = _lfDy[_cdi]; break; } }
+  var _curLn = liuNianJZ(nowYear);
+  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] } } : {};
+  var card1 = buildCardHTML(d1, Object.assign({ twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, meta: meta1 }, _luckOpts));
   var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun ? d2.qiYun.shun : true, d2.gender, d2.nian.gan);
-  var card2 = buildCardHTML(d2, { twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, meta: meta2 });
+  var card2 = buildCardHTML(d2, Object.assign({ twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, meta: meta2 }, _luckOpts));
 
   var tstTag = '', ryTag = '';
   if (d1.trueSolar) { tstTag = '<span class="meta-tag true-solar">☀ 真太阳时 '+pad(d1.trueSolar.h)+':'+pad(d1.trueSolar.mi)+' ('+(d1.trueSolar.offsetMin>=0?'+':'')+Math.round(d1.trueSolar.offsetMin)+'分)</span>'; }
@@ -10577,7 +10633,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
 
@@ -10597,6 +10653,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   container._paipanData = d1;
   container._jieqiYear = d1.y; // v0.26.0 v2: 龙凤胎默认老大出生年（D6/D8）
   container._jieqiLng = d1.lng; // v0.27.0 D5: 龙凤胎经度（老大同址）
+  applyTwinSecs();
   bindEvents(d1, container);
 }
 
@@ -11613,6 +11670,8 @@ function cmpSetState(entries) {
     setLevelPreset: setLevelPreset,
     setRowVisible: setRowVisible,
     setSecVisible: setSecVisible,
+    setTwinSecVisible: setTwinSecVisible,
+    applyTwinSecs: applyTwinSecs,
     setFlowVisible: setFlowVisible,
     flowMonths: flowMonths,
     flowControlsHTML: flowControlsHTML,
@@ -15326,6 +15385,144 @@ function captureScreenshot() {
         var tR = document.getElementById('tst-rec'); if (tR && tR.parentNode) tR.parentNode.removeChild(tR);
       } catch (e) {}
       tests.push(eq('REC 现场还原: bz_rec_mode/草稿清空', (function() { var m = localStorage.getItem('bz_rec_mode'); return m === savedMode && (keyR === null || localStorage.getItem(keyR) === savedNotes); })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
+  (function() {
+    tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.toggleRecMode !== 'function' || typeof R.setFlowVisible !== 'function') {
+      tests.push(fail('RECFL 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var savedMode2 = null, oldPd2 = null;
+    try {
+      savedMode2 = localStorage.getItem('bz_rec_mode');
+      var pdF = paipan('版面回归', '男', 1986, 8, 15, 10, 30);
+      oldPd2 = window._paipanData;
+      window._paipanData = pdF;
+      var tstF = document.createElement('div');
+      tstF.id = 'tst-recflow';
+      document.body.appendChild(tstF);
+      localStorage.removeItem('bz_rec_mode');
+      R.renderChart(pdF, undefined, 'tst-recflow');
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      tests.push(eq('RECFL 前置: 开记录前容器无超宽内容', tstF.scrollWidth <= window.innerWidth + 1, true));
+      R.toggleRecMode(true, tstF);
+      tests.push(eq('RECFL F01: 开记录后容器无超宽内容（v0.47.0 曾爆 50 万px）', tstF.scrollWidth <= window.innerWidth + 1, true));
+      var recF = tstF.querySelector('.record-panel');
+      var recRect = recF.getBoundingClientRect();
+      var tstRect = tstF.getBoundingClientRect();
+      tests.push(eq('RECFL F01: 记录面板落在容器宽度内', recRect.width > 0 && recRect.left >= tstRect.left - 1 && recRect.right <= tstRect.right + 1, true));
+      var luckF = tstF.querySelector('.luck-col');
+      tests.push(eq('RECFL F01: 运流区在 main-col 左下', !!luckF && luckF.parentElement === tstF.querySelector('.main-col') && luckF.classList.contains('luck-rec-below'), true));
+      tests.push(eq('RECFL F01: 流月面板仍在运流区内', !!(luckF && luckF.querySelector('.flow-panel:not([hidden])')), true));
+      tests.push(eq('RECFL F01: contain 兜底生效', (getComputedStyle(luckF.querySelector('.flow-table-wrap')).contain || '').indexOf('inline-size') >= 0, true));
+      R.toggleRecMode(false, tstF);
+      R.setFlowVisible('month', false);
+      R.toggleRecMode(true, tstF);
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      tests.push(eq('RECFL F02: 先记录后开流月同样无超宽内容', tstF.scrollWidth <= window.innerWidth + 1, true));
+    } finally {
+      try {
+        R.setFlowVisible('month', false);
+        R.toggleRecMode(false, tstF);
+        if (savedMode2 === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode2);
+        window._paipanData = oldPd2;
+        var tf = document.getElementById('tst-recflow'); if (tf && tf.parentNode) tf.parentNode.removeChild(tf);
+      } catch (e) {}
+      tests.push(eq('RECFL 现场还原: bz_rec_mode 清空', localStorage.getItem('bz_rec_mode') === savedMode2 ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  // ===== v0.48.0 双胞胎卡大运/流年列 + 区显隐勾选 =====
+  (function() {
+    tests.push({ section:'双胞胎卡大运流年列与区显隐(v0.48.0)' });
+    var R = window.RENDER, A48 = window.ALGO;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function' || typeof R.setTwinSecVisible !== 'function' || typeof A48.liuNianJZ !== 'function') {
+      tests.push(fail('TWN48 前置: RENDER/ALGO 接口挂载', '缺失'));
+      return;
+    }
+    var pdT = paipan('双运列测试', '男', 1982, 10, 18, 5, 1);
+    var tstT = document.createElement('div');
+    tstT.id = 'tst-twin48';
+    document.body.appendChild(tstT);
+    var savedRec3 = null;
+    try {
+      savedRec3 = localStorage.getItem('bz_rec_mode');
+      localStorage.removeItem('bz_rec_mode');
+      R.renderTwinCardsHtml(pdT, 'tst-twin48');
+      var cards = tstT.querySelectorAll('.bz-twin-card');
+      tests.push(eq('TWN48 前置: 两张卡渲染', cards.length, 2));
+      var nowY48 = new Date().getFullYear();
+      var curDy48 = null;
+      for (var i48 = pdT.daYun.length - 1; i48 >= 0; i48--) { if (pdT.daYun[i48].startYear <= nowY48) { curDy48 = pdT.daYun[i48]; break; } }
+      var lnJZ48 = A48.liuNianJZ(nowY48);
+      Array.prototype.forEach.call(cards, function(card, ci) {
+        var tag = 'TWN48 C' + (ci + 1);
+        var hd = card.querySelector('table.chart tr.hd');
+        var ths = hd ? Array.prototype.map.call(hd.cells, function(c) { return c.textContent; }) : [];
+        tests.push(eq(tag + ': 表头列序（时柱后即大运/流年）', ths[4] === '时柱' && ths[5] === '大运' && ths[6] === '流年', true));
+        var ganRow = card.querySelector('tr[data-row-type~="ln1"]');
+        var dyGanCell = ganRow ? ganRow.querySelector('.col-dy') : null;
+        var lnGanCell = ganRow ? ganRow.querySelector('.col-ln') : null;
+        tests.push(eq(tag + ': 大运干=' + (curDy48 ? curDy48.gan : '—'), dyGanCell ? dyGanCell.textContent : '', curDy48 ? curDy48.gan : '—'));
+        tests.push(eq(tag + ': 流年干=' + lnJZ48[0], lnGanCell ? lnGanCell.textContent : '', lnJZ48[0]));
+        var zhiRow = card.querySelector('tr[data-row-type~="dy2"]');
+        tests.push(eq(tag + ': 大运支=' + (curDy48 ? curDy48.zhi : '—'), zhiRow && zhiRow.querySelector('.col-dy') ? zhiRow.querySelector('.col-dy').textContent : '', curDy48 ? curDy48.zhi : '—'));
+        tests.push(eq(tag + ': 流年支=' + lnJZ48[1], zhiRow && zhiRow.querySelector('.col-ln') ? zhiRow.querySelector('.col-ln').textContent : '', lnJZ48[1]));
+      });
+      var bar48 = tstT.querySelector('#twinSecBar');
+      tests.push(eq('TWN48: 勾选条存在', !!bar48, true));
+      tests.push(eq('TWN48: 勾选项5个', bar48 ? bar48.querySelectorAll('input[data-tsec]').length : 0, 5));
+      tests.push(eq('TWN48: 默认全勾', bar48 ? Array.prototype.every.call(bar48.querySelectorAll('input[data-tsec]'), function(cb) { return cb.checked; }) : false, true));
+      var cardA = tstT.querySelector('.bz-twin-card');
+      R.setTwinSecVisible('yunxiang', false);
+      tests.push(eq('TWN48: 关运流项→卡带 off class', cardA.classList.contains('sec-yunxiang-off'), true));
+      tests.push(eq('TWN48: 关运流项→列 display:none', getComputedStyle(cardA.querySelector('.col-dy')).display === 'none', true));
+      var hdDyTh48 = cardA.querySelector('table.chart tr.hd th.col-dy');
+      tests.push(eq('TWN48: 关运流项→大运表头同步隐藏', hdDyTh48 ? getComputedStyle(hdDyTh48).display === 'none' : false, true));
+      tests.push(eq('TWN48: 关运流项→勾选框同步', bar48.querySelector('input[data-tsec="yunxiang"]').checked, false));
+      R.setTwinSecVisible('yunxiang', true);
+      tests.push(eq('TWN48: 开回运流项→列恢复', getComputedStyle(cardA.querySelector('.col-dy')).display !== 'none', true));
+      R.setTwinSecVisible('cangqi', false);
+      tests.push(eq('TWN48: 关藏气区→藏干行隐藏', getComputedStyle(cardA.querySelector('tr[data-sec~="cangqi"]')).display === 'none', true));
+      R.setTwinSecVisible('cangqi', true);
+      R.setTwinSecVisible('sanyuan', false);
+      var syA48 = cardA.querySelector('.bz-sanyuan-area');
+      tests.push(eq('TWN48: 关三垣区→区块隐藏', !syA48 || getComputedStyle(syA48).display === 'none', true));
+      R.setTwinSecVisible('sanyuan', true);
+      var shared48 = tstT.querySelector('.bz-twin-shared');
+      R.setTwinSecVisible('yunliu', false);
+      tests.push(eq('TWN48: 关运流区→luck-section 隐藏', getComputedStyle(shared48.querySelector('.luck-section')).display === 'none', true));
+      R.setTwinSecVisible('jieqi', false);
+      tests.push(eq('TWN48: 关节气区→jieqi-section 隐藏', getComputedStyle(shared48.querySelector('.jieqi-section')).display === 'none', true));
+      R.setTwinSecVisible('yunliu', true);
+      R.setTwinSecVisible('jieqi', true);
+      tests.push(eq('TWN48: 全部恢复显示', Array.prototype.every.call(bar48.querySelectorAll('input[data-tsec]'), function(cb) { return cb.checked; }) && getComputedStyle(shared48.querySelector('.luck-section')).display !== 'none', true));
+
+      var lf1 = paipan('龙凤运列A', '男', 1982, 10, 18, 5, 1);
+      var lf2 = paipan('龙凤运列B', '女', 1983, 1, 1, 0, 10);
+      R.renderLongFengCardsHtml(lf1, lf2, 'tst-twin48');
+      var lfc = tstT.querySelectorAll('.bz-twin-card');
+      tests.push(eq('TWN48 LF: 两张卡渲染', lfc.length, 2));
+      var lfGan = lfc[0].querySelector('tr[data-row-type~="ln1"] .col-dy');
+      tests.push(eq('TWN48 LF: 老大卡大运干单字', lfGan ? lfGan.textContent.length : 0, 1));
+      var lfBar = tstT.querySelector('#twinSecBar');
+      tests.push(eq('TWN48 LF: 勾选条存在', !!lfBar, true));
+      R.setTwinSecVisible('yunxiang', false);
+      tests.push(eq('TWN48 LF: 关运流项→卡 off', lfc[0].classList.contains('sec-yunxiang-off'), true));
+      R.setTwinSecVisible('yunxiang', true);
+    } finally {
+      try {
+        ['yunxiang', 'cangqi', 'sanyuan', 'yunliu', 'jieqi'].forEach(function(k) { R.setTwinSecVisible(k, true); });
+        if (savedRec3 === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedRec3);
+        if (tstT.parentNode) tstT.parentNode.removeChild(tstT);
+      } catch (e) {}
+      tests.push(eq('TWN48 现场还原: 测试容器已移除', !document.getElementById('tst-twin48'), true));
     }
   })();
 

@@ -3325,6 +3325,144 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
+  (function() {
+    tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.toggleRecMode !== 'function' || typeof R.setFlowVisible !== 'function') {
+      tests.push(fail('RECFL 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var savedMode2 = null, oldPd2 = null;
+    try {
+      savedMode2 = localStorage.getItem('bz_rec_mode');
+      var pdF = paipan('版面回归', '男', 1986, 8, 15, 10, 30);
+      oldPd2 = window._paipanData;
+      window._paipanData = pdF;
+      var tstF = document.createElement('div');
+      tstF.id = 'tst-recflow';
+      document.body.appendChild(tstF);
+      localStorage.removeItem('bz_rec_mode');
+      R.renderChart(pdF, undefined, 'tst-recflow');
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      tests.push(eq('RECFL 前置: 开记录前容器无超宽内容', tstF.scrollWidth <= window.innerWidth + 1, true));
+      R.toggleRecMode(true, tstF);
+      tests.push(eq('RECFL F01: 开记录后容器无超宽内容（v0.47.0 曾爆 50 万px）', tstF.scrollWidth <= window.innerWidth + 1, true));
+      var recF = tstF.querySelector('.record-panel');
+      var recRect = recF.getBoundingClientRect();
+      var tstRect = tstF.getBoundingClientRect();
+      tests.push(eq('RECFL F01: 记录面板落在容器宽度内', recRect.width > 0 && recRect.left >= tstRect.left - 1 && recRect.right <= tstRect.right + 1, true));
+      var luckF = tstF.querySelector('.luck-col');
+      tests.push(eq('RECFL F01: 运流区在 main-col 左下', !!luckF && luckF.parentElement === tstF.querySelector('.main-col') && luckF.classList.contains('luck-rec-below'), true));
+      tests.push(eq('RECFL F01: 流月面板仍在运流区内', !!(luckF && luckF.querySelector('.flow-panel:not([hidden])')), true));
+      tests.push(eq('RECFL F01: contain 兜底生效', (getComputedStyle(luckF.querySelector('.flow-table-wrap')).contain || '').indexOf('inline-size') >= 0, true));
+      R.toggleRecMode(false, tstF);
+      R.setFlowVisible('month', false);
+      R.toggleRecMode(true, tstF);
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      tests.push(eq('RECFL F02: 先记录后开流月同样无超宽内容', tstF.scrollWidth <= window.innerWidth + 1, true));
+    } finally {
+      try {
+        R.setFlowVisible('month', false);
+        R.toggleRecMode(false, tstF);
+        if (savedMode2 === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode2);
+        window._paipanData = oldPd2;
+        var tf = document.getElementById('tst-recflow'); if (tf && tf.parentNode) tf.parentNode.removeChild(tf);
+      } catch (e) {}
+      tests.push(eq('RECFL 现场还原: bz_rec_mode 清空', localStorage.getItem('bz_rec_mode') === savedMode2 ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  // ===== v0.48.0 双胞胎卡大运/流年列 + 区显隐勾选 =====
+  (function() {
+    tests.push({ section:'双胞胎卡大运流年列与区显隐(v0.48.0)' });
+    var R = window.RENDER, A48 = window.ALGO;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function' || typeof R.setTwinSecVisible !== 'function' || typeof A48.liuNianJZ !== 'function') {
+      tests.push(fail('TWN48 前置: RENDER/ALGO 接口挂载', '缺失'));
+      return;
+    }
+    var pdT = paipan('双运列测试', '男', 1982, 10, 18, 5, 1);
+    var tstT = document.createElement('div');
+    tstT.id = 'tst-twin48';
+    document.body.appendChild(tstT);
+    var savedRec3 = null;
+    try {
+      savedRec3 = localStorage.getItem('bz_rec_mode');
+      localStorage.removeItem('bz_rec_mode');
+      R.renderTwinCardsHtml(pdT, 'tst-twin48');
+      var cards = tstT.querySelectorAll('.bz-twin-card');
+      tests.push(eq('TWN48 前置: 两张卡渲染', cards.length, 2));
+      var nowY48 = new Date().getFullYear();
+      var curDy48 = null;
+      for (var i48 = pdT.daYun.length - 1; i48 >= 0; i48--) { if (pdT.daYun[i48].startYear <= nowY48) { curDy48 = pdT.daYun[i48]; break; } }
+      var lnJZ48 = A48.liuNianJZ(nowY48);
+      Array.prototype.forEach.call(cards, function(card, ci) {
+        var tag = 'TWN48 C' + (ci + 1);
+        var hd = card.querySelector('table.chart tr.hd');
+        var ths = hd ? Array.prototype.map.call(hd.cells, function(c) { return c.textContent; }) : [];
+        tests.push(eq(tag + ': 表头列序（时柱后即大运/流年）', ths[4] === '时柱' && ths[5] === '大运' && ths[6] === '流年', true));
+        var ganRow = card.querySelector('tr[data-row-type~="ln1"]');
+        var dyGanCell = ganRow ? ganRow.querySelector('.col-dy') : null;
+        var lnGanCell = ganRow ? ganRow.querySelector('.col-ln') : null;
+        tests.push(eq(tag + ': 大运干=' + (curDy48 ? curDy48.gan : '—'), dyGanCell ? dyGanCell.textContent : '', curDy48 ? curDy48.gan : '—'));
+        tests.push(eq(tag + ': 流年干=' + lnJZ48[0], lnGanCell ? lnGanCell.textContent : '', lnJZ48[0]));
+        var zhiRow = card.querySelector('tr[data-row-type~="dy2"]');
+        tests.push(eq(tag + ': 大运支=' + (curDy48 ? curDy48.zhi : '—'), zhiRow && zhiRow.querySelector('.col-dy') ? zhiRow.querySelector('.col-dy').textContent : '', curDy48 ? curDy48.zhi : '—'));
+        tests.push(eq(tag + ': 流年支=' + lnJZ48[1], zhiRow && zhiRow.querySelector('.col-ln') ? zhiRow.querySelector('.col-ln').textContent : '', lnJZ48[1]));
+      });
+      var bar48 = tstT.querySelector('#twinSecBar');
+      tests.push(eq('TWN48: 勾选条存在', !!bar48, true));
+      tests.push(eq('TWN48: 勾选项5个', bar48 ? bar48.querySelectorAll('input[data-tsec]').length : 0, 5));
+      tests.push(eq('TWN48: 默认全勾', bar48 ? Array.prototype.every.call(bar48.querySelectorAll('input[data-tsec]'), function(cb) { return cb.checked; }) : false, true));
+      var cardA = tstT.querySelector('.bz-twin-card');
+      R.setTwinSecVisible('yunxiang', false);
+      tests.push(eq('TWN48: 关运流项→卡带 off class', cardA.classList.contains('sec-yunxiang-off'), true));
+      tests.push(eq('TWN48: 关运流项→列 display:none', getComputedStyle(cardA.querySelector('.col-dy')).display === 'none', true));
+      var hdDyTh48 = cardA.querySelector('table.chart tr.hd th.col-dy');
+      tests.push(eq('TWN48: 关运流项→大运表头同步隐藏', hdDyTh48 ? getComputedStyle(hdDyTh48).display === 'none' : false, true));
+      tests.push(eq('TWN48: 关运流项→勾选框同步', bar48.querySelector('input[data-tsec="yunxiang"]').checked, false));
+      R.setTwinSecVisible('yunxiang', true);
+      tests.push(eq('TWN48: 开回运流项→列恢复', getComputedStyle(cardA.querySelector('.col-dy')).display !== 'none', true));
+      R.setTwinSecVisible('cangqi', false);
+      tests.push(eq('TWN48: 关藏气区→藏干行隐藏', getComputedStyle(cardA.querySelector('tr[data-sec~="cangqi"]')).display === 'none', true));
+      R.setTwinSecVisible('cangqi', true);
+      R.setTwinSecVisible('sanyuan', false);
+      var syA48 = cardA.querySelector('.bz-sanyuan-area');
+      tests.push(eq('TWN48: 关三垣区→区块隐藏', !syA48 || getComputedStyle(syA48).display === 'none', true));
+      R.setTwinSecVisible('sanyuan', true);
+      var shared48 = tstT.querySelector('.bz-twin-shared');
+      R.setTwinSecVisible('yunliu', false);
+      tests.push(eq('TWN48: 关运流区→luck-section 隐藏', getComputedStyle(shared48.querySelector('.luck-section')).display === 'none', true));
+      R.setTwinSecVisible('jieqi', false);
+      tests.push(eq('TWN48: 关节气区→jieqi-section 隐藏', getComputedStyle(shared48.querySelector('.jieqi-section')).display === 'none', true));
+      R.setTwinSecVisible('yunliu', true);
+      R.setTwinSecVisible('jieqi', true);
+      tests.push(eq('TWN48: 全部恢复显示', Array.prototype.every.call(bar48.querySelectorAll('input[data-tsec]'), function(cb) { return cb.checked; }) && getComputedStyle(shared48.querySelector('.luck-section')).display !== 'none', true));
+
+      var lf1 = paipan('龙凤运列A', '男', 1982, 10, 18, 5, 1);
+      var lf2 = paipan('龙凤运列B', '女', 1983, 1, 1, 0, 10);
+      R.renderLongFengCardsHtml(lf1, lf2, 'tst-twin48');
+      var lfc = tstT.querySelectorAll('.bz-twin-card');
+      tests.push(eq('TWN48 LF: 两张卡渲染', lfc.length, 2));
+      var lfGan = lfc[0].querySelector('tr[data-row-type~="ln1"] .col-dy');
+      tests.push(eq('TWN48 LF: 老大卡大运干单字', lfGan ? lfGan.textContent.length : 0, 1));
+      var lfBar = tstT.querySelector('#twinSecBar');
+      tests.push(eq('TWN48 LF: 勾选条存在', !!lfBar, true));
+      R.setTwinSecVisible('yunxiang', false);
+      tests.push(eq('TWN48 LF: 关运流项→卡 off', lfc[0].classList.contains('sec-yunxiang-off'), true));
+      R.setTwinSecVisible('yunxiang', true);
+    } finally {
+      try {
+        ['yunxiang', 'cangqi', 'sanyuan', 'yunliu', 'jieqi'].forEach(function(k) { R.setTwinSecVisible(k, true); });
+        if (savedRec3 === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedRec3);
+        if (tstT.parentNode) tstT.parentNode.removeChild(tstT);
+      } catch (e) {}
+      tests.push(eq('TWN48 现场还原: 测试容器已移除', !document.getElementById('tst-twin48'), true));
+    }
+  })();
+
   (function() {
     tests.push({ section: '流月流日选择与显隐' });
     var flowRoot = document.createElement('div');

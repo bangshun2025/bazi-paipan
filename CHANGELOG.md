@@ -4,6 +4,33 @@
 
 ---
 
+## v0.48.0（2026-10-15）功能：双胞胎卡时柱后大运/流年列 + 区显隐勾选条
+
+MINOR：双胞胎排盘界面的老大/老二卡四柱表，时柱后各新增「大运/流年」两列（当前大运按起运年倒查取当前步、流年取当年干支，如 2026 丙午）；tabs 行新增区显隐勾选条，与排盘对比卡的勾选交互同款。
+
+- 大运/流年列：同卵卡两卡各自带当前大运（`daYun` 倒查 `startYear<=今年`）与当年流年（`liuNianJZ`）；龙凤胎老大卡取老大数据。列恒渲染，显隐交给 CSS class，点击流年值级联动刷新（v0.44 既有路径）不受勾选影响。
+- 勾选条（`#twinSecBar`，5 项）：运流项（大运/流年列）、藏气区（四柱藏干三行）、三垣区（整块）、运流区（共享大运流年区）、节气区——作用于 `.bz-twin-card` / `.bz-twin-shared`，默认全显示，不持久化，与对比卡 `_cmpSecs` 相互独立；不重复提供流月/流月日（双胞胎界面已有 flowControls）。
+- 修一处遗留缺陷：双胞胎卡「大运」表头 th 漏挂 `col-dy` class（对比卡表头是挂的），关运流项时流年列头隐藏而大运列头残留；已补 `sep col-dy`，并加断言锁定。
+- `?test=1` 新增 28 条断言（TWN48 段）：两卡表头列序（时柱后即大运/流年）、大运干支/流年干支与算法值一致（甲寅/丙午）、勾选条 5 项默认全勾、五区逐一切换 off-class + getComputedStyle display:none + 勾选框同步、大运表头同步隐藏、龙凤胎两卡渲染与勾选、现场自恢复。
+- `?test=1` 回归全绿 1247 条通过、0 失败（1920 视口；1200 窄视口下 v0.47.1 RECFL 三条 scrollWidth 断言为视口宽度环境假红，1920 下不复现）。
+- 普通页真实实测（CDP 1440×2x）：同卵/龙凤胎渲染出列（大运甲寅、流年丙午），关「运流项」两列连同表头干净消失、关「藏气区」四柱藏干三行隐藏（三垣区藏干独立受控不受影响），截图取证 4 张。
+- index.html ≡ standalone.html MD5 `b9f85eab012d072e22ccd070c47c83cf`，1,402,933 B；standalone-split.html 104,174 B（split 版同步补齐 twin-sec CSS 9 行）。三入口版本头及 ext.yml 同步为 v0.48.0。
+
+---
+
+## v0.47.1（2026-10-15）修复：记录模式 × 流月流日版面横向爆宽
+
+PATCH：修一个版面 bug——点「流月」开流月流日后，再点「分析记录」进入记录模式，整页被撑出约 50 万 px 的横向宽度，记录面板被挤到屏幕外，版面完全错乱。
+
+- 根因：`toggleRecMode(true)` 把 luck-col 搬进 main-col（`flex:0 0 auto`）后，Chrome 对 `.flow-table { min-width:520px; table-layout:fixed }`（width:auto）在 `.flow-table-wrap { max-width:100% }` 里做 max-content 内在宽度计算时爆出 500000px，整页 docW 达 500502（视口 1512）。实测隐藏 `.flow-panel` 后 docW 回落 1512，锁定元凶；正常态（未搬移）不爆，仅记录模式触发。
+- 修复：`.luck-col.luck-rec-below .flow-table-wrap { contain: inline-size; }`——只在记录模式（luck-rec-below）生效，让 flow-table-wrap 的内在尺寸计算与内容解耦，与项目既有用法一致（cmp-card 的 yunxiang-off 同款兜底），对其他布局零影响。
+- 新增 8 条断言（分析记录×流月流日版面段）：前置无超宽、开记录后容器无超宽（v0.47.0 曾爆 50 万px，量测试容器 scrollWidth 而非 document，避免被测试页其他宽容器污染）、记录面板落在容器宽度内、运流区搬入 main-col 且带 luck-rec-below、流月面板仍在运流区内、contain 兜底生效、反序路径（先记录后开流月）同样无超宽；现场自恢复。
+- `?test=1` 回归全绿 1228 条通过、0 失败（v0.43 T02 在全新 profile 下失败为环境噪声：localStorage 缺 `bz_privacy_mode` 时隐私默认开导致显示名降级，真机有该键不复现）。
+- 普通页真实实测：排盘（UI实测 男 1986-08-15 10:30）→ 点流月 → 点流日 → 点分析记录，luck-col 由 body-cols 搬入 main-col，docW 1512 = 视口宽无溢出，记录面板 468×392 在视口内，截图确认四柱/流月流日/记录面板/大运流年各归其位。
+- index.html ≡ standalone.html MD5 `1ad1f5b711da4892314ecd7d48e7caca`，1,392,507 B；standalone-split.html 102,979 B。三入口版本头及 ext.yml 同步为 v0.47.1。
+
+---
+
 ## v0.47.0（2026-10-11）一键复制盘面，发给 AI 交流
 
 MINOR：工具栏新增「📋 复制盘面」按钮，一键把当前盘面复制成结构化纯文本，粘贴给任意 AI 即可续聊；纯 UI 功能，无算法口径变化。
