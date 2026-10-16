@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.48.0 | 2026-10-15 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
+<!-- 八字排盘 ·  从真版 v0.49.0 | 2026-10-16 --><!-- v0.49.0: 双胞胎卡分析记录 + 流月/流月日勾选条对齐修复 — tabs 行新增「分析记录」按钮（面板居卡片与共享运流之间，展开即主位；textarea 写入即自动保存，key 带 twin| 前缀与普通盘隔离，龙凤胎按老大数据指纹存稿；bz_rec_mode 开关记忆与普通卡同源）；修复 tabs 行「流月/流月日」勾选条在 stretch 布局下整体上浮错位（容器补 align-items:center，与新历输入框/区显隐勾选条同线）；?test=1 新增 TWN49 排版断言 6 条 + TWNREC 记录断言 17 条。 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
 
 <!-- v0.47.0: 一键复制盘面 — 工具栏新增「📋 复制盘面」按钮，把当前盘面生成 AI 友好纯文本（基本信息/四柱十神藏干纳音星曜空亡神煞/三垣/起运交运/十步大运/当前大运流年/已勾选宫位标注）写入剪贴板，粘贴即与 AI 对盘；隐私口径与截图一致只出 displayName；clipboard API 优先 execCommand 兜底，浮 tip 反馈 -->
 <!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
@@ -366,6 +366,8 @@
   /* ===== v0.43.6 分析记录区：占运流区原位，运流移左下；写入即存 ===== */
   .bz-zodiac { font-size:13px; white-space:nowrap; }
   .rec-trigger.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .twin-rec-trigger.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
+  .record-panel.twin-rec { width:100%; min-width:0; margin:0 0 18px; }
   .record-panel { display:none; flex:1 1 auto; min-width:380px; position:sticky; top:12px; border:0.5px solid var(--c-line); background:var(--c-paper); }
   .record-panel.open { display:flex; flex-direction:column; }
   .rec-head { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(201,169,110,.06); border-bottom:0.5px solid var(--c-line); }
@@ -9679,25 +9681,25 @@ var LS_REC_NOTES = 'bz_rec_notes_';
 function isRecOn() {
   try { return localStorage.getItem(LS_REC_MODE) === '1'; } catch (e) { return false; }
 }
-function recNotesKey() {
+function recNotesKey(suffix) {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_REC_NOTES + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  return LS_REC_NOTES + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
 function recAutogrow(ta) {
   ta.style.height = 'auto';
   ta.style.height = ta.scrollHeight + 'px';
 }
-function bindRecPanel(container) {
+function bindRecPanel(container, suffix) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
-  var key = recNotesKey();
+  var key = recNotesKey(suffix);
   if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
   recAutogrow(ta);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
-    var k = recNotesKey();
+    var k = recNotesKey(suffix);
     if (!k) return;
     try { localStorage.setItem(k, ta.value); } catch (e) {}
     var st = container.querySelector('.rec-status');
@@ -9737,6 +9739,30 @@ function toggleRecMode(force, root) {
   return on;
 }
 
+// ===== v0.49.0 双胞胎卡分析记录：tabs 行入口，面板居卡片与共享运流之间，key 带 twin| 前缀与普通盘隔离 =====
+function twinRecBtnHtml() {
+  return '<button class="btn-simple twin-rec-trigger' + (isRecOn() ? ' active' : '') + '" onclick="RENDER.toggleTwinRec(this)" title="记录双胞胎合盘分析：面板展开于卡片下方，写入即保存">分析记录</button>';
+}
+function twinRecPanelHtml() {
+  var on = isRecOn();
+  return '<div class="record-panel twin-rec' + (on ? ' open' : '') + '">'
+    + '<div class="rec-head"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-status" role="status"></span></div>'
+    + '<textarea class="rec-text" placeholder="记录本次双胞胎合盘分析……写入即自动保存"></textarea>'
+    + '</div>';
+}
+function toggleTwinRec(btn) {
+  var on = !isRecOn();
+  try { localStorage.setItem(LS_REC_MODE, on ? '1' : '0'); } catch (e) {}
+  var panel = btn.closest('.bz-twin-tabs').parentElement.querySelector('.record-panel.twin-rec');
+  if (panel) {
+    panel.classList.toggle('open', on);
+    var ta = panel.querySelector('.rec-text');
+    if (ta && on) recAutogrow(ta);
+  }
+  btn.classList.toggle('active', on);
+  return on;
+}
+
 var flowMonthOn = false;
 var flowDayOn = false;
 
@@ -9751,7 +9777,7 @@ function flowMonths(year) {
 }
 
 function flowControlsHTML() {
-  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
 }
 
 function locateFlowDate(input) {
@@ -10512,8 +10538,9 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
+    + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
@@ -10531,6 +10558,7 @@ function renderTwinCardsHtml(data, targetId) {
   container.querySelectorAll('.bz-twin-card').forEach(function(c) { c._cardData = data; });
   applyTwinSecs();
   bindEvents(data, container);
+  bindRecPanel(container, 'twin|');
 }
 
 // ============ v0.6.0 龙凤胎卡片式版面 ============
@@ -10633,8 +10661,9 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
+    + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
 
   var container = document.getElementById(targetId);
@@ -10655,6 +10684,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   container._jieqiLng = d1.lng; // v0.27.0 D5: 龙凤胎经度（老大同址）
   applyTwinSecs();
   bindEvents(d1, container);
+  bindRecPanel(container, 'twin|');
 }
 
 // 模式切换 JS（纯 CSS + class 切换）
@@ -11690,6 +11720,7 @@ function cmpSetState(entries) {
     renderChart: renderChart,
     bindEvents: bindEvents,
     toggleRecMode: toggleRecMode,
+    toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     hiDy: hiDy,
     hiLn: hiLn,
@@ -15523,6 +15554,113 @@ function captureScreenshot() {
         if (tstT.parentNode) tstT.parentNode.removeChild(tstT);
       } catch (e) {}
       tests.push(eq('TWN48 现场还原: 测试容器已移除', !document.getElementById('tst-twin48'), true));
+    }
+  })();
+
+  // ===== v0.49.0 流月/流月日勾选条对齐（tabs 行 stretch 环境下垂直居中） =====
+  (function() {
+    tests.push({ section:'双胞胎流月日勾选条对齐(v0.49.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function') {
+      tests.push(fail('TWN49 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var pdA = paipan('对齐测试', '男', 1982, 10, 18, 5, 1);
+    var tstA = document.createElement('div');
+    tstA.id = 'tst-twin49';
+    tstA.style.cssText = 'position:fixed;left:0;top:0;width:1512px;z-index:-1;opacity:0;';
+    document.body.appendChild(tstA);
+    try {
+      R.renderTwinCardsHtml(pdA, 'tst-twin49');
+      var tabs49 = tstA.querySelector('.bz-twin-tabs');
+      var flowWrap = Array.prototype.find.call(tabs49.children, function(k) { return k.querySelector && k.querySelector('input[data-flow="month"]'); });
+      tests.push(eq('TWN49: 勾选条容器存在', !!flowWrap, true));
+      tests.push(eq('TWN49: 勾选条 align-items center', flowWrap ? getComputedStyle(flowWrap).alignItems : '', 'center'));
+      var cbM = flowWrap.querySelector('input[data-flow="month"]');
+      var cbD = flowWrap.querySelector('input[data-flow="day"]');
+      tests.push(eq('TWN49: 流月/流月日勾选框存在', !!cbM && !!cbD, true));
+      var labM = cbM.parentElement.getBoundingClientRect();
+      var cbMRect = cbM.getBoundingClientRect();
+      var dateIn = tabs49.querySelector('.flow-date-picker input');
+      var dateRect = dateIn ? dateIn.getBoundingClientRect() : null;
+      tests.push(eq('TWN49: 流月label高度不被拉伸', labM.height > 0 && labM.height <= 24, true));
+      if (dateRect) {
+        var cbCenter = cbMRect.top + cbMRect.height / 2;
+        var dCenter = dateRect.top + dateRect.height / 2;
+        tests.push(eq('TWN49: 与新历输入框垂直中心差≤3px', Math.abs(cbCenter - dCenter) <= 3, true));
+      } else {
+        tests.push(fail('TWN49: 与新历输入框垂直中心差≤3px', '未找到日期输入框'));
+      }
+    } finally {
+      if (tstA.parentNode) tstA.parentNode.removeChild(tstA);
+    }
+    tests.push(eq('TWN49 现场还原: 测试容器已移除', !document.getElementById('tst-twin49'), true));
+  })();
+
+  // ===== v0.49.0 双胞胎卡分析记录（tabs 行入口 + 卡片/共享区之间面板 + twin| 独立 key） =====
+  (function() {
+    tests.push({ section:'双胞胎分析记录(v0.49.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function' || typeof R.toggleTwinRec !== 'function') {
+      tests.push(fail('TWNREC 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var savedModeR = null, savedNoteR = null;
+    var recKey49 = 'bz_rec_notes_twin|记录测试|男|1982|10|18|5|1';
+    var pdR = paipan('记录测试', '男', 1982, 10, 18, 5, 1);
+    var tstR49 = document.createElement('div');
+    tstR49.id = 'tst-twinrec';
+    document.body.appendChild(tstR49);
+    try {
+      savedModeR = localStorage.getItem('bz_rec_mode');
+      savedNoteR = localStorage.getItem(recKey49);
+      localStorage.removeItem('bz_rec_mode');
+      if (savedNoteR !== null) localStorage.removeItem(recKey49);
+      R.renderTwinCardsHtml(pdR, 'tst-twinrec');
+      var btnR49 = tstR49.querySelector('.twin-rec-trigger');
+      var panelR49 = tstR49.querySelector('.record-panel.twin-rec');
+      tests.push(eq('TWNREC: tabs 行按钮存在', !!btnR49, true));
+      tests.push(eq('TWNREC: 面板存在', !!panelR49, true));
+      tests.push(eq('TWNREC: 默认未展开', !!panelR49 && panelR49.classList.contains('open'), false));
+      tests.push(eq('TWNREC: 默认按钮未激活', btnR49.classList.contains('active'), false));
+      btnR49.click();
+      tests.push(eq('TWNREC: 点击后面板展开', panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 点击后按钮激活', btnR49.classList.contains('active'), true));
+      tests.push(eq('TWNREC: bz_rec_mode 持久化', localStorage.getItem('bz_rec_mode'), '1'));
+      var taR49 = panelR49.querySelector('.rec-text');
+      taR49.value = '合盘测试记录内容';
+      taR49.dispatchEvent(new Event('input'));
+      tests.push(eq('TWNREC: 写入即存 twin| key', localStorage.getItem(recKey49), '合盘测试记录内容'));
+      tests.push(eq('TWNREC: 已保存提示', taR49.closest('.record-panel').querySelector('.rec-status').classList.contains('show'), true));
+      R.renderTwinCardsHtml(pdR, 'tst-twinrec');
+      panelR49 = tstR49.querySelector('.record-panel.twin-rec');
+      var taRe = panelR49.querySelector('.rec-text');
+      tests.push(eq('TWNREC: 重渲染后面板仍开', panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 重渲染后记录保留', taRe.value, '合盘测试记录内容'));
+      tstR49.querySelector('.twin-rec-trigger').click();
+      tests.push(eq('TWNREC: 再点关闭面板', !panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 关闭后 bz_rec_mode=0', localStorage.getItem('bz_rec_mode'), '0'));
+
+      var lfA = paipan('龙凤记录A', '男', 1982, 10, 18, 5, 1);
+      var lfB = paipan('龙凤记录B', '女', 1982, 10, 18, 5, 1);
+      localStorage.setItem('bz_rec_mode', '1');
+      R.renderLongFengCardsHtml(lfA, lfB, 'tst-twinrec');
+      var lfBtn = tstR49.querySelector('.twin-rec-trigger');
+      var lfPanel = tstR49.querySelector('.record-panel.twin-rec');
+      tests.push(eq('TWNREC LF: 按钮与面板存在', !!lfBtn && !!lfPanel, true));
+      tests.push(eq('TWNREC LF: rec_mode=1 时默认展开', lfPanel.classList.contains('open'), true));
+      var lfTa = lfPanel.querySelector('.rec-text');
+      lfTa.value = '龙凤合盘记录';
+      lfTa.dispatchEvent(new Event('input'));
+      tests.push(eq('TWNREC LF: key 取老大数据', localStorage.getItem('bz_rec_notes_twin|龙凤记录A|男|1982|10|18|5|1'), '龙凤合盘记录'));
+    } finally {
+      try {
+        if (savedModeR === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedModeR);
+        if (savedNoteR === null) localStorage.removeItem(recKey49); else localStorage.setItem(recKey49, savedNoteR);
+        localStorage.removeItem('bz_rec_notes_twin|龙凤记录A|男|1982|10|18|5|1');
+        if (tstR49.parentNode) tstR49.parentNode.removeChild(tstR49);
+      } catch (e) {}
+      tests.push(eq('TWNREC 现场还原: bz_rec_mode 清理', localStorage.getItem('bz_rec_mode') === savedModeR ? 'Y' : 'N', 'Y'));
     }
   })();
 

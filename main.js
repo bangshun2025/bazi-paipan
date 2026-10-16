@@ -1,4 +1,4 @@
-/* 八字排盘 v0.43.2 — main.js */
+/* 八字排盘 v0.49.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3460,6 +3460,113 @@ function captureScreenshot() {
         if (tstT.parentNode) tstT.parentNode.removeChild(tstT);
       } catch (e) {}
       tests.push(eq('TWN48 现场还原: 测试容器已移除', !document.getElementById('tst-twin48'), true));
+    }
+  })();
+
+  // ===== v0.49.0 流月/流月日勾选条对齐（tabs 行 stretch 环境下垂直居中） =====
+  (function() {
+    tests.push({ section:'双胞胎流月日勾选条对齐(v0.49.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function') {
+      tests.push(fail('TWN49 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var pdA = paipan('对齐测试', '男', 1982, 10, 18, 5, 1);
+    var tstA = document.createElement('div');
+    tstA.id = 'tst-twin49';
+    tstA.style.cssText = 'position:fixed;left:0;top:0;width:1512px;z-index:-1;opacity:0;';
+    document.body.appendChild(tstA);
+    try {
+      R.renderTwinCardsHtml(pdA, 'tst-twin49');
+      var tabs49 = tstA.querySelector('.bz-twin-tabs');
+      var flowWrap = Array.prototype.find.call(tabs49.children, function(k) { return k.querySelector && k.querySelector('input[data-flow="month"]'); });
+      tests.push(eq('TWN49: 勾选条容器存在', !!flowWrap, true));
+      tests.push(eq('TWN49: 勾选条 align-items center', flowWrap ? getComputedStyle(flowWrap).alignItems : '', 'center'));
+      var cbM = flowWrap.querySelector('input[data-flow="month"]');
+      var cbD = flowWrap.querySelector('input[data-flow="day"]');
+      tests.push(eq('TWN49: 流月/流月日勾选框存在', !!cbM && !!cbD, true));
+      var labM = cbM.parentElement.getBoundingClientRect();
+      var cbMRect = cbM.getBoundingClientRect();
+      var dateIn = tabs49.querySelector('.flow-date-picker input');
+      var dateRect = dateIn ? dateIn.getBoundingClientRect() : null;
+      tests.push(eq('TWN49: 流月label高度不被拉伸', labM.height > 0 && labM.height <= 24, true));
+      if (dateRect) {
+        var cbCenter = cbMRect.top + cbMRect.height / 2;
+        var dCenter = dateRect.top + dateRect.height / 2;
+        tests.push(eq('TWN49: 与新历输入框垂直中心差≤3px', Math.abs(cbCenter - dCenter) <= 3, true));
+      } else {
+        tests.push(fail('TWN49: 与新历输入框垂直中心差≤3px', '未找到日期输入框'));
+      }
+    } finally {
+      if (tstA.parentNode) tstA.parentNode.removeChild(tstA);
+    }
+    tests.push(eq('TWN49 现场还原: 测试容器已移除', !document.getElementById('tst-twin49'), true));
+  })();
+
+  // ===== v0.49.0 双胞胎卡分析记录（tabs 行入口 + 卡片/共享区之间面板 + twin| 独立 key） =====
+  (function() {
+    tests.push({ section:'双胞胎分析记录(v0.49.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.renderTwinCardsHtml !== 'function' || typeof R.toggleTwinRec !== 'function') {
+      tests.push(fail('TWNREC 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var savedModeR = null, savedNoteR = null;
+    var recKey49 = 'bz_rec_notes_twin|记录测试|男|1982|10|18|5|1';
+    var pdR = paipan('记录测试', '男', 1982, 10, 18, 5, 1);
+    var tstR49 = document.createElement('div');
+    tstR49.id = 'tst-twinrec';
+    document.body.appendChild(tstR49);
+    try {
+      savedModeR = localStorage.getItem('bz_rec_mode');
+      savedNoteR = localStorage.getItem(recKey49);
+      localStorage.removeItem('bz_rec_mode');
+      if (savedNoteR !== null) localStorage.removeItem(recKey49);
+      R.renderTwinCardsHtml(pdR, 'tst-twinrec');
+      var btnR49 = tstR49.querySelector('.twin-rec-trigger');
+      var panelR49 = tstR49.querySelector('.record-panel.twin-rec');
+      tests.push(eq('TWNREC: tabs 行按钮存在', !!btnR49, true));
+      tests.push(eq('TWNREC: 面板存在', !!panelR49, true));
+      tests.push(eq('TWNREC: 默认未展开', !!panelR49 && panelR49.classList.contains('open'), false));
+      tests.push(eq('TWNREC: 默认按钮未激活', btnR49.classList.contains('active'), false));
+      btnR49.click();
+      tests.push(eq('TWNREC: 点击后面板展开', panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 点击后按钮激活', btnR49.classList.contains('active'), true));
+      tests.push(eq('TWNREC: bz_rec_mode 持久化', localStorage.getItem('bz_rec_mode'), '1'));
+      var taR49 = panelR49.querySelector('.rec-text');
+      taR49.value = '合盘测试记录内容';
+      taR49.dispatchEvent(new Event('input'));
+      tests.push(eq('TWNREC: 写入即存 twin| key', localStorage.getItem(recKey49), '合盘测试记录内容'));
+      tests.push(eq('TWNREC: 已保存提示', taR49.closest('.record-panel').querySelector('.rec-status').classList.contains('show'), true));
+      R.renderTwinCardsHtml(pdR, 'tst-twinrec');
+      panelR49 = tstR49.querySelector('.record-panel.twin-rec');
+      var taRe = panelR49.querySelector('.rec-text');
+      tests.push(eq('TWNREC: 重渲染后面板仍开', panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 重渲染后记录保留', taRe.value, '合盘测试记录内容'));
+      tstR49.querySelector('.twin-rec-trigger').click();
+      tests.push(eq('TWNREC: 再点关闭面板', !panelR49.classList.contains('open'), true));
+      tests.push(eq('TWNREC: 关闭后 bz_rec_mode=0', localStorage.getItem('bz_rec_mode'), '0'));
+
+      var lfA = paipan('龙凤记录A', '男', 1982, 10, 18, 5, 1);
+      var lfB = paipan('龙凤记录B', '女', 1982, 10, 18, 5, 1);
+      localStorage.setItem('bz_rec_mode', '1');
+      R.renderLongFengCardsHtml(lfA, lfB, 'tst-twinrec');
+      var lfBtn = tstR49.querySelector('.twin-rec-trigger');
+      var lfPanel = tstR49.querySelector('.record-panel.twin-rec');
+      tests.push(eq('TWNREC LF: 按钮与面板存在', !!lfBtn && !!lfPanel, true));
+      tests.push(eq('TWNREC LF: rec_mode=1 时默认展开', lfPanel.classList.contains('open'), true));
+      var lfTa = lfPanel.querySelector('.rec-text');
+      lfTa.value = '龙凤合盘记录';
+      lfTa.dispatchEvent(new Event('input'));
+      tests.push(eq('TWNREC LF: key 取老大数据', localStorage.getItem('bz_rec_notes_twin|龙凤记录A|男|1982|10|18|5|1'), '龙凤合盘记录'));
+    } finally {
+      try {
+        if (savedModeR === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedModeR);
+        if (savedNoteR === null) localStorage.removeItem(recKey49); else localStorage.setItem(recKey49, savedNoteR);
+        localStorage.removeItem('bz_rec_notes_twin|龙凤记录A|男|1982|10|18|5|1');
+        if (tstR49.parentNode) tstR49.parentNode.removeChild(tstR49);
+      } catch (e) {}
+      tests.push(eq('TWNREC 现场还原: bz_rec_mode 清理', localStorage.getItem('bz_rec_mode') === savedModeR ? 'Y' : 'N', 'Y'));
     }
   })();
 
