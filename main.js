@@ -1,4 +1,4 @@
-/* 八字排盘 v0.49.1 — main.js */
+/* 八字排盘 v0.50.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3928,6 +3928,37 @@ function captureScreenshot() {
       A.clearTaiji();
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ26: 清除后日柱主星回日主', rsTds()[3].textContent, '日主'));
+
+      // v0.50.0 三垣区扩展
+      var syRs = function() { return host.querySelectorAll('table.chart tr.rs')[1].cells; };
+      var syGanRow = function() { return host.querySelector('tr.rg[data-sec="sanyuan"]'); };
+      var mingGan2 = d.ming.gan;
+      A.setTaiji(mingGan2, 'ming', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ27: 命宫干设点后胎元主星换中心', syRs()[2].textContent, A.shiShen(mingGan2, d.tai.gan, false)));
+      tests.push(eq(sec + ' TJ28: 三垣设点主表日柱同步换中心', rsTds()[3].textContent, A.shiShen(mingGan2, riGan, false)));
+      tests.push(eq(sec + ' TJ29: 命宫干格套五行色圆圈', (syGanRow().cells[3].querySelector('.taiji-ring') || {}).textContent || '', mingGan2));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      syGanRow().cells[3].click();
+      var menu3 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ30: 点击命宫干弹「设为新太极点（命宫干）」', menu3 ? (menu3.textContent.indexOf('设为新太极点') >= 0 && menu3.textContent.indexOf('命宫干') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu3) menu3.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ31: 三垣弹窗按钮设点生效', (A.getTaiji().gan === d.ming.gan && A.getTaiji().col === 'ming' && A.getTaiji().kind === 'gan') ? 'Y' : 'N', 'Y'));
+      R.renderChart(d, 1, 'taijiTestHost');
+      syGanRow().cells[3].click();
+      var menu4 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ32: 三垣再点同位弹「恢复日主太极点」', menu4 ? (menu4.textContent.indexOf('恢复日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu4) menu4.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ33: 三垣恢复后未激活', A.getTaiji().active, false));
+      var syCgSpan = host.querySelector('tr[data-sec="sanyuan cangqi"] td:nth-child(2) span');
+      var syCgGan = syCgSpan ? syCgSpan.textContent.trim() : '';
+      A.setTaiji(syCgGan, 'taiNian', 'cang');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ34: 三垣藏干设点后身宫主星换中心', syRs()[4].textContent, A.shiShen(syCgGan, d.shen.gan, false)));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ35: 三垣主星还原', syRs()[2].textContent, A.shiShen(riGan, d.tai.gan, false)));
     } finally {
       A.clearTaiji();
       var m = document.getElementById('taijiMenu');

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.49.1 — render.js */
+/* 八字排盘 v0.50.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -874,10 +874,10 @@ function renderChart(data, twin, targetId, opts) {
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
-    td(pTaiNian.wg,pTaiNian.gan,' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
-    td(pTai.wg,pTai.gan,' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
-    td(pMing.wg,pMing.gan,' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
-    td(pShen.wg,pShen.gan,' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
+    td(pTaiNian.wg,stemCellHtml(pTaiNian,'taiNian'),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
+    td(pTai.wg,stemCellHtml(pTai,'tai'),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
+    td(pMing.wg,stemCellHtml(pMing,'ming'),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
+    td(pShen.wg,stemCellHtml(pShen,'shen'),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
     td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
@@ -1342,6 +1342,33 @@ function bindTaijiClicks(container) {
       });
     });
   });
+  // v0.50.0 三垣区：干行（tr.rg 含 data-gk="gan"）与藏气行可设太极点，col=taiNian/tai/ming/shen
+  var SY_KEYS = ['taiNian', 'tai', 'ming', 'shen'];
+  container.querySelectorAll('tr.rg[data-sec="sanyuan"]').forEach(function(tr) {
+    if (!tr.querySelector('td[data-gk="gan"]') || !inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        if (!td.textContent.trim()) return;
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
+      });
+    });
+  });
+  container.querySelectorAll('tr[data-sec="sanyuan cangqi"]').forEach(function(tr) {
+    if (!inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
+        if (!sp || !sp.textContent.trim()) return;
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
+      });
+    });
+  });
 }
 function closeTaijiMenu() {
   var m = document.getElementById('taijiMenu');
@@ -1351,7 +1378,7 @@ function showTaijiMenu(e, info) {
   closeTaijiMenu();
   var t = getTaiji();
   var isCur = t.active && t.gan === info.gan && t.col === info.col && t.kind === info.kind;
-  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干' }[info.col] || info.col;
+  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' }[info.col] || info.col;
   var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
   var m = document.createElement('div');
   m.id = 'taijiMenu';

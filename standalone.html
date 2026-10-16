@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.49.1 | 2026-10-16 -->
+<!-- 八字排盘 ·  从真版 v0.50.0 | 2026-10-16 -->
+<!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
 <!-- v0.49.0: 转换太极点 — 点击原局四柱天干/藏干弹出「设为新太极点」，原局+大运+流年十神统一换中心；太极点套五行色圆圈，主星位置标签年主/月主/日主/时主，藏干太极点标「主」；再点同位或新排盘即复位日主 -->
 <!-- v0.49.0: 双胞胎卡分析记录 + 流月/流月日勾选条对齐修复 — tabs 行新增「分析记录」按钮（面板居卡片与共享运流之间，展开即主位；textarea 写入即自动保存，key 带 twin| 前缀与普通盘隔离，龙凤胎按老大数据指纹存稿；bz_rec_mode 开关记忆与普通卡同源）；修复 tabs 行「流月/流月日」勾选条在 stretch 布局下整体上浮错位（容器补 align-items:center，与新历输入框/区显隐勾选条同线）；?test=1 新增 TWN49 排版断言 6 条 + TWNREC 记录断言 17 条。 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
@@ -9552,10 +9553,10 @@ function renderChart(data, twin, targetId, opts) {
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
-    td(pTaiNian.wg,pTaiNian.gan,' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
-    td(pTai.wg,pTai.gan,' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
-    td(pMing.wg,pMing.gan,' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
-    td(pShen.wg,pShen.gan,' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
+    td(pTaiNian.wg,stemCellHtml(pTaiNian,'taiNian'),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
+    td(pTai.wg,stemCellHtml(pTai,'tai'),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
+    td(pMing.wg,stemCellHtml(pMing,'ming'),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
+    td(pShen.wg,stemCellHtml(pShen,'shen'),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
     td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
@@ -10020,6 +10021,33 @@ function bindTaijiClicks(container) {
       });
     });
   });
+  // v0.50.0 三垣区：干行（tr.rg 含 data-gk="gan"）与藏气行可设太极点，col=taiNian/tai/ming/shen
+  var SY_KEYS = ['taiNian', 'tai', 'ming', 'shen'];
+  container.querySelectorAll('tr.rg[data-sec="sanyuan"]').forEach(function(tr) {
+    if (!tr.querySelector('td[data-gk="gan"]') || !inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        if (!td.textContent.trim()) return;
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
+      });
+    });
+  });
+  container.querySelectorAll('tr[data-sec="sanyuan cangqi"]').forEach(function(tr) {
+    if (!inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
+        if (!sp || !sp.textContent.trim()) return;
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
+      });
+    });
+  });
 }
 function closeTaijiMenu() {
   var m = document.getElementById('taijiMenu');
@@ -10029,7 +10057,7 @@ function showTaijiMenu(e, info) {
   closeTaijiMenu();
   var t = getTaiji();
   var isCur = t.active && t.gan === info.gan && t.col === info.col && t.kind === info.kind;
-  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干' }[info.col] || info.col;
+  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' }[info.col] || info.col;
   var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
   var m = document.createElement('div');
   m.id = 'taijiMenu';
@@ -16149,6 +16177,37 @@ function captureScreenshot() {
       A.clearTaiji();
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ26: 清除后日柱主星回日主', rsTds()[3].textContent, '日主'));
+
+      // v0.50.0 三垣区扩展
+      var syRs = function() { return host.querySelectorAll('table.chart tr.rs')[1].cells; };
+      var syGanRow = function() { return host.querySelector('tr.rg[data-sec="sanyuan"]'); };
+      var mingGan2 = d.ming.gan;
+      A.setTaiji(mingGan2, 'ming', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ27: 命宫干设点后胎元主星换中心', syRs()[2].textContent, A.shiShen(mingGan2, d.tai.gan, false)));
+      tests.push(eq(sec + ' TJ28: 三垣设点主表日柱同步换中心', rsTds()[3].textContent, A.shiShen(mingGan2, riGan, false)));
+      tests.push(eq(sec + ' TJ29: 命宫干格套五行色圆圈', (syGanRow().cells[3].querySelector('.taiji-ring') || {}).textContent || '', mingGan2));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      syGanRow().cells[3].click();
+      var menu3 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ30: 点击命宫干弹「设为新太极点（命宫干）」', menu3 ? (menu3.textContent.indexOf('设为新太极点') >= 0 && menu3.textContent.indexOf('命宫干') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu3) menu3.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ31: 三垣弹窗按钮设点生效', (A.getTaiji().gan === d.ming.gan && A.getTaiji().col === 'ming' && A.getTaiji().kind === 'gan') ? 'Y' : 'N', 'Y'));
+      R.renderChart(d, 1, 'taijiTestHost');
+      syGanRow().cells[3].click();
+      var menu4 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ32: 三垣再点同位弹「恢复日主太极点」', menu4 ? (menu4.textContent.indexOf('恢复日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu4) menu4.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ33: 三垣恢复后未激活', A.getTaiji().active, false));
+      var syCgSpan = host.querySelector('tr[data-sec="sanyuan cangqi"] td:nth-child(2) span');
+      var syCgGan = syCgSpan ? syCgSpan.textContent.trim() : '';
+      A.setTaiji(syCgGan, 'taiNian', 'cang');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ34: 三垣藏干设点后身宫主星换中心', syRs()[4].textContent, A.shiShen(syCgGan, d.shen.gan, false)));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ35: 三垣主星还原', syRs()[2].textContent, A.shiShen(riGan, d.tai.gan, false)));
     } finally {
       A.clearTaiji();
       var m = document.getElementById('taijiMenu');
