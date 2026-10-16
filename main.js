@@ -1,4 +1,4 @@
-/* 八字排盘 v0.51.0 — main.js */
+/* 八字排盘 v0.53.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1943,6 +1943,7 @@ function captureScreenshot() {
     function typeSeq(table) {
       var out = [], trs = table.querySelectorAll('tr[data-row-type]');
       for (var i = 0; i < trs.length; i++) {
+        if (trs[i].hasAttribute('data-ssh-group')) continue;
         out.push((trs[i].getAttribute('data-row-type') || '').split(' ')[0]);
       }
       return out;
@@ -4054,6 +4055,66 @@ function captureScreenshot() {
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     tests.push(eq(sec + ' TJ58: 测试后状态还原', localStorage.getItem('bz_cmp_state'), savedCmp));
     tests.push(eq(sec + ' TJ59: 主表太极快照不变', JSON.stringify(A.getTaiji()), JSON.stringify(savedMain)));
+  })();
+
+  tests.push({ section:'十神组(v0.53.0)' });
+  (function() {
+    var sec = 'SSH';
+    var S = window.SSH, R = window.RENDER, A = window.ALGO;
+    if (!S || !R || typeof R._applyDLUpdates !== 'function') {
+      tests.push(fail(sec + ' T01: 前置 SSH/RENDER._applyDLUpdates 已挂载', '缺失'));
+      return;
+    }
+    tests.push(eq(sec + ' T01: SSH 模块已挂载', typeof S.mapName === 'function' ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T02: 十神键序 10 项', S.SHI_SHEN_KEYS.length, 10));
+
+    var savedGroups = localStorage.getItem('bz_ssh_groups_v1');
+    var savedSel = localStorage.getItem('bz_ssh_selected_v1');
+
+    var groups = S.loadGroups();
+    tests.push(eq(sec + ' T03: 默认组含军队/社会', (groups[0] && groups[0].name === '军队' && groups[1] && groups[1].name === '社会') ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T04: 军队组七杀→司令', S.mapName(groups[0], '七杀'), '司令'));
+    tests.push(eq(sec + ' T05: 未配置键映射为空', S.mapName(groups[0], '不存在键'), ''));
+
+    A.clearTaiji();
+    localStorage.setItem('bz_ssh_selected_v1', JSON.stringify(['军队']));
+    var pd = paipan('SSH渲染', '男', 1984, 11, 15, 12, 0);
+    R.renderChart(pd, undefined, 'tst-out');
+    var host = document.getElementById('tst-out');
+    var ganRow = host.querySelector('tr.ssh-gan-row');
+    var cgRow = host.querySelector('tr.ssh-cg-row');
+    tests.push(eq(sec + ' T06: 组名行已插入', ganRow ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T07: 对应名行已插入', cgRow ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T08: 组名行紧跟主星行', ganRow && ganRow.previousElementSibling ? ganRow.getAttribute('data-ssh-group') + '@' + (ganRow.previousElementSibling.getAttribute('data-row-type') || '') : '', '军队@dy1'));
+    var grp = S.groupByName('军队');
+    var expectRs = S.mapName(grp, A.shiShen(pd.ri.gan, pd.nian.gan, false));
+    tests.push(eq(sec + ' T09: 年柱组名=主星全名映射', ganRow ? ganRow.cells[1].textContent : '', expectRs));
+    var cgCell = host.querySelector('tr[data-row-type="ln2"] td:nth-child(2)');
+    tests.push(eq(sec + ' T10: 藏气行横排3span', cgCell ? cgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
+    tests.push(eq(sec + ' T11: 对应名行逐位对齐3span', cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var cg0 = CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi][0] : '';
+    var expectCg = cg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, cg0, false)) : '';
+    tests.push(eq(sec + ' T12: 本气对应名', cgRow ? cgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectCg));
+
+    var table = host.querySelector('table.chart');
+    var mkPill = function(g, z) {
+      return { gan: g, zhi: z, rs: A.shiShen(pd.ri.gan, g, false), cg: '', wg: '', wz: '', ny: '', nayun: '', xy: '', zz: '', kw: '', sh: '' };
+    };
+    R._applyDLUpdates(table, mkPill('甲', '子'), mkPill('丙', '寅'), true, { riGan: pd.ri.gan });
+    var ganRow2 = host.querySelector('tr.ssh-gan-row');
+    var expectDy = S.mapName(grp, A.shiShen(pd.ri.gan, '甲', false));
+    var expectLn = S.mapName(grp, A.shiShen(pd.ri.gan, '丙', false));
+    tests.push(eq(sec + ' T13: 大运列组名同步', ganRow2 ? ganRow2.cells[5].textContent : '', expectDy));
+    tests.push(eq(sec + ' T14: 流年列组名同步', ganRow2 ? ganRow2.cells[6].textContent : '', expectLn));
+
+    localStorage.setItem('bz_ssh_selected_v1', '[]');
+    R.renderChart(pd, undefined, 'tst-out');
+    tests.push(eq(sec + ' T15: 清空后无组行', host.querySelector('tr.ssh-gan-row') ? 'N' : 'Y', 'Y'));
+
+    if (savedGroups === null) localStorage.removeItem('bz_ssh_groups_v1'); else localStorage.setItem('bz_ssh_groups_v1', savedGroups);
+    if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
+    R.renderChart(pd, undefined, 'tst-out');
+    tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

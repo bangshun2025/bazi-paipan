@@ -1,4 +1,4 @@
-/* 八字排盘 v0.51.0 — render.js */
+/* 八字排盘 v0.53.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -105,6 +105,12 @@
   var fmtDate = ALGO.fmtDate;
   var pad = ALGO.pad;
   var buildShunLabel = ALGO.buildShunLabel;
+
+  // ===== 别名：来自 shishen.js =====
+  var sshSelectedGroups = SSH.selectedGroups;
+  var sshMapName = SSH.mapName;
+  var sshGroupByName = SSH.groupByName;
+  var sshEsc = SSH.esc;
 
   // ===== 别名：来自 gongwei.js =====
   var loadGroups = GONGWEI.loadGroups;
@@ -457,6 +463,55 @@ function xyRowMainNoLuck(ps) {
     + _xyCell(ps.nian.gan + ps.nian.zhi) + _xyCell(ps.yue.gan + ps.yue.zhi)
     + _xyCell(ps.ri.gan + ps.ri.zhi) + _xyCell(ps.shi.gan + ps.shi.zhi) + '</tr>';
 }
+
+// ===== v0.53.0 十神组行 =====
+// 外层独立 td（renderChart 内的 td() 局部函数此处不可见）
+function sshTd(cls, txt) { return '<td class="' + (cls || '') + '">' + (txt || '') + '</td>'; }
+
+// 藏干横排单元：固定 3 个等宽 span（空层占位），与对应名行逐位对齐；太极藏干点保留 taiji-ring
+function sshCgSpans(p, colKey, twin, riGan) {
+  var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
+  var t = getTaiji();
+  var out = '';
+  for (var i = 0; i < 3; i++) {
+    var l = layers[i];
+    if (l && t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
+      out += '<span class="ssh-cg-g"><span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
+    } else {
+      out += '<span class="ssh-cg-g">' + (l ? '<span class="' + wxClass(l.gan) + '">' + l.gan + '</span>' : '&nbsp;') + '</span>';
+    }
+  }
+  return out;
+}
+
+// 藏干对应名单元：与 sshCgSpans 同源层序列，逐位映射组内对应名
+function sshCgNameCell(group, p, colKey, twin, riGan) {
+  var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
+  var out = '';
+  for (var i = 0; i < 3; i++) {
+    var l = layers[i];
+    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, l ? shiShen(riGan, l.gan, false) : '')) + '</span></span>';
+  }
+  return out;
+}
+
+function sshGanCell(group, rs) {
+  return sshEsc(sshMapName(group, rs));
+}
+
+function sshGanRow(group, pNian, pYue, pRi, pShi, pDy, pLn) {
+  return '<tr class="rm ssh-gan-row" data-row-type="ssh-gan" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
+    + sshTd('', sshGanCell(group, pNian.rs)) + sshTd('', sshGanCell(group, pYue.rs)) + sshTd('', sshGanCell(group, pRi.rs)) + sshTd('', sshGanCell(group, pShi.rs))
+    + sshTd('sep col-dy', sshGanCell(group, pDy.rs)) + sshTd('col-ln', sshGanCell(group, pLn.rs)) + '</tr>';
+}
+
+function sshCgRow(group, pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan) {
+  return '<tr class="rm ssh-cg-row" data-row-type="ssh-cg" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
+    + sshTd('', sshCgNameCell(group, pNian, 'nian', twin, riGan)) + sshTd('', sshCgNameCell(group, pYue, 'yue', twin, riGan))
+    + sshTd('', sshCgNameCell(group, pRi, 'ri', twin, riGan)) + sshTd('', sshCgNameCell(group, pShi, 'shi', twin, riGan))
+    + sshTd('sep col-dy', sshCgNameCell(group, pDy, 'dayun', 0, riGan)) + sshTd('col-ln', sshCgNameCell(group, pLn, 'liunian', 0, riGan)) + '</tr>';
+}
+
 // 三垣区核心 5 列（尾部 sep/col-ln 由调用方或 si 循环补）；不带 xy1，避免 _applyDLUpdates 误命中
 function xyRowSyCore(ps) {
   return '<tr class="rx" data-sec="sanyuan" data-row-type="xingyao"><td class="rl">星曜</td>'
@@ -837,7 +892,16 @@ function renderChart(data, twin, targetId, opts) {
     td(pShi.wz,pShi.zhi,' data-gk="zhi" data-gz="'+pShi.zhi+'" data-pk="shi"')+
     td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
-  mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
+  // v0.53.0 十神组行：勾选组时藏气行横排化（等宽 span 逐位对齐对应名行）
+  var sshSel = sshSelectedGroups();
+  var sshCg = sshSel.length > 0;
+  mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')
+    +td('', sshCg ? sshCgSpans(pNian,'nian',twin,riGan) : pNian.cg)
+    +td('', sshCg ? sshCgSpans(pYue,'yue',twin,riGan) : pYue.cg)
+    +td('', sshCg ? sshCgSpans(pRi,'ri',twin,riGan) : pRi.cg)
+    +td('', sshCg ? sshCgSpans(pShi,'shi',twin,riGan) : pShi.cg)
+    +td('sep col-dy', sshCg ? sshCgSpans(pDy,'dayun',0,riGan) : pDy.cg)
+    +td('col-ln', sshCg ? sshCgSpans(pLn,'liunian',0,riGan) : pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
   // 纳音 — splice 后索引从 6 偏移至 4
   mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
@@ -853,6 +917,17 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // v0.29.0 星曜行：插入「藏气」与「纳音」之间（index-independent，既有索引一字不改）
   insertBeforeNayin(mainRows, xyRowMain({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen }, pDy, pLn));
+  // v0.53.0 十神组行：组名行插主星行后、藏干对应名行插藏气行后（index-independent）
+  if (sshSel.length) {
+    var sshGanRows = [];
+    var sshCgRows = [];
+    for (var si = 0; si < sshSel.length; si++) {
+      sshGanRows.push(sshGanRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn));
+      sshCgRows.push(sshCgRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan));
+    }
+    insertAfterAnchor(mainRows, /data-row-type="dy1"/, sshGanRows);
+    insertAfterAnchor(mainRows, /data-row-type="ln2"/, sshCgRows);
+  }
   // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时（index-independent 锚点插入，自带 7 列）
   insertAfterAnchor(mainRows, /data-row-type="zhuzuo ln3"/, ZUO_GROUP.map(function(k){ return zuoRowMain(pAll, k, luckCols); }));
   insertAfterAnchor(mainRows, /data-row-type="zizuo dy5"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(pAll, k, luckCols); }));
@@ -995,7 +1070,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
   const recOn = !opts.luckBelow && isRecOn();
@@ -1632,6 +1707,8 @@ function _zuoRefs(d) {
   var r = {};
   ZUO_GROUP.forEach(function(k) { var c = d[ZUO_REF[k]]; if (c && c.gan) r[ZUO_REF[k]] = c.gan; });
   SIT_MAIN_KEYS.forEach(function(k) { var c = d[SIT_MAIN_COL[k]]; if (c && c.zhi) r[SIT_MAIN_COL[k] + 'Zhi'] = c.zhi; });
+  // v0.53.0 十神组对应名行刷新需要十神参照干
+  if (d.ri && d.ri.gan) r.riGan = d.ri.gan;
   return r;
 }
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
@@ -1789,6 +1866,24 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
     if (u[5] !== undefined) tds[5].setAttribute('data-xy-gz', u[5]);
     if (u[6] !== undefined) tds[6].setAttribute('data-xy-gz', u[6]);
   });
+
+  // v0.53.0 十神组行大运/流年列同步：组名行按 rs 映射，对应名行按藏干层映射（参照干 refs.riGan）
+  var sshTrs = tableEl.querySelectorAll('tr[data-ssh-group]');
+  for (var st = 0; st < sshTrs.length; st++) {
+    var sshTr = sshTrs[st];
+    var grp = sshGroupByName(sshTr.getAttribute('data-ssh-group'));
+    if (!grp) continue;
+    var sshTds = sshTr.querySelectorAll('td');
+    if (sshTds.length < 7) continue;
+    if (/\bssh-cg\b/.test(sshTr.getAttribute('data-row-type') || '')) {
+      if (!refs || !refs.riGan) continue;
+      sshTds[5].innerHTML = sshCgNameCell(grp, pDy, 'dayun', 0, refs.riGan);
+      sshTds[6].innerHTML = sshCgNameCell(grp, pLn, 'liunian', 0, refs.riGan);
+    } else {
+      sshTds[5].innerHTML = sshGanCell(grp, pDy.rs);
+      sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
+    }
+  }
 }
 
 
@@ -2111,7 +2206,7 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + SSH.renderPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
@@ -2234,7 +2329,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + SSH.renderPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
@@ -2966,7 +3061,7 @@ function cmpOpen() {
   closeAllLevelPops();
   var gzHost = document.getElementById('cmpGzPanel');
   if (gzHost && !gzHost.innerHTML && window.GONGWEI && typeof GONGWEI.renderGongWeiPanel === 'function') {
-    gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
+    gzHost.innerHTML = GONGWEI.renderGongWeiPanel() + SSH.renderPanel();
   }
   _cmpHlBind();
   _cmpApplyZoom();

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.51.0 | 2026-10-16 -->
+<!-- 八字排盘 ·  从真版 v0.53.0 | 2026-10-16 -->
+<!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.51.0: 对比排盘太极点 — 点击对比卡干行/藏干（含三垣）弹双选项「设为本盘新的太极点 / 设为全局新的太极点」；本盘仅该卡换中心，全局统摄所有对比卡（设置时清各本盘点），再点同位弹恢复；渲染包络使主表太极状态与对比卡互不干扰，主表太极激活时对比卡保持继承 -->
 <!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
@@ -596,6 +597,14 @@
     padding: 12px 14px; min-width: 280px; margin-top: 4px;
   }
   .gz-popover.open { display: block; }
+
+  /* v0.53.0 十神组行：藏干横排与对应名行等宽逐位对齐 */
+  .ssh-cg-g { display: inline-block; min-width: 3.2em; text-align: center; }
+  .ssh-cg-g .taiji-ring { min-width: 2em; }
+  .ssh-cg-i { display: inline-block; min-width: 3.2em; text-align: center; opacity: .9; }
+  .ssh-cg-i-t { font-size: 11px; }
+  .ssh-gan-row td, .ssh-cg-row td { font-size: 12px; padding: 1px 4px; }
+  .ssh-gan-row .rl, .ssh-cg-row .rl { color: var(--c-gray); font-size: 11px; }
 
   /* Checkbox grid */
   .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
@@ -8678,6 +8687,363 @@ function handleImportFile(event) {
 })();
 </script>
 <script>
+/* 八字排盘 v0.53.0 — shishen.js */
+(function() {
+  'use strict';
+
+  var GROUPS_KEY = 'bz_ssh_groups_v1';
+  var SEL_KEY = 'bz_ssh_selected_v1';
+
+  var SHI_SHEN_KEYS = ['七杀', '正官', '枭神', '正印', '比肩', '劫财', '正财', '偏财', '食神', '伤官'];
+
+  var DEFAULT_GROUPS = [
+    {
+      name: '军队',
+      map: { '七杀': '司令', '正官': '军务', '枭神': '军师', '正印': '政委', '比肩': '战友', '劫财': '盟友', '正财': '军需官', '偏财': '支前员', '食神': '炊事员', '伤官': '宣传员' }
+    },
+    {
+      name: '社会',
+      map: { '七杀': '对手', '正官': '领导', '枭神': '导师', '正印': '顾问', '比肩': '同事', '劫财': '伙伴', '正财': '工资', '偏财': '外快', '食神': '爱好', '伤官': '作品' }
+    }
+  ];
+
+  var _lsOk = true;
+  var _draft = [];
+
+  function lsGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { _lsOk = false; return null; }
+  }
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, val); return true; } catch (e) { _lsOk = false; return false; }
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function normalizeGroups(raw) {
+    var arr = Array.isArray(raw) ? raw : [];
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < arr.length; i++) {
+      var g = arr[i];
+      if (!g || typeof g !== 'object') continue;
+      var name = String(g.name || '').trim();
+      if (!name || seen[name]) continue;
+      seen[name] = 1;
+      var src = (g.map && typeof g.map === 'object') ? g.map : {};
+      var map = {};
+      for (var j = 0; j < SHI_SHEN_KEYS.length; j++) {
+        var k = SHI_SHEN_KEYS[j];
+        map[k] = String(src[k] == null ? '' : src[k]).trim();
+      }
+      out.push({ name: name, map: map });
+    }
+    return out;
+  }
+
+  function loadGroups() {
+    var raw = lsGet(GROUPS_KEY);
+    if (raw == null) return JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+    try {
+      var parsed = normalizeGroups(JSON.parse(raw));
+      return parsed.length ? parsed : JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+    } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_GROUPS)); }
+  }
+
+  function persistGroups(groups) {
+    return lsSet(GROUPS_KEY, JSON.stringify(normalizeGroups(groups)));
+  }
+
+  function loadSelected() {
+    var raw = lsGet(SEL_KEY);
+    if (raw == null) return ['军队'];
+    try {
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return ['军队'];
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        if (typeof arr[i] === 'string' && arr[i] && out.indexOf(arr[i]) < 0) out.push(arr[i]);
+      }
+      return out;
+    } catch (e) { return ['军队']; }
+  }
+
+  function persistSelected(sel) {
+    return lsSet(SEL_KEY, JSON.stringify(sel));
+  }
+
+  // 勾选顺序即主表行顺序；组不存在或重复勾选时静默丢弃
+  function selectedGroups() {
+    var groups = loadGroups();
+    var sel = loadSelected();
+    var byName = {};
+    var out = [];
+    for (var i = 0; i < groups.length; i++) byName[groups[i].name] = groups[i];
+    for (var j = 0; j < sel.length; j++) {
+      var g = byName[sel[j]];
+      if (g && out.indexOf(g) < 0) out.push(g);
+    }
+    return out;
+  }
+
+  function groupByName(name) {
+    var groups = loadGroups();
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i].name === name) return groups[i];
+    }
+    return null;
+  }
+
+  // 十神全名 → 组内对应名；未配置或键不存在返回空串
+  function mapName(group, ssName) {
+    if (!group || !ssName || !group.map) return '';
+    return group.map[ssName] || '';
+  }
+
+  function cbGridHtml() {
+    var groups = loadGroups();
+    var sel = loadSelected();
+    if (!groups.length) {
+      return '<div style="text-align:center;color:var(--c-gray);padding:16px 0;font-size:12px;">暂无十神组，点击 ⚙ 十神设置添加</div>';
+    }
+    var items = '';
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i];
+      var checked = sel.indexOf(g.name) >= 0;
+      items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '">'
+        + '<input type="checkbox" value="' + esc(g.name) + '" onchange="SSH.toggleGroup(this.value, this.checked)"' + (checked ? ' checked' : '') + '>'
+        + '<span>' + esc(g.name) + '</span></label>';
+    }
+    return items;
+  }
+
+  function renderPanel() {
+    var sel = loadSelected();
+    return '<div class="gz-panel-wrapper">'
+      + '<button class="btn-simple ssh-trigger" onclick="SSH.togglePanel(event)">十神<span class="ssh-count"> ' + sel.length + '</span> ▾</button>'
+      + '<div class="gz-popover" id="ssh-popover" onclick="event.stopPropagation()">'
+      + '<div class="gz-cb-grid">' + cbGridHtml() + '</div>'
+      + '<div class="gz-popover-actions">'
+      + '<button onclick="SSH.selectAll()">全选</button>'
+      + '<button onclick="SSH.clearAll()">清空</button>'
+      + '<button class="gz-settings-btn" onclick="SSH.closePanel();SSH.openSettings();">⚙ 十神设置</button>'
+      + '</div>'
+      + '</div></div>';
+  }
+
+  function togglePanel(e) {
+    if (e) e.stopPropagation();
+    var pop = document.getElementById('ssh-popover');
+    if (pop) pop.classList.toggle('open');
+  }
+
+  function closePanel() {
+    var pop = document.getElementById('ssh-popover');
+    if (pop) pop.classList.remove('open');
+  }
+
+  // 勾选变化后刷新所有已注入的 SSH 面板（主页 topbar 与对比页各一份，只动 cb-grid 与计数，保 popover 开合状态）
+  function rebuildPanels() {
+    var grids = document.querySelectorAll('#ssh-popover .gz-cb-grid');
+    for (var i = 0; i < grids.length; i++) grids[i].innerHTML = cbGridHtml();
+    var counts = document.querySelectorAll('.ssh-trigger .ssh-count');
+    var n = loadSelected().length;
+    for (var j = 0; j < counts.length; j++) counts[j].textContent = ' ' + n;
+  }
+
+  // 勾选变化后重渲当前视图：对比页 overlay 打开 → renderCmpTrack；否则主页主表全量重渲
+  function refresh() {
+    var ov = document.getElementById('cmpOverlay');
+    if (ov && ov.classList.contains('show')) {
+      if (typeof window.renderCmpTrack === 'function') window.renderCmpTrack();
+      return;
+    }
+    var data = window._paipanData;
+    if (data && window.RENDER && typeof RENDER.renderChart === 'function') RENDER.renderChart(data, 1, 'output');
+  }
+
+  function toggleGroup(name, checked) {
+    var sel = loadSelected();
+    var idx = sel.indexOf(name);
+    if (checked && idx < 0) sel.push(name);
+    else if (!checked && idx >= 0) sel.splice(idx, 1);
+    persistSelected(sel);
+    rebuildPanels();
+    refresh();
+  }
+
+  function selectAll() {
+    var groups = loadGroups();
+    var sel = [];
+    for (var i = 0; i < groups.length; i++) sel.push(groups[i].name);
+    persistSelected(sel);
+    rebuildPanels();
+    refresh();
+    closePanel();
+  }
+
+  function clearAll() {
+    persistSelected([]);
+    rebuildPanels();
+    refresh();
+    closePanel();
+  }
+
+  // ===== 设置弹窗（动态构建，骨架复用 gz-settings-*） =====
+  function buildSettingsModal() {
+    var div = document.createElement('div');
+    div.className = 'gz-settings-overlay';
+    div.id = 'sshSettingsOverlay';
+    div.innerHTML = '<div class="gz-settings-modal" style="max-width:680px;">'
+      + '<div class="gz-settings-header"><span class="gz-settings-title">十神设置</span>'
+      + '<button class="gz-settings-close" onclick="SSH.closeSettings()">✕</button></div>'
+      + '<div id="sshSettingsList" style="overflow-y:auto;padding:12px 18px;flex:1;"></div>'
+      + '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 18px 14px;border-top:1px solid var(--c-line);">'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="btn-simple" onclick="SSH.addGroup()">+ 新增组</button>'
+      + '<button class="btn-simple" onclick="SSH.resetGroups()">恢复默认</button>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="btn-simple" onclick="SSH.closeSettings()">取消</button>'
+      + '<button class="btn-simple active" onclick="SSH.saveSettings()">保存</button>'
+      + '</div>'
+      + '</div></div>';
+    div.addEventListener('click', function(e) { if (e.target === div) closeSettings(); });
+    document.body.appendChild(div);
+  }
+
+  function renderSettingsList() {
+    var host = document.getElementById('sshSettingsList');
+    if (!host) return;
+    var html = '';
+    for (var i = 0; i < _draft.length; i++) {
+      var g = _draft[i];
+      var fields = '';
+      for (var j = 0; j < SHI_SHEN_KEYS.length; j++) {
+        var k = SHI_SHEN_KEYS[j];
+        fields += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;">'
+          + '<span style="width:36px;flex-shrink:0;color:var(--c-gray);">' + k + '</span>'
+          + '<input type="text" value="' + esc(g.map[k]) + '" oninput="SSH.setMap(' + i + ',\'' + k + '\',this.value)" '
+          + 'style="flex:1;min-width:0;padding:3px 6px;border:1px solid var(--c-line);border-radius:3px;font-size:12px;background:transparent;color:var(--c-ink);">'
+          + '</label>';
+      }
+      html += '<div style="border:1px solid var(--c-line);border-radius:4px;padding:10px 12px;margin-bottom:10px;">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+        + '<input type="text" value="' + esc(g.name) + '" oninput="SSH.setGroupName(' + i + ',this.value)" placeholder="组名" '
+        + 'style="width:140px;padding:3px 6px;border:1px solid var(--c-line);border-radius:3px;font-size:13px;background:transparent;color:var(--c-ink);">'
+        + '<button class="btn-simple" style="margin-left:auto;" onclick="SSH.removeGroup(' + i + ')">删除</button>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 16px;">' + fields + '</div>'
+        + '</div>';
+    }
+    if (!_draft.length) {
+      html = '<div style="text-align:center;color:var(--c-gray);padding:24px 0;font-size:13px;">暂无十神组，点击「+ 新增组」创建</div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function openSettings() {
+    closePanel();
+    var overlay = document.getElementById('sshSettingsOverlay');
+    if (!overlay) {
+      buildSettingsModal();
+      overlay = document.getElementById('sshSettingsOverlay');
+    }
+    _draft = loadGroups();
+    renderSettingsList();
+    overlay.classList.add('show');
+  }
+
+  function closeSettings() {
+    var ov = document.getElementById('sshSettingsOverlay');
+    if (ov) ov.classList.remove('show');
+    _draft = [];
+  }
+
+  function setGroupName(i, v) {
+    if (_draft[i]) _draft[i].name = v;
+  }
+
+  function setMap(i, key, v) {
+    if (_draft[i] && _draft[i].map && SHI_SHEN_KEYS.indexOf(key) >= 0) _draft[i].map[key] = v;
+  }
+
+  function addGroup() {
+    var n = _draft.length + 1;
+    var name = '新组';
+    while (true) {
+      var dup = false;
+      for (var i = 0; i < _draft.length; i++) {
+        if (_draft[i].name === name) { dup = true; break; }
+      }
+      if (!dup) break;
+      name = '新组' + (++n);
+    }
+    var map = {};
+    for (var j = 0; j < SHI_SHEN_KEYS.length; j++) map[SHI_SHEN_KEYS[j]] = '';
+    _draft.push({ name: name, map: map });
+    renderSettingsList();
+  }
+
+  function removeGroup(i) {
+    _draft.splice(i, 1);
+    renderSettingsList();
+  }
+
+  function resetGroups() {
+    _draft = JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+    renderSettingsList();
+  }
+
+  // 保存：trim/去重后落盘；已删除或改名的组自动移出勾选
+  function saveSettings() {
+    var groups = normalizeGroups(_draft);
+    persistGroups(groups);
+    var names = {};
+    for (var i = 0; i < groups.length; i++) names[groups[i].name] = 1;
+    var oldSel = loadSelected();
+    var sel = [];
+    for (var j = 0; j < oldSel.length; j++) {
+      if (names[oldSel[j]] && sel.indexOf(oldSel[j]) < 0) sel.push(oldSel[j]);
+    }
+    persistSelected(sel);
+    closeSettings();
+    rebuildPanels();
+    refresh();
+  }
+
+  window.SSH = {
+    SHI_SHEN_KEYS: SHI_SHEN_KEYS,
+    DEFAULT_GROUPS: DEFAULT_GROUPS,
+    esc: esc,
+    loadGroups: loadGroups,
+    persistGroups: persistGroups,
+    loadSelected: loadSelected,
+    persistSelected: persistSelected,
+    selectedGroups: selectedGroups,
+    groupByName: groupByName,
+    mapName: mapName,
+    renderPanel: renderPanel,
+    togglePanel: togglePanel,
+    closePanel: closePanel,
+    toggleGroup: toggleGroup,
+    selectAll: selectAll,
+    clearAll: clearAll,
+    openSettings: openSettings,
+    closeSettings: closeSettings,
+    setGroupName: setGroupName,
+    setMap: setMap,
+    addGroup: addGroup,
+    removeGroup: removeGroup,
+    resetGroups: resetGroups,
+    saveSettings: saveSettings,
+    refresh: refresh
+  };
+})();
+
+</script>
+<script>
 /* 八字排盘 v0.29.0 — render.js */
 (function() {
 
@@ -8785,6 +9151,12 @@ function handleImportFile(event) {
   var fmtDate = ALGO.fmtDate;
   var pad = ALGO.pad;
   var buildShunLabel = ALGO.buildShunLabel;
+
+  // ===== 别名：来自 shishen.js =====
+  var sshSelectedGroups = SSH.selectedGroups;
+  var sshMapName = SSH.mapName;
+  var sshGroupByName = SSH.groupByName;
+  var sshEsc = SSH.esc;
 
   // ===== 别名：来自 gongwei.js =====
   var loadGroups = GONGWEI.loadGroups;
@@ -9137,6 +9509,55 @@ function xyRowMainNoLuck(ps) {
     + _xyCell(ps.nian.gan + ps.nian.zhi) + _xyCell(ps.yue.gan + ps.yue.zhi)
     + _xyCell(ps.ri.gan + ps.ri.zhi) + _xyCell(ps.shi.gan + ps.shi.zhi) + '</tr>';
 }
+
+// ===== v0.53.0 十神组行 =====
+// 外层独立 td（renderChart 内的 td() 局部函数此处不可见）
+function sshTd(cls, txt) { return '<td class="' + (cls || '') + '">' + (txt || '') + '</td>'; }
+
+// 藏干横排单元：固定 3 个等宽 span（空层占位），与对应名行逐位对齐；太极藏干点保留 taiji-ring
+function sshCgSpans(p, colKey, twin, riGan) {
+  var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
+  var t = getTaiji();
+  var out = '';
+  for (var i = 0; i < 3; i++) {
+    var l = layers[i];
+    if (l && t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
+      out += '<span class="ssh-cg-g"><span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
+    } else {
+      out += '<span class="ssh-cg-g">' + (l ? '<span class="' + wxClass(l.gan) + '">' + l.gan + '</span>' : '&nbsp;') + '</span>';
+    }
+  }
+  return out;
+}
+
+// 藏干对应名单元：与 sshCgSpans 同源层序列，逐位映射组内对应名
+function sshCgNameCell(group, p, colKey, twin, riGan) {
+  var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
+  var out = '';
+  for (var i = 0; i < 3; i++) {
+    var l = layers[i];
+    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, l ? shiShen(riGan, l.gan, false) : '')) + '</span></span>';
+  }
+  return out;
+}
+
+function sshGanCell(group, rs) {
+  return sshEsc(sshMapName(group, rs));
+}
+
+function sshGanRow(group, pNian, pYue, pRi, pShi, pDy, pLn) {
+  return '<tr class="rm ssh-gan-row" data-row-type="ssh-gan" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
+    + sshTd('', sshGanCell(group, pNian.rs)) + sshTd('', sshGanCell(group, pYue.rs)) + sshTd('', sshGanCell(group, pRi.rs)) + sshTd('', sshGanCell(group, pShi.rs))
+    + sshTd('sep col-dy', sshGanCell(group, pDy.rs)) + sshTd('col-ln', sshGanCell(group, pLn.rs)) + '</tr>';
+}
+
+function sshCgRow(group, pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan) {
+  return '<tr class="rm ssh-cg-row" data-row-type="ssh-cg" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
+    + sshTd('', sshCgNameCell(group, pNian, 'nian', twin, riGan)) + sshTd('', sshCgNameCell(group, pYue, 'yue', twin, riGan))
+    + sshTd('', sshCgNameCell(group, pRi, 'ri', twin, riGan)) + sshTd('', sshCgNameCell(group, pShi, 'shi', twin, riGan))
+    + sshTd('sep col-dy', sshCgNameCell(group, pDy, 'dayun', 0, riGan)) + sshTd('col-ln', sshCgNameCell(group, pLn, 'liunian', 0, riGan)) + '</tr>';
+}
+
 // 三垣区核心 5 列（尾部 sep/col-ln 由调用方或 si 循环补）；不带 xy1，避免 _applyDLUpdates 误命中
 function xyRowSyCore(ps) {
   return '<tr class="rx" data-sec="sanyuan" data-row-type="xingyao"><td class="rl">星曜</td>'
@@ -9517,7 +9938,16 @@ function renderChart(data, twin, targetId, opts) {
     td(pShi.wz,pShi.zhi,' data-gk="zhi" data-gz="'+pShi.zhi+'" data-pk="shi"')+
     td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
-  mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')+td('',pNian.cg)+td('',pYue.cg)+td('',pRi.cg)+td('',pShi.cg)+td('sep col-dy',pDy.cg)+td('col-ln',pLn.cg)+'</tr>';
+  // v0.53.0 十神组行：勾选组时藏气行横排化（等宽 span 逐位对齐对应名行）
+  var sshSel = sshSelectedGroups();
+  var sshCg = sshSel.length > 0;
+  mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')
+    +td('', sshCg ? sshCgSpans(pNian,'nian',twin,riGan) : pNian.cg)
+    +td('', sshCg ? sshCgSpans(pYue,'yue',twin,riGan) : pYue.cg)
+    +td('', sshCg ? sshCgSpans(pRi,'ri',twin,riGan) : pRi.cg)
+    +td('', sshCg ? sshCgSpans(pShi,'shi',twin,riGan) : pShi.cg)
+    +td('sep col-dy', sshCg ? sshCgSpans(pDy,'dayun',0,riGan) : pDy.cg)
+    +td('col-ln', sshCg ? sshCgSpans(pLn,'liunian',0,riGan) : pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
   // 纳音 — splice 后索引从 6 偏移至 4
   mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
@@ -9533,6 +9963,17 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // v0.29.0 星曜行：插入「藏气」与「纳音」之间（index-independent，既有索引一字不改）
   insertBeforeNayin(mainRows, xyRowMain({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen }, pDy, pLn));
+  // v0.53.0 十神组行：组名行插主星行后、藏干对应名行插藏气行后（index-independent）
+  if (sshSel.length) {
+    var sshGanRows = [];
+    var sshCgRows = [];
+    for (var si = 0; si < sshSel.length; si++) {
+      sshGanRows.push(sshGanRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn));
+      sshCgRows.push(sshCgRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan));
+    }
+    insertAfterAnchor(mainRows, /data-row-type="dy1"/, sshGanRows);
+    insertAfterAnchor(mainRows, /data-row-type="ln2"/, sshCgRows);
+  }
   // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时（index-independent 锚点插入，自带 7 列）
   insertAfterAnchor(mainRows, /data-row-type="zhuzuo ln3"/, ZUO_GROUP.map(function(k){ return zuoRowMain(pAll, k, luckCols); }));
   insertAfterAnchor(mainRows, /data-row-type="zizuo dy5"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(pAll, k, luckCols); }));
@@ -9675,7 +10116,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
   const recOn = !opts.luckBelow && isRecOn();
@@ -10312,6 +10753,8 @@ function _zuoRefs(d) {
   var r = {};
   ZUO_GROUP.forEach(function(k) { var c = d[ZUO_REF[k]]; if (c && c.gan) r[ZUO_REF[k]] = c.gan; });
   SIT_MAIN_KEYS.forEach(function(k) { var c = d[SIT_MAIN_COL[k]]; if (c && c.zhi) r[SIT_MAIN_COL[k] + 'Zhi'] = c.zhi; });
+  // v0.53.0 十神组对应名行刷新需要十神参照干
+  if (d.ri && d.ri.gan) r.riGan = d.ri.gan;
   return r;
 }
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
@@ -10469,6 +10912,24 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
     if (u[5] !== undefined) tds[5].setAttribute('data-xy-gz', u[5]);
     if (u[6] !== undefined) tds[6].setAttribute('data-xy-gz', u[6]);
   });
+
+  // v0.53.0 十神组行大运/流年列同步：组名行按 rs 映射，对应名行按藏干层映射（参照干 refs.riGan）
+  var sshTrs = tableEl.querySelectorAll('tr[data-ssh-group]');
+  for (var st = 0; st < sshTrs.length; st++) {
+    var sshTr = sshTrs[st];
+    var grp = sshGroupByName(sshTr.getAttribute('data-ssh-group'));
+    if (!grp) continue;
+    var sshTds = sshTr.querySelectorAll('td');
+    if (sshTds.length < 7) continue;
+    if (/\bssh-cg\b/.test(sshTr.getAttribute('data-row-type') || '')) {
+      if (!refs || !refs.riGan) continue;
+      sshTds[5].innerHTML = sshCgNameCell(grp, pDy, 'dayun', 0, refs.riGan);
+      sshTds[6].innerHTML = sshCgNameCell(grp, pLn, 'liunian', 0, refs.riGan);
+    } else {
+      sshTds[5].innerHTML = sshGanCell(grp, pDy.rs);
+      sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
+    }
+  }
 }
 
 
@@ -10791,7 +11252,7 @@ function renderTwinCardsHtml(data, targetId) {
   var nowYearCn = '（当前 ' + nowYear + ' 年）';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(data.displayName || data.name)+'</b><span class="sex-tag">'+(gender==='男'?'乾造':'坤造')+'</span><span class="meta">'+gender+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + SSH.renderPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年（共享）</span> &nbsp; <span class="label">起运</span>'+qiyunText+' &nbsp; <span class="label">交运</span>'+jyText+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div class="luck-table">'+luckRows.join('\n')+'</div>\n      </div>\n      '+buildJieqiHtml(y, data.lng)+'\n    </div>';
@@ -10914,7 +11375,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var lbl2 = (g2==='男'?'👦':'👧')+' 老二';
 
   var html = '\n    <div class="top-bar">\n      <div class="person-info"><b>'+(d1.displayName || d1.name)+'</b><span class="sex-tag">龙凤胎</span><span class="meta">'+sexTag+' · '+y+'年'+m+'月'+d+'日 '+pad(h)+':'+pad(mi)+'</span>'+tstTag+ryTag+'</div>\n      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button><div class="person-info meta bz-zodiac">'+nian.gan+nian.zhi+'年生 · 属'+shengXiao+' '+nowYearCn+'</div></div>\n    </div>\n'
-    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
+    + '\n    <div class="bz-twin-tabs">\n      <button class="bz-twin-tab active" data-mode="both" onclick="RENDER.switchTwinMode(this,\'both\')">并排对比</button>\n      <button class="bz-twin-tab" data-mode="twin1" onclick="RENDER.switchTwinMode(this,\'twin1\')">仅看老大</button>\n      <button class="bz-twin-tab" data-mode="twin2" onclick="RENDER.switchTwinMode(this,\'twin2\')">仅看老二</button>\n      ' + renderGongWeiPanel() + SSH.renderPanel() + renderTwinPillarPanel() + flowControlsHTML() + twinSecControlsHTML() + twinRecBtnHtml() + '\n    </div>\n'
     + '\n    <div class="bz-twin-cards">\n' + card1 + '\n' + card2 + '\n    </div>\n'
     + twinRecPanelHtml()
     + '\n    <div class="bz-twin-shared">\n      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">\n        <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">\n          <div><span class="label">大运·流年</span> &nbsp; '+qiyunText1+' &nbsp; '+qiyunText2+'</div>\n        </div>\n        <button class="btn-back" onclick="RENDER.scrollToNow(this.closest(\'.bz-twin-shared\'))" title="定位今年">📍 今年</button>\n      </div>\n      <div class="luck-section" style="border:none;">\n        <div style="display:flex; gap:24px; align-items:flex-start;">\n          <div class="bz-card-luck" data-card-index="0" style="flex:1; min-width:0;">\n            <div class="luck-table-label">'+lbl1+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr1.join('\n')+'</div>\n          </div>\n          <div class="bz-card-luck" data-card-index="1" style="flex:1; min-width:0; overflow-x:auto;">\n            <div class="luck-table-label">'+lbl2+'</div>\n            <div class="luck-table" style="min-width:520px;">'+lr2.join('\n')+'</div>\n          </div>\n        </div>\n      </div>\n      '+buildJieqiHtml(y, d1.lng)+'\n    </div>';
@@ -11646,7 +12107,7 @@ function cmpOpen() {
   closeAllLevelPops();
   var gzHost = document.getElementById('cmpGzPanel');
   if (gzHost && !gzHost.innerHTML && window.GONGWEI && typeof GONGWEI.renderGongWeiPanel === 'function') {
-    gzHost.innerHTML = GONGWEI.renderGongWeiPanel();
+    gzHost.innerHTML = GONGWEI.renderGongWeiPanel() + SSH.renderPanel();
   }
   _cmpHlBind();
   _cmpApplyZoom();
@@ -14294,6 +14755,7 @@ function captureScreenshot() {
     function typeSeq(table) {
       var out = [], trs = table.querySelectorAll('tr[data-row-type]');
       for (var i = 0; i < trs.length; i++) {
+        if (trs[i].hasAttribute('data-ssh-group')) continue;
         out.push((trs[i].getAttribute('data-row-type') || '').split(' ')[0]);
       }
       return out;
@@ -16405,6 +16867,66 @@ function captureScreenshot() {
     if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
     tests.push(eq(sec + ' TJ58: 测试后状态还原', localStorage.getItem('bz_cmp_state'), savedCmp));
     tests.push(eq(sec + ' TJ59: 主表太极快照不变', JSON.stringify(A.getTaiji()), JSON.stringify(savedMain)));
+  })();
+
+  tests.push({ section:'十神组(v0.53.0)' });
+  (function() {
+    var sec = 'SSH';
+    var S = window.SSH, R = window.RENDER, A = window.ALGO;
+    if (!S || !R || typeof R._applyDLUpdates !== 'function') {
+      tests.push(fail(sec + ' T01: 前置 SSH/RENDER._applyDLUpdates 已挂载', '缺失'));
+      return;
+    }
+    tests.push(eq(sec + ' T01: SSH 模块已挂载', typeof S.mapName === 'function' ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T02: 十神键序 10 项', S.SHI_SHEN_KEYS.length, 10));
+
+    var savedGroups = localStorage.getItem('bz_ssh_groups_v1');
+    var savedSel = localStorage.getItem('bz_ssh_selected_v1');
+
+    var groups = S.loadGroups();
+    tests.push(eq(sec + ' T03: 默认组含军队/社会', (groups[0] && groups[0].name === '军队' && groups[1] && groups[1].name === '社会') ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T04: 军队组七杀→司令', S.mapName(groups[0], '七杀'), '司令'));
+    tests.push(eq(sec + ' T05: 未配置键映射为空', S.mapName(groups[0], '不存在键'), ''));
+
+    A.clearTaiji();
+    localStorage.setItem('bz_ssh_selected_v1', JSON.stringify(['军队']));
+    var pd = paipan('SSH渲染', '男', 1984, 11, 15, 12, 0);
+    R.renderChart(pd, undefined, 'tst-out');
+    var host = document.getElementById('tst-out');
+    var ganRow = host.querySelector('tr.ssh-gan-row');
+    var cgRow = host.querySelector('tr.ssh-cg-row');
+    tests.push(eq(sec + ' T06: 组名行已插入', ganRow ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T07: 对应名行已插入', cgRow ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T08: 组名行紧跟主星行', ganRow && ganRow.previousElementSibling ? ganRow.getAttribute('data-ssh-group') + '@' + (ganRow.previousElementSibling.getAttribute('data-row-type') || '') : '', '军队@dy1'));
+    var grp = S.groupByName('军队');
+    var expectRs = S.mapName(grp, A.shiShen(pd.ri.gan, pd.nian.gan, false));
+    tests.push(eq(sec + ' T09: 年柱组名=主星全名映射', ganRow ? ganRow.cells[1].textContent : '', expectRs));
+    var cgCell = host.querySelector('tr[data-row-type="ln2"] td:nth-child(2)');
+    tests.push(eq(sec + ' T10: 藏气行横排3span', cgCell ? cgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
+    tests.push(eq(sec + ' T11: 对应名行逐位对齐3span', cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var cg0 = CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi][0] : '';
+    var expectCg = cg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, cg0, false)) : '';
+    tests.push(eq(sec + ' T12: 本气对应名', cgRow ? cgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectCg));
+
+    var table = host.querySelector('table.chart');
+    var mkPill = function(g, z) {
+      return { gan: g, zhi: z, rs: A.shiShen(pd.ri.gan, g, false), cg: '', wg: '', wz: '', ny: '', nayun: '', xy: '', zz: '', kw: '', sh: '' };
+    };
+    R._applyDLUpdates(table, mkPill('甲', '子'), mkPill('丙', '寅'), true, { riGan: pd.ri.gan });
+    var ganRow2 = host.querySelector('tr.ssh-gan-row');
+    var expectDy = S.mapName(grp, A.shiShen(pd.ri.gan, '甲', false));
+    var expectLn = S.mapName(grp, A.shiShen(pd.ri.gan, '丙', false));
+    tests.push(eq(sec + ' T13: 大运列组名同步', ganRow2 ? ganRow2.cells[5].textContent : '', expectDy));
+    tests.push(eq(sec + ' T14: 流年列组名同步', ganRow2 ? ganRow2.cells[6].textContent : '', expectLn));
+
+    localStorage.setItem('bz_ssh_selected_v1', '[]');
+    R.renderChart(pd, undefined, 'tst-out');
+    tests.push(eq(sec + ' T15: 清空后无组行', host.querySelector('tr.ssh-gan-row') ? 'N' : 'Y', 'Y'));
+
+    if (savedGroups === null) localStorage.removeItem('bz_ssh_groups_v1'); else localStorage.setItem('bz_ssh_groups_v1', savedGroups);
+    if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
+    R.renderChart(pd, undefined, 'tst-out');
+    tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
