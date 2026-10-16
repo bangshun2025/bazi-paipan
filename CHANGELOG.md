@@ -4,16 +4,20 @@
 
 ---
 
-## v0.49.0（2026-10-16）功能+修复：双胞胎卡分析记录 + 流月/流月日勾选条对齐
+## v0.49.0（2026-10-16）功能+修复：转换太极点 + 双胞胎卡分析记录 + 流月/流月日勾选条对齐
 
-MINOR+PATCH：双胞胎排盘 tabs 行新增「分析记录」入口；修复 tabs 行「流月/流月日」勾选条上浮错位。
+MINOR+PATCH：新增「转换太极点」——点击原局任一天干或藏干，一键把全表十神参照系换到该干；双胞胎排盘 tabs 行新增「分析记录」入口；修复 tabs 行「流月/流月日」勾选条上浮错位。
 
+- 转换太极点：单盘主表点原局四柱天干（含藏气行藏干）弹出菜单「设为新太极点」；确认后 algorithm.shiShen 内部把日干劫持为所选天干（一处改动全局生效——主星行、藏气十神、大运列、流年列、地支主气全部换中心重算），被选天干套五行色圆圈（.taiji-ring 继承 wood/fire/earth/metal/water），主星行该柱标注「年主/月主/日主/时主」（藏干标「主」）；再点同一天干选「恢复日主太极点」即还原；新排盘自动复位。交互限定单盘主表（排除双胞胎卡/对比卡/运流卡），弹窗 fixed 跟随点击位置，点空白处关闭。
+- 修弹窗遗留监听隐患：开菜单后若经按钮（stopPropagation）路径离开，document 的 once 关闭监听会残留，下一次点天干/藏干开新菜单时被立刻关闭（闪现即消失）；天干/藏干两处点击 handler 补 stopPropagation 根治。
 - 分析记录：tabs 行尾新增「分析记录」按钮（btn-simple 同款交互），面板居两张卡与共享运流区之间——展开即取得主位，运流顺延其下，语义对齐普通卡「记录占主位、运流退居下」；textarea 写入即自动保存，「已保存 HH:MM:SS」提示 1.5s 消退；重渲染后开关态与稿子都保留。
 - 存储隔离：记录 key 为 `bz_rec_notes_twin|<姓名>|<性别>|<y>|<m>|<d>|<h>|<mi>`，与普通盘（无前缀）互不覆盖；龙凤胎按老大（d1）数据指纹存稿（合盘一份记录）；开关态沿用全局 `bz_rec_mode`，与普通卡行为同源。
 - 对齐修复：flowControlsHTML 的流月/流月日勾选条容器原无 `align-items`，在普通卡 top-bar（baseline）下无恙，在双胞胎 tabs 行（stretch）下被拉高导致文字与勾选框整体上浮；容器补 `align-items:center` 后与「新历/定位」「区显隐勾选条」同线（实测与新历输入框垂直中心差 2px）。
 - 修一处隐患：双胞胎面板 textarea/status 不带 id，避免与普通卡 bzRecText/bzRecStatus 潜在重号。
-- `?test=1` 新增 23 条断言：TWN49 排版 6 条（align-items=center、勾选框存在、label 高度不被拉伸、与新历输入框中心差≤3px、现场还原）；TWNREC 17 条（按钮/面板默认态、点击展开+激活+bz_rec_mode 持久化、写入即存 twin| key、已保存提示、重渲染后仍开且稿子保留、关闭复原 mode=0、龙凤胎按钮/面板/默认展开/key 取老大数据、现场还原）。
-- `?test=1` 回归全绿 1280 条通过、1 失败（v0.43 T02 标题带档案名——依赖 Supabase 登录态的环境性既有失败，非本版引入）。
+- `?test=1` 新增 23 条断言：TJ01-TJ23（TAIJI 状态机 set/clear、十神换中心主星+藏干+大运+流年、年主/月主/日主/时主位置标签、藏干「主」、taiji-ring 圈层 HTML、新排盘自动复位）；另有 TWN49 排版 6 条（align-items=center、勾选框存在、label 高度不被拉伸、与新历输入框中心差≤3px、现场还原）；TWNREC 17 条（按钮/面板默认态、点击展开+激活+bz_rec_mode 持久化、写入即存 twin| key、已保存提示、重渲染后仍开且稿子保留、关闭复原 mode=0、龙凤胎按钮/面板/默认展开/key 取老大数据、现场还原）。
+- `?test=1` 回归 1304 条总断言，仅 2 失败且均为环境性假红（RECFL 前置视口假红、v0.43 T02 标题带档案名——依赖 Supabase 登录态，用 `git show HEAD:index.html` 基线复跑确认同样红这 2 条，非本版引入）。
+- 真实 UI 实测（CDP 独立实例 22/22 全绿）：点年干→弹窗→设点→壬套蓝色水圈+主星「年主」+全表（月柱庚枭神/时柱丁正财/大运流年列）换中心+藏气以壬重算；点藏干戊→设点→土黄圈+「主」+主星以戊为中心；恢复→无圈、还原日主中心；四张截图目检通过。
+- index.html ≡ standalone.html MD5 `2d10775fd3e890d5c496d7ea7a13b3ac`；standalone-split.html 同步（taiji-ring/tj-menu CSS + setTaiji/clearTaiji/getTaiji/taijiStemLabel 导出）。三入口版本头及 ext.yml 同步为 v0.49.0。
 - 真实 UI 实测（CDP 独立实例）：排双胞胎后 tabs 行勾选条同线；真实坐标点击「分析记录」面板展开、写入后「已保存」出现、localStorage 出现 twin| key；再点关闭复原 bz_rec_mode=0；截图取证 2 张。
 - index.html ≡ standalone.html 内联同步；standalone-split.html 外链+CSS 同步（twin-rec 两行 CSS 三文件同插）。
 

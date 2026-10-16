@@ -3853,6 +3853,77 @@ function captureScreenshot() {
     })(), true));
   })();
 
+  // ===== 转换太极点(v0.49.0) =====
+  (function() {
+    var sec = '太极点';
+    var A = window.ALGO, R = window.RENDER;
+    if (!A || typeof A.setTaiji !== 'function' || !R || typeof R.renderChart !== 'function') {
+      tests.push(fail(sec + ' TJ00: 前置 ALGO.setTaiji/RENDER.renderChart 已挂载', '缺失'));
+      return;
+    }
+    tests.push(eq(sec + ' TJ01: 默认太极点未激活', A.getTaiji().active, false));
+    tests.push(eq(sec + ' TJ02: 默认 甲见丙=食神', A.shiShen('甲', '丙', false), '食神'));
+    A.setTaiji('丙', 'nian', 'gan');
+    tests.push(eq(sec + ' TJ03: 丙为太极点 甲见丙=比肩', A.shiShen('甲', '丙', false), '比肩'));
+    tests.push(eq(sec + ' TJ04: 丙为太极点 甲见丁=劫财', A.shiShen('甲', '丁', false), '劫财'));
+    tests.push(eq(sec + ' TJ05: 位置标签四主', A.taijiStemLabel('nian') + A.taijiStemLabel('yue') + A.taijiStemLabel('ri') + A.taijiStemLabel('shi'), '年主月主日主时主'));
+    var cgA = A.cangGanText('午', '甲', 1, 'nian');
+    tests.push(eq(sec + ' TJ06: 丙太极点 午藏干见劫(财)', cgA.indexOf('劫') >= 0, true));
+    A.setTaiji('丁', 'nian', 'cang');
+    var cgB = A.cangGanText('午', '甲', 1, 'nian');
+    tests.push(eq(sec + ' TJ07: 藏干太极点套圆圈', cgB.indexOf('taiji-ring') >= 0, true));
+    tests.push(eq(sec + ' TJ08: 藏干太极点标注「主」', cgB.indexOf(' 主') >= 0, true));
+    A.clearTaiji();
+
+    var host = document.createElement('div');
+    host.id = 'taijiTestHost';
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    try {
+      var d = A.paipan('太极测试', '男', 1990, 5, 20, 10, 30);
+      R.renderChart(d, 1, 'taijiTestHost');
+      var nianGan = d.nian.gan, riGan = d.ri.gan;
+      var rsTds = function() { return host.querySelectorAll('table.chart tr.rs')[0].cells; };
+      var stemRow = function() { return host.querySelectorAll('table.chart tr[data-row-type="ln1"]')[0]; };
+      tests.push(eq(sec + ' TJ09: 默认年柱主星=日干对年干', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
+      tests.push(eq(sec + ' TJ10: 默认日柱主星=日主', rsTds()[3].textContent, '日主'));
+
+      A.setTaiji(nianGan, 'nian', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ11: 年干太极点标「年主」', rsTds()[1].textContent, '年主'));
+      tests.push(eq(sec + ' TJ12: 日柱主星仍为日主', rsTds()[3].textContent, '日主'));
+      tests.push(eq(sec + ' TJ13: 时柱主星换中心', rsTds()[4].textContent, A.shiShen(nianGan, d.shi.gan, false)));
+      var curDyIdx = 0;
+      for (var di = d.daYun.length - 1; di >= 0; di--) { if (d.daYun[di].startYear <= new Date().getFullYear()) { curDyIdx = di; break; } }
+      tests.push(eq(sec + ' TJ14: 大运列主星换中心', rsTds()[5].textContent, A.shiShen(nianGan, d.daYun[curDyIdx].gan, false)));
+      var ring = stemRow().cells[1].querySelector('.taiji-ring');
+      tests.push(eq(sec + ' TJ15: 年干套五行色圆圈', ring ? ring.textContent : '', nianGan));
+      tests.push(eq(sec + ' TJ16: 圆圈带五行 class', ring ? (ring.className.indexOf(ALGO.wxClass(nianGan)) >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+
+      stemRow().cells[2].click();
+      var menu = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ17: 点击月干弹「设为新太极点」', menu ? (menu.textContent.indexOf('设为新太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu) menu.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ18: 弹窗按钮设点生效', (A.getTaiji().gan === d.yue.gan && A.getTaiji().col === 'yue' && A.getTaiji().kind === 'gan') ? 'Y' : 'N', 'Y'));
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ19: 月柱标「月主」', rsTds()[2].textContent, '月主'));
+
+      stemRow().cells[2].click();
+      var menu2 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ20: 再点同位弹「恢复日主太极点」', menu2 ? (menu2.textContent.indexOf('恢复日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu2) menu2.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ21: 恢复后未激活', A.getTaiji().active, false));
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ22: 年柱主星还原', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
+      tests.push(eq(sec + ' TJ23: 圆圈消失', host.querySelector('.taiji-ring') ? 'Y' : 'N', 'N'));
+    } finally {
+      A.clearTaiji();
+      var m = document.getElementById('taijiMenu');
+      if (m) m.parentNode.removeChild(m);
+      if (host.parentNode) host.parentNode.removeChild(host);
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

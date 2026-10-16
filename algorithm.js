@@ -255,7 +255,16 @@ function hourPillar(dayGan, hour) {
   const gan = TG[(TG.indexOf(ganStart) + zhiIdx) % 10];
   return { gan, zhi };
 }
+// ============ 转换太极点 ============
+// active 时所有十神关系以 TAIJI.gan 为中心重算（原局/藏干/大运/流年统一换参照系）
+var TAIJI = { active: false, gan: '', col: '', kind: '' };
+function setTaiji(gan, col, kind) { TAIJI = { active: true, gan: gan, col: col || '', kind: kind || 'gan' }; }
+function clearTaiji() { TAIJI = { active: false, gan: '', col: '', kind: '' }; }
+function getTaiji() { return TAIJI; }
+function taijiStemLabel(col) { return { nian:'年主', yue:'月主', ri:'日主', shi:'时主' }[col] || ''; }
+
 function shiShen(riGan, gan, short) {
+  if (TAIJI.active && TAIJI.gan) riGan = TAIJI.gan;
   let r;
   if (riGan === gan) r = '比肩';
   else {
@@ -328,7 +337,11 @@ function cangGanText(zhi, riGan, twin, pillarType) {
   } else {
     cg = CANG_GAN[zhi] || [];
   }
-  return cg.map(c => '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c)).join('<br>');
+  return cg.map(c => {
+    if (TAIJI.active && TAIJI.kind === 'cang' && pillarType === TAIJI.col && c === TAIJI.gan)
+      return '<span class="'+wxClass(c)+' taiji-ring">'+c+'</span> 主';
+    return '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c);
+  }).join('<br>');
 }
 
 // v0.4.1 藏干分层（日/时/命/身 vs 年/月/大运/流年）
@@ -697,6 +710,10 @@ function buildShunLabel(shun, gender, nianGan) {
     hourPillar: hourPillar,
     shiShen: shiShen,
     zhiShiShen: zhiShiShen,
+    setTaiji: setTaiji,
+    clearTaiji: clearTaiji,
+    getTaiji: getTaiji,
+    taijiStemLabel: taijiStemLabel,
     wxClass: wxClass,
     changSheng: changSheng,
     nayunChangSheng: nayunChangSheng,

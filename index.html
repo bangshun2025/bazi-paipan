@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.49.0 | 2026-10-16 --><!-- v0.49.0: 双胞胎卡分析记录 + 流月/流月日勾选条对齐修复 — tabs 行新增「分析记录」按钮（面板居卡片与共享运流之间，展开即主位；textarea 写入即自动保存，key 带 twin| 前缀与普通盘隔离，龙凤胎按老大数据指纹存稿；bz_rec_mode 开关记忆与普通卡同源）；修复 tabs 行「流月/流月日」勾选条在 stretch 布局下整体上浮错位（容器补 align-items:center，与新历输入框/区显隐勾选条同线）；?test=1 新增 TWN49 排版断言 6 条 + TWNREC 记录断言 17 条。 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
+<!-- 八字排盘 ·  从真版 v0.49.0 | 2026-10-16 -->
+<!-- v0.49.0: 转换太极点 — 点击原局四柱天干/藏干弹出「设为新太极点」，原局+大运+流年十神统一换中心；太极点套五行色圆圈，主星位置标签年主/月主/日主/时主，藏干太极点标「主」；再点同位或新排盘即复位日主 -->
+<!-- v0.49.0: 双胞胎卡分析记录 + 流月/流月日勾选条对齐修复 — tabs 行新增「分析记录」按钮（面板居卡片与共享运流之间，展开即主位；textarea 写入即自动保存，key 带 twin| 前缀与普通盘隔离，龙凤胎按老大数据指纹存稿；bz_rec_mode 开关记忆与普通卡同源）；修复 tabs 行「流月/流月日」勾选条在 stretch 布局下整体上浮错位（容器补 align-items:center，与新历输入框/区显隐勾选条同线）；?test=1 新增 TWN49 排版断言 6 条 + TWNREC 记录断言 17 条。 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
 
 <!-- v0.47.0: 一键复制盘面 — 工具栏新增「📋 复制盘面」按钮，把当前盘面生成 AI 友好纯文本（基本信息/四柱十神藏干纳音星曜空亡神煞/三垣/起运交运/十步大运/当前大运流年/已勾选宫位标注）写入剪贴板，粘贴即与 AI 对盘；隐私口径与截图一致只出 displayName；clipboard API 优先 execCommand 兜底，浮 tip 反馈 -->
 <!-- v0.46.0: 大运起始年改按真实交运时刻定 — startYear 由「出生 + 起运 年/月/天/小时」的日历年取（addYMDH 自然月加法、目标月天数不足对齐月末），修掉 Math.round(totalMonths/12) 丢掉起运月日造成的整体错一年（余月≥6且不跨年 → 晚一年；余月<6且跨年 → 早一年；118 条档案实测 29 条错位）；startAge 同步按交运年重算；运前列年数与运前流年改由首运年推（与 daYun[0].startYear 单源）；新增 21 条断言 -->
@@ -346,6 +348,12 @@
 
   .wood { color:var(--c-wood); } .fire { color:var(--c-fire); } .earth { color:var(--c-earth); }
   .metal { color:var(--c-metal); } .water { color:var(--c-water); }
+
+  /* 转换太极点：五行色圆圈 + 换点弹窗 */
+  .taiji-ring { display:inline-block; border:2px solid currentColor; border-radius:50%; min-width:1.7em; padding:0 1px; line-height:1.55; text-align:center; box-sizing:border-box; }
+  .tj-menu { position:fixed; z-index:99999; background:var(--c-paper); border:1px solid var(--c-ink); border-radius:8px; padding:10px; box-shadow:0 6px 24px rgba(0,0,0,.25); display:flex; flex-direction:column; gap:6px; }
+  .tj-menu button { cursor:pointer; border:1px solid var(--c-ink); background:transparent; border-radius:6px; padding:6px 12px; font-size:14px; white-space:nowrap; color:var(--c-ink); }
+  .tj-menu button:hover { background:rgba(0,0,0,.06); }
 
   .col-dy { background:rgba(200,58,58,.03); }
   .col-ln { background:rgba(200,58,58,.06); }
@@ -4737,7 +4745,16 @@ function hourPillar(dayGan, hour) {
   const gan = TG[(TG.indexOf(ganStart) + zhiIdx) % 10];
   return { gan, zhi };
 }
+// ============ 转换太极点 ============
+// active 时所有十神关系以 TAIJI.gan 为中心重算（原局/藏干/大运/流年统一换参照系）
+var TAIJI = { active: false, gan: '', col: '', kind: '' };
+function setTaiji(gan, col, kind) { TAIJI = { active: true, gan: gan, col: col || '', kind: kind || 'gan' }; }
+function clearTaiji() { TAIJI = { active: false, gan: '', col: '', kind: '' }; }
+function getTaiji() { return TAIJI; }
+function taijiStemLabel(col) { return { nian:'年主', yue:'月主', ri:'日主', shi:'时主' }[col] || ''; }
+
 function shiShen(riGan, gan, short) {
+  if (TAIJI.active && TAIJI.gan) riGan = TAIJI.gan;
   let r;
   if (riGan === gan) r = '比肩';
   else {
@@ -4810,7 +4827,11 @@ function cangGanText(zhi, riGan, twin, pillarType) {
   } else {
     cg = CANG_GAN[zhi] || [];
   }
-  return cg.map(c => '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c)).join('<br>');
+  return cg.map(c => {
+    if (TAIJI.active && TAIJI.kind === 'cang' && pillarType === TAIJI.col && c === TAIJI.gan)
+      return '<span class="'+wxClass(c)+' taiji-ring">'+c+'</span> 主';
+    return '<span class="'+wxClass(c)+'">'+c+'</span> ' + shiShen(riGan, c);
+  }).join('<br>');
 }
 
 // v0.4.1 藏干分层（日/时/命/身 vs 年/月/大运/流年）
@@ -5179,6 +5200,10 @@ function buildShunLabel(shun, gender, nianGan) {
     hourPillar: hourPillar,
     shiShen: shiShen,
     zhiShiShen: zhiShiShen,
+    setTaiji: setTaiji,
+    clearTaiji: clearTaiji,
+    getTaiji: getTaiji,
+    taijiStemLabel: taijiStemLabel,
     wxClass: wxClass,
     changSheng: changSheng,
     nayunChangSheng: nayunChangSheng,
@@ -8707,6 +8732,31 @@ function handleImportFile(event) {
   var hourPillar = ALGO.hourPillar;
   var shiShen = ALGO.shiShen;
   var zhiShiShen = ALGO.zhiShiShen;
+  var getTaiji = ALGO.getTaiji;
+  var taijiStemLabel = ALGO.taijiStemLabel;
+
+  // 太极点天干的主星位置标签（年主/月主/日主/时主）；gan 比对防跨排盘残留
+  function taijiStemRs(gan, type) {
+    var t = getTaiji();
+    if (!t.active || t.kind !== 'gan' || type !== t.col || gan !== t.gan) return '';
+    return taijiStemLabel(t.col);
+  }
+
+  function taijiRingHtml(gan, wg) {
+    return '<span class="taiji-ring ' + (wg || wxClass(gan)) + '">' + gan + '</span>';
+  }
+  function stemCellHtml(p, k) {
+    var t = getTaiji();
+    if (t.active && t.kind === 'gan' && k === t.col && p.gan === t.gan) return taijiRingHtml(p.gan, p.wg);
+    return p.gan;
+  }
+  function cgCellHtml(l, k) {
+    var t = getTaiji();
+    if (l && t.active && t.kind === 'cang' && k === t.col && l.gan === t.gan)
+      return '<span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span> 主';
+    return fmtCGLayer(l);
+  }
+
   var wxClass = ALGO.wxClass;
   var changSheng = ALGO.changSheng;
   var nayunChangSheng = ALGO.nayunChangSheng;
@@ -9153,14 +9203,14 @@ function buildPillarRows(p, options) {
     cols.map(function(k){return td(dm(k+'.rs'), p[k].rs);}).join('') + '</tr>');
   // 天干
   main.push('<tr class="rg" data-row-type="ln1">' + rl('') +
-    cols.map(function(k){return td(dm(k+'.gan', p[k].wg), p[k].gan);}).join('') + '</tr>');
+    cols.map(function(k){return td(dm(k+'.gan', p[k].wg), stemCellHtml(p[k], k));}).join('') + '</tr>');
   // 地支
   main.push('<tr class="rg" data-row-type="dy2">' + rl('') +
     cols.map(function(k){return td(dm(k+'.zhi', p[k].wz), p[k].zhi);}).join('') + '</tr>');
   // 藏干三层
   ['本气','中气','余气'].forEach(function(lv, li) {
     main.push('<tr class="rh" data-sec="cangqi">' + rl(lv) +
-      cols.map(function(k){return td(dm(k+'.cg.'+li), fmtCGLayer((p[k].ly||[])[li]));}).join('') + '</tr>');
+      cols.map(function(k){return td(dm(k+'.cg.'+li), cgCellHtml((p[k].ly||[])[li], k));}).join('') + '</tr>');
   });
   // 纳音
   main.push('<tr class="rn" data-row-type="nayin">' + rl('纳音') +
@@ -9341,7 +9391,7 @@ function renderChart(data, twin, targetId, opts) {
   function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
-      rs: (gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
       rsCg: CANG_GAN[zhi] ? shiShen(riGan, CANG_GAN[zhi][0]) : '',
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
@@ -9450,10 +9500,10 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
   // 天干行(1)
   mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+
-    td(pNian.wg,pNian.gan,' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
-    td(pYue.wg,pYue.gan,' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
-    td(pRi.wg,pRi.gan,' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
-    td(pShi.wg,pShi.gan,' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
+    td(pNian.wg,stemCellHtml(pNian,'nian'),' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
+    td(pYue.wg,stemCellHtml(pYue,'yue'),' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
+    td(pRi.wg,stemCellHtml(pRi,'ri'),' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
+    td(pShi.wg,stemCellHtml(pShi,'shi'),' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
     td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
   // 地支行(2)
   mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+
@@ -9937,6 +9987,78 @@ function refreshFlow(root, data, year) {
   document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
 }
 
+// ===== 转换太极点：点击原局四柱天干/藏干弹窗换十神参照系（仅单盘主表） =====
+var TAIJI_COLS = ['nian', 'yue', 'ri', 'shi'];
+function inMainChart(el) {
+  var t = el.closest ? el.closest('table.chart') : null;
+  return !!(t && !t.closest('.bz-twin-card') && !t.closest('.cmp-card') && !t.closest('.bz-card-luck'));
+}
+function bindTaijiClicks(container) {
+  container.querySelectorAll('tr[data-row-type="ln1"]').forEach(function(tr) {
+    if (!inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
+      });
+    });
+  });
+  container.querySelectorAll('tr[data-sec="cangqi"]').forEach(function(tr) {
+    if (!inMainChart(tr)) return;
+    Array.prototype.forEach.call(tr.cells, function(td) {
+      var i = td.cellIndex;
+      if (i < 1 || i > 4) return;
+      td.addEventListener('click', function(e) {
+        var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
+        if (!sp) return;
+        e.stopPropagation();
+        showTaijiMenu(e, { gan: sp.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'cang' });
+      });
+    });
+  });
+}
+function closeTaijiMenu() {
+  var m = document.getElementById('taijiMenu');
+  if (m) m.parentNode.removeChild(m);
+}
+function showTaijiMenu(e, info) {
+  closeTaijiMenu();
+  var t = getTaiji();
+  var isCur = t.active && t.gan === info.gan && t.col === info.col && t.kind === info.kind;
+  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干' }[info.col] || info.col;
+  var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
+  var m = document.createElement('div');
+  m.id = 'taijiMenu';
+  m.className = 'tj-menu';
+  var mainBtn = document.createElement('button');
+  mainBtn.textContent = isCur
+    ? '恢复日主太极点（当前 ' + info.gan + ' · ' + posName + '）'
+    : '设为新太极点：' + info.gan + '（' + posName + '）';
+  mainBtn.onclick = function(ev) { ev.stopPropagation(); applyTaiji(info, isCur); };
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '取消';
+  cancelBtn.onclick = function(ev) { ev.stopPropagation(); closeTaijiMenu(); };
+  m.appendChild(mainBtn);
+  m.appendChild(cancelBtn);
+  document.body.appendChild(m);
+  var x = Math.min(e.clientX, window.innerWidth - m.offsetWidth - 12);
+  var y = Math.min(e.clientY, window.innerHeight - m.offsetHeight - 12);
+  m.style.left = Math.max(8, x) + 'px';
+  m.style.top = Math.max(8, y) + 'px';
+  setTimeout(function() { document.addEventListener('click', closeTaijiMenu, { once: true }); }, 0);
+}
+function applyTaiji(info, isCur) {
+  if (isCur) ALGO.clearTaiji();
+  else ALGO.setTaiji(info.gan, info.col, info.kind);
+  closeTaijiMenu();
+  var data = window._paipanData;
+  if (!data) return;
+  renderChart(data, 1, 'output');
+  if (window.GONGWEI && typeof GONGWEI.updateGongWeiTags === 'function') GONGWEI.updateGongWeiTags();
+}
+
 function bindEvents(data, container) {
   const { daYun, ri, y } = data;
   const riGan = ri.gan;
@@ -9944,6 +10066,8 @@ function bindEvents(data, container) {
   var cards = container.querySelectorAll('.bz-twin-card');
   if (cards.length) cards.forEach(function(card) { refreshFlow(card, card._cardData || data); });
   else refreshFlow(container, data);
+
+  bindTaijiClicks(container);
 
   // 大运点击
   container.querySelectorAll('[data-dy]').forEach(c => {
@@ -10275,7 +10399,7 @@ function buildCardHTML(data, options) {
     return {
       gan: gan, zhi: zhi,
       wg: wxClass(gan), wz: wxClass(zhi),
-      rs: (gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
       xy: changSheng(riGan, zhi),
@@ -10316,7 +10440,7 @@ function buildCardHTML(data, options) {
     // 主星(0)
     rows.main[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
     // 天干(1)
-    rows.main[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(dm('nian.gan',p.nian.wg),p.nian.gan)+td(dm('yue.gan',p.yue.wg),p.yue.gan)+td(dm('ri.gan',p.ri.wg),p.ri.gan)+td(dm('shi.gan',p.shi.wg),p.shi.gan)+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+    rows.main[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+td(dm('nian.gan',p.nian.wg),stemCellHtml(p.nian,'nian'))+td(dm('yue.gan',p.yue.wg),stemCellHtml(p.yue,'yue'))+td(dm('ri.gan',p.ri.wg),stemCellHtml(p.ri,'ri'))+td(dm('shi.gan',p.shi.wg),stemCellHtml(p.shi,'shi'))+td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
     // 地支(2)
     rows.main[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+td(dm('nian.zhi',p.nian.wz),p.nian.zhi)+td(dm('yue.zhi',p.yue.wz),p.yue.zhi)+td(dm('ri.zhi',p.ri.wz),p.ri.zhi)+td(dm('shi.zhi',p.shi.wz),p.shi.zhi)+td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
     // 本气(3)
@@ -10809,6 +10933,7 @@ function doPaipan() {
       data.julian = julianTag;
       data.lng = lng; // v0.27.0 D1: 出生地经度（未选=null）
       data.renYuan = renYuanSiLing(ey, em, ed, eh, emi);
+      ALGO.clearTaiji();
       output.innerHTML = '';
       renderChart(data);
       setCurrentBaziResult(extractBaziFromPaipan(data));
@@ -11557,7 +11682,7 @@ function cmpSetState(entries) {
     var riGan = data.ri.gan, riZhi = data.ri.zhi;
     return {
       gan: gan, zhi: zhi,
-      rs: (type === 'ri') ? '日主' : shiShen(riGan, gan, false),
+      rs: taijiStemRs(gan, type) || ((type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
       cg: cangGanText(zhi, riGan, 1, type),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
@@ -15945,6 +16070,77 @@ function captureScreenshot() {
       }
       return true;
     })(), true));
+  })();
+
+  // ===== 转换太极点(v0.49.0) =====
+  (function() {
+    var sec = '太极点';
+    var A = window.ALGO, R = window.RENDER;
+    if (!A || typeof A.setTaiji !== 'function' || !R || typeof R.renderChart !== 'function') {
+      tests.push(fail(sec + ' TJ00: 前置 ALGO.setTaiji/RENDER.renderChart 已挂载', '缺失'));
+      return;
+    }
+    tests.push(eq(sec + ' TJ01: 默认太极点未激活', A.getTaiji().active, false));
+    tests.push(eq(sec + ' TJ02: 默认 甲见丙=食神', A.shiShen('甲', '丙', false), '食神'));
+    A.setTaiji('丙', 'nian', 'gan');
+    tests.push(eq(sec + ' TJ03: 丙为太极点 甲见丙=比肩', A.shiShen('甲', '丙', false), '比肩'));
+    tests.push(eq(sec + ' TJ04: 丙为太极点 甲见丁=劫财', A.shiShen('甲', '丁', false), '劫财'));
+    tests.push(eq(sec + ' TJ05: 位置标签四主', A.taijiStemLabel('nian') + A.taijiStemLabel('yue') + A.taijiStemLabel('ri') + A.taijiStemLabel('shi'), '年主月主日主时主'));
+    var cgA = A.cangGanText('午', '甲', 1, 'nian');
+    tests.push(eq(sec + ' TJ06: 丙太极点 午藏干见劫(财)', cgA.indexOf('劫') >= 0, true));
+    A.setTaiji('丁', 'nian', 'cang');
+    var cgB = A.cangGanText('午', '甲', 1, 'nian');
+    tests.push(eq(sec + ' TJ07: 藏干太极点套圆圈', cgB.indexOf('taiji-ring') >= 0, true));
+    tests.push(eq(sec + ' TJ08: 藏干太极点标注「主」', cgB.indexOf(' 主') >= 0, true));
+    A.clearTaiji();
+
+    var host = document.createElement('div');
+    host.id = 'taijiTestHost';
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    try {
+      var d = A.paipan('太极测试', '男', 1990, 5, 20, 10, 30);
+      R.renderChart(d, 1, 'taijiTestHost');
+      var nianGan = d.nian.gan, riGan = d.ri.gan;
+      var rsTds = function() { return host.querySelectorAll('table.chart tr.rs')[0].cells; };
+      var stemRow = function() { return host.querySelectorAll('table.chart tr[data-row-type="ln1"]')[0]; };
+      tests.push(eq(sec + ' TJ09: 默认年柱主星=日干对年干', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
+      tests.push(eq(sec + ' TJ10: 默认日柱主星=日主', rsTds()[3].textContent, '日主'));
+
+      A.setTaiji(nianGan, 'nian', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ11: 年干太极点标「年主」', rsTds()[1].textContent, '年主'));
+      tests.push(eq(sec + ' TJ12: 日柱主星仍为日主', rsTds()[3].textContent, '日主'));
+      tests.push(eq(sec + ' TJ13: 时柱主星换中心', rsTds()[4].textContent, A.shiShen(nianGan, d.shi.gan, false)));
+      var curDyIdx = 0;
+      for (var di = d.daYun.length - 1; di >= 0; di--) { if (d.daYun[di].startYear <= new Date().getFullYear()) { curDyIdx = di; break; } }
+      tests.push(eq(sec + ' TJ14: 大运列主星换中心', rsTds()[5].textContent, A.shiShen(nianGan, d.daYun[curDyIdx].gan, false)));
+      var ring = stemRow().cells[1].querySelector('.taiji-ring');
+      tests.push(eq(sec + ' TJ15: 年干套五行色圆圈', ring ? ring.textContent : '', nianGan));
+      tests.push(eq(sec + ' TJ16: 圆圈带五行 class', ring ? (ring.className.indexOf(ALGO.wxClass(nianGan)) >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+
+      stemRow().cells[2].click();
+      var menu = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ17: 点击月干弹「设为新太极点」', menu ? (menu.textContent.indexOf('设为新太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu) menu.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ18: 弹窗按钮设点生效', (A.getTaiji().gan === d.yue.gan && A.getTaiji().col === 'yue' && A.getTaiji().kind === 'gan') ? 'Y' : 'N', 'Y'));
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ19: 月柱标「月主」', rsTds()[2].textContent, '月主'));
+
+      stemRow().cells[2].click();
+      var menu2 = document.getElementById('taijiMenu');
+      tests.push(eq(sec + ' TJ20: 再点同位弹「恢复日主太极点」', menu2 ? (menu2.textContent.indexOf('恢复日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+      if (menu2) menu2.querySelectorAll('button')[0].click();
+      tests.push(eq(sec + ' TJ21: 恢复后未激活', A.getTaiji().active, false));
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ22: 年柱主星还原', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
+      tests.push(eq(sec + ' TJ23: 圆圈消失', host.querySelector('.taiji-ring') ? 'Y' : 'N', 'N'));
+    } finally {
+      A.clearTaiji();
+      var m = document.getElementById('taijiMenu');
+      if (m) m.parentNode.removeChild(m);
+      if (host.parentNode) host.parentNode.removeChild(host);
+    }
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
