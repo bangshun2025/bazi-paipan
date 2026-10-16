@@ -1,4 +1,4 @@
-/* 八字排盘 v0.49.0 — render.js */
+/* 八字排盘 v0.49.1 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -58,7 +58,8 @@
   var getTaiji = ALGO.getTaiji;
   var taijiStemLabel = ALGO.taijiStemLabel;
 
-  // 太极点天干的主星位置标签（年主/月主/日主/时主）；gan 比对防跨排盘残留
+  // 太极点天干的主星位置标签（年主/月主/日主/时主）；gan 比对防跨排盘残留。
+  // 太极激活后日干格不再是「日主」例外，统一显示对新中心的十神（col='ri' 时 taijiStemRs 已接管）
   function taijiStemRs(gan, type) {
     var t = getTaiji();
     if (!t.active || t.kind !== 'gan' || type !== t.col || gan !== t.gan) return '';
@@ -714,7 +715,7 @@ function renderChart(data, twin, targetId, opts) {
   function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
-      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       rsCg: CANG_GAN[zhi] ? shiShen(riGan, CANG_GAN[zhi][0]) : '',
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
@@ -1722,7 +1723,7 @@ function buildCardHTML(data, options) {
     return {
       gan: gan, zhi: zhi,
       wg: wxClass(gan), wz: wxClass(zhi),
-      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
       xy: changSheng(riGan, zhi),
@@ -3005,7 +3006,7 @@ function cmpSetState(entries) {
     var riGan = data.ri.gan, riZhi = data.ri.zhi;
     return {
       gan: gan, zhi: zhi,
-      rs: taijiStemRs(gan, type) || ((type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       cg: cangGanText(zhi, riGan, 1, type),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),

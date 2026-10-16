@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.49.0 | 2026-10-16 -->
+<!-- 八字排盘 ·  从真版 v0.49.1 | 2026-10-16 -->
+<!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
 <!-- v0.49.0: 转换太极点 — 点击原局四柱天干/藏干弹出「设为新太极点」，原局+大运+流年十神统一换中心；太极点套五行色圆圈，主星位置标签年主/月主/日主/时主，藏干太极点标「主」；再点同位或新排盘即复位日主 -->
 <!-- v0.49.0: 双胞胎卡分析记录 + 流月/流月日勾选条对齐修复 — tabs 行新增「分析记录」按钮（面板居卡片与共享运流之间，展开即主位；textarea 写入即自动保存，key 带 twin| 前缀与普通盘隔离，龙凤胎按老大数据指纹存稿；bz_rec_mode 开关记忆与普通卡同源）；修复 tabs 行「流月/流月日」勾选条在 stretch 布局下整体上浮错位（容器补 align-items:center，与新历输入框/区显隐勾选条同线）；?test=1 新增 TWN49 排版断言 6 条 + TWNREC 记录断言 17 条。 --><!-- v0.48.0: 双胞胎排盘界面——老大/老二卡四柱表时柱后新增大运/流年列（大运取当前起运步、流年取当年干支，点击流年联动刷新不变），tabs 行新增区显隐勾选条（运流列/藏气区/三垣区/运流区/节气区，与排盘对比卡同款交互，默认全显示）；?test=1 新增 TWN48 断言 28 条。 --><!-- v0.47.1: 修复「流月+流日→分析记录」版面爆宽 — 记录模式把运流区搬进 main-col 后，table-layout:fixed 的流月/流日表在 flex 内在宽度计算中被 Chrome 算出 50 万px，整页横向溢出、记录面板被挤出视口；给 .luck-col.luck-rec-below .flow-table-wrap 加 contain:inline-size（项目内 817 行同款用法），内在宽度不再携带表格巨宽；?test=1 新增「分析记录×流月流日版面」断言段（正序/反序两条路径 + 视口断言 + contain 兜底断言） -->
 
@@ -8735,7 +8736,8 @@ function handleImportFile(event) {
   var getTaiji = ALGO.getTaiji;
   var taijiStemLabel = ALGO.taijiStemLabel;
 
-  // 太极点天干的主星位置标签（年主/月主/日主/时主）；gan 比对防跨排盘残留
+  // 太极点天干的主星位置标签（年主/月主/日主/时主）；gan 比对防跨排盘残留。
+  // 太极激活后日干格不再是「日主」例外，统一显示对新中心的十神（col='ri' 时 taijiStemRs 已接管）
   function taijiStemRs(gan, type) {
     var t = getTaiji();
     if (!t.active || t.kind !== 'gan' || type !== t.col || gan !== t.gan) return '';
@@ -9391,7 +9393,7 @@ function renderChart(data, twin, targetId, opts) {
   function pillar(gan, zhi, type) {
     return {
       gan, zhi, wg: wxClass(gan), wz: wxClass(zhi),
-      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       rsCg: CANG_GAN[zhi] ? shiShen(riGan, CANG_GAN[zhi][0]) : '',
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
@@ -10399,7 +10401,7 @@ function buildCardHTML(data, options) {
     return {
       gan: gan, zhi: zhi,
       wg: wxClass(gan), wz: wxClass(zhi),
-      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((gan === riGan && type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       ny: NAYIN[gan + zhi] || '',
       nayun: nayunChangSheng(NAYIN[gan + zhi], yue.zhi),
       xy: changSheng(riGan, zhi),
@@ -11682,7 +11684,7 @@ function cmpSetState(entries) {
     var riGan = data.ri.gan, riZhi = data.ri.zhi;
     return {
       gan: gan, zhi: zhi,
-      rs: taijiStemRs(gan, type) || ((type === 'ri') ? '日主' : shiShen(riGan, gan, false)),
+      rs: taijiStemRs(gan, type) || ((type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
       cg: cangGanText(zhi, riGan, 1, type),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
@@ -16110,7 +16112,7 @@ function captureScreenshot() {
       A.setTaiji(nianGan, 'nian', 'gan');
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ11: 年干太极点标「年主」', rsTds()[1].textContent, '年主'));
-      tests.push(eq(sec + ' TJ12: 日柱主星仍为日主', rsTds()[3].textContent, '日主'));
+      tests.push(eq(sec + ' TJ12: 年干设点后日柱主星=日干对年干', rsTds()[3].textContent, A.shiShen(nianGan, riGan, false)));
       tests.push(eq(sec + ' TJ13: 时柱主星换中心', rsTds()[4].textContent, A.shiShen(nianGan, d.shi.gan, false)));
       var curDyIdx = 0;
       for (var di = d.daYun.length - 1; di >= 0; di--) { if (d.daYun[di].startYear <= new Date().getFullYear()) { curDyIdx = di; break; } }
@@ -16135,6 +16137,18 @@ function captureScreenshot() {
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ22: 年柱主星还原', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
       tests.push(eq(sec + ' TJ23: 圆圈消失', host.querySelector('.taiji-ring') ? 'Y' : 'N', 'N'));
+
+      var cgSpan = host.querySelector('tr[data-sec="cangqi"] td:nth-child(2) span');
+      var cgGan = cgSpan ? cgSpan.textContent.trim() : '';
+      A.setTaiji(cgGan, 'nian', 'cang');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ24: 藏干设点后日柱主星=日干对该藏干', rsTds()[3].textContent, A.shiShen(cgGan, riGan, false)));
+      A.setTaiji(riGan, 'ri', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ25: 日干自设太极点日柱仍「日主」', rsTds()[3].textContent, '日主'));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ26: 清除后日柱主星回日主', rsTds()[3].textContent, '日主'));
     } finally {
       A.clearTaiji();
       var m = document.getElementById('taijiMenu');

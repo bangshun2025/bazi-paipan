@@ -1,4 +1,4 @@
-/* 八字排盘 v0.49.0 — main.js */
+/* 八字排盘 v0.49.1 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3891,7 +3891,7 @@ function captureScreenshot() {
       A.setTaiji(nianGan, 'nian', 'gan');
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ11: 年干太极点标「年主」', rsTds()[1].textContent, '年主'));
-      tests.push(eq(sec + ' TJ12: 日柱主星仍为日主', rsTds()[3].textContent, '日主'));
+      tests.push(eq(sec + ' TJ12: 年干设点后日柱主星=日干对年干', rsTds()[3].textContent, A.shiShen(nianGan, riGan, false)));
       tests.push(eq(sec + ' TJ13: 时柱主星换中心', rsTds()[4].textContent, A.shiShen(nianGan, d.shi.gan, false)));
       var curDyIdx = 0;
       for (var di = d.daYun.length - 1; di >= 0; di--) { if (d.daYun[di].startYear <= new Date().getFullYear()) { curDyIdx = di; break; } }
@@ -3916,6 +3916,18 @@ function captureScreenshot() {
       R.renderChart(d, 1, 'taijiTestHost');
       tests.push(eq(sec + ' TJ22: 年柱主星还原', rsTds()[1].textContent, A.shiShen(riGan, nianGan, false)));
       tests.push(eq(sec + ' TJ23: 圆圈消失', host.querySelector('.taiji-ring') ? 'Y' : 'N', 'N'));
+
+      var cgSpan = host.querySelector('tr[data-sec="cangqi"] td:nth-child(2) span');
+      var cgGan = cgSpan ? cgSpan.textContent.trim() : '';
+      A.setTaiji(cgGan, 'nian', 'cang');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ24: 藏干设点后日柱主星=日干对该藏干', rsTds()[3].textContent, A.shiShen(cgGan, riGan, false)));
+      A.setTaiji(riGan, 'ri', 'gan');
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ25: 日干自设太极点日柱仍「日主」', rsTds()[3].textContent, '日主'));
+      A.clearTaiji();
+      R.renderChart(d, 1, 'taijiTestHost');
+      tests.push(eq(sec + ' TJ26: 清除后日柱主星回日主', rsTds()[3].textContent, '日主'));
     } finally {
       A.clearTaiji();
       var m = document.getElementById('taijiMenu');
