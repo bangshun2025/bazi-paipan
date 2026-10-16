@@ -1,4 +1,4 @@
-/* 八字排盘 v0.50.0 — render.js */
+/* 八字排盘 v0.51.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1212,6 +1212,9 @@ function setFlowVisible(kind, checked) {
 }
 
 function refreshFlow(root, data, year) {
+  withPanTaiji(root, function() { _refreshFlowInner(root, data, year); });
+}
+function _refreshFlowInner(root, data, year) {
   if (!root || !data) return;
   var table = root.querySelector('table.chart');
   var luck = root.querySelector('.luck-section');
@@ -1313,64 +1316,106 @@ function refreshFlow(root, data, year) {
 
 // ===== 转换太极点：点击原局四柱天干/藏干弹窗换十神参照系（仅单盘主表） =====
 var TAIJI_COLS = ['nian', 'yue', 'ri', 'shi'];
+var TAIJI_COL_NAMES = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' };
 function inMainChart(el) {
   var t = el.closest ? el.closest('table.chart') : null;
   return !!(t && !t.closest('.bz-twin-card') && !t.closest('.cmp-card') && !t.closest('.bz-card-luck'));
 }
+// v0.51.0 对比排盘太极点：本盘 > 全局 > 主表TAIJI（渲染包络内生效，主表状态不受影响）
+var CMP_TAIJI = { byPan: {}, global: null };
+function setCmpTaijiLocal(panKey, info) { CMP_TAIJI.byPan[panKey] = { gan: info.gan, col: info.col, kind: info.kind }; }
+function setCmpTaijiGlobal(info) { CMP_TAIJI.global = { gan: info.gan, col: info.col, kind: info.kind }; CMP_TAIJI.byPan = {}; }
+function clearCmpTaijiLocal(panKey) { delete CMP_TAIJI.byPan[panKey]; }
+function clearCmpTaijiGlobal() { CMP_TAIJI.global = null; }
+function clearAllCmpTaiji() { CMP_TAIJI.byPan = {}; CMP_TAIJI.global = null; }
+function getCmpTaiji() { return CMP_TAIJI; }
+function cmpEffTaiji(panKey) {
+  if (CMP_TAIJI.byPan[panKey]) return CMP_TAIJI.byPan[panKey];
+  if (CMP_TAIJI.global) return CMP_TAIJI.global;
+  var t = getTaiji();
+  return t.active ? t : null;
+}
+function withPanTaiji(el, fn) {
+  var card = el && el.closest ? el.closest('.cmp-card') : null;
+  if (!card) { fn(); return; }
+  var saved = getTaiji();
+  var eff = cmpEffTaiji(card.getAttribute('data-key'));
+  if (eff) ALGO.setTaiji(eff.gan, eff.col, eff.kind); else ALGO.clearTaiji();
+  try { fn(); } finally {
+    if (saved.active) ALGO.setTaiji(saved.gan, saved.col, saved.kind); else ALGO.clearTaiji();
+  }
+}
+function taijiScopeOf(tr) {
+  if (inMainChart(tr)) return 'main';
+  if (tr.closest && tr.closest('.cmp-card')) return 'cmp';
+  return null;
+}
+function taijiDispatch(e, scope, td, info) {
+  // main 拦冒泡；cmp 不拦——v0.43 关系高亮委托（cmpTrack 级）需照常收到点击
+  if (scope === 'main') e.stopPropagation();
+  if (scope === 'cmp') {
+    var card = td.closest('.cmp-card');
+    showCmpTaijiMenu(e, info, card ? card.getAttribute('data-key') : '');
+    return;
+  }
+  showTaijiMenu(e, info);
+}
 function bindTaijiClicks(container) {
   container.querySelectorAll('tr[data-row-type="ln1"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
       });
     });
   });
   container.querySelectorAll('tr[data-sec="cangqi"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
         if (!sp) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: sp.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'cang' });
+        taijiDispatch(e, scope, td, { gan: sp.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'cang' });
       });
     });
   });
   // v0.50.0 三垣区：干行（tr.rg 含 data-gk="gan"）与藏气行可设太极点，col=taiNian/tai/ming/shen
   var SY_KEYS = ['taiNian', 'tai', 'ming', 'shen'];
   container.querySelectorAll('tr.rg[data-sec="sanyuan"]').forEach(function(tr) {
-    if (!tr.querySelector('td[data-gk="gan"]') || !inMainChart(tr)) return;
+    if (!tr.querySelector('td[data-gk="gan"]')) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         if (!td.textContent.trim()) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
       });
     });
   });
   container.querySelectorAll('tr[data-sec="sanyuan cangqi"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
         if (!sp || !sp.textContent.trim()) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
+        taijiDispatch(e, scope, td, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
       });
     });
   });
 }
 function closeTaijiMenu() {
+  document.removeEventListener('click', closeTaijiMenu);
   var m = document.getElementById('taijiMenu');
   if (m) m.parentNode.removeChild(m);
 }
@@ -1378,7 +1423,7 @@ function showTaijiMenu(e, info) {
   closeTaijiMenu();
   var t = getTaiji();
   var isCur = t.active && t.gan === info.gan && t.col === info.col && t.kind === info.kind;
-  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' }[info.col] || info.col;
+  var colName = TAIJI_COL_NAMES[info.col] || info.col;
   var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
   var m = document.createElement('div');
   m.id = 'taijiMenu';
@@ -1408,6 +1453,56 @@ function applyTaiji(info, isCur) {
   if (!data) return;
   renderChart(data, 1, 'output');
   if (window.GONGWEI && typeof GONGWEI.updateGongWeiTags === 'function') GONGWEI.updateGongWeiTags();
+}
+
+// v0.51.0 对比排盘太极点菜单：本盘（仅该卡换算）/ 全局（所有对比卡以该干为中心）
+function finishCmpTaiji() {
+  closeTaijiMenu();
+  if (typeof _cmpHlClearAll === 'function') _cmpHlClearAll();
+  renderCmpTrack();
+}
+function showCmpTaijiMenu(e, info, panKey) {
+  closeTaijiMenu();
+  var colName = TAIJI_COL_NAMES[info.col] || info.col;
+  var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
+  var local = CMP_TAIJI.byPan[panKey];
+  var glob = CMP_TAIJI.global;
+  var samePos = function(t) { return t && t.gan === info.gan && t.col === info.col && t.kind === info.kind; };
+  var isLocalCur = !!local && samePos(local);
+  var isGlobalCur = !local && !!glob && samePos(glob);
+  var m = document.createElement('div');
+  m.id = 'taijiMenu';
+  m.className = 'tj-menu';
+  var b1 = document.createElement('button');
+  b1.textContent = isLocalCur
+    ? '恢复本盘日主太极点（当前 ' + info.gan + ' · ' + posName + '）'
+    : '设为本盘新的太极点：' + info.gan + '（' + posName + '）';
+  b1.onclick = function(ev) {
+    ev.stopPropagation();
+    if (isLocalCur) clearCmpTaijiLocal(panKey); else setCmpTaijiLocal(panKey, info);
+    finishCmpTaiji();
+  };
+  var b2 = document.createElement('button');
+  b2.textContent = isGlobalCur
+    ? '恢复全局日主太极点（当前 ' + info.gan + ' · ' + posName + '）'
+    : '设为全局新的太极点：' + info.gan + '（' + posName + '）';
+  b2.onclick = function(ev) {
+    ev.stopPropagation();
+    if (isGlobalCur) clearCmpTaijiGlobal(); else setCmpTaijiGlobal(info);
+    finishCmpTaiji();
+  };
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '取消';
+  cancelBtn.onclick = function(ev) { ev.stopPropagation(); closeTaijiMenu(); };
+  m.appendChild(b1);
+  m.appendChild(b2);
+  m.appendChild(cancelBtn);
+  document.body.appendChild(m);
+  var x = Math.min(e.clientX, window.innerWidth - m.offsetWidth - 12);
+  var y = Math.min(e.clientY, window.innerHeight - m.offsetHeight - 12);
+  m.style.left = Math.max(8, x) + 'px';
+  m.style.top = Math.max(8, y) + 'px';
+  setTimeout(function() { document.addEventListener('click', closeTaijiMenu, { once: true }); }, 0);
 }
 
 function bindEvents(data, container) {
@@ -1540,6 +1635,9 @@ function _zuoRefs(d) {
   return r;
 }
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
+  withPanTaiji(clickedEl, function() { _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx); });
+}
+function _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   // 确定用哪个卡的数据：从点击元素向上找 .bz-twin-card
   var card = clickedEl.closest('.bz-twin-card');
   var cardData;
@@ -2617,7 +2715,7 @@ function renderCmpTrack() {
     var body = cards[k].querySelector('.cmp-card-body');
     var data = _cmpDataFor(alive[k]);
     if (data) {
-      renderChart(data, 1, body, { luckBelow: true, noTopBar: true });
+      withPanTaiji(cards[k], function() { renderChart(data, 1, body, { luckBelow: true, noTopBar: true }); });
     } else {
       body.innerHTML = '<div style="color:var(--c-red);padding:8px;">档案数据缺失</div>';
     }
@@ -3202,6 +3300,9 @@ function cmpSetState(entries) {
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,
     _applyDLUpdates: _applyDLUpdates,
+    renderCmpTrack: renderCmpTrack,
+    getCmpTaiji: getCmpTaiji,
+    clearAllCmpTaiji: clearAllCmpTaiji,
     buildDiffMap: buildDiffMap,
     buildCardHTML: buildCardHTML,
     buildCardLuckHTML: buildCardLuckHTML,

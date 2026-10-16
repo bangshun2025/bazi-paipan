@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.50.0 | 2026-10-16 -->
+<!-- 八字排盘 ·  从真版 v0.51.0 | 2026-10-16 -->
+<!-- v0.51.0: 对比排盘太极点 — 点击对比卡干行/藏干（含三垣）弹双选项「设为本盘新的太极点 / 设为全局新的太极点」；本盘仅该卡换中心，全局统摄所有对比卡（设置时清各本盘点），再点同位弹恢复；渲染包络使主表太极状态与对比卡互不干扰，主表太极激活时对比卡保持继承 -->
 <!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
 <!-- v0.49.0: 转换太极点 — 点击原局四柱天干/藏干弹出「设为新太极点」，原局+大运+流年十神统一换中心；太极点套五行色圆圈，主星位置标签年主/月主/日主/时主，藏干太极点标「主」；再点同位或新排盘即复位日主 -->
@@ -9891,6 +9892,9 @@ function setFlowVisible(kind, checked) {
 }
 
 function refreshFlow(root, data, year) {
+  withPanTaiji(root, function() { _refreshFlowInner(root, data, year); });
+}
+function _refreshFlowInner(root, data, year) {
   if (!root || !data) return;
   var table = root.querySelector('table.chart');
   var luck = root.querySelector('.luck-section');
@@ -9992,64 +9996,106 @@ function refreshFlow(root, data, year) {
 
 // ===== 转换太极点：点击原局四柱天干/藏干弹窗换十神参照系（仅单盘主表） =====
 var TAIJI_COLS = ['nian', 'yue', 'ri', 'shi'];
+var TAIJI_COL_NAMES = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' };
 function inMainChart(el) {
   var t = el.closest ? el.closest('table.chart') : null;
   return !!(t && !t.closest('.bz-twin-card') && !t.closest('.cmp-card') && !t.closest('.bz-card-luck'));
 }
+// v0.51.0 对比排盘太极点：本盘 > 全局 > 主表TAIJI（渲染包络内生效，主表状态不受影响）
+var CMP_TAIJI = { byPan: {}, global: null };
+function setCmpTaijiLocal(panKey, info) { CMP_TAIJI.byPan[panKey] = { gan: info.gan, col: info.col, kind: info.kind }; }
+function setCmpTaijiGlobal(info) { CMP_TAIJI.global = { gan: info.gan, col: info.col, kind: info.kind }; CMP_TAIJI.byPan = {}; }
+function clearCmpTaijiLocal(panKey) { delete CMP_TAIJI.byPan[panKey]; }
+function clearCmpTaijiGlobal() { CMP_TAIJI.global = null; }
+function clearAllCmpTaiji() { CMP_TAIJI.byPan = {}; CMP_TAIJI.global = null; }
+function getCmpTaiji() { return CMP_TAIJI; }
+function cmpEffTaiji(panKey) {
+  if (CMP_TAIJI.byPan[panKey]) return CMP_TAIJI.byPan[panKey];
+  if (CMP_TAIJI.global) return CMP_TAIJI.global;
+  var t = getTaiji();
+  return t.active ? t : null;
+}
+function withPanTaiji(el, fn) {
+  var card = el && el.closest ? el.closest('.cmp-card') : null;
+  if (!card) { fn(); return; }
+  var saved = getTaiji();
+  var eff = cmpEffTaiji(card.getAttribute('data-key'));
+  if (eff) ALGO.setTaiji(eff.gan, eff.col, eff.kind); else ALGO.clearTaiji();
+  try { fn(); } finally {
+    if (saved.active) ALGO.setTaiji(saved.gan, saved.col, saved.kind); else ALGO.clearTaiji();
+  }
+}
+function taijiScopeOf(tr) {
+  if (inMainChart(tr)) return 'main';
+  if (tr.closest && tr.closest('.cmp-card')) return 'cmp';
+  return null;
+}
+function taijiDispatch(e, scope, td, info) {
+  // main 拦冒泡；cmp 不拦——v0.43 关系高亮委托（cmpTrack 级）需照常收到点击
+  if (scope === 'main') e.stopPropagation();
+  if (scope === 'cmp') {
+    var card = td.closest('.cmp-card');
+    showCmpTaijiMenu(e, info, card ? card.getAttribute('data-key') : '');
+    return;
+  }
+  showTaijiMenu(e, info);
+}
 function bindTaijiClicks(container) {
   container.querySelectorAll('tr[data-row-type="ln1"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
       });
     });
   });
   container.querySelectorAll('tr[data-sec="cangqi"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
         if (!sp) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: sp.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'cang' });
+        taijiDispatch(e, scope, td, { gan: sp.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'cang' });
       });
     });
   });
   // v0.50.0 三垣区：干行（tr.rg 含 data-gk="gan"）与藏气行可设太极点，col=taiNian/tai/ming/shen
   var SY_KEYS = ['taiNian', 'tai', 'ming', 'shen'];
   container.querySelectorAll('tr.rg[data-sec="sanyuan"]').forEach(function(tr) {
-    if (!tr.querySelector('td[data-gk="gan"]') || !inMainChart(tr)) return;
+    if (!tr.querySelector('td[data-gk="gan"]')) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         if (!td.textContent.trim()) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
       });
     });
   });
   container.querySelectorAll('tr[data-sec="sanyuan cangqi"]').forEach(function(tr) {
-    if (!inMainChart(tr)) return;
+    var scope = taijiScopeOf(tr);
+    if (!scope) return;
     Array.prototype.forEach.call(tr.cells, function(td) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         var sp = (e.target && e.target.tagName === 'SPAN' && !e.target.classList.contains('rl')) ? e.target : null;
         if (!sp || !sp.textContent.trim()) return;
-        e.stopPropagation();
-        showTaijiMenu(e, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
+        taijiDispatch(e, scope, td, { gan: sp.textContent.trim(), col: SY_KEYS[i - 1], kind: 'cang' });
       });
     });
   });
 }
 function closeTaijiMenu() {
+  document.removeEventListener('click', closeTaijiMenu);
   var m = document.getElementById('taijiMenu');
   if (m) m.parentNode.removeChild(m);
 }
@@ -10057,7 +10103,7 @@ function showTaijiMenu(e, info) {
   closeTaijiMenu();
   var t = getTaiji();
   var isCur = t.active && t.gan === info.gan && t.col === info.col && t.kind === info.kind;
-  var colName = { nian:'年干', yue:'月干', ri:'日干', shi:'时干', taiNian:'胎年干', tai:'胎元干', ming:'命宫干', shen:'身宫干' }[info.col] || info.col;
+  var colName = TAIJI_COL_NAMES[info.col] || info.col;
   var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
   var m = document.createElement('div');
   m.id = 'taijiMenu';
@@ -10087,6 +10133,56 @@ function applyTaiji(info, isCur) {
   if (!data) return;
   renderChart(data, 1, 'output');
   if (window.GONGWEI && typeof GONGWEI.updateGongWeiTags === 'function') GONGWEI.updateGongWeiTags();
+}
+
+// v0.51.0 对比排盘太极点菜单：本盘（仅该卡换算）/ 全局（所有对比卡以该干为中心）
+function finishCmpTaiji() {
+  closeTaijiMenu();
+  if (typeof _cmpHlClearAll === 'function') _cmpHlClearAll();
+  renderCmpTrack();
+}
+function showCmpTaijiMenu(e, info, panKey) {
+  closeTaijiMenu();
+  var colName = TAIJI_COL_NAMES[info.col] || info.col;
+  var posName = colName + (info.kind === 'cang' ? '·藏干' : '');
+  var local = CMP_TAIJI.byPan[panKey];
+  var glob = CMP_TAIJI.global;
+  var samePos = function(t) { return t && t.gan === info.gan && t.col === info.col && t.kind === info.kind; };
+  var isLocalCur = !!local && samePos(local);
+  var isGlobalCur = !local && !!glob && samePos(glob);
+  var m = document.createElement('div');
+  m.id = 'taijiMenu';
+  m.className = 'tj-menu';
+  var b1 = document.createElement('button');
+  b1.textContent = isLocalCur
+    ? '恢复本盘日主太极点（当前 ' + info.gan + ' · ' + posName + '）'
+    : '设为本盘新的太极点：' + info.gan + '（' + posName + '）';
+  b1.onclick = function(ev) {
+    ev.stopPropagation();
+    if (isLocalCur) clearCmpTaijiLocal(panKey); else setCmpTaijiLocal(panKey, info);
+    finishCmpTaiji();
+  };
+  var b2 = document.createElement('button');
+  b2.textContent = isGlobalCur
+    ? '恢复全局日主太极点（当前 ' + info.gan + ' · ' + posName + '）'
+    : '设为全局新的太极点：' + info.gan + '（' + posName + '）';
+  b2.onclick = function(ev) {
+    ev.stopPropagation();
+    if (isGlobalCur) clearCmpTaijiGlobal(); else setCmpTaijiGlobal(info);
+    finishCmpTaiji();
+  };
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '取消';
+  cancelBtn.onclick = function(ev) { ev.stopPropagation(); closeTaijiMenu(); };
+  m.appendChild(b1);
+  m.appendChild(b2);
+  m.appendChild(cancelBtn);
+  document.body.appendChild(m);
+  var x = Math.min(e.clientX, window.innerWidth - m.offsetWidth - 12);
+  var y = Math.min(e.clientY, window.innerHeight - m.offsetHeight - 12);
+  m.style.left = Math.max(8, x) + 'px';
+  m.style.top = Math.max(8, y) + 'px';
+  setTimeout(function() { document.addEventListener('click', closeTaijiMenu, { once: true }); }, 0);
 }
 
 function bindEvents(data, container) {
@@ -10219,6 +10315,9 @@ function _zuoRefs(d) {
   return r;
 }
 function updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
+  withPanTaiji(clickedEl, function() { _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx); });
+}
+function _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   // 确定用哪个卡的数据：从点击元素向上找 .bz-twin-card
   var card = clickedEl.closest('.bz-twin-card');
   var cardData;
@@ -11296,7 +11395,7 @@ function renderCmpTrack() {
     var body = cards[k].querySelector('.cmp-card-body');
     var data = _cmpDataFor(alive[k]);
     if (data) {
-      renderChart(data, 1, body, { luckBelow: true, noTopBar: true });
+      withPanTaiji(cards[k], function() { renderChart(data, 1, body, { luckBelow: true, noTopBar: true }); });
     } else {
       body.innerHTML = '<div style="color:var(--c-red);padding:8px;">档案数据缺失</div>';
     }
@@ -11881,6 +11980,9 @@ function cmpSetState(entries) {
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,
     _applyDLUpdates: _applyDLUpdates,
+    renderCmpTrack: renderCmpTrack,
+    getCmpTaiji: getCmpTaiji,
+    clearAllCmpTaiji: clearAllCmpTaiji,
     buildDiffMap: buildDiffMap,
     buildCardHTML: buildCardHTML,
     buildCardLuckHTML: buildCardLuckHTML,
@@ -16214,6 +16316,95 @@ function captureScreenshot() {
       if (m) m.parentNode.removeChild(m);
       if (host.parentNode) host.parentNode.removeChild(host);
     }
+  })();
+
+  // ===== v0.51.0 对比排盘太极点：本盘/全局双选项 =====
+  tests.push({ section:'对比排盘太极点(v0.51.0)' });
+  (function() {
+    var sec = '对比太极';
+    var A = window.ALGO, R = window.RENDER, C = window.COMPARE, AR = window.ARCHIVE;
+    if (!C || !R || typeof R.renderCmpTrack !== 'function' || typeof R.getCmpTaiji !== 'function') {
+      tests.push(fail(sec + ' TJ36: 前置 COMPARE/RENDER.renderCmpTrack/getCmpTaiji 已挂载', '缺失'));
+      return;
+    }
+    R.clearAllCmpTaiji();
+    var ars = AR.getArchives();
+    var a1 = null, a2 = null;
+    for (var i = 0; i < ars.length; i++) { if (ars[i].name === '杨禹赫' && !a1) a1 = ars[i]; if (ars[i].name === '彭子旭' && !a2) a2 = ars[i]; }
+    tests.push(eq(sec + ' TJ36: 预置两档案可取', a1 && a2 ? 'Y' : 'N', 'Y'));
+    if (!a1 || !a2) { R.clearAllCmpTaiji(); return; }
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    var savedMain = A.getTaiji();
+    var track = document.getElementById('cmpTrack');
+    var key1 = 'arch:' + a1.id, key2 = 'arch:' + a2.id;
+    var cardByKey = function(k) { return track.querySelector('.cmp-card[data-key="' + k + '"]'); };
+    var starText = function(card) { var r = card.querySelectorAll('table.chart tr.rs')[0]; return r ? Array.prototype.map.call(r.cells, function(c) { return c.textContent.trim(); }).join('|') : ''; };
+    var stemRowOf = function(card) { return card.querySelectorAll('table.chart tr[data-row-type="ln1"]')[0]; };
+    C._setState([{ type:'arch', id:a1.id }, { type:'arch', id:a2.id }]);
+    C.open();
+    var cards = track.querySelectorAll('.cmp-card');
+    tests.push(eq(sec + ' TJ37: 两卡在轨', String(cards.length), '2'));
+    var s1a = starText(cardByKey(key1)), s2a = starText(cardByKey(key2));
+    tests.push(eq(sec + ' TJ38: 初始无对比太极状态', JSON.stringify(R.getCmpTaiji()), '{"byPan":{},"global":null}'));
+
+    var stem1 = stemRowOf(cardByKey(key1));
+    var g1 = stem1.cells[1].textContent.trim();
+    stem1.cells[1].click();
+    var menu = document.getElementById('taijiMenu');
+    var btns = menu ? menu.querySelectorAll('button') : [];
+    tests.push(eq(sec + ' TJ39: 对比卡点击弹三按钮(本盘/全局/取消)', String(btns.length), '3'));
+    tests.push(eq(sec + ' TJ40: 选项一=设为本盘新的太极点', btns[0] ? (btns[0].textContent.indexOf('设为本盘新的太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    tests.push(eq(sec + ' TJ41: 选项二=设为全局新的太极点', btns[1] ? (btns[1].textContent.indexOf('设为全局新的太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (btns[0]) btns[0].click();
+    var tjLocal = R.getCmpTaiji().byPan[key1] || null;
+    tests.push(eq(sec + ' TJ42: 本盘设点写入 byPan', JSON.stringify(tjLocal), JSON.stringify({ gan:g1, col:'nian', kind:'gan' })));
+    tests.push(eq(sec + ' TJ43: 本盘设点后该卡主星换中心', starText(cardByKey(key1)) !== s1a, true));
+    tests.push(eq(sec + ' TJ44: 其他卡不受影响', starText(cardByKey(key2)), s2a));
+    tests.push(eq(sec + ' TJ45: 激活卡干格套圈', (stemRowOf(cardByKey(key1)).cells[1].querySelector('.taiji-ring') || {}).textContent || '', g1));
+    tests.push(eq(sec + ' TJ46: 主表太极状态不受影响', A.getTaiji().active, savedMain.active));
+
+    var stem2 = stemRowOf(cardByKey(key2));
+    var g2 = stem2.cells[1].textContent.trim();
+    stem2.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    if (menu) menu.querySelectorAll('button')[1].click();
+    var tjG = R.getCmpTaiji();
+    tests.push(eq(sec + ' TJ47: 全局设点 global 生效', JSON.stringify(tjG.global || null), JSON.stringify({ gan:g2, col:'nian', kind:'gan' })));
+    tests.push(eq(sec + ' TJ48: 全局设点清空 byPan', String(Object.keys(tjG.byPan).length), '0'));
+    tests.push(eq(sec + ' TJ49: 全局后两卡主星均换中心', (starText(cardByKey(key1)) !== s1a && starText(cardByKey(key2)) !== s2a) ? 'Y' : 'N', 'Y'));
+
+    stem2 = stemRowOf(cardByKey(key2));
+    stem2.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    tests.push(eq(sec + ' TJ50: 再点同位弹恢复全局', menu ? (menu.textContent.indexOf('恢复全局日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (menu) menu.querySelectorAll('button')[1].click();
+    tests.push(eq(sec + ' TJ51: 恢复全局后两卡还原', (starText(cardByKey(key1)) === s1a && starText(cardByKey(key2)) === s2a) ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' TJ52: 恢复后 global=null', R.getCmpTaiji().global, null));
+
+    stem1 = stemRowOf(cardByKey(key1));
+    stem1.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    if (menu) menu.querySelectorAll('button')[0].click();
+    stem1 = stemRowOf(cardByKey(key1));
+    stem1.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    tests.push(eq(sec + ' TJ53: 本盘同位弹恢复本盘', menu ? (menu.textContent.indexOf('恢复本盘日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (menu) menu.querySelectorAll('button')[0].click();
+    tests.push(eq(sec + ' TJ54: 本盘恢复后 byPan 空', String(Object.keys(R.getCmpTaiji().byPan).length), '0'));
+    tests.push(eq(sec + ' TJ55: 本盘恢复后卡1还原', starText(cardByKey(key1)), s1a));
+
+    A.setTaiji(g1, 'nian', 'gan');
+    R.renderCmpTrack();
+    tests.push(eq(sec + ' TJ56: 主表太极激活时对比卡继承', starText(cardByKey(key1)) !== s1a, true));
+    A.clearTaiji();
+    R.renderCmpTrack();
+    tests.push(eq(sec + ' TJ57: 主表清除后对比卡还原', starText(cardByKey(key1)), s1a));
+
+    R.clearAllCmpTaiji();
+    C.clear(); C.close();
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    tests.push(eq(sec + ' TJ58: 测试后状态还原', localStorage.getItem('bz_cmp_state'), savedCmp));
+    tests.push(eq(sec + ' TJ59: 主表太极快照不变', JSON.stringify(A.getTaiji()), JSON.stringify(savedMain)));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

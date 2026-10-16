@@ -1,4 +1,4 @@
-/* 八字排盘 v0.50.0 — main.js */
+/* 八字排盘 v0.51.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3965,6 +3965,95 @@ function captureScreenshot() {
       if (m) m.parentNode.removeChild(m);
       if (host.parentNode) host.parentNode.removeChild(host);
     }
+  })();
+
+  // ===== v0.51.0 对比排盘太极点：本盘/全局双选项 =====
+  tests.push({ section:'对比排盘太极点(v0.51.0)' });
+  (function() {
+    var sec = '对比太极';
+    var A = window.ALGO, R = window.RENDER, C = window.COMPARE, AR = window.ARCHIVE;
+    if (!C || !R || typeof R.renderCmpTrack !== 'function' || typeof R.getCmpTaiji !== 'function') {
+      tests.push(fail(sec + ' TJ36: 前置 COMPARE/RENDER.renderCmpTrack/getCmpTaiji 已挂载', '缺失'));
+      return;
+    }
+    R.clearAllCmpTaiji();
+    var ars = AR.getArchives();
+    var a1 = null, a2 = null;
+    for (var i = 0; i < ars.length; i++) { if (ars[i].name === '杨禹赫' && !a1) a1 = ars[i]; if (ars[i].name === '彭子旭' && !a2) a2 = ars[i]; }
+    tests.push(eq(sec + ' TJ36: 预置两档案可取', a1 && a2 ? 'Y' : 'N', 'Y'));
+    if (!a1 || !a2) { R.clearAllCmpTaiji(); return; }
+    var savedCmp = localStorage.getItem('bz_cmp_state');
+    var savedMain = A.getTaiji();
+    var track = document.getElementById('cmpTrack');
+    var key1 = 'arch:' + a1.id, key2 = 'arch:' + a2.id;
+    var cardByKey = function(k) { return track.querySelector('.cmp-card[data-key="' + k + '"]'); };
+    var starText = function(card) { var r = card.querySelectorAll('table.chart tr.rs')[0]; return r ? Array.prototype.map.call(r.cells, function(c) { return c.textContent.trim(); }).join('|') : ''; };
+    var stemRowOf = function(card) { return card.querySelectorAll('table.chart tr[data-row-type="ln1"]')[0]; };
+    C._setState([{ type:'arch', id:a1.id }, { type:'arch', id:a2.id }]);
+    C.open();
+    var cards = track.querySelectorAll('.cmp-card');
+    tests.push(eq(sec + ' TJ37: 两卡在轨', String(cards.length), '2'));
+    var s1a = starText(cardByKey(key1)), s2a = starText(cardByKey(key2));
+    tests.push(eq(sec + ' TJ38: 初始无对比太极状态', JSON.stringify(R.getCmpTaiji()), '{"byPan":{},"global":null}'));
+
+    var stem1 = stemRowOf(cardByKey(key1));
+    var g1 = stem1.cells[1].textContent.trim();
+    stem1.cells[1].click();
+    var menu = document.getElementById('taijiMenu');
+    var btns = menu ? menu.querySelectorAll('button') : [];
+    tests.push(eq(sec + ' TJ39: 对比卡点击弹三按钮(本盘/全局/取消)', String(btns.length), '3'));
+    tests.push(eq(sec + ' TJ40: 选项一=设为本盘新的太极点', btns[0] ? (btns[0].textContent.indexOf('设为本盘新的太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    tests.push(eq(sec + ' TJ41: 选项二=设为全局新的太极点', btns[1] ? (btns[1].textContent.indexOf('设为全局新的太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (btns[0]) btns[0].click();
+    var tjLocal = R.getCmpTaiji().byPan[key1] || null;
+    tests.push(eq(sec + ' TJ42: 本盘设点写入 byPan', JSON.stringify(tjLocal), JSON.stringify({ gan:g1, col:'nian', kind:'gan' })));
+    tests.push(eq(sec + ' TJ43: 本盘设点后该卡主星换中心', starText(cardByKey(key1)) !== s1a, true));
+    tests.push(eq(sec + ' TJ44: 其他卡不受影响', starText(cardByKey(key2)), s2a));
+    tests.push(eq(sec + ' TJ45: 激活卡干格套圈', (stemRowOf(cardByKey(key1)).cells[1].querySelector('.taiji-ring') || {}).textContent || '', g1));
+    tests.push(eq(sec + ' TJ46: 主表太极状态不受影响', A.getTaiji().active, savedMain.active));
+
+    var stem2 = stemRowOf(cardByKey(key2));
+    var g2 = stem2.cells[1].textContent.trim();
+    stem2.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    if (menu) menu.querySelectorAll('button')[1].click();
+    var tjG = R.getCmpTaiji();
+    tests.push(eq(sec + ' TJ47: 全局设点 global 生效', JSON.stringify(tjG.global || null), JSON.stringify({ gan:g2, col:'nian', kind:'gan' })));
+    tests.push(eq(sec + ' TJ48: 全局设点清空 byPan', String(Object.keys(tjG.byPan).length), '0'));
+    tests.push(eq(sec + ' TJ49: 全局后两卡主星均换中心', (starText(cardByKey(key1)) !== s1a && starText(cardByKey(key2)) !== s2a) ? 'Y' : 'N', 'Y'));
+
+    stem2 = stemRowOf(cardByKey(key2));
+    stem2.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    tests.push(eq(sec + ' TJ50: 再点同位弹恢复全局', menu ? (menu.textContent.indexOf('恢复全局日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (menu) menu.querySelectorAll('button')[1].click();
+    tests.push(eq(sec + ' TJ51: 恢复全局后两卡还原', (starText(cardByKey(key1)) === s1a && starText(cardByKey(key2)) === s2a) ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' TJ52: 恢复后 global=null', R.getCmpTaiji().global, null));
+
+    stem1 = stemRowOf(cardByKey(key1));
+    stem1.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    if (menu) menu.querySelectorAll('button')[0].click();
+    stem1 = stemRowOf(cardByKey(key1));
+    stem1.cells[1].click();
+    menu = document.getElementById('taijiMenu');
+    tests.push(eq(sec + ' TJ53: 本盘同位弹恢复本盘', menu ? (menu.textContent.indexOf('恢复本盘日主太极点') >= 0 ? 'Y' : 'N') : 'N', 'Y'));
+    if (menu) menu.querySelectorAll('button')[0].click();
+    tests.push(eq(sec + ' TJ54: 本盘恢复后 byPan 空', String(Object.keys(R.getCmpTaiji().byPan).length), '0'));
+    tests.push(eq(sec + ' TJ55: 本盘恢复后卡1还原', starText(cardByKey(key1)), s1a));
+
+    A.setTaiji(g1, 'nian', 'gan');
+    R.renderCmpTrack();
+    tests.push(eq(sec + ' TJ56: 主表太极激活时对比卡继承', starText(cardByKey(key1)) !== s1a, true));
+    A.clearTaiji();
+    R.renderCmpTrack();
+    tests.push(eq(sec + ' TJ57: 主表清除后对比卡还原', starText(cardByKey(key1)), s1a));
+
+    R.clearAllCmpTaiji();
+    C.clear(); C.close();
+    if (savedCmp === null) localStorage.removeItem('bz_cmp_state'); else localStorage.setItem('bz_cmp_state', savedCmp);
+    tests.push(eq(sec + ' TJ58: 测试后状态还原', localStorage.getItem('bz_cmp_state'), savedCmp));
+    tests.push(eq(sec + ' TJ59: 主表太极快照不变', JSON.stringify(A.getTaiji()), JSON.stringify(savedMain)));
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
