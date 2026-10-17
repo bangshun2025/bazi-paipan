@@ -4,6 +4,18 @@
 
 ---
 
+## v0.55.2（2026-10-17）修复：干净环境首访 ？test=1 全量回归炸页
+
+**背景**：v0.55.1 发版后线上 ？test=1 全量回归发现：干净环境（清缓存/新设备/无痕）打开 ？test=1 时测试永远停在「⏳ 运行中…」，并抛 4 条级联异常。
+
+**根因**：测试框架「盘面对比(v0.37.0)」段在 DOMContentLoaded 之前同步执行，直接读 `a1.id`（a1=预置档案杨禹赫）。干净环境 localStorage 为空、预置档案尚未由 initPresetArchives 建立（它在 DOMContentLoaded 才跑）→ `Cannot read properties of null (reading 'id')` → main 大块顶层同步执行中断 → 同块后续的 `window.__testAppend` 与 `window.APP = {...}` 均未执行 → 级联出「APP is not defined」「Cannot read properties of undefined (reading 'doPaipan')」，测试框架永不渲染结果。
+
+**为什么此前未暴露**：历次本地全量实测复用同一 Chrome profile（内含档案数据），a1 有值跳过炸点，1371/1372 一直「假绿」。本次首次改用全新干净 profile 复现。线上正常使用（有数据用户）不受影响。
+
+**修复**：测试框架开头（tests 数组定义后）同步补建预置档案：`ARCHIVE.initPresetArchives()`（幂等，检测 hasPreset，DOMContentLoaded 再跑一次不会重复写入）。干净首访 ？test=1 回归实测：1372 条断言、0 异常、仅剩 1 条已知历史基线失败（v0.43 T02 标题带档案名，与本修复无关的既有口径）；正常模式（无 ？test=1）干净首访 0 异常、APP 正常挂载。
+
+---
+
 ## v0.55.1（2026-10-17）修复：档案改名后分析记录丢失（孤儿迁移）
 
 PATCH：修复档案改名后「分析记录」看似消失的问题——记录 key 为 `bz_rec_notes_[twin|]<名字|性别|公历y|m|d|h|mi>`，改名后 key 失配导致旧记录读不到（数据未删，仅孤儿化）。三处修复：① archive.js saveEdit 改名/性别/生日变更后调 migrateRecNotesKeys 把旧 key 记录迁到新 key（新 key 已有内容则不覆盖）；② 启动时 initPresetArchives 末尾调 migrateOrphanRecNotes 扫描全部 `bz_rec_notes_*` key，按「性别+公历生日+时分」唯一匹配档案且档案名不同者，自动回收/合并（旧内容在前、空行分隔、删除旧 key，幂等）；③ 农历档案 key 构造走 lunarToSolar 转公历，与排盘 data.y/m/d 口径一致。断言 MIG T01-T05（key 构造/改名迁移/旧 key 删除/孤儿合并顺序/孤儿旧 key 删除）。已孤儿化的历史记录升级后刷新页面自动找回。

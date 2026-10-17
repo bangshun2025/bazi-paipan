@@ -800,6 +800,11 @@ function captureScreenshot() {
   const start = Date.now();
   const tests = [];
 
+  // 干净环境首访 ?test=1：DOMContentLoaded 尚未触发，预置档案未建，
+  // v0.37 对比段会因取不到杨禹赫/彭子旭抛 TypeError 中断整个测试流。
+  // initPresetArchives 幂等（检测 hasPreset），DOMContentLoaded 再跑一次不会重复写入。
+  try { if (typeof ARCHIVE !== 'undefined' && ARCHIVE.initPresetArchives) ARCHIVE.initPresetArchives(); } catch(e) {}
+
   // === 十神 ===
   tests.push({ section:'十神计算' });
   tests.push(eq('shiShen("甲","辛") → 官',           shiShen('甲','辛'), '官'));
