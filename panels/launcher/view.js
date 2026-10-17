@@ -42,6 +42,15 @@
       url: "/api/ext/qimen-paipan/standalone"
     },
     {
+      id: "liuyao-online",
+      name: "六爻排盘 · 正式",
+      subtitle: "线上正式版",
+      desc: "GitHub Pages 发布版，对外分享链接。",
+      icon: "爻",
+      iconColor: "#2e8b3d",
+      url: "https://bangshun2025.github.io/liuyao-paipan/"
+    },
+    {
       id: "liuyao-paipan",
       name: "六爻排盘",
       subtitle: "测事体系 v2.1",
