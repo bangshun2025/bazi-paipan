@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.53.0 | 2026-10-16 -->
+<!-- 八字排盘 ·  从真版 v0.54.0 | 2026-10-17 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
+<!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
 <!-- v0.51.0: 对比排盘太极点 — 点击对比卡干行/藏干（含三垣）弹双选项「设为本盘新的太极点 / 设为全局新的太极点」；本盘仅该卡换中心，全局统摄所有对比卡（设置时清各本盘点），再点同位弹恢复；渲染包络使主表太极状态与对比卡互不干扰，主表太极激活时对比卡保持继承 -->
 <!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
@@ -380,6 +381,19 @@
   .rec-trigger.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
   .twin-rec-trigger.active { background:var(--c-ink); color:var(--c-paper); border-color:var(--c-ink); }
   .record-panel.twin-rec { width:100%; min-width:0; margin:0 0 18px; }
+  .record-panel.cmp-rec { width:auto; min-width:0; flex:0 0 auto; margin:0 14px 10px; position:static; }
+  .record-panel.cmp-rec .rec-text { min-height:140px; max-height:34dvh; }
+  .hepan-overlay { z-index:1002; }
+  .hepan-modal { max-width:640px; }
+  .hepan-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 20px; border-bottom:0.5px solid var(--c-line); }
+  .hepan-row-main { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+  .hepan-row-name { font-family:var(--font-display); font-size:15px; color:var(--c-ink); }
+  .hepan-row-meta { font-size:12px; color:var(--c-gray); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hepan-row-date { font-size:11px; color:var(--c-gray); opacity:.7; }
+  .hepan-row-ops { display:flex; gap:6px; flex:0 0 auto; }
+  .hepan-btn { font-size:12px; padding:5px 10px; background:var(--c-paper); color:var(--c-ink); border:1px solid var(--c-line); border-radius:2px; cursor:pointer; font-family:var(--font-body); }
+  .hepan-btn:hover { border-color:var(--c-ink); }
+  .hepan-btn-open { background:var(--c-water); color:#fff; border-color:var(--c-water); letter-spacing:.08em; }
   .record-panel { display:none; flex:1 1 auto; min-width:380px; position:sticky; top:12px; border:0.5px solid var(--c-line); background:var(--c-paper); }
   .record-panel.open { display:flex; flex-direction:column; }
   .rec-head { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(201,169,110,.06); border-bottom:0.5px solid var(--c-line); }
@@ -1050,6 +1064,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <span class="cmp-toolbar-title">▦ 排盘对比</span>
         <span class="cmp-count" id="cmpCount"></span>
         <button class="btn" onclick="ARCHIVE.openArchivePanel()">📋 档案</button>
+        <button class="btn" id="btnHePanSave" onclick="HEPAN.saveFromCmp()" title="把当前对比组合存为合盘档案">💾 存为合盘</button>
+        <button class="btn-simple" id="btnCmpRec" onclick="HEPAN.toggleCmpRec(this)" title="记录合盘分析：写入即自动保存">📝 分析记录</button>
         <span class="cmp-level-wrap"><button class="btn-simple" id="btnCmpLevel" onclick="COMPARE.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" id="cmpLevelPop" onclick="event.stopPropagation()"></div></span>
         <span class="cmp-gz-host" id="cmpGzPanel"></span>
         <span class="cmp-zoom-wrap"><label>缩放</label><input type="range" id="cmpZoom" min="60" max="150" step="5" value="100" oninput="COMPARE.setZoom(this.value)"><span class="cmp-zoom-val" id="cmpZoomVal">100%</span></span><span class="cmp-cols-wrap"><label>布局</label><button class="cmp-cols-btn" data-cols="1" onclick="COMPARE.setCols(1)">1</button><button class="cmp-cols-btn" data-cols="2" onclick="COMPARE.setCols(2)">2</button><button class="cmp-cols-btn" data-cols="3" onclick="COMPARE.setCols(3)">3</button><button class="cmp-cols-btn" data-cols="4" onclick="COMPARE.setCols(4)">4</button><button class="cmp-cols-btn" data-cols="5" onclick="COMPARE.setCols(5)">5</button><button class="cmp-cols-btn" data-cols="6" onclick="COMPARE.setCols(6)">6</button></span><button class="cmp-bar-toggle" onclick="COMPARE.toggleBar()">名字</button>
@@ -1060,8 +1076,27 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible('month',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible('day',this.checked)">流月日</label><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
       <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
+      <div class="record-panel cmp-rec" id="cmpRecPanel">
+        <div class="rec-head"><span class="rec-title">分析记录（合盘）</span><span class="rec-status" id="cmpRecStatus"></span></div>
+        <textarea class="rec-text" id="cmpRecText" placeholder="记录本次合盘分析……写入即自动保存"></textarea>
+      </div>
       <div class="cmp-picker" id="cmpPicker"></div>
       <div class="cmp-track" id="cmpTrack"></div>
+    </div>
+  </div>
+
+  <!-- ===== v0.54.0 合盘档案弹窗 ===== -->
+  <div class="archive-overlay hepan-overlay" id="hepanOverlay" onclick="HEPAN.closePanel()">
+    <div class="archive-modal hepan-modal" onclick="event.stopPropagation()">
+      <div class="archive-modal-header">
+        <span class="archive-modal-title">▤ 合盘档案</span>
+        <span style="display:flex;align-items:center;gap:8px;"><button class="btn" id="btnHePanCompare" onclick="COMPARE.open()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▦ 盘面对比</button><button class="archive-modal-close" onclick="HEPAN.closePanel()">✕</button></span>
+      </div>
+      <div class="archive-modal-search">
+        <input type="text" id="hepan-search" placeholder="输入合盘名称筛选" oninput="HEPAN.onHePanSearch(this.value)">
+        <button class="archive-search-btn" onclick="HEPAN.renderHePanModal()">确定</button>
+      </div>
+      <div class="archive-modal-list" id="hepan-modal-list"></div>
     </div>
   </div>
 
@@ -1070,7 +1105,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
     <div class="archive-modal" onclick="event.stopPropagation()">
       <div class="archive-modal-header">
         <span class="archive-modal-title">📋 档案</span>
-        <span style="display:flex;align-items:center;gap:8px;"><button class="btn" id="btnArchiveCompare" onclick="COMPARE.open()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▦ 盘面对比</button><button class="btn btn-default-tag" id="btnDefaultTag" onclick="ARCHIVE.toggleDefaultTagPicker()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🏷 默认标签</button><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
+        <span style="display:flex;align-items:center;gap:8px;"><button class="btn" id="btnHePanEntry" onclick="HEPAN.openPanel()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▤ 合盘</button><button class="btn" id="btnArchiveCompare" onclick="COMPARE.open()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▦ 盘面对比</button><button class="btn btn-default-tag" id="btnDefaultTag" onclick="ARCHIVE.toggleDefaultTagPicker()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🏷 默认标签</button><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
       </div>
       <div class="archive-modal-tagbar" id="archive-tag-bar"></div>
       <div class="archive-tag-default-panel" id="archive-tag-default-panel" style="display:none;"></div>
@@ -9044,6 +9079,354 @@ function handleImportFile(event) {
 
 </script>
 <script>
+/* 八字排盘 v0.54.0 — hepan.js */
+/* 合盘档案：把排盘对比（当前组合）存为合盘档案，可从档案界面一键恢复对比界面；合盘界面内置分析记录（写入即存，按合盘 id 隔离，未存档组合用稳定指纹 key） */
+(function() {
+  'use strict';
+
+  var HP_KEY = 'bz_hepans_v1';
+  var NOTES_KEY = 'bz_hepan_notes_';
+  var CMP_KEY = 'bz_cmp_state'; // 与 render.js CMP_KEY 同源，改动需两处同步
+
+  function lsGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
+  }
+  function lsRemove(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function normalizeEntries(raw) {
+    var arr = Array.isArray(raw) ? raw : [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (!e || typeof e !== 'object') continue;
+      if (e.type === 'current') out.push({ type: 'current' });
+      else if (e.type === 'arch' && e.id != null) out.push({ type: 'arch', id: e.id });
+    }
+    return out;
+  }
+
+  function getHePans() {
+    var raw = lsGet(HP_KEY);
+    if (!raw) return [];
+    try {
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        var h = arr[i];
+        if (!h || !h.id) continue;
+        out.push({ id: String(h.id), name: String(h.name || '未命名合盘'), entries: normalizeEntries(h.entries), createdAt: h.createdAt || '' });
+      }
+      return out;
+    } catch (e) { return []; }
+  }
+
+  function saveHePans(list) {
+    return lsSet(HP_KEY, JSON.stringify(list));
+  }
+
+  function entriesSig(entries) {
+    var arr = normalizeEntries(entries);
+    var parts = [];
+    for (var i = 0; i < arr.length; i++) {
+      parts.push(arr[i].type === 'current' ? 'cur' : 'a' + arr[i].id);
+    }
+    return parts.join('|');
+  }
+
+  function matchHePan(entries) {
+    var sig = entriesSig(entries);
+    if (!sig) return null;
+    var list = getHePans();
+    for (var i = 0; i < list.length; i++) {
+      if (entriesSig(list[i].entries) === sig) return list[i];
+    }
+    return null;
+  }
+
+  function noteKeyFor(entries) {
+    var hp = matchHePan(entries);
+    if (hp) return NOTES_KEY + hp.id;
+    var sig = entriesSig(entries);
+    return sig ? NOTES_KEY + 'fp-' + sig : null;
+  }
+
+  function currentCmpEntries() {
+    var raw = lsGet(CMP_KEY);
+    if (!raw) return [];
+    try {
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+
+  // ===== 保存（CMP 工具栏入口）=====
+  function saveFromCmp() {
+    var entries = currentCmpEntries();
+    if (!entries.length) {
+      alert('当前对比未选择任何盘面，先勾选档案再加入对比');
+      return;
+    }
+    var exist = matchHePan(entries);
+    var defName = exist ? exist.name : defaultName(entries);
+    var name = prompt('合盘名称：', defName);
+    if (name == null) return;
+    name = String(name).trim();
+    if (!name) { alert('名称不能为空'); return; }
+    var list = getHePans();
+    if (exist) {
+      if (!confirm('「' + exist.name + '」已存在，覆盖更新？')) return;
+      // exist 是 matchHePan 内部另一次 getHePans 的对象引用，直接改它会脱节，必须按 id 在本 list 内改
+      for (var k = 0; k < list.length; k++) {
+        if (list[k].id === exist.id) { list[k].name = name; break; }
+      }
+      saveHePans(list);
+    } else {
+      list.push({ id: 'hp_' + Date.now().toString(36), name: name, entries: normalizeEntries(entries), createdAt: new Date().toISOString().slice(0, 10) });
+      saveHePans(list);
+    }
+    // fp key 里的旧记录迁移到 id key
+    var fpKey = NOTES_KEY + 'fp-' + entriesSig(entries);
+    var hp = matchHePan(entries);
+    if (hp) {
+      var idKey = NOTES_KEY + hp.id;
+      var old = lsGet(fpKey);
+      if (old != null && lsGet(idKey) == null) {
+        lsSet(idKey, old);
+        lsRemove(fpKey);
+      }
+    }
+    renderHePanModal();
+  }
+
+  // ARCHIVE 方法内部引用裸 APP，APP 挂载前调用会抛 ReferenceError，这里统一兜底
+  function archGetFormData() {
+    if (!window.ARCHIVE || typeof ARCHIVE.getFormData !== 'function') return null;
+    try { return ARCHIVE.getFormData(); } catch (e) { return null; }
+  }
+
+  function archGetArchives() {
+    if (!window.ARCHIVE || typeof ARCHIVE.getArchives !== 'function') return [];
+    try { return ARCHIVE.getArchives() || []; } catch (e) { return []; }
+  }
+
+  function defaultName(entries) {
+    var names = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (e.type === 'current') {
+        var f = archGetFormData();
+        names.push((f && (f.nickname || f.name)) || '当前盘');
+      } else if (window.ARCHIVE) {
+        var ars = archGetArchives();
+        for (var j = 0; j < ars.length; j++) {
+          if (String(ars[j].id) === String(e.id)) { names.push(ARCHIVE.getDisplayName ? ARCHIVE.getDisplayName(ars[j]) : ars[j].name); break; }
+        }
+      }
+    }
+    return names.length ? names.join('×') + ' 合盘' : '未命名合盘';
+  }
+
+  function entryDesc(e) {
+    if (!e) return '';
+    if (e.type === 'current') {
+      var f = archGetFormData();
+      return (f && (f.nickname || f.name)) || '当前盘';
+    }
+    if (window.ARCHIVE) {
+      var ars = archGetArchives();
+      for (var i = 0; i < ars.length; i++) {
+        if (String(ars[i].id) === String(e.id)) return ARCHIVE.getDisplayName ? ARCHIVE.getDisplayName(ars[i]) : ars[i].name;
+      }
+    }
+    return '(档案已删)';
+  }
+
+  // ===== 打开 / 重命名 / 删除 =====
+  function openHePan(id) {
+    var hp = null;
+    var list = getHePans();
+    for (var i = 0; i < list.length; i++) { if (list[i].id === String(id)) { hp = list[i]; break; } }
+    if (!hp) { alert('合盘不存在或已删除'); renderHePanModal(); return; }
+    if (!window.COMPARE || typeof COMPARE._setState !== 'function') { alert('对比模块未就绪'); return; }
+    COMPARE._setState(hp.entries);
+    closePanel();
+    COMPARE.open();
+  }
+
+  function renameHePan(id) {
+    var list = getHePans();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === String(id)) {
+        var name = prompt('新的合盘名称：', list[i].name);
+        if (name == null) return;
+        name = String(name).trim();
+        if (!name) { alert('名称不能为空'); return; }
+        list[i].name = name;
+        saveHePans(list);
+        renderHePanModal();
+        return;
+      }
+    }
+  }
+
+  function deleteHePan(id) {
+    var list = getHePans();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === String(id)) {
+        if (!confirm('确定删除合盘「' + list[i].name + '」？其分析记录将一并删除，此操作不可恢复。')) return;
+        lsRemove(NOTES_KEY + list[i].id);
+        list.splice(i, 1);
+        saveHePans(list);
+        renderHePanModal();
+        return;
+      }
+    }
+  }
+
+  // ===== 弹窗 =====
+  var _searchKeyword = '';
+
+  function openPanel() {
+    _searchKeyword = '';
+    var searchEl = document.getElementById('hepan-search');
+    if (searchEl) searchEl.value = '';
+    if (window.ARCHIVE && typeof ARCHIVE.closeArchivePanel === 'function') ARCHIVE.closeArchivePanel();
+    renderHePanModal();
+    var ov = document.getElementById('hepanOverlay');
+    if (ov) ov.classList.add('show');
+    if (searchEl) setTimeout(function() { searchEl.focus(); }, 100);
+  }
+
+  function closePanel() {
+    var ov = document.getElementById('hepanOverlay');
+    if (ov) ov.classList.remove('show');
+  }
+
+  function onHePanSearch(v) {
+    _searchKeyword = String(v || '');
+    renderHePanModal();
+  }
+
+  function renderHePanModal() {
+    var listEl = document.getElementById('hepan-modal-list');
+    if (!listEl) return;
+    var list = getHePans();
+    if (!list.length) {
+      listEl.innerHTML = '<div class="archive-modal-empty">暂无合盘 —— 打开「盘面对比」勾选盘面后，点「💾 存为合盘」</div>';
+      return;
+    }
+    var k = _searchKeyword.trim().toLowerCase();
+    var html = '';
+    var hit = 0;
+    for (var i = 0; i < list.length; i++) {
+      var h = list[i];
+      var desc = [];
+      for (var j = 0; j < h.entries.length; j++) desc.push(entryDesc(h.entries[j]));
+      var rowText = (h.name + ' ' + desc.join(' ')).toLowerCase();
+      if (k && rowText.indexOf(k) < 0) continue;
+      html += '<div class="hepan-row" data-id="' + esc(h.id) + '">'
+        + '<div class="hepan-row-main">'
+        + '<span class="hepan-row-name">' + esc(h.name) + '</span>'
+        + '<span class="hepan-row-meta">' + h.entries.length + '盘 · ' + esc(desc.join(' × ')) + '</span>'
+        + (h.createdAt ? '<span class="hepan-row-date">' + esc(h.createdAt) + '</span>' : '')
+        + '</div>'
+        + '<div class="hepan-row-ops">'
+        + '<button class="hepan-btn hepan-btn-open" onclick="HEPAN.openHePan(\'' + esc(h.id) + '\')">打开</button>'
+        + '<button class="hepan-btn" onclick="HEPAN.renameHePan(\'' + esc(h.id) + '\')" title="重命名">✏️</button>'
+        + '<button class="hepan-btn" onclick="HEPAN.deleteHePan(\'' + esc(h.id) + '\')" title="删除">🗑️</button>'
+        + '</div>'
+        + '</div>';
+      hit++;
+    }
+    listEl.innerHTML = hit ? html : '<div class="archive-modal-empty">未找到匹配合盘</div>';
+  }
+
+  // ===== 合盘分析记录（CMP 内） =====
+  function toggleCmpRec(btn) {
+    var panel = document.getElementById('cmpRecPanel');
+    if (!panel) return false;
+    var on = !panel.classList.contains('open');
+    panel.classList.toggle('open', on);
+    if (btn) btn.classList.toggle('active', on);
+    if (on) refreshCmpRec();
+    return on;
+  }
+
+  function refreshCmpRec() {
+    var panel = document.getElementById('cmpRecPanel');
+    if (!panel || !panel.classList.contains('open')) return;
+    var ta = panel.querySelector('.rec-text');
+    if (!ta) return;
+    var key = noteKeyFor(currentCmpEntries());
+    ta.value = key ? (lsGet(key) || '') : '';
+    autoGrow(ta);
+  }
+
+  function autoGrow(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  }
+
+  function bindCmpRec() {
+    var ta = document.getElementById('cmpRecText');
+    if (!ta || ta._hepanBound) return;
+    ta._hepanBound = true;
+    ta.addEventListener('input', function() {
+      autoGrow(ta);
+      var key = noteKeyFor(currentCmpEntries());
+      if (!key) return;
+      lsSet(key, ta.value);
+      var st = document.getElementById('cmpRecStatus');
+      if (st) {
+        st.textContent = '已保存 ' + new Date().toTimeString().slice(0, 8);
+        st.classList.add('show');
+        clearTimeout(st._t);
+        st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
+      }
+    });
+  }
+
+  window.HEPAN = {
+    HP_KEY: HP_KEY,
+    NOTES_KEY: NOTES_KEY,
+    getHePans: getHePans,
+    saveHePan: function(name, entries) {
+      var list = getHePans();
+      var hp = { id: 'hp_' + Date.now().toString(36), name: String(name || '').trim() || '未命名合盘', entries: normalizeEntries(entries), createdAt: new Date().toISOString().slice(0, 10) };
+      list.push(hp);
+      saveHePans(list);
+      return hp;
+    },
+    entriesSig: entriesSig,
+    matchHePan: matchHePan,
+    noteKeyFor: noteKeyFor,
+    currentCmpEntries: currentCmpEntries,
+    saveFromCmp: saveFromCmp,
+    openHePan: openHePan,
+    renameHePan: renameHePan,
+    deleteHePan: deleteHePan,
+    openPanel: openPanel,
+    closePanel: closePanel,
+    onHePanSearch: onHePanSearch,
+    renderHePanModal: renderHePanModal,
+    toggleCmpRec: toggleCmpRec,
+    refreshCmpRec: refreshCmpRec,
+    bindCmpRec: bindCmpRec
+  };
+
+  bindCmpRec();
+})();</script>
+<script>
 /* 八字排盘 v0.29.0 — render.js */
 (function() {
 
@@ -16927,6 +17310,97 @@ function captureScreenshot() {
     if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
     R.renderChart(pd, undefined, 'tst-out');
     tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
+  })();
+
+  // ===== v0.54.0 合盘档案 =====
+  (function() {
+    tests.push({ section:'合盘档案(v0.54.0)' });
+    var H = window.HEPAN, C = window.COMPARE;
+    if (!H || typeof H.getHePans !== 'function' || !C || typeof C._setState !== 'function') {
+      tests.push(fail('HP 前置: HEPAN/COMPARE 接口挂载', '缺失'));
+      return;
+    }
+    var HP_KEY = H.HP_KEY, NOTES_KEY = H.NOTES_KEY, CMP_KEY = 'bz_cmp_state';
+    var savedHp = localStorage.getItem(HP_KEY);
+    var savedCmp = localStorage.getItem(CMP_KEY);
+    var savedPrompt = window.prompt, savedConfirm = window.confirm;
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    // renderCmpTrack 会自动剔除不存在的档案 id（自愈），假 id 会让对比条目被清掉，必须造真档案
+    try {
+      window.ARCHIVE.saveArchives([
+        { id:'tst-arch-1', nickname:'测试甲', name:'测试甲', gender:'男', year:1990, month:1, day:1, hour:12, min:0, prov:'', city:'', dist:'', useSolar:true, calendarType:'solar', isLeap:false, lunarMonth:null, bazi:null, sanyuan:null, extras:null, gongWeiType:null, createdAt:'2026-01-01', updatedAt:'2026-01-01', isPreset:false },
+        { id:'tst-arch-2', nickname:'测试乙', name:'测试乙', gender:'女', year:1992, month:2, day:2, hour:6, min:0, prov:'', city:'', dist:'', useSolar:true, calendarType:'solar', isLeap:false, lunarMonth:null, bazi:null, sanyuan:null, extras:null, gongWeiType:null, createdAt:'2026-01-01', updatedAt:'2026-01-01', isPreset:false }
+      ]);
+    } catch (e) {}
+    var testEntries = [{ type:'current' }, { type:'arch', id:'tst-arch-1' }];
+    var testNoteKey = null;
+    var hp = null;
+    try {
+      localStorage.removeItem(HP_KEY);
+      tests.push(eq('HP01: 默认空数组', JSON.stringify(H.getHePans()), '[]'));
+
+      hp = H.saveHePan('初名A', testEntries);
+      var list1 = H.getHePans();
+      tests.push(eq('HP02: saveHePan 入库', list1.length === 1 && list1[0].name === '初名A' && /^hp_/.test(list1[0].id) && !!list1[0].createdAt, true));
+      tests.push(eq('HP03: entries 归一化', JSON.stringify(list1[0].entries), JSON.stringify(testEntries)));
+
+      localStorage.setItem(CMP_KEY, JSON.stringify(testEntries));
+      window.prompt = function() { return '覆盖名X'; };
+      window.confirm = function() { return true; };
+      H.saveFromCmp();
+      var list2 = H.getHePans();
+      tests.push(eq('HP04: saveFromCmp 同组合覆盖改名', list2.length === 1 && list2[0].name === '覆盖名X', true));
+
+      H.renameHePan(hp.id);
+      tests.push(eq('HP05: renameHePan', H.getHePans()[0].name, '覆盖名X'));
+
+      var m1 = H.matchHePan(testEntries);
+      var m2 = H.matchHePan([{ type:'current' }, { type:'arch', id:'tst-arch-2' }]);
+      tests.push(eq('HP06: matchHePan 命中id', m1 ? m1.id === hp.id : false, true));
+      tests.push(eq('HP07: matchHePan 异组合 null', m2, null));
+
+      tests.push(eq('HP08: noteKeyFor id路径', H.noteKeyFor(testEntries), NOTES_KEY + hp.id));
+      var fp1 = H.noteKeyFor([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]);
+      var fp2 = H.noteKeyFor([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]);
+      tests.push(eq('HP09: noteKeyFor fp路径稳定', /^bz_hepan_notes_fp-/.test(fp1) && fp1 === fp2, true));
+
+      tests.push(eq('HP10: cmp记录面板与按钮存在', !!document.getElementById('cmpRecPanel') && !!document.getElementById('cmpRecText') && !!document.getElementById('cmpRecStatus') && !!document.getElementById('btnHePanSave') && !!document.getElementById('btnCmpRec'), true));
+
+      testNoteKey = NOTES_KEY + hp.id;
+      var ta = document.getElementById('cmpRecText');
+      ta.value = '合盘测试记录ABC';
+      ta.dispatchEvent(new Event('input'));
+      tests.push(eq('HP11: 记录写入即存', localStorage.getItem(testNoteKey), '合盘测试记录ABC'));
+
+      var threw = false;
+      try { H.openHePan(hp.id); } catch (e) { threw = true; }
+      var st = JSON.parse(localStorage.getItem(CMP_KEY) || '[]');
+      tests.push(eq('HP12: openHePan 写入对比状态' + (threw ? '（open渲染跳过）' : ''), st.length === 2 && st[1].id === 'tst-arch-1', true));
+
+      tests.push(eq('HP13: 弹窗与入口元素存在', !!document.getElementById('hepanOverlay') && !!document.getElementById('hepan-search') && !!document.getElementById('btnHePanEntry') && !!document.getElementById('btnHePanCompare'), true));
+
+      H.openPanel();
+      var ovShown = document.getElementById('hepanOverlay').classList.contains('show');
+      H.closePanel();
+      var ovHidden = !document.getElementById('hepanOverlay').classList.contains('show');
+      tests.push(eq('HP14: openPanel/closePanel', ovShown && ovHidden, true));
+
+      H.deleteHePan(hp.id);
+      tests.push(eq('HP15: 删除连带记录', H.getHePans().length === 0 && localStorage.getItem(testNoteKey) === null, true));
+    } catch (e) {
+      tests.push(fail('HP 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      window.prompt = savedPrompt;
+      window.confirm = savedConfirm;
+      if (savedHp === null) localStorage.removeItem(HP_KEY); else localStorage.setItem(HP_KEY, savedHp);
+      if (savedCmp === null) localStorage.removeItem(CMP_KEY); else localStorage.setItem(CMP_KEY, savedCmp);
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      if (testNoteKey) localStorage.removeItem(testNoteKey);
+      localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig(testEntries));
+      localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]));
+      tests.push(eq('HP16: 测试后现场还原', JSON.stringify(H.getHePans()), savedHp === null ? '[]' : JSON.stringify(JSON.parse(savedHp))));
+    }
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）

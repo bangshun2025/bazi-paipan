@@ -4,7 +4,23 @@
 
 ---
 
+## v0.54.0（2026-10-17）功能：合盘档案 — 对比组合存档与一键恢复 + 合盘分析记录
+
+MINOR：对比工具栏新增「💾 存为合盘」，把当前对比组合（当前盘 + 勾选档案）起名存档；topbar 新增「📊 合盘」入口打开合盘档案弹窗（参照档案弹窗交互：搜索过滤、行渲染名称/组合/日期、每行「打开 / 重命名 / 删除」）；「打开」一键恢复该组合的对比界面；对比界面「📝 分析记录」升级为合盘维度——已存档组合按合盘 id 隔离记录（bz_hepan_notes_<id>），未存档组合退回稳定指纹 key（bz_hepan_notes_fp-<sig>），存档时自动迁移旧指纹记录，删除合盘连带删除其记录。
+
+- 新模块 hepan.js（独立 `<script>` 块，先例同 shishen/xingyao）：HP 数据层（localStorage `bz_hepan_archives`，无存储环境回落内存）、saveHePan/saveFromCmp（同组合覆盖改名）/openHePan（写 COMPARE state 恢复对比）/renameHePan/deleteHePan（连带记录）/matchHePan（entriesSig 比对）/noteKeyFor（id 优先、fp 兜底）、弹窗 renderHePanModal/onHePanSearch、对比界面记录面板 toggleCmpRec/refreshCmpRec（按 noteKey 自动切合盘/指纹 key）。
+- render.js：cmpOpen 时若存在当前组合的合盘记录则自动打开记录面板并注入标题「📝 <合盘名> 分析记录」；工具栏注入「💾 存为合盘」。
+- 附带修复（产品 bug）：saveFromCmp 覆盖分支里 `exist`（matchHePan 内部另一次 getHePans 的对象引用）与 `list`（本函数 getHePans）引用脱节，覆盖确认后改名静默丢失——改为按 id 在同一 list 内改名。同组合二次保存改名场景此前无 UI 测试覆盖。
+- 启动安全：hepan.js 对 ARCHIVE.getFormData/getArchives 的调用统一走 archGetFormData/archGetArchives 包装（typeof + try/catch 兜底 null/[]）——archive.js 内部引用裸 APP，APP 挂载前调用会 ReferenceError；对比轨自愈剔除已删档案 id（renderCmpTrack alive 过滤）是既有机制，合盘「打开」走真实档案不受影响。
+- check-release.sh：MODULES 清单、运行时 key 兜底链、内联比对清单三处加入 hepan.js；hepan 内联段与 shishen 一样为独立 `<script>` 块；头注释保持 `/* 八字排盘 vX.Y.Z — hepan.js */` 完整结尾（门禁切段硬约束）。
+- `?test=1` 新 section「合盘档案(v0.54.0)」HP01-HP16 共 16 条：默认空数组/入库/entries 归一化/覆盖改名/matchHePan 命中与异组合 null/noteKeyFor id+fp 路径/记录面板元素/写入即存/openHePan 写状态/弹窗与入口元素/开关面板/删除连带/现场还原。断言段自造 tst-arch 测试档案（renderCmpTrack 会剔除不存在档案 id，假 id 必须造真档），finally 全量还原（合盘库/对比状态/档案库/prompt/confirm/记录）。全量 1371 条，5 条失败均为既有环境差异（RECFL×4、v0.43 T02），零新增失败。
+- 真实 UI 实测 9/9（CDP 9233 独立实例）：💾 存为合盘→合盘界面行渲染→点「打开」恢复对比界面→📝 写入即存→刷新后点 📝 恢复记录→删除合盘连带记录→现场还原（hp=null cmp=null）；A 阶段 ？test=1 断言页与 B 阶段 UI 流程同 profile 串联，B 阶段数据全程干净。
+- check-release.sh 6/6 全绿；index.html ≡ standalone.html；standalone-split.html 外链一致。
+
+---
+
 ## v0.53.0（2026-10-16）功能：十神组 — 自定义组勾选与对应名映射
+
 
 MINOR：topbar 新增「十神」按钮（宫位旁），点开 popover 勾选自定义组；勾选后主表主星行下插入组名行（每柱显示该柱主星在组内的对应名，日主留空）、藏气行横排化（每柱固定 3 等宽 span）并新增对应名行逐位映射藏干十神；大运/流年列随导航条点击同步。齿轮进「十神设置」弹窗：每组可改组名与十个十神的对应名，支持新增组/删除组/恢复默认。默认两组：军队（七杀→司令、正官→军务、枭神→军师、正印→政委、比肩→战友、劫财→盟友、正财→军需官、偏财→支前员、食神→炊事员、伤官→宣传员）、社会（七杀→对手、正官→领导、枭神→导师、正印→顾问、比肩→同事、劫财→伙伴、正财→工资、偏财→外快、食神→爱好、伤官→作品）。
 

@@ -20,7 +20,7 @@ cd "$DIR" || { echo "❌ 目录不存在: $DIR"; exit 1; }
 
 FILES="index.html standalone.html standalone-split.html"
 KEYS="noteOverlay noteDrawer noteTitle noteText noteStatus noteCount btnCmpFocus btnArchiveCompare cmpBar cmpHLBar cmpZoom cmpZoomVal btnCmpLevel cmpGzPanel gzTabAll gzTabFav gzFooterFav gzSettingsActionsAll gzFooterAll btnScreenshot btnCopyChart authOverlay recordsOverlay recordDetailOverlay btnSaveCloud btnMyRecords btnLogout authEmail regEmail btnAuthLogin btnAuthRegister btnAuthRegister2 authLinkLogin authLinkRegister recordsList recordDetail btnExportConfig btnImportConfig gzFileImport gzCloudSyncNote jieqi-section jq-gz jq-tsmd jq-tstm xySettingsOverlay xySettingsList xy-trigger xy-note xySearchBar xySearchInput xySearchClear xySearchCount xySearchEmpty xy-group-title archive-tag-bar archive-tag-default-panel btnDefaultTag gzEditL7 cmpOverlay cmpTrack cmpCount cmpPicker"
-MODULES="constants algorithm archive gongwei xingyao shishen render main config auth records gongwei-cloud supabase.min"
+MODULES="constants algorithm archive gongwei xingyao shishen hepan render main config auth records gongwei-cloud supabase.min"
 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -92,8 +92,8 @@ for f in $FILES; do
     elif grep -qE "class=\"[^\"]*${k}([ \"]|$)" "$f"; then
       pass "$f 含 class=$k"
     elif case " $RUNTIME_KEYS " in *" $k "*) true;; *) false;; esac && \
-         { { [ -f render.js ] && grep -q "$k" render.js; } || { [ -f main.js ] && grep -q "$k" main.js; } || { [ -f xingyao.js ] && grep -q "$k" xingyao.js; } || { [ -f shishen.js ] && grep -q "$k" shishen.js; } || { [ -f gongwei.js ] && grep -q "$k" gongwei.js; }; }; then
-      pass "$f 运行时生成 $k (render/main/xingyao/shishen/gongwei.js)"
+         { { [ -f render.js ] && grep -q "$k" render.js; } || { [ -f main.js ] && grep -q "$k" main.js; } || { [ -f xingyao.js ] && grep -q "$k" xingyao.js; } || { [ -f shishen.js ] && grep -q "$k" shishen.js; } || { [ -f hepan.js ] && grep -q "$k" hepan.js; } || { [ -f gongwei.js ] && grep -q "$k" gongwei.js; }; }; then
+      pass "$f 运行时生成 $k (render/main/xingyao/shishen/hepan/gongwei.js)"
     else
       fail "$f 缺 id/class=$k"
     fi
@@ -101,7 +101,7 @@ for f in $FILES; do
 done
 
 echo "【4/6】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
-for m in gongwei xingyao shishen gongwei-cloud config auth records supabase.min; do
+for m in gongwei xingyao shishen hepan gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
   [ -f standalone.html ] || { fail "缺少 standalone.html，跳过内联比对"; continue; }

@@ -1,4 +1,4 @@
-/* 八字排盘 v0.53.0 — main.js */
+/* 八字排盘 v0.54.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -4115,6 +4115,97 @@ function captureScreenshot() {
     if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
     R.renderChart(pd, undefined, 'tst-out');
     tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
+  })();
+
+  // ===== v0.54.0 合盘档案 =====
+  (function() {
+    tests.push({ section:'合盘档案(v0.54.0)' });
+    var H = window.HEPAN, C = window.COMPARE;
+    if (!H || typeof H.getHePans !== 'function' || !C || typeof C._setState !== 'function') {
+      tests.push(fail('HP 前置: HEPAN/COMPARE 接口挂载', '缺失'));
+      return;
+    }
+    var HP_KEY = H.HP_KEY, NOTES_KEY = H.NOTES_KEY, CMP_KEY = 'bz_cmp_state';
+    var savedHp = localStorage.getItem(HP_KEY);
+    var savedCmp = localStorage.getItem(CMP_KEY);
+    var savedPrompt = window.prompt, savedConfirm = window.confirm;
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    // renderCmpTrack 会自动剔除不存在的档案 id（自愈），假 id 会让对比条目被清掉，必须造真档案
+    try {
+      window.ARCHIVE.saveArchives([
+        { id:'tst-arch-1', nickname:'测试甲', name:'测试甲', gender:'男', year:1990, month:1, day:1, hour:12, min:0, prov:'', city:'', dist:'', useSolar:true, calendarType:'solar', isLeap:false, lunarMonth:null, bazi:null, sanyuan:null, extras:null, gongWeiType:null, createdAt:'2026-01-01', updatedAt:'2026-01-01', isPreset:false },
+        { id:'tst-arch-2', nickname:'测试乙', name:'测试乙', gender:'女', year:1992, month:2, day:2, hour:6, min:0, prov:'', city:'', dist:'', useSolar:true, calendarType:'solar', isLeap:false, lunarMonth:null, bazi:null, sanyuan:null, extras:null, gongWeiType:null, createdAt:'2026-01-01', updatedAt:'2026-01-01', isPreset:false }
+      ]);
+    } catch (e) {}
+    var testEntries = [{ type:'current' }, { type:'arch', id:'tst-arch-1' }];
+    var testNoteKey = null;
+    var hp = null;
+    try {
+      localStorage.removeItem(HP_KEY);
+      tests.push(eq('HP01: 默认空数组', JSON.stringify(H.getHePans()), '[]'));
+
+      hp = H.saveHePan('初名A', testEntries);
+      var list1 = H.getHePans();
+      tests.push(eq('HP02: saveHePan 入库', list1.length === 1 && list1[0].name === '初名A' && /^hp_/.test(list1[0].id) && !!list1[0].createdAt, true));
+      tests.push(eq('HP03: entries 归一化', JSON.stringify(list1[0].entries), JSON.stringify(testEntries)));
+
+      localStorage.setItem(CMP_KEY, JSON.stringify(testEntries));
+      window.prompt = function() { return '覆盖名X'; };
+      window.confirm = function() { return true; };
+      H.saveFromCmp();
+      var list2 = H.getHePans();
+      tests.push(eq('HP04: saveFromCmp 同组合覆盖改名', list2.length === 1 && list2[0].name === '覆盖名X', true));
+
+      H.renameHePan(hp.id);
+      tests.push(eq('HP05: renameHePan', H.getHePans()[0].name, '覆盖名X'));
+
+      var m1 = H.matchHePan(testEntries);
+      var m2 = H.matchHePan([{ type:'current' }, { type:'arch', id:'tst-arch-2' }]);
+      tests.push(eq('HP06: matchHePan 命中id', m1 ? m1.id === hp.id : false, true));
+      tests.push(eq('HP07: matchHePan 异组合 null', m2, null));
+
+      tests.push(eq('HP08: noteKeyFor id路径', H.noteKeyFor(testEntries), NOTES_KEY + hp.id));
+      var fp1 = H.noteKeyFor([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]);
+      var fp2 = H.noteKeyFor([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]);
+      tests.push(eq('HP09: noteKeyFor fp路径稳定', /^bz_hepan_notes_fp-/.test(fp1) && fp1 === fp2, true));
+
+      tests.push(eq('HP10: cmp记录面板与按钮存在', !!document.getElementById('cmpRecPanel') && !!document.getElementById('cmpRecText') && !!document.getElementById('cmpRecStatus') && !!document.getElementById('btnHePanSave') && !!document.getElementById('btnCmpRec'), true));
+
+      testNoteKey = NOTES_KEY + hp.id;
+      var ta = document.getElementById('cmpRecText');
+      ta.value = '合盘测试记录ABC';
+      ta.dispatchEvent(new Event('input'));
+      tests.push(eq('HP11: 记录写入即存', localStorage.getItem(testNoteKey), '合盘测试记录ABC'));
+
+      var threw = false;
+      try { H.openHePan(hp.id); } catch (e) { threw = true; }
+      var st = JSON.parse(localStorage.getItem(CMP_KEY) || '[]');
+      tests.push(eq('HP12: openHePan 写入对比状态' + (threw ? '（open渲染跳过）' : ''), st.length === 2 && st[1].id === 'tst-arch-1', true));
+
+      tests.push(eq('HP13: 弹窗与入口元素存在', !!document.getElementById('hepanOverlay') && !!document.getElementById('hepan-search') && !!document.getElementById('btnHePanEntry') && !!document.getElementById('btnHePanCompare'), true));
+
+      H.openPanel();
+      var ovShown = document.getElementById('hepanOverlay').classList.contains('show');
+      H.closePanel();
+      var ovHidden = !document.getElementById('hepanOverlay').classList.contains('show');
+      tests.push(eq('HP14: openPanel/closePanel', ovShown && ovHidden, true));
+
+      H.deleteHePan(hp.id);
+      tests.push(eq('HP15: 删除连带记录', H.getHePans().length === 0 && localStorage.getItem(testNoteKey) === null, true));
+    } catch (e) {
+      tests.push(fail('HP 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      window.prompt = savedPrompt;
+      window.confirm = savedConfirm;
+      if (savedHp === null) localStorage.removeItem(HP_KEY); else localStorage.setItem(HP_KEY, savedHp);
+      if (savedCmp === null) localStorage.removeItem(CMP_KEY); else localStorage.setItem(CMP_KEY, savedCmp);
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      if (testNoteKey) localStorage.removeItem(testNoteKey);
+      localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig(testEntries));
+      localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]));
+      tests.push(eq('HP16: 测试后现场还原', JSON.stringify(H.getHePans()), savedHp === null ? '[]' : JSON.stringify(JSON.parse(savedHp))));
+    }
   })();
 
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
