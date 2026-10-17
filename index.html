@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.55.0 | 2026-10-17 -->
+<!-- 八字排盘 ·  从真版 v0.55.1 | 2026-10-17 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
 <!-- v0.55.0: 十神组同步三垣区 — 勾选十神组后组名行/藏干对应名行同步插入三垣区（胎年/胎元/命宫/身宫），三垣藏气行同步横排化逐位对齐 -->
+<!-- v0.55.1: 档案改名/生日变更后分析记录自动迁移；启动时孤儿记录扫描回收（修复改名后记录"消失"） -->
 <!-- v0.51.0: 对比排盘太极点 — 点击对比卡干行/藏干（含三垣）弹双选项「设为本盘新的太极点 / 设为全局新的太极点」；本盘仅该卡换中心，全局统摄所有对比卡（设置时清各本盘点），再点同位弹恢复；渲染包络使主表太极状态与对比卡互不干扰，主表太极激活时对比卡保持继承 -->
 <!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
@@ -5458,6 +5459,7 @@ function initPresetArchives() {
     var merged = existing.concat(presets);
     saveArchivesRaw(merged);
   }
+  try { migrateOrphanRecNotes(); } catch (e) {}
 }
 
 // ===== v0.9.0 核心读写函数 =====
@@ -5884,11 +5886,73 @@ function saveEdit() {
   // 合并到原对象
   archives[_editIdx] = Object.assign({}, old, edited);
   saveArchives(archives);
+  migrateRecNotesKeys(old, edited);
   // 直接关闭弹窗（不经过 closeEditPanel，避免"未保存修改"确认）
   document.getElementById('editOverlay').classList.remove('show');
   _editOriginal = null;
   _editIdx = -1;
   refreshArchiveModalIfOpen();
+}
+
+// ===== v0.55.1 分析记录随档案变更迁移（记录 key 含 name|gender|公历y|m|d|h|mi） =====
+function archiveSolarYmd(a) {
+  var y = +a.year, m = +a.month, d = +a.day;
+  if (a.calendarType === 'lunar') {
+    var s = lunarToSolar(y, m, d, !!a.isLeap);
+    if (!s) return null;
+    y = s.y; m = s.m; d = s.d;
+  }
+  return { y: y, m: m, d: d };
+}
+function recNotesKeyFor(a, suffix) {
+  var s = archiveSolarYmd(a);
+  if (!s) return null;
+  return 'bz_rec_notes_' + (suffix || '') + [a.name || '', a.gender || '', s.y, s.m, s.d, +a.hour || 0, +a.min || 0].join('|');
+}
+var REC_SUFFIXES = ['', 'twin|'];
+function migrateRecNotesKeys(oldA, newA) {
+  for (var i = 0; i < REC_SUFFIXES.length; i++) {
+    var ok = recNotesKeyFor(oldA, REC_SUFFIXES[i]);
+    var nk = recNotesKeyFor(newA, REC_SUFFIXES[i]);
+    if (!ok || !nk || ok === nk) continue;
+    var ov = null, nv = null;
+    try { ov = localStorage.getItem(ok); nv = localStorage.getItem(nk); } catch (e) {}
+    if (ov == null || (nv != null && nv !== '')) continue;
+    try { localStorage.setItem(nk, ov); localStorage.removeItem(ok); } catch (e) {}
+  }
+}
+function migrateOrphanRecNotes() {
+  var archives = getArchives();
+  var keys = [];
+  try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+  for (var k = 0; k < keys.length; k++) {
+    var key = keys[k];
+    if (key.indexOf('bz_rec_notes_') !== 0) continue;
+    var rest = key.slice('bz_rec_notes_'.length);
+    var suffix = '';
+    if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
+    var parts = rest.split('|');
+    if (parts.length !== 7) continue;
+    var og = parts[1], oy = +parts[2], om = +parts[3], od = +parts[4], oh = +parts[5], omi = +parts[6];
+    var hits = [];
+    for (var j = 0; j < archives.length; j++) {
+      var a = archives[j];
+      if ((a.gender || '') !== og) continue;
+      var s = archiveSolarYmd(a);
+      if (!s || s.y !== oy || s.m !== om || s.d !== od) continue;
+      if ((+a.hour || 0) !== oh || (+a.min || 0) !== omi) continue;
+      hits.push(a);
+    }
+    if (hits.length !== 1) continue;
+    if (hits[0].name === parts[0]) continue;
+    var nk = recNotesKeyFor(hits[0], suffix);
+    if (!nk || nk === key) continue;
+    var ov2 = null, nv2 = null;
+    try { ov2 = localStorage.getItem(key); nv2 = localStorage.getItem(nk); } catch (e) {}
+    if (ov2 == null) continue;
+    var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
+    try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
+  }
 }
 
 // 编辑弹窗 — 历法切换
@@ -6475,6 +6539,9 @@ function deleteNote(id) {
     getEditFormData: getEditFormData,
     isBirthFieldChanged: isBirthFieldChanged,
     saveEdit: saveEdit,
+    migrateRecNotesKeys: migrateRecNotesKeys,
+    migrateOrphanRecNotes: migrateOrphanRecNotes,
+    recNotesKeyFor: recNotesKeyFor,
     editCalChange: editCalChange,
     editSolarToggle: editSolarToggle,
     editProvChange: editProvChange,
@@ -16444,6 +16511,43 @@ function captureScreenshot() {
     var KEYS44 = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
     KEYS44.forEach(function(k) { R.setRowVisible(k, false); });
     host.innerHTML = '';
+  })();
+
+  // ===== v0.55.1 分析记录随档案改名迁移 =====
+  (function() {
+    tests.push({ section:'分析记录迁移(v0.55.1)' });
+    var A = window.ARCHIVE;
+    if (!A || typeof A.migrateRecNotesKeys !== 'function' || typeof A.recNotesKeyFor !== 'function') {
+      tests.push(fail('MIG 前置: ARCHIVE.migrateRecNotesKeys/recNotesKeyFor 已挂载', '缺失'));
+      return;
+    }
+    var oldA = { name:'迁测旧名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar' };
+    var newA = Object.assign({}, oldA, { name:'迁测新名' });
+    var ok = A.recNotesKeyFor(oldA, '');
+    var nk = A.recNotesKeyFor(newA, '');
+    var savedArch = null;
+    try {
+      tests.push(eq('MIG T01: key 构造含名字性别生日', ok, 'bz_rec_notes_迁测旧名|女|1981|9|6|22|30'));
+      savedArch = localStorage.getItem('bz_archives_v2');
+      localStorage.setItem(ok, '旧记录X');
+      localStorage.removeItem(nk);
+      A.migrateRecNotesKeys(oldA, newA);
+      tests.push(eq('MIG T02: 改名后记录迁至新key', localStorage.getItem(nk), '旧记录X'));
+      tests.push(eq('MIG T03: 旧key已删', localStorage.getItem(ok), null));
+      var archList = [];
+      try { archList = JSON.parse(savedArch) || []; } catch(e) { archList = []; }
+      var migArch = { id: 'mig-t04', name:'迁测新名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([migArch])));
+      localStorage.setItem(ok, '孤儿Y');
+      localStorage.setItem(nk, '新Z');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
+      tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
+    } finally {
+      if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
+      localStorage.removeItem(ok);
+      localStorage.removeItem(nk);
+    }
   })();
 
   // ===== v0.43.6 分析记录区（记录区占运流原位/运流移左下/写入即存）=====

@@ -4,6 +4,12 @@
 
 ---
 
+## v0.55.1（2026-10-17）修复：档案改名后分析记录丢失（孤儿迁移）
+
+PATCH：修复档案改名后「分析记录」看似消失的问题——记录 key 为 `bz_rec_notes_[twin|]<名字|性别|公历y|m|d|h|mi>`，改名后 key 失配导致旧记录读不到（数据未删，仅孤儿化）。三处修复：① archive.js saveEdit 改名/性别/生日变更后调 migrateRecNotesKeys 把旧 key 记录迁到新 key（新 key 已有内容则不覆盖）；② 启动时 initPresetArchives 末尾调 migrateOrphanRecNotes 扫描全部 `bz_rec_notes_*` key，按「性别+公历生日+时分」唯一匹配档案且档案名不同者，自动回收/合并（旧内容在前、空行分隔、删除旧 key，幂等）；③ 农历档案 key 构造走 lunarToSolar 转公历，与排盘 data.y/m/d 口径一致。断言 MIG T01-T05（key 构造/改名迁移/旧 key 删除/孤儿合并顺序/孤儿旧 key 删除）。已孤儿化的历史记录升级后刷新页面自动找回。
+
+---
+
 ## v0.55.0（2026-10-17）功能：十神组同步三垣区
 
 MINOR：v0.53.0 十神组扩展到三垣区——勾选组后，组名行与藏干对应名行按主表同样方式插入三垣区（胎年/胎元/命宫/身宫四列），三垣藏气行同步横排化逐位对齐（空数据列如胎年安全占位）。render.js 新增 sshGanRowSy/sshCgRowSy 并在 syRows 段尾按锚插行；三垣主星/藏气行补 data-row-type（sy-rs/sy-cg）。断言 T17-T22 覆盖；v0.29 T02 行序期望按真实 DOM 修正（三垣干支行本无 row-type）后转绿。附带修复历史 bug：删除 render.js 两处 redrawZuHeSVG 死调用（函数从未定义，v0.26 遗留，每次点击大运/流年卡片 80ms 后静默 ReferenceError，单次全量跑 18 个）——JS 异常归零。门禁 check-release.sh 6/6；全量 1367 条失败 5 = v0.54.0 基线（RECFL×4 + v0.43 T02）；CDP 独立实例 UI 7/7 + 截图目检映射抽查全对。

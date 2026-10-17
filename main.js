@@ -3221,6 +3221,43 @@ function captureScreenshot() {
     host.innerHTML = '';
   })();
 
+  // ===== v0.55.1 分析记录随档案改名迁移 =====
+  (function() {
+    tests.push({ section:'分析记录迁移(v0.55.1)' });
+    var A = window.ARCHIVE;
+    if (!A || typeof A.migrateRecNotesKeys !== 'function' || typeof A.recNotesKeyFor !== 'function') {
+      tests.push(fail('MIG 前置: ARCHIVE.migrateRecNotesKeys/recNotesKeyFor 已挂载', '缺失'));
+      return;
+    }
+    var oldA = { name:'迁测旧名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar' };
+    var newA = Object.assign({}, oldA, { name:'迁测新名' });
+    var ok = A.recNotesKeyFor(oldA, '');
+    var nk = A.recNotesKeyFor(newA, '');
+    var savedArch = null;
+    try {
+      tests.push(eq('MIG T01: key 构造含名字性别生日', ok, 'bz_rec_notes_迁测旧名|女|1981|9|6|22|30'));
+      savedArch = localStorage.getItem('bz_archives_v2');
+      localStorage.setItem(ok, '旧记录X');
+      localStorage.removeItem(nk);
+      A.migrateRecNotesKeys(oldA, newA);
+      tests.push(eq('MIG T02: 改名后记录迁至新key', localStorage.getItem(nk), '旧记录X'));
+      tests.push(eq('MIG T03: 旧key已删', localStorage.getItem(ok), null));
+      var archList = [];
+      try { archList = JSON.parse(savedArch) || []; } catch(e) { archList = []; }
+      var migArch = { id: 'mig-t04', name:'迁测新名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([migArch])));
+      localStorage.setItem(ok, '孤儿Y');
+      localStorage.setItem(nk, '新Z');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
+      tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
+    } finally {
+      if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
+      localStorage.removeItem(ok);
+      localStorage.removeItem(nk);
+    }
+  })();
+
   // ===== v0.43.6 分析记录区（记录区占运流原位/运流移左下/写入即存）=====
   (function() {
     tests.push({ section:'分析记录区(v0.43.6)' });

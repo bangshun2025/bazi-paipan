@@ -175,6 +175,7 @@ function initPresetArchives() {
     var merged = existing.concat(presets);
     saveArchivesRaw(merged);
   }
+  try { migrateOrphanRecNotes(); } catch (e) {}
 }
 
 // ===== v0.9.0 核心读写函数 =====
@@ -601,11 +602,73 @@ function saveEdit() {
   // 合并到原对象
   archives[_editIdx] = Object.assign({}, old, edited);
   saveArchives(archives);
+  migrateRecNotesKeys(old, edited);
   // 直接关闭弹窗（不经过 closeEditPanel，避免"未保存修改"确认）
   document.getElementById('editOverlay').classList.remove('show');
   _editOriginal = null;
   _editIdx = -1;
   refreshArchiveModalIfOpen();
+}
+
+// ===== v0.55.1 分析记录随档案变更迁移（记录 key 含 name|gender|公历y|m|d|h|mi） =====
+function archiveSolarYmd(a) {
+  var y = +a.year, m = +a.month, d = +a.day;
+  if (a.calendarType === 'lunar') {
+    var s = lunarToSolar(y, m, d, !!a.isLeap);
+    if (!s) return null;
+    y = s.y; m = s.m; d = s.d;
+  }
+  return { y: y, m: m, d: d };
+}
+function recNotesKeyFor(a, suffix) {
+  var s = archiveSolarYmd(a);
+  if (!s) return null;
+  return 'bz_rec_notes_' + (suffix || '') + [a.name || '', a.gender || '', s.y, s.m, s.d, +a.hour || 0, +a.min || 0].join('|');
+}
+var REC_SUFFIXES = ['', 'twin|'];
+function migrateRecNotesKeys(oldA, newA) {
+  for (var i = 0; i < REC_SUFFIXES.length; i++) {
+    var ok = recNotesKeyFor(oldA, REC_SUFFIXES[i]);
+    var nk = recNotesKeyFor(newA, REC_SUFFIXES[i]);
+    if (!ok || !nk || ok === nk) continue;
+    var ov = null, nv = null;
+    try { ov = localStorage.getItem(ok); nv = localStorage.getItem(nk); } catch (e) {}
+    if (ov == null || (nv != null && nv !== '')) continue;
+    try { localStorage.setItem(nk, ov); localStorage.removeItem(ok); } catch (e) {}
+  }
+}
+function migrateOrphanRecNotes() {
+  var archives = getArchives();
+  var keys = [];
+  try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+  for (var k = 0; k < keys.length; k++) {
+    var key = keys[k];
+    if (key.indexOf('bz_rec_notes_') !== 0) continue;
+    var rest = key.slice('bz_rec_notes_'.length);
+    var suffix = '';
+    if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
+    var parts = rest.split('|');
+    if (parts.length !== 7) continue;
+    var og = parts[1], oy = +parts[2], om = +parts[3], od = +parts[4], oh = +parts[5], omi = +parts[6];
+    var hits = [];
+    for (var j = 0; j < archives.length; j++) {
+      var a = archives[j];
+      if ((a.gender || '') !== og) continue;
+      var s = archiveSolarYmd(a);
+      if (!s || s.y !== oy || s.m !== om || s.d !== od) continue;
+      if ((+a.hour || 0) !== oh || (+a.min || 0) !== omi) continue;
+      hits.push(a);
+    }
+    if (hits.length !== 1) continue;
+    if (hits[0].name === parts[0]) continue;
+    var nk = recNotesKeyFor(hits[0], suffix);
+    if (!nk || nk === key) continue;
+    var ov2 = null, nv2 = null;
+    try { ov2 = localStorage.getItem(key); nv2 = localStorage.getItem(nk); } catch (e) {}
+    if (ov2 == null) continue;
+    var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
+    try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
+  }
 }
 
 // 编辑弹窗 — 历法切换
@@ -1192,6 +1255,9 @@ function deleteNote(id) {
     getEditFormData: getEditFormData,
     isBirthFieldChanged: isBirthFieldChanged,
     saveEdit: saveEdit,
+    migrateRecNotesKeys: migrateRecNotesKeys,
+    migrateOrphanRecNotes: migrateOrphanRecNotes,
+    recNotesKeyFor: recNotesKeyFor,
     editCalChange: editCalChange,
     editSolarToggle: editSolarToggle,
     editProvChange: editProvChange,
