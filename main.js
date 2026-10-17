@@ -1,4 +1,4 @@
-/* 八字排盘 v0.54.0 — main.js */
+/* 八字排盘 v0.55.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1954,7 +1954,7 @@ function captureScreenshot() {
     tests.push(eq('v0.29 T02:容器含 table.chart', !!tbl, true));
     if (tbl) {
       var EXP_MAIN = ['dy1','ln1','dy2','ln2','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','kongwang','shensha'];
-      var EXP_SY = ['xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
+      var EXP_SY = ['sy-rs','sy-cg','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
       var seq = typeSeq(tbl);
       tests.push(eq('v0.29 T02:主表+三垣行序（藏气→星曜→纳音）', seq.join(','), EXP_MAIN.concat(EXP_SY).join(',')));
       tests.push(eq('v0.29 T02:星曜行紧邻于纳音行之前', seq.indexOf('xingyao') === seq.indexOf('nayin') - 1, true));
@@ -4106,6 +4106,20 @@ function captureScreenshot() {
     var expectLn = S.mapName(grp, A.shiShen(pd.ri.gan, '丙', false));
     tests.push(eq(sec + ' T13: 大运列组名同步', ganRow2 ? ganRow2.cells[5].textContent : '', expectDy));
     tests.push(eq(sec + ' T14: 流年列组名同步', ganRow2 ? ganRow2.cells[6].textContent : '', expectLn));
+
+    var syGanRow = host.querySelector('tr.ssh-gan-row[data-sec="sanyuan"]');
+    var syCgRow = host.querySelector('tr.ssh-cg-row[data-sec="sanyuan"]');
+    tests.push(eq(sec + ' T17: 三垣组名行已插入', syGanRow ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' T18: 三垣组名行紧跟三垣主星行', syGanRow && syGanRow.previousElementSibling ? syGanRow.getAttribute('data-ssh-group') + '@' + (syGanRow.previousElementSibling.getAttribute('data-row-type') || '') : '', '军队@sy-rs'));
+    var syTaiNian = pd.taiNian || null;
+    var expectSyRs = syTaiNian ? S.mapName(grp, A.shiShen(pd.ri.gan, syTaiNian.gan, false)) : '';
+    tests.push(eq(sec + ' T19: 三垣胎年列组名映射', syGanRow ? syGanRow.cells[1].textContent : '', expectSyRs));
+    var syCgCell = host.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)');
+    tests.push(eq(sec + ' T20: 三垣藏气行横排3span', syCgCell ? syCgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
+    tests.push(eq(sec + ' T21: 三垣对应名行逐位3span', syCgRow ? syCgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var syCg0 = syTaiNian && CONST.CANG_GAN[syTaiNian.zhi] ? CONST.CANG_GAN[syTaiNian.zhi][0] : '';
+    var expectSyCg = syCg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, syCg0, false)) : '';
+    tests.push(eq(sec + ' T22: 三垣本气对应名', syCgRow ? syCgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectSyCg));
 
     localStorage.setItem('bz_ssh_selected_v1', '[]');
     R.renderChart(pd, undefined, 'tst-out');
