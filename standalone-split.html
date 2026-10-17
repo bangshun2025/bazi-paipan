@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.55.2 | 2026-10-17 -->
+<!-- 八字排盘 ·  从真版 v0.57.0 | 2026-10-18 -->
 <!-- v0.55.2: 修复干净环境（清缓存/新设备）首访 ？test=1 全量回归炸页 — 测试框架开头同步补建预置档案（initPresetArchives 幂等），v0.37 盘面对比段不再因取不到杨禹赫/彭子旭抛 TypeError 中断整个测试流（连带 __testAppend/window.APP 挂载与 doPaipan 全部恢复） -->
+<!-- v0.57.0: 多选岁运 — 工具栏「☰ 多选岁运」进入勾选模式，运列表点选两个大运（时柱右=大运一列、身宫右=大运二列）与其下多个流年（col-ln 复用并右扩，年份升序从左往右），勾选格表头均带 dyln-yr 年份小字；单人主表 DOM 插列（applyMultiDL，行类型值映射与 _applyDLUpdates 同源），再点取消，退出恢复七列；双胞胎/合盘卡不参与 -->
+<!-- v0.56.0: 运列表头年份 — 主表大运表头上方显示当前大运起始年、流年表头上方显示当年年份（11px 灰字副行），点击大运/流年格切换时表头年份同步联动（运前无大运置空）；单人/双胞胎/合盘卡表头全覆盖 -->
 <!-- v0.51.0: 对比排盘太极点 — 点击对比卡干行/藏干（含三垣）弹双选项「设为本盘新的太极点 / 设为全局新的太极点」；本盘仅该卡换中心，全局统摄所有对比卡（设置时清各本盘点），再点同位弹恢复；渲染包络使主表太极状态与对比卡互不干扰，主表太极激活时对比卡保持继承 -->
 <!-- v0.50.0: 太极点交互扩展至三垣区 — 点击胎年/胎元/命宫/身宫天干与藏干可设新太极点（弹窗标「胎元干/命宫干/身宫干·藏干」等），三垣主星与主表全盘同口径换中心，三垣太极干套五行色圆圈；换算层复用 shiShen 劫持零改动 -->
 <!-- v0.49.1: 太极点激活后日柱主星不再固定「日主」，显示日干对新中心的十神（日干自设太极点仍标「日主」）；主表/双胞胎卡/对比卡三处渲染同口径 -->
@@ -234,6 +236,8 @@
   .chart th, .chart td { border:0.5px solid var(--c-line); text-align:center; vertical-align:middle; font-family:var(--font-display); padding:3px 5px; }
   .chart td.rl, .chart th.rl { width:54px; min-width:54px; background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; font-weight:500; padding:3px 2px; white-space:nowrap; }
   .chart tr.hd th { font-size:18px; color:var(--c-gray); font-weight:500; background:rgba(201,169,110,.04); padding:6px 3px; }
+  .chart tr.hd th .dyln-yr { display:block; font-size:11px; font-weight:400; color:var(--c-gray); letter-spacing:.05em; margin-top:1px; opacity:.85; }
+  #btnMultiDL.active { background:var(--c-ink)!important; color:var(--c-paper)!important; border-color:var(--c-ink)!important; }
   .chart .sep { border-left:1.5px solid rgba(181,52,58,.4) !important; }
   .chart .rs td { font-size:18px; color:var(--c-ink); font-weight:500; }
   .chart .rg td { font-size:28px; font-weight:700; padding:1px 4px; line-height:1.1; }
@@ -1009,6 +1013,7 @@
       <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
       <button class="btn btn-privacy" id="btnSaveCloud" onclick="window.RECORDS.saveCurrentPaipan()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">💾 保存云端</button>
+      <button class="btn btn-privacy" id="btnMultiDL" onclick="RENDER.toggleMultiDL()" title="多选模式：在下方运列表勾选两个大运与其下多个流年，主表从左往右多列显示（时柱右=大运一，身宫右=大运二）" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☰ 多选岁运</button>
       <button class="btn btn-privacy" id="btnMyRecords" onclick="window.RECORDS.openRecordsPanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☁️ 我的排盘</button>
       <button class="btn btn-privacy" id="btnLogout" onclick="window.AUTH.doLogout()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-gray);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🚪 登出</button>
 

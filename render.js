@@ -1,4 +1,4 @@
-/* 八字排盘 v0.55.0 — render.js */
+/* 八字排盘 v0.56.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -752,6 +752,9 @@ function liunianYearOf(cd, dyIdx, lnIdx) {
   return dy ? dy.startYear + lnIdx : null;
 }
 
+// v0.56.0 运列表头年份小字（大运=该运起始年，流年=当年）
+function dyLnYearHtml(y) { return (y !== null && y !== undefined && y !== '') ? '<span class="dyln-yr">'+y+'</span>' : ''; }
+
 // 把 root 内唯一的 .jieqi-section 整块替换为 buildJieqiHtml(year, lng) 的产物，
 // 并回写 root._jieqiYear / root._jieqiLng。不触碰 luck-section / chart / 事件绑定（节气块纯展示）。
 // root 约定：可 querySelector 到 .jieqi-section 的任意祖先（#output / .bz-twin-shared / document）。
@@ -874,7 +877,7 @@ function renderChart(data, twin, targetId, opts) {
   const chartRows = [];
   // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
   // 柱名头
-  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱',' data-pk="nian"')+th('','月柱',' data-pk="yue"')+th('','日柱',' data-pk="ri"')+th('','时柱',' data-pk="shi"')+th('sep col-dy','大运')+th('col-ln','流年')+'</tr>');
+  chartRows.push('<tr class="hd">'+th('rl','盘式')+th('','年柱',' data-pk="nian"')+th('','月柱',' data-pk="yue"')+th('','日柱',' data-pk="ri"')+th('','时柱',' data-pk="shi"')+th('sep col-dy','大运'+dyLnYearHtml(curDy?curDy.startYear:''))+th('col-ln','流年'+dyLnYearHtml(nowYear))+'</tr>');
 
   // 生成四柱行（5列），再拼接大运/流年列
   var bp = buildPillarRows({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, taiNian:pTaiNian, tai:pTai, ming:pMing, shen:pShen });
@@ -1139,6 +1142,7 @@ ${recPanelHtml}
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
   container.innerHTML = html;
   container._flowState = null;
+  applyMultiDL(container, data); // v0.57.0 多选岁运列注入（先于分级/胎年列显隐，插列不影响其定位）
   applyLevelRows();
   applyTaiNianColumn(container);
   container._paipanData = data;
@@ -1625,6 +1629,8 @@ function bindEvents(data, container) {
   container.querySelectorAll('[data-dy]').forEach(c => {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
+      // v0.57.0 多选岁运：单人盘勾选大运（≤2）
+      if (_multiDL.on) { multiDLPickDy(i, c); return; }
       var cardEl = c.closest('.bz-twin-card');
       // 龙凤胎: 大运行在 .bz-card-luck 中, 按 data-card-index 找对应卡片
       if (!cardEl) {
@@ -1656,6 +1662,8 @@ function bindEvents(data, container) {
       e.stopPropagation();
       const di = parseInt(li.dataset.di);
       const liIdx = parseInt(li.dataset.li);
+      // v0.57.0 多选岁运：单人盘勾选流年（运前流年不参与）
+      if (_multiDL.on) { multiDLPickLn(container, di, liIdx, li); return; }
       var cardEl2 = li.closest('.bz-twin-card');
       // 龙凤胎: 流年在 .bz-card-luck 中, 按 data-card-index 找对应卡片
       if (!cardEl2) {
@@ -1799,13 +1807,13 @@ function _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
   // v0.6.6: 单人模式回退 —— 无 .bz-twin-card 时直接更新主 chart 表格
   if (cards.length === 0) {
     var mainChart = container.querySelector('table.chart');
-    if (mainChart) _applyDLUpdates(mainChart, pDy, pLn, true, _zuoRefs(cardData));
+    if (mainChart) _applyDLUpdates(mainChart, pDy, pLn, true, _zuoRefs(cardData), { dyYear: (dyIdx >= 0 && daYun[dyIdx]) ? daYun[dyIdx].startYear : '', lnYear: lnYear });
     return;
   }
 
   cards.forEach(function(c) {
     var ct = c.querySelector('.chart-wrap table.chart');
-    if (ct) _applyDLUpdates(ct, pDy, pLn, false, _zuoRefs(cardData));
+    if (ct) _applyDLUpdates(ct, pDy, pLn, false, _zuoRefs(cardData), { dyYear: (dyIdx >= 0 && daYun[dyIdx]) ? daYun[dyIdx].startYear : '', lnYear: lnYear });
   });
 }
 
@@ -1813,7 +1821,7 @@ function _updateCardDyLnColumns(container, clickedEl, dyIdx, lnIdx) {
 
 // ============ v0.6.6 通用大运/流年列更新函数 ============
 // 双模式行映射：isSingle=true → 9行（藏气合并），isSingle=false → 11行（藏干分层）
-function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
+function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
   // v0.10.4: 语义选择器替代硬编码行索引，宫位标签行不再影响数据定位
   var getRow = function(type) { return tableEl.querySelector('[data-row-type~="' + type + '"]'); };
   var updates;
@@ -1913,8 +1921,213 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs) {
       sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
     }
   }
+
+  // v0.56.0 运列表头年份同步（大运=该运起始年，运前无大运年份置空；流年=换算年份）
+  if (yr) {
+    var dyYrEl = tableEl.querySelector('tr.hd th.col-dy .dyln-yr');
+    if (dyYrEl) dyYrEl.textContent = (yr.dyYear === null || yr.dyYear === undefined) ? '' : String(yr.dyYear);
+    var lnYrEl = tableEl.querySelector('tr.hd th.col-ln .dyln-yr');
+    if (lnYrEl) lnYrEl.textContent = (yr.lnYear === null || yr.lnYear === undefined) ? '' : String(yr.lnYear);
+  }
 }
 
+
+// ============ v0.57.0 多选岁运 ============
+// 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序）。
+// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（大运1=现 col-dy 位，大运2=新 col-dy2 列即三垣身宫右侧，流年列复用 col-ln 并右扩，年份升序从左往右）。
+var _multiDL = { on: false, dys: [], lns: [] };
+
+function toggleMultiDL() {
+  _multiDL.on = !_multiDL.on;
+  if (!_multiDL.on) { _multiDL.dys = []; _multiDL.lns = []; }
+  syncMultiDLBtn();
+  if (window.APP && APP.doPaipan) APP.doPaipan();
+  return _multiDL.on;
+}
+
+function syncMultiDLBtn() {
+  var btn = document.getElementById('btnMultiDL');
+  if (btn) btn.classList.toggle('active', _multiDL.on);
+}
+
+function multiDLState() {
+  return { on: _multiDL.on, dys: _multiDL.dys.slice(), lns: _multiDL.lns.slice() };
+}
+
+function setMultiDLState(st) {
+  _multiDL.on = !!st.on;
+  _multiDL.dys = (st.dys || []).slice();
+  _multiDL.lns = (st.lns || []).slice().sort(function(a, b) { return a - b; });
+}
+
+// 多选模式点大运格（仅单人盘；双胞胎/合盘卡点击不响应）
+function multiDLPickDy(i, clickedEl) {
+  if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
+  var pos = _multiDL.dys.indexOf(i);
+  if (pos >= 0) _multiDL.dys.splice(pos, 1);
+  else { if (_multiDL.dys.length >= 2) _multiDL.dys.shift(); _multiDL.dys.push(i); }
+  if (window.APP && APP.doPaipan) APP.doPaipan();
+}
+
+// 多选模式点流年格（运前流年 di=-1 不参与）
+function multiDLPickLn(container, di, liIdx, clickedEl) {
+  if (di === -1) return;
+  if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
+  var yr = liunianYearOf(container._paipanData, di, liIdx);
+  if (yr === null || yr === undefined) return;
+  var pos = _multiDL.lns.indexOf(yr);
+  if (pos >= 0) _multiDL.lns.splice(pos, 1);
+  else { _multiDL.lns.push(yr); _multiDL.lns.sort(function(a, b) { return a - b; }); }
+  if (window.APP && APP.doPaipan) APP.doPaipan();
+}
+
+function _mdlPill(data) {
+  var riGan = data.ri.gan, riZhi = data.ri.zhi, nianZhi = data.nian.zhi, yueZhi = data.yue.zhi;
+  return function(gan, zhi) {
+    return {
+      rs: shiShen(riGan, gan), wg: wxClass(gan), wz: wxClass(zhi),
+      gan: gan, zhi: zhi, ny: NAYIN[gan + zhi] || '',
+      nayun: nayunChangSheng(NAYIN[gan + zhi], yueZhi),
+      xy: changSheng(riGan, zhi), zz: changSheng(gan, zhi),
+      kw: gan + zhi === riGan + riZhi ? kongWang(riGan, riZhi) : kongWang(gan, zhi),
+      cg: cangGanText(zhi, riGan, 1, 'dayun'),
+      sh: gan + zhi === riGan + riZhi ? shenSha(riGan, riZhi, nianZhi, yueZhi) : ''
+    };
+  };
+}
+
+// 按行类型把 p（大运/流年柱）填进 cell；isDy2=false 表示复用的原大运列（class 保持 col-dy）
+function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
+  var t = tr.getAttribute('data-row-type') || '';
+  var isSy = /sanyuan/.test(tr.getAttribute('data-sec') || '');
+  var isXy = /\bxy\d\b/.test(t);
+  var colorCls = '';
+  if (/\bln1\b/.test(t)) colorCls = ' ' + p.wg;
+  else if (/\bdy2\b/.test(t)) colorCls = ' ' + p.wz;
+  cell.className = isDy ? (isSy ? 'sep' : (isDy2 ? 'sep col-dy2' : 'sep col-dy')) : 'col-ln';
+  cell.className += colorCls;
+  var gName = tr.getAttribute('data-ssh-group');
+  if (gName) {
+    var grp = sshGroupByName(gName);
+    if (grp) cell.innerHTML = /ssh-cg/.test(t) ? sshCgNameCell(grp, p, isDy ? 'dayun' : 'liunian', 0, riGan) : sshGanCell(grp, p.rs);
+    return;
+  }
+  var X = window.XINGYAO;
+  if (isXy) {
+    var gz = p.gan + p.zhi;
+    cell.setAttribute('data-xy-gz', gz);
+    var sys = X ? X.systemOf(gz) : '';
+    if (sys) cell.setAttribute('title', sys); else cell.removeAttribute('title');
+    cell.innerHTML = X ? _xyEscText(X.nameOf(gz)) : '—';
+    return;
+  }
+  var m = t.match(/\bnz\d\b/);
+  if (m) {
+    var zk = null;
+    for (var k1 in ZUO_TOKEN) if (ZUO_TOKEN[k1] === m[0]) { zk = k1; break; }
+    var rg = zk && refs ? refs[ZUO_REF[zk]] : null;
+    cell.innerHTML = rg ? changSheng(rg, p.zhi) : '';
+    return;
+  }
+  m = t.match(/\bsk\d\b/);
+  if (m) {
+    var sk = null;
+    for (var k2 in SIT_TOKEN) if (SIT_TOKEN[k2] === m[0]) { sk = k2; break; }
+    var z = sk && refs ? refs[SIT_MAIN_COL[sk] + 'Zhi'] : null;
+    cell.innerHTML = (z && p.gan) ? changSheng(p.gan, z) : '';
+    return;
+  }
+  if (/\bdy1\b/.test(t)) cell.innerHTML = p.rs;
+  else if (/\bln1\b/.test(t)) cell.innerHTML = p.gan;
+  else if (/\bdy2\b/.test(t)) cell.innerHTML = p.zhi;
+  else if (/\bln2\b/.test(t)) cell.innerHTML = sshCg ? sshCgSpans(p, isDy ? 'dayun' : 'liunian', 0, riGan) : p.cg;
+  else if (/\bnayin\b/.test(t)) cell.innerHTML = p.ny;
+  else if (/\bnayun\b/.test(t)) cell.innerHTML = p.nayun;
+  else if (/\bzhuzuo\b/.test(t)) cell.innerHTML = p.xy;
+  else if (/\bzizuo\b/.test(t)) cell.innerHTML = p.zz;
+  else if (/\bkongwang\b/.test(t)) cell.innerHTML = p.kw;
+  else if (/\bshensha\b/.test(t)) cell.innerHTML = p.sh;
+  else cell.innerHTML = '';
+}
+
+// 渲染后 DOM 插列：仅当多选开启且有勾选。原 col-ln 列复用为第一个流年列。
+function applyMultiDL(root, data) {
+  syncMultiDLBtn();
+  var table = root.querySelector ? root.querySelector('table.chart') : null;
+  if (!table || !data || !data.daYun || !data.daYun.length) return;
+  if (!_multiDL.on || (!_multiDL.dys.length && !_multiDL.lns.length)) return;
+  var daYun = data.daYun;
+  var nowY = new Date().getFullYear();
+  var curIdx = 0;
+  for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowY) { curIdx = i; break; } }
+  var pill = _mdlPill(data);
+  var dy1 = daYun[_multiDL.dys.length ? _multiDL.dys[0] : curIdx];
+  var dy2 = _multiDL.dys.length > 1 ? daYun[_multiDL.dys[1]] : null;
+  var pDy1 = pill(dy1.gan, dy1.zhi);
+  var pDy2 = dy2 ? pill(dy2.gan, dy2.zhi) : null;
+  var pLns = _multiDL.lns.map(function(yr) { var gz = liuNianJZ(yr); var p = pill(gz[0], gz[1]); p._yr = yr; return p; });
+  var refs = _zuoRefs(data);
+  var sshCg = sshSelectedGroups().length > 0;
+  var riGan = data.ri.gan;
+  var nExtra = (pDy2 ? 1 : 0) + Math.max(0, pLns.length - 1);
+
+  var trs = table.querySelectorAll('tr');
+  for (var r = 0; r < trs.length; r++) {
+    var tr = trs[r];
+    if (tr.classList.contains('sanyuan-sep')) {
+      var c0 = tr.querySelector('td');
+      if (c0) c0.setAttribute('colspan', 7 + nExtra);
+      continue;
+    }
+    var isHd = tr.classList.contains('hd');
+    // 三垣 hd 行尾两列（运流占位）是 td 不是 th，须混选才能取满 7 列
+    var cells = tr.querySelectorAll(isHd ? 'th,td' : 'td');
+    if (cells.length < 7) continue;
+    var dyCell = cells[5], lnCell = cells[6];
+    var isSy = /sanyuan/.test(tr.getAttribute('data-sec') || '');
+    var cellTag = isSy ? 'td' : 'th';
+    if (isHd) {
+      if (!isSy) {
+        dyCell.className = 'sep col-dy';
+        dyCell.innerHTML = '大运' + dyLnYearHtml(dy1.startYear);
+      }
+      if (pDy2) {
+        var th2 = document.createElement(cellTag);
+        th2.className = isSy ? 'sep' : 'sep col-dy2';
+        th2.innerHTML = isSy ? '' : '大运' + dyLnYearHtml(dy2.startYear);
+        dyCell.insertAdjacentElement('afterend', th2);
+      }
+      if (pLns.length) {
+        if (!isSy) lnCell.innerHTML = '流年' + dyLnYearHtml(pLns[0]._yr);
+        var ref = lnCell;
+        for (var li = 1; li < pLns.length; li++) {
+          var thn = document.createElement(cellTag);
+          thn.className = 'col-ln';
+          thn.innerHTML = isSy ? '' : '流年' + dyLnYearHtml(pLns[li]._yr);
+          ref.insertAdjacentElement('afterend', thn);
+          ref = thn;
+        }
+      }
+    } else {
+      _mdlFillCell(dyCell, tr, pDy1, true, false, refs, sshCg, riGan);
+      if (pDy2) {
+        var td2 = document.createElement('td');
+        dyCell.insertAdjacentElement('afterend', td2);
+        _mdlFillCell(td2, tr, pDy2, true, true, refs, sshCg, riGan);
+      }
+      if (pLns.length) {
+        _mdlFillCell(lnCell, tr, pLns[0], false, false, refs, sshCg, riGan);
+        var ref2 = lnCell;
+        for (var lj = 1; lj < pLns.length; lj++) {
+          var tdn = document.createElement('td');
+          ref2.insertAdjacentElement('afterend', tdn);
+          _mdlFillCell(tdn, tr, pLns[lj], false, false, refs, sshCg, riGan);
+          ref2 = tdn;
+        }
+      }
+    }
+  }
+}
 
 // ============ v0.5.0 差异高亮 ============
 // 逐 cell 比对双胞胎两个盘式的同字段，返回 diffMap
@@ -1962,6 +2175,8 @@ function buildCardHTML(data, options) {
   var includeLuckCols = options.includeLuckCols || false;
   var curDaYun = options.curDaYun;
   var curLiuNian = options.curLiuNian;
+  var curDyYear = options.curDyYear;
+  var curLnYear = options.curLnYear;
   var meta = options.meta || '';
 
   var riGan = data.ri.gan, riZhi = data.ri.zhi;
@@ -2008,7 +2223,7 @@ function buildCardHTML(data, options) {
   if (includeLuckCols && curDaYun && curLiuNian) {
     var pDy = pillar(curDaYun.gan, curDaYun.zhi, 'dayun');
     var pLn = pillar(curLiuNian.gan, curLiuNian.zhi, 'liunian');
-    hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep col-dy">大运</th><th class="col-ln">流年</th></tr>';
+    hdr = '<tr class="hd"><th class="rl">盘式</th><th>年柱</th><th>月柱</th><th>日柱</th><th>时柱</th><th class="sep col-dy">大运'+dyLnYearHtml(curDyYear)+'</th><th class="col-ln">流年'+dyLnYearHtml(curLnYear)+'</th></tr>';
     // v0.10.0 宫位标签行由 updateGongWeiTags() 动态生成
     // 主星(0)
     rows.main[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td(dm('nian.rs'),p.nian.rs)+td(dm('yue.rs'),p.yue.rs)+td(dm('ri.rs'),p.ri.rs)+td(dm('shi.rs'),p.shi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
@@ -2188,7 +2403,7 @@ function renderTwinCardsHtml(data, targetId) {
   var _curDy = null;
   for (var _cdi = daYun.length - 1; _cdi >= 0; _cdi--) { if (daYun[_cdi].startYear <= nowYear) { _curDy = daYun[_cdi]; break; } }
   var _curLn = liuNianJZ(nowYear);
-  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] } } : {};
+  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] }, curDyYear: _curDy.startYear, curLnYear: nowYear } : {};
   var meta1 = (gender==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(data.qiYun.shun, data.gender, data.nian.gan);
   var card1 = buildCardHTML(data, Object.assign({ twin: 1, label: '老大', relation: gender==='男'?'兄':'姐', identClass: 'twin-1', diffMap: diffMap, meta: meta1 }, _luckOpts));
   var card2 = buildCardHTML(data, Object.assign({ twin: 2, label: '老二', relation: gender==='男'?'弟':'妹', identClass: 'twin-2', diffMap: diffMap, meta: meta1 }, _luckOpts));
@@ -2286,7 +2501,7 @@ function renderLongFengCardsHtml(d1, d2, targetId) {
   var _lfDy = d1.daYun || [];
   for (var _cdi = _lfDy.length - 1; _cdi >= 0; _cdi--) { if (_lfDy[_cdi].startYear <= nowYear) { _curDy = _lfDy[_cdi]; break; } }
   var _curLn = liuNianJZ(nowYear);
-  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] } } : {};
+  var _luckOpts = (_curDy && _curLn) ? { includeLuckCols: true, curDaYun: { gan: _curDy.gan, zhi: _curDy.zhi }, curLiuNian: { gan: _curLn[0], zhi: _curLn[1] }, curDyYear: _curDy.startYear, curLnYear: nowYear } : {};
   var card1 = buildCardHTML(d1, Object.assign({ twin: 1, label: '老大', relation: '', identClass: 'twin-1', diffMap: diffMap, meta: meta1 }, _luckOpts));
   var meta2 = (g2==='男'?'乾造':'坤造')+' · '+nian.gan+nian.zhi+'年'+buildShunLabel(d2.qiYun ? d2.qiYun.shun : true, d2.gender, d2.nian.gan);
   var card2 = buildCardHTML(d2, Object.assign({ twin: 2, label: '老二', relation: '', identClass: 'twin-2', diffMap: diffMap, meta: meta2 }, _luckOpts));
@@ -3424,6 +3639,12 @@ function cmpSetState(entries) {
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,
     _applyDLUpdates: _applyDLUpdates,
+    toggleMultiDL: toggleMultiDL,
+    multiDLState: multiDLState,
+    setMultiDLState: setMultiDLState,
+    multiDLPickDy: multiDLPickDy,
+    multiDLPickLn: multiDLPickLn,
+    applyMultiDL: applyMultiDL,
     renderCmpTrack: renderCmpTrack,
     getCmpTaiji: getCmpTaiji,
     clearAllCmpTaiji: clearAllCmpTaiji,
