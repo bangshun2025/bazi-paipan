@@ -34,7 +34,7 @@
 | 7 | 关闭后 active 清除 | ✅ |
 | 8 | 关闭恢复 7 列且无 col-dy2 | ✅ |
 
-截图：/tmp/bazi057-ui.png（时柱→大运1999→大运2029→流年1999/2001）
+截图：docs/TEST_v0.57.0_多选岁运-ui.png（时柱→大运1999→大运2029→流年1999/2001）
 
 **测试环境绕行说明**：干净 profile 未登录，`auth.js` 登录守卫包装 `APP.doPaipan`，`isLoggedIn()=false` 时 `requireLogin()` 拦截——多选每次点选调 `doPaipan` 重排全被拦。UI 脚本用 `history.replaceState(null,'','?test=1')` 使 `isTestMode()` 放行（不刷新页面、测试框架不启动）。**真实登录用户无此问题，属既有正确行为**。
 
