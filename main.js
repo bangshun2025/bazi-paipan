@@ -4260,8 +4260,12 @@ function captureScreenshot() {
     var expectRs = S.mapName(grp, A.shiShen(pd.ri.gan, pd.nian.gan, false));
     tests.push(eq(sec + ' T09: 年柱组名=主星全名映射', ganRow ? ganRow.cells[1].textContent : '', expectRs));
     var cgCell = host.querySelector('tr[data-row-type="ln2"] td:nth-child(2)');
-    tests.push(eq(sec + ' T10: 藏气行横排3span', cgCell ? cgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
-    tests.push(eq(sec + ' T11: 对应名行逐位对齐3span', cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var cgSpans = cgCell ? cgCell.querySelectorAll('.ssh-cg-g') : [];
+    var nianLyN = pd.nian && CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi].filter(function(l) { return l; }).length : 0;
+    tests.push(eq(sec + ' T10: 藏气行span数=非空层数', cgSpans.length, nianLyN));
+    tests.push(eq(sec + ' T10b: 藏气行无空占位span', Array.prototype.some.call(cgSpans, function(x) { return !x.textContent.trim(); }) ? 'N' : 'Y', 'Y'));
+    var cgSpans2 = cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i') : [];
+    tests.push(eq(sec + ' T11: 对应名行span数=非空层数', cgSpans2.length, nianLyN));
     var cg0 = CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi][0] : '';
     var expectCg = cg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, cg0, false)) : '';
     tests.push(eq(sec + ' T12: 本气对应名', cgRow ? cgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectCg));
@@ -4285,11 +4289,16 @@ function captureScreenshot() {
     var expectSyRs = syTaiNian ? S.mapName(grp, A.shiShen(pd.ri.gan, syTaiNian.gan, false)) : '';
     tests.push(eq(sec + ' T19: 三垣胎年列组名映射', syGanRow ? syGanRow.cells[1].textContent : '', expectSyRs));
     var syCgCell = host.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)');
-    tests.push(eq(sec + ' T20: 三垣藏气行横排3span', syCgCell ? syCgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
-    tests.push(eq(sec + ' T21: 三垣对应名行逐位3span', syCgRow ? syCgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var syLyN = syTaiNian && CONST.CANG_GAN[syTaiNian.zhi] ? CONST.CANG_GAN[syTaiNian.zhi].filter(function(l) { return l; }).length : 0;
+    tests.push(eq(sec + ' T20: 三垣藏气行span数=非空层数', syCgCell ? syCgCell.querySelectorAll('.ssh-cg-g').length : 0, syLyN));
+    var syCgSpans = syCgRow ? syCgRow.cells[1].querySelectorAll('.ssh-cg-i') : [];
+    tests.push(eq(sec + ' T21: 三垣对应名行span数=非空层数', syCgSpans.length, syLyN));
     var syCg0 = syTaiNian && CONST.CANG_GAN[syTaiNian.zhi] ? CONST.CANG_GAN[syTaiNian.zhi][0] : '';
     var expectSyCg = syCg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, syCg0, false)) : '';
     tests.push(eq(sec + ' T22: 三垣本气对应名', syCgRow ? syCgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectSyCg));
+
+    var panelHtml = S.renderPanel();
+    tests.push(eq(sec + ' T23: 十神popover自有类名且非宫位类', (panelHtml.indexOf('class="ssh-popover"') >= 0 && panelHtml.indexOf('class="gz-popover"') < 0) ? 'Y' : 'N', 'Y'));
 
     localStorage.setItem('bz_ssh_selected_v1', '[]');
     R.renderChart(pd, undefined, 'tst-out');

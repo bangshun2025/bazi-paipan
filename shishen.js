@@ -133,30 +133,45 @@
     var sel = loadSelected();
     return '<div class="gz-panel-wrapper">'
       + '<button class="btn-simple ssh-trigger" onclick="SSH.togglePanel(event)">十神<span class="ssh-count"> ' + sel.length + '</span> ▾</button>'
-      + '<div class="gz-popover" id="ssh-popover" onclick="event.stopPropagation()">'
+      + '<div class="ssh-popover" onclick="event.stopPropagation()">'
       + '<div class="gz-cb-grid">' + cbGridHtml() + '</div>'
       + '<div class="gz-popover-actions">'
       + '<button onclick="SSH.selectAll()">全选</button>'
       + '<button onclick="SSH.clearAll()">清空</button>'
       + '<button class="gz-settings-btn" onclick="SSH.closePanel();SSH.openSettings();">⚙ 十神设置</button>'
-      + '</div>'
-      + '</div></div>';
+      + '</div></div></div>';
+  }
+
+  // 就近定位本实例 popover：页内多份（主页/对比/双胞胎卡）时 getElementById 会拿错实例
+  function popOf(e) {
+    var t = e && e.target && e.target.closest ? e.target : null;
+    var wrapper = t ? t.closest('.gz-panel-wrapper') : null;
+    return wrapper ? wrapper.querySelector('.ssh-popover') : document.querySelector('.ssh-popover');
   }
 
   function togglePanel(e) {
     if (e) e.stopPropagation();
-    var pop = document.getElementById('ssh-popover');
+    var pop = popOf(e);
     if (pop) pop.classList.toggle('open');
   }
 
   function closePanel() {
-    var pop = document.getElementById('ssh-popover');
-    if (pop) pop.classList.remove('open');
+    var pops = document.querySelectorAll('.ssh-popover');
+    for (var i = 0; i < pops.length; i++) pops[i].classList.remove('open');
   }
+
+  // popover 外部点击关闭（自带监听，不混入宫位的全局关闭逻辑）
+  document.addEventListener('click', function(e) {
+    var pops = document.querySelectorAll('.ssh-popover');
+    for (var i = 0; i < pops.length; i++) {
+      var w = pops[i].closest('.gz-panel-wrapper');
+      if (pops[i].classList.contains('open') && w && !w.contains(e.target)) pops[i].classList.remove('open');
+    }
+  });
 
   // 勾选变化后刷新所有已注入的 SSH 面板（主页 topbar 与对比页各一份，只动 cb-grid 与计数，保 popover 开合状态）
   function rebuildPanels() {
-    var grids = document.querySelectorAll('#ssh-popover .gz-cb-grid');
+    var grids = document.querySelectorAll('.ssh-popover .gz-cb-grid');
     for (var i = 0; i < grids.length; i++) grids[i].innerHTML = cbGridHtml();
     var counts = document.querySelectorAll('.ssh-trigger .ssh-count');
     var n = loadSelected().length;

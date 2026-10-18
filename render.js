@@ -468,29 +468,31 @@ function xyRowMainNoLuck(ps) {
 // 外层独立 td（renderChart 内的 td() 局部函数此处不可见）
 function sshTd(cls, txt) { return '<td class="' + (cls || '') + '">' + (txt || '') + '</td>'; }
 
-// 藏干横排单元：固定 3 个等宽 span（空层占位），与对应名行逐位对齐；太极藏干点保留 taiji-ring
+// 藏干横排单元：只输出非空层等宽 span（单字层自然居中），与对应名行逐位对齐；太极藏干点保留 taiji-ring
 function sshCgSpans(p, colKey, twin, riGan) {
   var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
   var t = getTaiji();
   var out = '';
   for (var i = 0; i < 3; i++) {
     var l = layers[i];
-    if (l && t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
+    if (!l) continue;
+    if (t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
       out += '<span class="ssh-cg-g"><span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
     } else {
-      out += '<span class="ssh-cg-g">' + (l ? '<span class="' + wxClass(l.gan) + '">' + l.gan + '</span>' : '&nbsp;') + '</span>';
+      out += '<span class="ssh-cg-g"><span class="' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
     }
   }
   return out;
 }
 
-// 藏干对应名单元：与 sshCgSpans 同源层序列，逐位映射组内对应名
+// 藏干对应名单元：与 sshCgSpans 同源非空层序列，逐位映射组内对应名
 function sshCgNameCell(group, p, colKey, twin, riGan) {
   var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
   var out = '';
   for (var i = 0; i < 3; i++) {
     var l = layers[i];
-    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, l ? shiShen(riGan, l.gan, false) : '')) + '</span></span>';
+    if (!l) continue;
+    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, shiShen(riGan, l.gan, false))) + '</span></span>';
   }
   return out;
 }

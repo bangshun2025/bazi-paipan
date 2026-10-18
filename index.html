@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.57.0 | 2026-10-18 -->
+<!-- 八字排盘 ·  从真版 v0.58.0 | 2026-10-18 -->
+<!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
 <!-- v0.55.0: 十神组同步三垣区 — 勾选十神组后组名行/藏干对应名行同步插入三垣区（胎年/胎元/命宫/身宫），三垣藏气行同步横排化逐位对齐 -->
@@ -611,21 +612,21 @@
   .gz-trigger:hover .gz-summary { color: var(--c-paper); opacity: 0.8; }
 
   /* Popover */
-  .gz-popover {
+  .gz-popover, .ssh-popover {
     display: none; position: absolute; top: 100%; right: 0; z-index: 100;
     background: var(--gz-popover-bg); border: 1px solid var(--gz-popover-border);
     border-radius: 4px; box-shadow: var(--gz-popover-shadow);
     padding: 12px 14px; min-width: 280px; margin-top: 4px;
   }
-  .gz-popover.open { display: block; }
+  .gz-popover.open, .ssh-popover.open { display: block; }
 
-  /* v0.53.0 十神组行：藏干横排与对应名行等宽逐位对齐 */
-  .ssh-cg-g { display: inline-block; min-width: 3.2em; text-align: center; }
+  /* v0.58.0 十神组行修正：非空层居中、字号统一 11px（优先级压过 .chart .rm td/.rl 的 17px）、收窄占位防撑爆列宽 */
+  .chart tr.ssh-gan-row > td, .chart tr.ssh-cg-row > td { font-size: 11px; padding: 1px 4px; }
+  .chart tr.ssh-gan-row .rl, .chart tr.ssh-cg-row .rl { color: var(--c-gray); font-size: 11px; }
+  .ssh-cg-g { display: inline-block; min-width: 2.8em; text-align: center; }
   .ssh-cg-g .taiji-ring { min-width: 2em; }
-  .ssh-cg-i { display: inline-block; min-width: 3.2em; text-align: center; opacity: .9; }
+  .ssh-cg-i { display: inline-block; min-width: 2.8em; text-align: center; opacity: .9; }
   .ssh-cg-i-t { font-size: 11px; }
-  .ssh-gan-row td, .ssh-cg-row td { font-size: 12px; padding: 1px 4px; }
-  .ssh-gan-row .rl, .ssh-cg-row .rl { color: var(--c-gray); font-size: 11px; }
 
   /* Checkbox grid */
   .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
@@ -667,7 +668,7 @@
 
   /* 移动端适配 */
   @media (max-width: 480px) {
-    .gz-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
+    .gz-popover, .ssh-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
       transform: translateY(-50%); max-width: 90vw; }
     .gz-cb-grid { grid-template-columns: 1fr; }
   }
@@ -947,7 +948,7 @@
   .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
-  .cmp-gz-host .gz-popover { z-index:30; }
+  .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover { z-index:30; }
   .archive-row-cmp { flex:0 0 auto; margin-right:2px; cursor:pointer; }
 </style>
 <script>
@@ -8796,7 +8797,8 @@ function handleImportFile(event) {
 })();
 </script>
 <script>
-/* 八字排盘 v0.53.0 — shishen.js */
+/* 八字排盘 v0.58.0 — shishen.js */
+/* 八字排盘 v0.53.0 — shishen.js 十神组：勾选组在主表插行（天干组名行 + 藏干对应名行），设置弹窗维护「组→十神对应名」映射，localStorage 持久化 */
 (function() {
   'use strict';
 
@@ -8931,30 +8933,45 @@ function handleImportFile(event) {
     var sel = loadSelected();
     return '<div class="gz-panel-wrapper">'
       + '<button class="btn-simple ssh-trigger" onclick="SSH.togglePanel(event)">十神<span class="ssh-count"> ' + sel.length + '</span> ▾</button>'
-      + '<div class="gz-popover" id="ssh-popover" onclick="event.stopPropagation()">'
+      + '<div class="ssh-popover" onclick="event.stopPropagation()">'
       + '<div class="gz-cb-grid">' + cbGridHtml() + '</div>'
       + '<div class="gz-popover-actions">'
       + '<button onclick="SSH.selectAll()">全选</button>'
       + '<button onclick="SSH.clearAll()">清空</button>'
       + '<button class="gz-settings-btn" onclick="SSH.closePanel();SSH.openSettings();">⚙ 十神设置</button>'
-      + '</div>'
-      + '</div></div>';
+      + '</div></div></div>';
+  }
+
+  // 就近定位本实例 popover：页内多份（主页/对比/双胞胎卡）时 getElementById 会拿错实例
+  function popOf(e) {
+    var t = e && e.target && e.target.closest ? e.target : null;
+    var wrapper = t ? t.closest('.gz-panel-wrapper') : null;
+    return wrapper ? wrapper.querySelector('.ssh-popover') : document.querySelector('.ssh-popover');
   }
 
   function togglePanel(e) {
     if (e) e.stopPropagation();
-    var pop = document.getElementById('ssh-popover');
+    var pop = popOf(e);
     if (pop) pop.classList.toggle('open');
   }
 
   function closePanel() {
-    var pop = document.getElementById('ssh-popover');
-    if (pop) pop.classList.remove('open');
+    var pops = document.querySelectorAll('.ssh-popover');
+    for (var i = 0; i < pops.length; i++) pops[i].classList.remove('open');
   }
+
+  // popover 外部点击关闭（自带监听，不混入宫位的全局关闭逻辑）
+  document.addEventListener('click', function(e) {
+    var pops = document.querySelectorAll('.ssh-popover');
+    for (var i = 0; i < pops.length; i++) {
+      var w = pops[i].closest('.gz-panel-wrapper');
+      if (pops[i].classList.contains('open') && w && !w.contains(e.target)) pops[i].classList.remove('open');
+    }
+  });
 
   // 勾选变化后刷新所有已注入的 SSH 面板（主页 topbar 与对比页各一份，只动 cb-grid 与计数，保 popover 开合状态）
   function rebuildPanels() {
-    var grids = document.querySelectorAll('#ssh-popover .gz-cb-grid');
+    var grids = document.querySelectorAll('.ssh-popover .gz-cb-grid');
     for (var i = 0; i < grids.length; i++) grids[i].innerHTML = cbGridHtml();
     var counts = document.querySelectorAll('.ssh-trigger .ssh-count');
     var n = loadSelected().length;
@@ -9150,7 +9167,6 @@ function handleImportFile(event) {
     refresh: refresh
   };
 })();
-
 </script>
 <script>
 /* 八字排盘 v0.54.0 — hepan.js */
@@ -9971,29 +9987,31 @@ function xyRowMainNoLuck(ps) {
 // 外层独立 td（renderChart 内的 td() 局部函数此处不可见）
 function sshTd(cls, txt) { return '<td class="' + (cls || '') + '">' + (txt || '') + '</td>'; }
 
-// 藏干横排单元：固定 3 个等宽 span（空层占位），与对应名行逐位对齐；太极藏干点保留 taiji-ring
+// 藏干横排单元：只输出非空层等宽 span（单字层自然居中），与对应名行逐位对齐；太极藏干点保留 taiji-ring
 function sshCgSpans(p, colKey, twin, riGan) {
   var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
   var t = getTaiji();
   var out = '';
   for (var i = 0; i < 3; i++) {
     var l = layers[i];
-    if (l && t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
+    if (!l) continue;
+    if (t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
       out += '<span class="ssh-cg-g"><span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
     } else {
-      out += '<span class="ssh-cg-g">' + (l ? '<span class="' + wxClass(l.gan) + '">' + l.gan + '</span>' : '&nbsp;') + '</span>';
+      out += '<span class="ssh-cg-g"><span class="' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
     }
   }
   return out;
 }
 
-// 藏干对应名单元：与 sshCgSpans 同源层序列，逐位映射组内对应名
+// 藏干对应名单元：与 sshCgSpans 同源非空层序列，逐位映射组内对应名
 function sshCgNameCell(group, p, colKey, twin, riGan) {
   var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
   var out = '';
   for (var i = 0; i < 3; i++) {
     var l = layers[i];
-    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, l ? shiShen(riGan, l.gan, false) : '')) + '</span></span>';
+    if (!l) continue;
+    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, shiShen(riGan, l.gan, false))) + '</span></span>';
   }
   return out;
 }
@@ -17779,8 +17797,12 @@ function captureScreenshot() {
     var expectRs = S.mapName(grp, A.shiShen(pd.ri.gan, pd.nian.gan, false));
     tests.push(eq(sec + ' T09: 年柱组名=主星全名映射', ganRow ? ganRow.cells[1].textContent : '', expectRs));
     var cgCell = host.querySelector('tr[data-row-type="ln2"] td:nth-child(2)');
-    tests.push(eq(sec + ' T10: 藏气行横排3span', cgCell ? cgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
-    tests.push(eq(sec + ' T11: 对应名行逐位对齐3span', cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var cgSpans = cgCell ? cgCell.querySelectorAll('.ssh-cg-g') : [];
+    var nianLyN = pd.nian && CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi].filter(function(l) { return l; }).length : 0;
+    tests.push(eq(sec + ' T10: 藏气行span数=非空层数', cgSpans.length, nianLyN));
+    tests.push(eq(sec + ' T10b: 藏气行无空占位span', Array.prototype.some.call(cgSpans, function(x) { return !x.textContent.trim(); }) ? 'N' : 'Y', 'Y'));
+    var cgSpans2 = cgRow ? cgRow.cells[1].querySelectorAll('.ssh-cg-i') : [];
+    tests.push(eq(sec + ' T11: 对应名行span数=非空层数', cgSpans2.length, nianLyN));
     var cg0 = CONST.CANG_GAN[pd.nian.zhi] ? CONST.CANG_GAN[pd.nian.zhi][0] : '';
     var expectCg = cg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, cg0, false)) : '';
     tests.push(eq(sec + ' T12: 本气对应名', cgRow ? cgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectCg));
@@ -17804,11 +17826,16 @@ function captureScreenshot() {
     var expectSyRs = syTaiNian ? S.mapName(grp, A.shiShen(pd.ri.gan, syTaiNian.gan, false)) : '';
     tests.push(eq(sec + ' T19: 三垣胎年列组名映射', syGanRow ? syGanRow.cells[1].textContent : '', expectSyRs));
     var syCgCell = host.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)');
-    tests.push(eq(sec + ' T20: 三垣藏气行横排3span', syCgCell ? syCgCell.querySelectorAll('.ssh-cg-g').length : 0, 3));
-    tests.push(eq(sec + ' T21: 三垣对应名行逐位3span', syCgRow ? syCgRow.cells[1].querySelectorAll('.ssh-cg-i').length : 0, 3));
+    var syLyN = syTaiNian && CONST.CANG_GAN[syTaiNian.zhi] ? CONST.CANG_GAN[syTaiNian.zhi].filter(function(l) { return l; }).length : 0;
+    tests.push(eq(sec + ' T20: 三垣藏气行span数=非空层数', syCgCell ? syCgCell.querySelectorAll('.ssh-cg-g').length : 0, syLyN));
+    var syCgSpans = syCgRow ? syCgRow.cells[1].querySelectorAll('.ssh-cg-i') : [];
+    tests.push(eq(sec + ' T21: 三垣对应名行span数=非空层数', syCgSpans.length, syLyN));
     var syCg0 = syTaiNian && CONST.CANG_GAN[syTaiNian.zhi] ? CONST.CANG_GAN[syTaiNian.zhi][0] : '';
     var expectSyCg = syCg0 ? S.mapName(grp, A.shiShen(pd.ri.gan, syCg0, false)) : '';
     tests.push(eq(sec + ' T22: 三垣本气对应名', syCgRow ? syCgRow.cells[1].querySelector('.ssh-cg-i').textContent : '', expectSyCg));
+
+    var panelHtml = S.renderPanel();
+    tests.push(eq(sec + ' T23: 十神popover自有类名且非宫位类', (panelHtml.indexOf('class="ssh-popover"') >= 0 && panelHtml.indexOf('class="gz-popover"') < 0) ? 'Y' : 'N', 'Y'));
 
     localStorage.setItem('bz_ssh_selected_v1', '[]');
     R.renderChart(pd, undefined, 'tst-out');
