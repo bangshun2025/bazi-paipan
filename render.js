@@ -1936,7 +1936,7 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
 
 // ============ v0.57.0 多选岁运 ============
 // 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序，只能属于已勾大运）。
-// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（col-dy=早大运、col-dy2=晚大运即三垣身宫右侧，显示序按起始年升序与点击序解耦；流年列复用 col-ln 并右扩）。取消/挤出大运时其底下的流年联动清除（_mdlPruneLns）。
+// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入：早大运=主段时柱右 col-dy，晚大运=三垣段身宫右 col-dy2（复用占位列），流年按归属跟各自大运（col-ln 复用+右扩）；显示序按起始年升序与点击序解耦。取消/挤出大运时其底下的流年联动清除（_mdlPruneLns）。
 var _multiDL = { on: false, dys: [], lns: [] };
 
 function toggleMultiDL() {
@@ -2014,12 +2014,19 @@ function _mdlPill(data) {
 // 按行类型把 p（大运/流年柱）填进 cell；isDy2=false 表示复用的原大运列（class 保持 col-dy）
 function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   var t = tr.getAttribute('data-row-type') || '';
-  var isSy = /sanyuan/.test(tr.getAttribute('data-sec') || '');
-  var isXy = /\bxy\d\b/.test(t);
+  var sec = tr.getAttribute('data-sec') || '';
+  if (t === 'sy-rs') t = 'dy1';
+  else if (t === 'sy-cg') t = 'ln2';
+  else if (!t && /sanyuan/.test(sec)) {
+    if (tr.querySelector('td[data-gk="gan"]')) t = 'ln1';
+    else if (tr.querySelector('td[data-gk="zhi"]')) t = 'dy2';
+  }
+  var isSy = /sanyuan/.test(sec);
+  var isXy = /\bxy\d\b/.test(t) || t === 'xingyao';
   var colorCls = '';
   if (/\bln1\b/.test(t)) colorCls = ' ' + p.wg;
   else if (/\bdy2\b/.test(t)) colorCls = ' ' + p.wz;
-  cell.className = isDy ? (isSy ? 'sep' : (isDy2 ? 'sep col-dy2' : 'sep col-dy')) : 'col-ln';
+  cell.className = isDy ? (isDy2 ? 'sep col-dy2' : (isSy ? 'sep' : 'sep col-dy')) : 'col-ln';
   cell.className += colorCls;
   var gName = tr.getAttribute('data-ssh-group');
   if (gName) {
@@ -2076,24 +2083,30 @@ function applyMultiDL(root, data) {
   var curIdx = 0;
   for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowY) { curIdx = i; break; } }
   var pill = _mdlPill(data);
-  // 时柱右=早大运、身宫右=晚大运：显示序按起始年升序，与勾选点击序解耦
+  // 早大运=主段时柱右、晚大运=三垣段身宫右：显示序按起始年升序，与勾选点击序解耦
   var dysSorted = _multiDL.dys.slice().sort(function(a, b) { return daYun[a].startYear - daYun[b].startYear; });
   var dy1 = daYun[dysSorted.length ? dysSorted[0] : curIdx];
   var dy2 = dysSorted.length > 1 ? daYun[dysSorted[1]] : null;
   var pDy1 = pill(dy1.gan, dy1.zhi);
   var pDy2 = dy2 ? pill(dy2.gan, dy2.zhi) : null;
   var pLns = _multiDL.lns.map(function(yr) { var gz = liuNianJZ(yr); var p = pill(gz[0], gz[1]); p._yr = yr; return p; });
+  var lns1 = [], lns2 = [];
+  pLns.forEach(function(p) {
+    if (dy2 && p._yr >= dy2.startYear && p._yr <= dy2.startYear + 9) lns2.push(p);
+    else lns1.push(p);
+  });
   var refs = _zuoRefs(data);
   var sshCg = sshSelectedGroups().length > 0;
   var riGan = data.ri.gan;
-  var nExtra = (pDy2 ? 1 : 0) + Math.max(0, pLns.length - 1);
+  var nMain = Math.max(0, lns1.length - 1);
+  var nSy = Math.max(0, lns2.length - 1);
 
   var trs = table.querySelectorAll('tr');
   for (var r = 0; r < trs.length; r++) {
     var tr = trs[r];
     if (tr.classList.contains('sanyuan-sep')) {
       var c0 = tr.querySelector('td');
-      if (c0) c0.setAttribute('colspan', 7 + nExtra);
+      if (c0) c0.setAttribute('colspan', 7 + nMain + nSy);
       continue;
     }
     var isHd = tr.classList.contains('hd');
@@ -2103,43 +2116,65 @@ function applyMultiDL(root, data) {
     var dyCell = cells[5], lnCell = cells[6];
     var isSy = /sanyuan/.test(tr.getAttribute('data-sec') || '');
     var cellTag = isSy ? 'td' : 'th';
-    if (isHd) {
-      if (!isSy) {
-        dyCell.className = 'sep col-dy';
-        dyCell.innerHTML = '大运' + dyLnYearHtml(dy1.startYear);
-      }
-      if (pDy2) {
-        var th2 = document.createElement(cellTag);
-        th2.className = isSy ? 'sep' : 'sep col-dy2';
-        th2.innerHTML = isSy ? '' : '大运' + dyLnYearHtml(dy2.startYear);
-        dyCell.insertAdjacentElement('afterend', th2);
-      }
-      if (pLns.length) {
-        if (!isSy) lnCell.innerHTML = '流年' + dyLnYearHtml(pLns[0]._yr);
-        var ref = lnCell;
-        for (var li = 1; li < pLns.length; li++) {
-          var thn = document.createElement(cellTag);
-          thn.className = 'col-ln';
-          thn.innerHTML = isSy ? '' : '流年' + dyLnYearHtml(pLns[li]._yr);
-          ref.insertAdjacentElement('afterend', thn);
-          ref = thn;
+    if (isSy) {
+      // 身宫右：晚大运 + 其流年（复用段尾占位列）
+      if (!pDy2 && !lns2.length) continue;
+      if (isHd) {
+        if (pDy2) {
+          dyCell.className = 'sep col-dy2';
+          dyCell.innerHTML = '大运' + dyLnYearHtml(dy2.startYear);
+        }
+        if (lns2.length) {
+          lnCell.className = 'col-ln';
+          lnCell.innerHTML = '流年' + dyLnYearHtml(lns2[0]._yr);
+          var syRef = lnCell;
+          for (var si = 1; si < lns2.length; si++) {
+            var syN = document.createElement(cellTag);
+            syN.className = 'col-ln';
+            syN.innerHTML = '流年' + dyLnYearHtml(lns2[si]._yr);
+            syRef.insertAdjacentElement('afterend', syN);
+            syRef = syN;
+          }
+        }
+      } else {
+        if (pDy2) _mdlFillCell(dyCell, tr, pDy2, true, true, refs, sshCg, riGan);
+        if (lns2.length) {
+          _mdlFillCell(lnCell, tr, lns2[0], false, false, refs, sshCg, riGan);
+          var syRef2 = lnCell;
+          for (var sj = 1; sj < lns2.length; sj++) {
+            var syTd = document.createElement('td');
+            syRef2.insertAdjacentElement('afterend', syTd);
+            _mdlFillCell(syTd, tr, lns2[sj], false, false, refs, sshCg, riGan);
+            syRef2 = syTd;
+          }
         }
       }
     } else {
-      _mdlFillCell(dyCell, tr, pDy1, true, false, refs, sshCg, riGan);
-      if (pDy2) {
-        var td2 = document.createElement('td');
-        dyCell.insertAdjacentElement('afterend', td2);
-        _mdlFillCell(td2, tr, pDy2, true, true, refs, sshCg, riGan);
-      }
-      if (pLns.length) {
-        _mdlFillCell(lnCell, tr, pLns[0], false, false, refs, sshCg, riGan);
-        var ref2 = lnCell;
-        for (var lj = 1; lj < pLns.length; lj++) {
-          var tdn = document.createElement('td');
-          ref2.insertAdjacentElement('afterend', tdn);
-          _mdlFillCell(tdn, tr, pLns[lj], false, false, refs, sshCg, riGan);
-          ref2 = tdn;
+      if (isHd) {
+        dyCell.className = 'sep col-dy';
+        dyCell.innerHTML = '大运' + dyLnYearHtml(dy1.startYear);
+        if (lns1.length) {
+          lnCell.innerHTML = '流年' + dyLnYearHtml(lns1[0]._yr);
+          var ref = lnCell;
+          for (var li = 1; li < lns1.length; li++) {
+            var thn = document.createElement(cellTag);
+            thn.className = 'col-ln';
+            thn.innerHTML = '流年' + dyLnYearHtml(lns1[li]._yr);
+            ref.insertAdjacentElement('afterend', thn);
+            ref = thn;
+          }
+        }
+      } else {
+        _mdlFillCell(dyCell, tr, pDy1, true, false, refs, sshCg, riGan);
+        if (lns1.length) {
+          _mdlFillCell(lnCell, tr, lns1[0], false, false, refs, sshCg, riGan);
+          var ref2 = lnCell;
+          for (var lj = 1; lj < lns1.length; lj++) {
+            var tdn = document.createElement('td');
+            ref2.insertAdjacentElement('afterend', tdn);
+            _mdlFillCell(tdn, tr, lns1[lj], false, false, refs, sshCg, riGan);
+            ref2 = tdn;
+          }
         }
       }
     }
