@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.60.1 | 2026-10-19 -->
-<!-- v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
+<!-- 八字排盘 ·  从真版 v0.60.2 | 2026-10-19 -->
+<!-- v0.60.2: 十神/宫位面板互斥修复+藏干对应名列对齐 — ①shishen togglePanel 开面板前先关全部 .gz-popover；②gongwei toggleGzPopover 开面板前调 SSH.closePanel() 关全部十神面板（双向互斥，修复先点宫位再点十神时两面板叠加、宫位大面板盖住十神=「点十神出现宫位内容」）；③gongwei 全局委托改逐 popover 判断（原 querySelector 只取 DOM 序第一个 wrapper，会误判内部点击）；④.ssh-cg-g/.ssh-cg-i min-width 2.8em→2.8rem（em 基准随字号 17/11px 不同致逐列错位 8.4px，统一 rem 后 44.8px 等宽同列左缘）。v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
@@ -624,9 +624,9 @@
   /* v0.58.0 十神组行修正：非空层居中、字号统一 11px（优先级压过 .chart .rm td/.rl 的 17px）、收窄占位防撑爆列宽 */
   .chart tr.ssh-gan-row > td, .chart tr.ssh-cg-row > td { font-size: 11px; padding: 1px 4px; }
   .chart tr.ssh-gan-row .rl, .chart tr.ssh-cg-row .rl { color: var(--c-gray); font-size: 11px; }
-  .ssh-cg-g { display: inline-block; min-width: 2.8em; text-align: center; }
+  .ssh-cg-g { display: inline-block; min-width: 2.8rem; text-align: center; }
   .ssh-cg-g .taiji-ring { min-width: 2em; }
-  .ssh-cg-i { display: inline-block; min-width: 2.8em; text-align: center; opacity: .9; }
+  .ssh-cg-i { display: inline-block; min-width: 2.8rem; text-align: center; opacity: .9; }
   .ssh-cg-i-t { font-size: 11px; }
 
   /* Checkbox grid */
@@ -7520,6 +7520,10 @@ function toggleGzPopover(e) {
   var wrapper = (e && e.target && e.target.closest) ? e.target.closest('.gz-panel-wrapper') : null;
   var popover = wrapper ? wrapper.querySelector('.gz-popover') : document.getElementById('gz-popover');
   if (!popover) return;
+  // v0.60.2 互斥：打开宫位面板前显式关十神面板（两按钮 onclick 均 stopPropagation，委托收不到）
+  if (!popover.classList.contains('open') && window.SSH && typeof SSH.closePanel === 'function') {
+    SSH.closePanel();
+  }
   // 每次打开前同步 checkbox（数据可能已在设置面板中变化）
   syncGzCheckboxes();
   popover.classList.toggle('open');
@@ -7530,12 +7534,14 @@ function closeGzPopover() {
   for (var i = 0; i < popovers.length; i++) popovers[i].classList.remove('open');
 }
 
-// 全局事件委托：popover 外部点击关闭
+// 全局事件委托：popover 外部点击关闭（v0.60.2 逐 popover 判断：querySelector('.gz-panel-wrapper') 只取
+// DOM 序首个 wrapper，十神 wrapper 在前时会把十神按钮点击误判为「内部点击」导致宫位漏关）
 document.addEventListener('click', function(e) {
-  var wrapper = document.querySelector('.gz-panel-wrapper');
-  if (!wrapper) return;
-  if (!wrapper.contains(e.target)) {
-    closeGzPopover();
+  var popovers = document.querySelectorAll('.gz-popover');
+  for (var i = 0; i < popovers.length; i++) {
+    if (!popovers[i].classList.contains('open')) continue;
+    var w = popovers[i].closest('.gz-panel-wrapper');
+    if (w && !w.contains(e.target)) popovers[i].classList.remove('open');
   }
   // 分气 popover 外部点击关闭
   var tpWrapper = document.querySelector('#tp-popover');
@@ -8318,7 +8324,7 @@ function handleImportFile(event) {
     gongWeiTrash: gongWeiTrash,
   };
 })();
-</script>
+</script></script>
 <script>
 /* 八字排盘 v0.30.0 — xingyao.js */
 (function() {
@@ -8953,7 +8959,13 @@ function handleImportFile(event) {
   function togglePanel(e) {
     if (e) e.stopPropagation();
     var pop = popOf(e);
-    if (pop) pop.classList.toggle('open');
+    if (!pop) return;
+    // v0.60.2 互斥：两按钮 onclick 均 stopPropagation，document 委托收不到，打开十神面板前显式关宫位
+    if (!pop.classList.contains('open')) {
+      var gzs = document.querySelectorAll('.gz-popover');
+      for (var i = 0; i < gzs.length; i++) gzs[i].classList.remove('open');
+    }
+    pop.classList.toggle('open');
   }
 
   function closePanel() {
@@ -9168,7 +9180,7 @@ function handleImportFile(event) {
     refresh: refresh
   };
 })();
-</script>
+</script></script>
 <script>
 /* 八字排盘 v0.54.0 — hepan.js */
 /* 合盘档案：把排盘对比（当前组合）存为合盘档案，可从档案界面一键恢复对比界面；合盘界面内置分析记录（写入即存，按合盘 id 隔离，未存档组合用稳定指纹 key） */
@@ -17926,6 +17938,56 @@ function captureScreenshot() {
     if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
     R.renderChart(pd, undefined, 'tst-out');
     tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
+  })();
+
+  // ===== v0.60.2 popover 互斥 + 藏干对应名对齐 =====
+  (function() {
+    var sec = 'SSHX';
+    var S = window.SSH, R = window.RENDER, GW = window.GONGWEI;
+    if (!S || !R || !GW || typeof R.renderChart !== 'function' || typeof GW.toggleGzPopover !== 'function') {
+      tests.push(fail(sec + ' 前置: SSH/RENDER/GONGWEI 挂载', '缺失'));
+      return;
+    }
+    // 动态 wrapper 自控环境，不依赖页面是否已有 topbar 按钮
+    var wrap = document.createElement('div');
+    wrap.className = 'gz-panel-wrapper';
+    wrap.style.position = 'fixed'; wrap.style.left = '-9999px'; wrap.style.top = '0';
+    wrap.innerHTML = '<button class="gz-trigger">宫位</button><div class="gz-popover">GZ</div>'
+      + '<button class="ssh-trigger">十神</button><div class="ssh-popover">SSH</div>';
+    document.body.appendChild(wrap);
+    var gzPop = wrap.querySelector('.gz-popover'), sshPop = wrap.querySelector('.ssh-popover');
+    var gzTrig = wrap.querySelector('.gz-trigger'), sshTrig = wrap.querySelector('.ssh-trigger');
+    gzPop.classList.add('open');
+    S.togglePanel({ target: sshTrig, stopPropagation: function(){} });
+    tests.push(eq(sec + ' X01: 宫位开时点十神→宫位关闭', gzPop.classList.contains('open') ? 'Y' : 'N', 'N'));
+    tests.push(eq(sec + ' X02: 十神面板打开', sshPop.classList.contains('open') ? 'Y' : 'N', 'Y'));
+    GW.toggleGzPopover({ target: gzTrig, stopPropagation: function(){} });
+    tests.push(eq(sec + ' X03: 十神开时点宫位→十神关闭', sshPop.classList.contains('open') ? 'Y' : 'N', 'N'));
+    tests.push(eq(sec + ' X04: 宫位面板打开', gzPop.classList.contains('open') ? 'Y' : 'N', 'Y'));
+    document.body.removeChild(wrap);
+
+    // 藏干行/对应名行 span 等宽同列（rem 统一基准后 17px 与 11px 行不再错位）
+    var savedSel2 = localStorage.getItem('bz_ssh_selected_v1');
+    var host2 = document.getElementById('tst-out');
+    localStorage.setItem('bz_ssh_selected_v1', JSON.stringify(['军队']));
+    var pd2 = paipan('SSHX几何', '男', 1984, 11, 15, 12, 0);
+    R.renderChart(pd2, undefined, 'tst-out');
+    var cgSp = host2.querySelector('tr[data-row-type="ln2"] td:nth-child(2) .ssh-cg-g');
+    var nmSp = host2.querySelector('tr.ssh-cg-row:not([data-sec="sanyuan"]) td:nth-child(2) .ssh-cg-i');
+    if (cgSp && nmSp) {
+      var prevCss = host2.getAttribute('style') || '';
+      host2.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+      var wc = Math.round(cgSp.getBoundingClientRect().width * 10) / 10;
+      var wn = Math.round(nmSp.getBoundingClientRect().width * 10) / 10;
+      var lc = Math.round(cgSp.getBoundingClientRect().left * 10) / 10;
+      var ln = Math.round(nmSp.getBoundingClientRect().left * 10) / 10;
+      host2.setAttribute('style', prevCss);
+      tests.push(eq(sec + ' X05: 藏干/对应名span等宽(rem统一)', wc, wn));
+      tests.push(eq(sec + ' X06: 藏干/对应名span同列左缘', lc, ln));
+    } else {
+      tests.push(fail(sec + ' X00b: 藏干/对应名span存在', '缺失'));
+    }
+    if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
   })();
 
   // ===== v0.54.0 合盘档案 =====

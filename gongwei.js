@@ -577,6 +577,10 @@ function toggleGzPopover(e) {
   var wrapper = (e && e.target && e.target.closest) ? e.target.closest('.gz-panel-wrapper') : null;
   var popover = wrapper ? wrapper.querySelector('.gz-popover') : document.getElementById('gz-popover');
   if (!popover) return;
+  // v0.60.2 互斥：打开宫位面板前显式关十神面板（两按钮 onclick 均 stopPropagation，委托收不到）
+  if (!popover.classList.contains('open') && window.SSH && typeof SSH.closePanel === 'function') {
+    SSH.closePanel();
+  }
   // 每次打开前同步 checkbox（数据可能已在设置面板中变化）
   syncGzCheckboxes();
   popover.classList.toggle('open');
@@ -587,12 +591,14 @@ function closeGzPopover() {
   for (var i = 0; i < popovers.length; i++) popovers[i].classList.remove('open');
 }
 
-// 全局事件委托：popover 外部点击关闭
+// 全局事件委托：popover 外部点击关闭（v0.60.2 逐 popover 判断：querySelector('.gz-panel-wrapper') 只取
+// DOM 序首个 wrapper，十神 wrapper 在前时会把十神按钮点击误判为「内部点击」导致宫位漏关）
 document.addEventListener('click', function(e) {
-  var wrapper = document.querySelector('.gz-panel-wrapper');
-  if (!wrapper) return;
-  if (!wrapper.contains(e.target)) {
-    closeGzPopover();
+  var popovers = document.querySelectorAll('.gz-popover');
+  for (var i = 0; i < popovers.length; i++) {
+    if (!popovers[i].classList.contains('open')) continue;
+    var w = popovers[i].closest('.gz-panel-wrapper');
+    if (w && !w.contains(e.target)) popovers[i].classList.remove('open');
   }
   // 分气 popover 外部点击关闭
   var tpWrapper = document.querySelector('#tp-popover');

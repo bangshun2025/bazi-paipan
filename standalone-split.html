@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.60.1 | 2026-10-19 -->
-<!-- v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
+<!-- 八字排盘 ·  从真版 v0.60.2 | 2026-10-19 -->
+<!-- v0.60.2: 十神/宫位面板互斥修复+藏干对应名列对齐 — ①shishen togglePanel 开面板前先关全部 .gz-popover；②gongwei toggleGzPopover 开面板前调 SSH.closePanel() 关全部十神面板（双向互斥，修复先点宫位再点十神时两面板叠加、宫位大面板盖住十神=「点十神出现宫位内容」）；③gongwei 全局委托改逐 popover 判断（原 querySelector 只取 DOM 序第一个 wrapper，会误判内部点击）；④.ssh-cg-g/.ssh-cg-i min-width 2.8em→2.8rem（em 基准随字号 17/11px 不同致逐列错位 8.4px，统一 rem 后 44.8px 等宽同列左缘）。v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.55.2: 修复干净环境（清缓存/新设备）首访 ？test=1 全量回归炸页 — 测试框架开头同步补建预置档案（initPresetArchives 幂等），v0.37 盘面对比段不再因取不到杨禹赫/彭子旭抛 TypeError 中断整个测试流（连带 __testAppend/window.APP 挂载与 doPaipan 全部恢复） -->
 <!-- v0.57.0: 多选岁运 — 工具栏「☰ 多选岁运」进入勾选模式，运列表点选两个大运（时柱右=大运一列、身宫右=大运二列）与其下多个流年（col-ln 复用并右扩，年份升序从左往右），勾选格表头均带 dyln-yr 年份小字；单人主表 DOM 插列（applyMultiDL，行类型值映射与 _applyDLUpdates 同源），再点取消，退出恢复七列；双胞胎/合盘卡不参与 -->
@@ -948,9 +948,9 @@
   /* v0.58.0 十神组行修正：非空层居中、字号统一 11px（优先级压过 .chart .rm td/.rl 的 17px）、收窄占位防撑爆列宽 */
   .chart tr.ssh-gan-row > td, .chart tr.ssh-cg-row > td { font-size: 11px; padding: 1px 4px; }
   .chart tr.ssh-gan-row .rl, .chart tr.ssh-cg-row .rl { color: var(--c-gray); font-size: 11px; }
-  .ssh-cg-g { display: inline-block; min-width: 2.8em; text-align: center; }
+  .ssh-cg-g { display: inline-block; min-width: 2.8rem; text-align: center; }
   .ssh-cg-g .taiji-ring { min-width: 2em; }
-  .ssh-cg-i { display: inline-block; min-width: 2.8em; text-align: center; opacity: .9; }
+  .ssh-cg-i { display: inline-block; min-width: 2.8rem; text-align: center; opacity: .9; }
   .ssh-cg-i-t { font-size: 11px; }
 </style>
   <!-- v0.25.0 Supabase 账号功能：supabase-js v2（本地化，摆脱 CDN 依赖） -->

@@ -152,7 +152,13 @@
   function togglePanel(e) {
     if (e) e.stopPropagation();
     var pop = popOf(e);
-    if (pop) pop.classList.toggle('open');
+    if (!pop) return;
+    // v0.60.2 互斥：两按钮 onclick 均 stopPropagation，document 委托收不到，打开十神面板前显式关宫位
+    if (!pop.classList.contains('open')) {
+      var gzs = document.querySelectorAll('.gz-popover');
+      for (var i = 0; i < gzs.length; i++) gzs[i].classList.remove('open');
+    }
+    pop.classList.toggle('open');
   }
 
   function closePanel() {

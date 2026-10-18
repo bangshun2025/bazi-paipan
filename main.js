@@ -4340,6 +4340,56 @@ function captureScreenshot() {
     tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
   })();
 
+  // ===== v0.60.2 popover 互斥 + 藏干对应名对齐 =====
+  (function() {
+    var sec = 'SSHX';
+    var S = window.SSH, R = window.RENDER, GW = window.GONGWEI;
+    if (!S || !R || !GW || typeof R.renderChart !== 'function' || typeof GW.toggleGzPopover !== 'function') {
+      tests.push(fail(sec + ' 前置: SSH/RENDER/GONGWEI 挂载', '缺失'));
+      return;
+    }
+    // 动态 wrapper 自控环境，不依赖页面是否已有 topbar 按钮
+    var wrap = document.createElement('div');
+    wrap.className = 'gz-panel-wrapper';
+    wrap.style.position = 'fixed'; wrap.style.left = '-9999px'; wrap.style.top = '0';
+    wrap.innerHTML = '<button class="gz-trigger">宫位</button><div class="gz-popover">GZ</div>'
+      + '<button class="ssh-trigger">十神</button><div class="ssh-popover">SSH</div>';
+    document.body.appendChild(wrap);
+    var gzPop = wrap.querySelector('.gz-popover'), sshPop = wrap.querySelector('.ssh-popover');
+    var gzTrig = wrap.querySelector('.gz-trigger'), sshTrig = wrap.querySelector('.ssh-trigger');
+    gzPop.classList.add('open');
+    S.togglePanel({ target: sshTrig, stopPropagation: function(){} });
+    tests.push(eq(sec + ' X01: 宫位开时点十神→宫位关闭', gzPop.classList.contains('open') ? 'Y' : 'N', 'N'));
+    tests.push(eq(sec + ' X02: 十神面板打开', sshPop.classList.contains('open') ? 'Y' : 'N', 'Y'));
+    GW.toggleGzPopover({ target: gzTrig, stopPropagation: function(){} });
+    tests.push(eq(sec + ' X03: 十神开时点宫位→十神关闭', sshPop.classList.contains('open') ? 'Y' : 'N', 'N'));
+    tests.push(eq(sec + ' X04: 宫位面板打开', gzPop.classList.contains('open') ? 'Y' : 'N', 'Y'));
+    document.body.removeChild(wrap);
+
+    // 藏干行/对应名行 span 等宽同列（rem 统一基准后 17px 与 11px 行不再错位）
+    var savedSel2 = localStorage.getItem('bz_ssh_selected_v1');
+    var host2 = document.getElementById('tst-out');
+    localStorage.setItem('bz_ssh_selected_v1', JSON.stringify(['军队']));
+    var pd2 = paipan('SSHX几何', '男', 1984, 11, 15, 12, 0);
+    R.renderChart(pd2, undefined, 'tst-out');
+    var cgSp = host2.querySelector('tr[data-row-type="ln2"] td:nth-child(2) .ssh-cg-g');
+    var nmSp = host2.querySelector('tr.ssh-cg-row:not([data-sec="sanyuan"]) td:nth-child(2) .ssh-cg-i');
+    if (cgSp && nmSp) {
+      var prevCss = host2.getAttribute('style') || '';
+      host2.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+      var wc = Math.round(cgSp.getBoundingClientRect().width * 10) / 10;
+      var wn = Math.round(nmSp.getBoundingClientRect().width * 10) / 10;
+      var lc = Math.round(cgSp.getBoundingClientRect().left * 10) / 10;
+      var ln = Math.round(nmSp.getBoundingClientRect().left * 10) / 10;
+      host2.setAttribute('style', prevCss);
+      tests.push(eq(sec + ' X05: 藏干/对应名span等宽(rem统一)', wc, wn));
+      tests.push(eq(sec + ' X06: 藏干/对应名span同列左缘', lc, ln));
+    } else {
+      tests.push(fail(sec + ' X00b: 藏干/对应名span存在', '缺失'));
+    }
+    if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
+  })();
+
   // ===== v0.54.0 合盘档案 =====
   (function() {
     tests.push({ section:'合盘档案(v0.54.0)' });
