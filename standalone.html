@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.60.0 | 2026-10-18 -->
-<!-- v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
+<!-- 八字排盘 ·  从真版 v0.60.1 | 2026-10-19 -->
+<!-- v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
@@ -236,7 +236,7 @@
   .chart th, .chart td { border:0.5px solid var(--c-line); text-align:center; vertical-align:middle; font-family:var(--font-display); padding:3px 5px; }
   .chart td.rl, .chart th.rl { width:54px; min-width:54px; background:rgba(201,169,110,.06); font-size:14px; color:var(--c-gray); letter-spacing:.1em; font-weight:500; padding:3px 2px; white-space:nowrap; }
   .chart tr.hd th { font-size:18px; color:var(--c-gray); font-weight:500; background:rgba(201,169,110,.04); padding:6px 3px; }
-  .chart tr.hd th .dyln-yr { display:block; font-size:11px; font-weight:400; color:var(--c-gray); letter-spacing:.05em; margin-top:1px; opacity:.85; }
+  .chart tr.hd th .dyln-yr, .chart tr.hd td .dyln-yr { display:block; font-size:11px; font-weight:400; color:var(--c-gray); letter-spacing:.05em; margin-top:1px; opacity:.85; }
   #btnMultiDL.active { background:var(--c-ink)!important; color:var(--c-paper)!important; border-color:var(--c-ink)!important; }
   .chart .sep { border-left:1.5px solid rgba(181,52,58,.4) !important; }
   .chart .rs td { font-size:18px; color:var(--c-ink); font-weight:500; }
