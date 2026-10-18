@@ -3622,6 +3622,27 @@ function captureScreenshot() {
       R.setMultiDLState({ on: true, dys: [1, 4], lns: [] });
       st57 = R.multiDLState();
       tests.push(eq('MLT: 状态机 dys=[1,4]', st57.dys.join(','), '1,4'));
+      // v0.59.0 显示序与点击序解耦：乱序勾选时柱右仍=早大运
+      R.setMultiDLState({ on: true, dys: [dB57, dA57], lns: [lnB1] });
+      R.renderChart(pd57, undefined, 'tst-multidl');
+      R.applyMultiDL(tst57, pd57);
+      var hd59 = tst57.querySelector('table.chart tr.hd');
+      var thDy1b = hd59 ? hd59.querySelector('th.col-dy') : null;
+      var thDy2b = hd59 ? hd59.querySelector('th.col-dy2') : null;
+      tests.push(eq('MLT59: 乱序勾选时柱右=早大运(' + pd57.daYun[dA57].startYear + ')', thDy1b ? thDy1b.querySelector('.dyln-yr').textContent : '', String(pd57.daYun[dA57].startYear)));
+      tests.push(eq('MLT59: 乱序勾选身宫右=晚大运(' + pd57.daYun[dB57].startYear + ')', thDy2b ? thDy2b.querySelector('.dyln-yr').textContent : '', String(pd57.daYun[dB57].startYear)));
+      // v0.59.0 取消大运联动清其流年（直调 multiDLPickDy，tst 容器已挂 _paipanData）
+      tst57._paipanData = tst57._paipanData || pd57;
+      R.setMultiDLState({ on: true, dys: [dA57, dB57], lns: [lnA1, lnB1] });
+      R.multiDLPickDy(tst57, dB57, null);
+      tests.push(eq('MLT59: 取消大运二其流年被清', JSON.stringify(R.multiDLState().lns), JSON.stringify([lnA1])));
+      tests.push(eq('MLT59: 取消后dys仅剩大运一', R.multiDLState().dys.join(','), String(dA57)));
+      // v0.59.0 流年只能勾所选大运底下的
+      R.setMultiDLState({ on: true, dys: [dA57], lns: [] });
+      R.multiDLPickLn(tst57, dB57, 2, null);
+      tests.push(eq('MLT59: 点未选大运的流年不生效', R.multiDLState().lns.length, 0));
+      R.multiDLPickLn(tst57, dA57, 2, null);
+      tests.push(eq('MLT59: 点所选大运的流年生效应收录', JSON.stringify(R.multiDLState().lns), JSON.stringify([R.liunianYearOf(pd57, dA57, 2)])));
       // 关闭恢复：状态清空重渲染回 7 列
       R.setMultiDLState({ on: false, dys: [], lns: [] });
       R.renderChart(pd57, undefined, 'tst-multidl');

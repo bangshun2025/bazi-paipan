@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.58.0 | 2026-10-18 -->
+<!-- 八字排盘 ·  从真版 v0.59.0 | 2026-10-18 -->
+<!-- v0.59.0: 多选大运规则调整 — ①大运列显示序按起始年升序（时柱右=早大运、身宫右=晚大运，与点击序解耦）；②流年只能勾所选大运底下的（未勾大运的流年点击不生效）；③取消/挤出大运时其底下的流年联动清除（_mdlPruneLns 按十年区间归属过滤） -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
 <!-- v0.54.0: 合盘档案 — 对比界面「💾 存为合盘」把当前对比组合存为合盘档案；「▤ 合盘」档案界面（搜索/打开/重命名/删除，参照档案界面）点「打开」一键恢复对比界面；对比界面内置「📝 分析记录」写入即存，按合盘 id 隔离（未存档组合用稳定指纹 key，存档后自动迁移） -->
@@ -1028,7 +1029,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <button class="btn btn-privacy" id="btnScreenshot" onclick="APP.captureScreenshot()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📷 截图</button>
       <button class="btn btn-privacy" id="btnCopyChart" onclick="RENDER.copyChartForAi()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 复制盘面</button>
       <button class="btn btn-privacy" id="btnSaveCloud" onclick="window.RECORDS.saveCurrentPaipan()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">💾 保存云端</button>
-      <button class="btn btn-privacy" id="btnMultiDL" onclick="RENDER.toggleMultiDL()" title="多选模式：在下方运列表勾选两个大运与其下多个流年，主表从左往右多列显示（时柱右=大运一，身宫右=大运二）" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☰ 多选岁运</button>
+      <button class="btn btn-privacy" id="btnMultiDL" onclick="RENDER.toggleMultiDL()" title="多选模式：勾选两个大运与其底下的多个流年（流年只能是所选大运底下的，取消大运时其流年一并清除）；时柱右=早大运、身宫右=晚大运，按起始年升序排列" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☰ 多选岁运</button>
       <button class="btn btn-privacy" id="btnMyRecords" onclick="window.RECORDS.openRecordsPanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☁️ 我的排盘</button>
       <button class="btn btn-privacy" id="btnLogout" onclick="window.AUTH.doLogout()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-gray);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">🚪 登出</button>
       <button class="btn" onclick="ARCHIVE.openArchivePanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">📋 档案</button>
@@ -11150,8 +11151,8 @@ function bindEvents(data, container) {
   container.querySelectorAll('[data-dy]').forEach(c => {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
-      // v0.57.0 多选岁运：单人盘勾选大运（≤2）
-      if (_multiDL.on) { multiDLPickDy(i, c); return; }
+      // v0.57.0 多选岁运：单人盘勾选大运（≤2，取消时联动清其流年）
+      if (_multiDL.on) { multiDLPickDy(container, i, c); return; }
       var cardEl = c.closest('.bz-twin-card');
       // 龙凤胎: 大运行在 .bz-card-luck 中, 按 data-card-index 找对应卡片
       if (!cardEl) {
@@ -11454,8 +11455,8 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
 
 
 // ============ v0.57.0 多选岁运 ============
-// 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序）。
-// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（大运1=现 col-dy 位，大运2=新 col-dy2 列即三垣身宫右侧，流年列复用 col-ln 并右扩，年份升序从左往右）。
+// 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序，只能属于已勾大运）。
+// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（col-dy=早大运、col-dy2=晚大运即三垣身宫右侧，显示序按起始年升序与点击序解耦；流年列复用 col-ln 并右扩）。取消/挤出大运时其底下的流年联动清除（_mdlPruneLns）。
 var _multiDL = { on: false, dys: [], lns: [] };
 
 function toggleMultiDL() {
@@ -11481,18 +11482,31 @@ function setMultiDLState(st) {
   _multiDL.lns = (st.lns || []).slice().sort(function(a, b) { return a - b; });
 }
 
+// 流年只能挂在已勾大运底下：大运变更后剪掉失去归属的流年（十年运区间=startYear..+9）
+function _mdlPruneLns(data) {
+  if (!data || !data.daYun) return;
+  var ok = {};
+  _multiDL.dys.forEach(function(di) {
+    var d = data.daYun[di];
+    if (!d) return;
+    for (var yr = d.startYear; yr <= d.startYear + 9; yr++) ok[yr] = true;
+  });
+  _multiDL.lns = _multiDL.lns.filter(function(yr) { return ok[yr]; });
+}
+
 // 多选模式点大运格（仅单人盘；双胞胎/合盘卡点击不响应）
-function multiDLPickDy(i, clickedEl) {
+function multiDLPickDy(container, i, clickedEl) {
   if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
   var pos = _multiDL.dys.indexOf(i);
   if (pos >= 0) _multiDL.dys.splice(pos, 1);
   else { if (_multiDL.dys.length >= 2) _multiDL.dys.shift(); _multiDL.dys.push(i); }
+  _mdlPruneLns(container && container._paipanData);
   if (window.APP && APP.doPaipan) APP.doPaipan();
 }
 
-// 多选模式点流年格（运前流年 di=-1 不参与）
+// 多选模式点流年格（运前流年与未勾选大运底下的流年不参与）
 function multiDLPickLn(container, di, liIdx, clickedEl) {
-  if (di === -1) return;
+  if (di === -1 || _multiDL.dys.indexOf(di) < 0) return;
   if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
   var yr = liunianYearOf(container._paipanData, di, liIdx);
   if (yr === null || yr === undefined) return;
@@ -11582,8 +11596,10 @@ function applyMultiDL(root, data) {
   var curIdx = 0;
   for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowY) { curIdx = i; break; } }
   var pill = _mdlPill(data);
-  var dy1 = daYun[_multiDL.dys.length ? _multiDL.dys[0] : curIdx];
-  var dy2 = _multiDL.dys.length > 1 ? daYun[_multiDL.dys[1]] : null;
+  // 时柱右=早大运、身宫右=晚大运：显示序按起始年升序，与勾选点击序解耦
+  var dysSorted = _multiDL.dys.slice().sort(function(a, b) { return daYun[a].startYear - daYun[b].startYear; });
+  var dy1 = daYun[dysSorted.length ? dysSorted[0] : curIdx];
+  var dy2 = dysSorted.length > 1 ? daYun[dysSorted[1]] : null;
   var pDy1 = pill(dy1.gan, dy1.zhi);
   var pDy2 = dy2 ? pill(dy2.gan, dy2.zhi) : null;
   var pLns = _multiDL.lns.map(function(yr) { var gz = liuNianJZ(yr); var p = pill(gz[0], gz[1]); p._yr = yr; return p; });
@@ -17159,6 +17175,27 @@ function captureScreenshot() {
       R.setMultiDLState({ on: true, dys: [1, 4], lns: [] });
       st57 = R.multiDLState();
       tests.push(eq('MLT: 状态机 dys=[1,4]', st57.dys.join(','), '1,4'));
+      // v0.59.0 显示序与点击序解耦：乱序勾选时柱右仍=早大运
+      R.setMultiDLState({ on: true, dys: [dB57, dA57], lns: [lnB1] });
+      R.renderChart(pd57, undefined, 'tst-multidl');
+      R.applyMultiDL(tst57, pd57);
+      var hd59 = tst57.querySelector('table.chart tr.hd');
+      var thDy1b = hd59 ? hd59.querySelector('th.col-dy') : null;
+      var thDy2b = hd59 ? hd59.querySelector('th.col-dy2') : null;
+      tests.push(eq('MLT59: 乱序勾选时柱右=早大运(' + pd57.daYun[dA57].startYear + ')', thDy1b ? thDy1b.querySelector('.dyln-yr').textContent : '', String(pd57.daYun[dA57].startYear)));
+      tests.push(eq('MLT59: 乱序勾选身宫右=晚大运(' + pd57.daYun[dB57].startYear + ')', thDy2b ? thDy2b.querySelector('.dyln-yr').textContent : '', String(pd57.daYun[dB57].startYear)));
+      // v0.59.0 取消大运联动清其流年（直调 multiDLPickDy，tst 容器已挂 _paipanData）
+      tst57._paipanData = tst57._paipanData || pd57;
+      R.setMultiDLState({ on: true, dys: [dA57, dB57], lns: [lnA1, lnB1] });
+      R.multiDLPickDy(tst57, dB57, null);
+      tests.push(eq('MLT59: 取消大运二其流年被清', JSON.stringify(R.multiDLState().lns), JSON.stringify([lnA1])));
+      tests.push(eq('MLT59: 取消后dys仅剩大运一', R.multiDLState().dys.join(','), String(dA57)));
+      // v0.59.0 流年只能勾所选大运底下的
+      R.setMultiDLState({ on: true, dys: [dA57], lns: [] });
+      R.multiDLPickLn(tst57, dB57, 2, null);
+      tests.push(eq('MLT59: 点未选大运的流年不生效', R.multiDLState().lns.length, 0));
+      R.multiDLPickLn(tst57, dA57, 2, null);
+      tests.push(eq('MLT59: 点所选大运的流年生效应收录', JSON.stringify(R.multiDLState().lns), JSON.stringify([R.liunianYearOf(pd57, dA57, 2)])));
       // 关闭恢复：状态清空重渲染回 7 列
       R.setMultiDLState({ on: false, dys: [], lns: [] });
       R.renderChart(pd57, undefined, 'tst-multidl');

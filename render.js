@@ -1631,8 +1631,8 @@ function bindEvents(data, container) {
   container.querySelectorAll('[data-dy]').forEach(c => {
     c.addEventListener('click', () => {
       const i = parseInt(c.dataset.dy);
-      // v0.57.0 多选岁运：单人盘勾选大运（≤2）
-      if (_multiDL.on) { multiDLPickDy(i, c); return; }
+      // v0.57.0 多选岁运：单人盘勾选大运（≤2，取消时联动清其流年）
+      if (_multiDL.on) { multiDLPickDy(container, i, c); return; }
       var cardEl = c.closest('.bz-twin-card');
       // 龙凤胎: 大运行在 .bz-card-luck 中, 按 data-card-index 找对应卡片
       if (!cardEl) {
@@ -1935,8 +1935,8 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
 
 
 // ============ v0.57.0 多选岁运 ============
-// 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序）。
-// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（大运1=现 col-dy 位，大运2=新 col-dy2 列即三垣身宫右侧，流年列复用 col-ln 并右扩，年份升序从左往右）。
+// 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序，只能属于已勾大运）。
+// 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入（col-dy=早大运、col-dy2=晚大运即三垣身宫右侧，显示序按起始年升序与点击序解耦；流年列复用 col-ln 并右扩）。取消/挤出大运时其底下的流年联动清除（_mdlPruneLns）。
 var _multiDL = { on: false, dys: [], lns: [] };
 
 function toggleMultiDL() {
@@ -1962,18 +1962,31 @@ function setMultiDLState(st) {
   _multiDL.lns = (st.lns || []).slice().sort(function(a, b) { return a - b; });
 }
 
+// 流年只能挂在已勾大运底下：大运变更后剪掉失去归属的流年（十年运区间=startYear..+9）
+function _mdlPruneLns(data) {
+  if (!data || !data.daYun) return;
+  var ok = {};
+  _multiDL.dys.forEach(function(di) {
+    var d = data.daYun[di];
+    if (!d) return;
+    for (var yr = d.startYear; yr <= d.startYear + 9; yr++) ok[yr] = true;
+  });
+  _multiDL.lns = _multiDL.lns.filter(function(yr) { return ok[yr]; });
+}
+
 // 多选模式点大运格（仅单人盘；双胞胎/合盘卡点击不响应）
-function multiDLPickDy(i, clickedEl) {
+function multiDLPickDy(container, i, clickedEl) {
   if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
   var pos = _multiDL.dys.indexOf(i);
   if (pos >= 0) _multiDL.dys.splice(pos, 1);
   else { if (_multiDL.dys.length >= 2) _multiDL.dys.shift(); _multiDL.dys.push(i); }
+  _mdlPruneLns(container && container._paipanData);
   if (window.APP && APP.doPaipan) APP.doPaipan();
 }
 
-// 多选模式点流年格（运前流年 di=-1 不参与）
+// 多选模式点流年格（运前流年与未勾选大运底下的流年不参与）
 function multiDLPickLn(container, di, liIdx, clickedEl) {
-  if (di === -1) return;
+  if (di === -1 || _multiDL.dys.indexOf(di) < 0) return;
   if (clickedEl && clickedEl.closest && (clickedEl.closest('.bz-twin-card') || clickedEl.closest('.bz-card-luck'))) return;
   var yr = liunianYearOf(container._paipanData, di, liIdx);
   if (yr === null || yr === undefined) return;
@@ -2063,8 +2076,10 @@ function applyMultiDL(root, data) {
   var curIdx = 0;
   for (var i = daYun.length - 1; i >= 0; i--) { if (daYun[i].startYear <= nowY) { curIdx = i; break; } }
   var pill = _mdlPill(data);
-  var dy1 = daYun[_multiDL.dys.length ? _multiDL.dys[0] : curIdx];
-  var dy2 = _multiDL.dys.length > 1 ? daYun[_multiDL.dys[1]] : null;
+  // 时柱右=早大运、身宫右=晚大运：显示序按起始年升序，与勾选点击序解耦
+  var dysSorted = _multiDL.dys.slice().sort(function(a, b) { return daYun[a].startYear - daYun[b].startYear; });
+  var dy1 = daYun[dysSorted.length ? dysSorted[0] : curIdx];
+  var dy2 = dysSorted.length > 1 ? daYun[dysSorted[1]] : null;
   var pDy1 = pill(dy1.gan, dy1.zhi);
   var pDy2 = dy2 ? pill(dy2.gan, dy2.zhi) : null;
   var pLns = _multiDL.lns.map(function(yr) { var gz = liuNianJZ(yr); var p = pill(gz[0], gz[1]); p._yr = yr; return p; });
