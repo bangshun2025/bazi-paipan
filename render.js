@@ -1417,12 +1417,12 @@ function _refreshFlowInner(root, data, year) {
       var cell = source ? source.cloneNode(true) : document.createElement(row.querySelector('th') ? 'th' : 'td');
       cell.classList.remove('col-ln');
       cell.classList.add(className);
-      if (row.classList.contains('hd')) cell.textContent = row.querySelector('[data-pk="nian"]') || row.textContent.indexOf('年柱') >= 0 ? title : '';
+      if (row.classList.contains('hd')) cell.innerHTML = row.querySelector('[data-pk="nian"]') || row.textContent.indexOf('年柱') >= 0 ? title : '';
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月·' + (selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月');
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日·' + (selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate());
+  appendColumn(selected, 'col-lm', '流月' + dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月'));
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()));
   document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
 }
 

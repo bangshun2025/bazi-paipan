@@ -3808,7 +3808,7 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
-      tests.push(eq('流月：列头带新历月', flowRoot.querySelector('tr.hd .col-lm').textContent, '流月·' + (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
+      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
@@ -3816,7 +3816,7 @@ function captureScreenshot() {
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
       var hdrDate = new Date(Number(dayButton.dataset.flowDay));
-      tests.push(eq('流日：列头带新历日', flowRoot.querySelector('tr.hd .col-ld').textContent, '流日·' + (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
+      tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
