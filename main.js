@@ -3790,6 +3790,8 @@ function captureScreenshot() {
       tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
+      tests.push(eq('流月：按钮为新历起始月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
+      tests.push(eq('流月：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
@@ -3806,12 +3808,15 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
+      tests.push(eq('流月：列头带新历月', flowRoot.querySelector('tr.hd .col-lm').textContent, '流月·' + (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
       var selectedPillar = ALGO.dayPillar(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, selectedDate.getUTCDate());
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
+      var hdrDate = new Date(Number(dayButton.dataset.flowDay));
+      tests.push(eq('流日：列头带新历日', flowRoot.querySelector('tr.hd .col-ld').textContent, '流日·' + (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));

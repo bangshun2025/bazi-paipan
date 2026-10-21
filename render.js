@@ -1383,7 +1383,7 @@ function _refreshFlowInner(root, data, year) {
         var index = columnIndex * perColumn + entryIndex;
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
-        var label = kind === 'month' ? (index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        var label = kind === 'month' ? (item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
         return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
@@ -1421,8 +1421,8 @@ function _refreshFlowInner(root, data, year) {
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月');
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日');
+  appendColumn(selected, 'col-lm', '流月·' + (selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月');
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日·' + (selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate());
   document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
 }
 

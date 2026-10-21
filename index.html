@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.60.2 | 2026-10-19 -->
+<!-- 八字排盘 ·  从真版 v0.60.3 | 2026-10-21 -->
+<!-- v0.60.3: 运流月日新历化 — ①运流区流月按钮由节气月序号(1~12月)改为新历起始月(寅月→2月…丑月→跨年1月)；②运流项流月列头「流月」→「流月·N月」(选中节气月起始的新历月)、流日列头「流日」→「流日·M/D」(新历月/日)；单人/双胞胎/合盘卡全走 refreshFlow 同路径 -->
 <!-- v0.60.2: 十神/宫位面板互斥修复+藏干对应名列对齐 — ①shishen togglePanel 开面板前先关全部 .gz-popover；②gongwei toggleGzPopover 开面板前调 SSH.closePanel() 关全部十神面板（双向互斥，修复先点宫位再点十神时两面板叠加、宫位大面板盖住十神=「点十神出现宫位内容」）；③gongwei 全局委托改逐 popover 判断（原 querySelector 只取 DOM 序第一个 wrapper，会误判内部点击）；④.ssh-cg-g/.ssh-cg-i min-width 2.8em→2.8rem（em 基准随字号 17/11px 不同致逐列错位 8.4px，统一 rem 后 44.8px 等宽同列左缘）。v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
 <!-- v0.53.0: 十神组 — 工具栏「十神」按钮，勾选组在主表插行：天干组名行（主星行后）+ 藏干对应名行（藏气行后），藏气行同步横排化（等宽 span 逐位对齐，太极藏干圈保留）；⚙ 十神设置维护「组→十神对应名」映射（默认军队/社会两组），localStorage 持久化；大运/流年格点选时组行两列同步刷新 -->
@@ -10915,7 +10916,7 @@ function _refreshFlowInner(root, data, year) {
         var index = columnIndex * perColumn + entryIndex;
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
-        var label = kind === 'month' ? (index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        var label = kind === 'month' ? (item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
         return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
@@ -10953,8 +10954,8 @@ function _refreshFlowInner(root, data, year) {
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月');
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日');
+  appendColumn(selected, 'col-lm', '流月·' + (selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月');
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日·' + (selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate());
   document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
 }
 
@@ -17390,6 +17391,8 @@ function captureScreenshot() {
       tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
+      tests.push(eq('流月：按钮为新历起始月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
+      tests.push(eq('流月：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
@@ -17406,12 +17409,15 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
+      tests.push(eq('流月：列头带新历月', flowRoot.querySelector('tr.hd .col-lm').textContent, '流月·' + (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
       var selectedPillar = ALGO.dayPillar(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, selectedDate.getUTCDate());
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
+      var hdrDate = new Date(Number(dayButton.dataset.flowDay));
+      tests.push(eq('流日：列头带新历日', flowRoot.querySelector('tr.hd .col-ld').textContent, '流日·' + (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
