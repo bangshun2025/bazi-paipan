@@ -756,6 +756,7 @@ function liunianYearOf(cd, dyIdx, lnIdx) {
 
 // v0.56.0 运列表头年份小字（大运=该运起始年，流年=当年）
 function dyLnYearHtml(y) { return (y !== null && y !== undefined && y !== '') ? '<span class="dyln-yr">'+y+'</span>' : ''; }
+function gzYearLabel(y) { return y ? CONST.TG[((y - 4) % 10 + 10) % 10] + CONST.DZ[((y - 4) % 12 + 12) % 12] : ''; }
 
 // 把 root 内唯一的 .jieqi-section 整块替换为 buildJieqiHtml(year, lng) 的产物，
 // 并回写 root._jieqiYear / root._jieqiLng。不触碰 luck-section / chart / 事件绑定（节气块纯展示）。
@@ -1251,6 +1252,7 @@ function toggleTwinRec(btn) {
 
 var flowMonthOn = false;
 var flowDayOn = false;
+var flowNewCal = false;
 
 function flowMonths(year) {
   return CONST.MONTH_TERM.map(function(term, index) {
@@ -1263,7 +1265,13 @@ function flowMonths(year) {
 }
 
 function flowControlsHTML() {
-  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label><label><input type="checkbox" data-flow="newcal" onchange="RENDER.setFlowNewCal(this.checked)">新历</label></span>';
+}
+
+function setFlowNewCal(checked) {
+  flowNewCal = checked;
+  document.querySelectorAll('[data-flow="newcal"]').forEach(function(input) { input.checked = checked; });
+  document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
 }
 
 function locateFlowDate(input) {
@@ -1318,7 +1326,7 @@ function setFlowVisible(kind, checked) {
   if (kind === 'month') { flowMonthOn = checked; if (!checked) flowDayOn = false; }
   else { flowDayOn = checked; if (checked) flowMonthOn = true; }
   document.querySelectorAll('[data-flow]').forEach(function(input) {
-    input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn;
+    input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
   });
   document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
 }
@@ -1383,14 +1391,14 @@ function _refreshFlowInner(root, data, year) {
         var index = columnIndex * perColumn + entryIndex;
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
-        var label = kind === 'month' ? (item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        var label = kind === 'month' ? (flowNewCal && item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
         return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
     return '<div class="flow-table-wrap"><table class="luck-table flow-table"><tbody><tr class="luck-row liu-row"><td class="cell rtag">' + title + '</td>' + cells.join('') + '</tr></tbody></table></div>';
   }
-  panel.innerHTML = '<div class="luck-table-label">' + state.year + ' 年 · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
+  panel.innerHTML = '<div class="luck-table-label">' + (flowNewCal ? state.year + ' 年' : gzYearLabel(state.year) + '年') + ' · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
   panel.querySelectorAll('[data-flow-month]').forEach(function(buttonEl) {
     buttonEl.onclick = function() { state.month = Number(buttonEl.dataset.flowMonth); state.day = null; refreshFlow(root, data); };
   });
@@ -1421,9 +1429,11 @@ function _refreshFlowInner(root, data, year) {
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月' + dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月'));
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()));
-  document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
+  appendColumn(selected, 'col-lm', '流月' + (flowNewCal ? dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月') : ''));
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + (flowNewCal ? dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()) : ''));
+  document.querySelectorAll('[data-flow]').forEach(function(input) {
+    input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
+  });
 }
 
 // ===== 转换太极点：点击原局四柱天干/藏干弹窗换十神参照系（仅单盘主表） =====
@@ -3523,7 +3533,7 @@ function cmpSetState(entries) {
     return {
       gan: gan, zhi: zhi,
       rs: taijiStemRs(gan, type) || ((type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
-      cg: cangGanText(zhi, riGan, 1, type),
+      cg: (CANG_GAN[zhi] || []).map(function(c) { return c + shiShen(riGan, c); }).join('·'),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
@@ -3670,6 +3680,7 @@ function cmpSetState(entries) {
     setFlowVisible: setFlowVisible,
     flowMonths: flowMonths,
     flowControlsHTML: flowControlsHTML,
+    setFlowNewCal: setFlowNewCal,
     locateFlowDate: locateFlowDate,
     refreshFlow: refreshFlow,
     applyLevelRows: applyLevelRows,

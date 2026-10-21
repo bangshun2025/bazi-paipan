@@ -669,6 +669,32 @@ function migrateOrphanRecNotes() {
     var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
     try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
   }
+  // 二轮：生日/时辰变更（含农历互转）后旧 key 按 7 字段匹配不上任何档案，改按名字+性别回收；
+  // 双胞胎同生日场景靠名字区分（彭子旭/彭子阳类），重名档案 hits!==1 跳过
+  for (var k2 = 0; k2 < keys.length; k2++) {
+    var key2 = keys[k2];
+    if (key2.indexOf('bz_rec_notes_') !== 0) continue;
+    var rest2 = key2.slice('bz_rec_notes_'.length);
+    var suffix2 = '';
+    if (rest2.indexOf('twin|') === 0) { suffix2 = 'twin|'; rest2 = rest2.slice(5); }
+    var parts2 = rest2.split('|');
+    if (parts2.length !== 7) continue;
+    var hits2 = [];
+    for (var j2 = 0; j2 < archives.length; j2++) {
+      if ((archives[j2].name || '') === parts2[0] && (archives[j2].gender || '') === parts2[1]) hits2.push(archives[j2]);
+    }
+    if (hits2.length !== 1) continue;
+    var nk2 = recNotesKeyFor(hits2[0], suffix2);
+    if (!nk2 || nk2 === key2) continue;
+    var ov3 = null, nv3 = null;
+    try { ov3 = localStorage.getItem(key2); nv3 = localStorage.getItem(nk2); } catch (e) {}
+    if (ov3 == null) continue;
+    if (nv3 != null && nv3 !== '') {
+      if (String(nv3).indexOf(String(ov3)) >= 0) { try { localStorage.removeItem(key2); } catch (e) {} }
+      continue;
+    }
+    try { localStorage.setItem(nk2, ov3); localStorage.removeItem(key2); } catch (e) {}
+  }
 }
 
 // 编辑弹窗 — 历法切换

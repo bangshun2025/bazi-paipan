@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.60.4 | 2026-10-21 -->
-<!-- v0.60.4: 运流项流月/流日列头改两行式（流月\n10月 / 流日\n1/10，复用 dyln-yr 同款小字，与大运/流年表头一致）；appendColumn hd 行 textContent→innerHTML 承载 span；断言同步两行式结构断言 -->
+<!-- 八字排盘 ·  从真版 v0.62.0 | 2026-10-21 -->
+<!-- v0.62.0: 复制盘面藏干纯文本化 — buildAiCopyText 藏干不再复用 cangGanText（HTML span/br），改为 CANG_GAN+shiShen 连写「庚才·壬杀·戊食」顿号分隔；断言+2（T02i 无HTML标签 / T02j 藏干串入文） -->
+<!-- v0.61.0: 流年流月流日新历/农历切换勾选（运流区头部「新历」勾选框，默认农历）：农历=按钮节气月序(1月寅…12月丑)+列头纯流月/流日+面板标签干支年；勾选=按钮新历起始月+列头两行式(dyln-yr)+面板标签公历年；对比盘次条静态勾选框三HTML同步；断言+8条双向 | 修复：孤儿记录扫描二轮按名字+性别回收（时辰/历法变更断链 key），同名双档案不误吞；MIG+5条 -->
 <!-- v0.60.3: 运流月日新历化 — ①运流区流月按钮由节气月序号(1~12月)改为新历起始月(寅月→2月…丑月→跨年1月)；②运流项流月列头「流月」→「流月·N月」(选中节气月起始的新历月)、流日列头「流日」→「流日·M/D」(新历月/日)；单人/双胞胎/合盘卡全走 refreshFlow 同路径 -->
 <!-- v0.60.2: 十神/宫位面板互斥修复+藏干对应名列对齐 — ①shishen togglePanel 开面板前先关全部 .gz-popover；②gongwei toggleGzPopover 开面板前调 SSH.closePanel() 关全部十神面板（双向互斥，修复先点宫位再点十神时两面板叠加、宫位大面板盖住十神=「点十神出现宫位内容」）；③gongwei 全局委托改逐 popover 判断（原 querySelector 只取 DOM 序第一个 wrapper，会误判内部点击）；④.ssh-cg-g/.ssh-cg-i min-width 2.8em→2.8rem（em 基准随字号 17/11px 不同致逐列错位 8.4px，统一 rem 后 44.8px 等宽同列左缘）。v0.60.1: 三垣段表头年份换行修复（tr.hd td .dyln-yr 同款 display:block）。v0.60.0: 多选大运分列布局修订 — ①早大运=主段时柱右 col-dy；②晚大运=三垣段身宫右 col-dy2（复用段尾占位列，不再插在主段）；③流年按十年区间归属跟各自大运列（主段/三垣段各自 col-ln 复用+右扩）；显示序仍按起始年升序与点击序解耦 -->
 <!-- v0.58.0: 十神组四修 — ①十神 popover 改自有 .ssh-popover 类+就近定位（修复多实例 id 冲突致点击弹到宫位区/无响应），点击面板外部自动关闭；②藏干对应行非空层输出（午子卯酉单字支居中，不再被空占位 span 拉左）；③十神组行字号统一 11px（组名/藏干/对应名，不再被主表 17px 覆盖）；④十神行列宽回落（span 3.2em→2.8em），窄窗口大运流年不再右侧出界 -->
@@ -1085,7 +1086,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <button class="btn" onclick="COMPARE.close()" style="margin-left:auto;">关 闭</button>
         <button class="btn" id="btnCmpFocus" onclick="COMPARE.toggleFocus()" title="专注：收起管理工具与名字条，缩放/布局/简分/宫位/名字/五区勾选并入一行">⛶ 专注</button>
       </div>
-      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible('month',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible('day',this.checked)">流月日</label><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
+      <div class="cmp-secbar" id="cmpSecBar"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible('month',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible('day',this.checked)">流月日</label><label><input type="checkbox" data-flow="newcal" onchange="RENDER.setFlowNewCal(this.checked)">新历</label><label><input type="checkbox" data-sec="yunxiang" onchange="RENDER.setSecVisible('yunxiang',this.checked)">运流项</label><label><input type="checkbox" data-sec="cangqi" onchange="RENDER.setSecVisible('cangqi',this.checked)">藏气区</label><label><input type="checkbox" data-sec="sanyuan" checked onchange="RENDER.setSecVisible('sanyuan',this.checked)">三垣区</label><label><input type="checkbox" data-sec="yunliu" onchange="RENDER.setSecVisible('yunliu',this.checked)">运流区</label><label><input type="checkbox" data-sec="jieqi" onchange="RENDER.setSecVisible('jieqi',this.checked)">节气区</label></div>
       <div class="cmp-bar" id="cmpBar"></div>
       <div class="cmp-hl-bar" id="cmpHLBar" style="display:none"></div>
       <div class="record-panel cmp-rec" id="cmpRecPanel">
@@ -5963,6 +5964,32 @@ function migrateOrphanRecNotes() {
     var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
     try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
   }
+  // 二轮：生日/时辰变更（含农历互转）后旧 key 按 7 字段匹配不上任何档案，改按名字+性别回收；
+  // 双胞胎同生日场景靠名字区分（彭子旭/彭子阳类），重名档案 hits!==1 跳过
+  for (var k2 = 0; k2 < keys.length; k2++) {
+    var key2 = keys[k2];
+    if (key2.indexOf('bz_rec_notes_') !== 0) continue;
+    var rest2 = key2.slice('bz_rec_notes_'.length);
+    var suffix2 = '';
+    if (rest2.indexOf('twin|') === 0) { suffix2 = 'twin|'; rest2 = rest2.slice(5); }
+    var parts2 = rest2.split('|');
+    if (parts2.length !== 7) continue;
+    var hits2 = [];
+    for (var j2 = 0; j2 < archives.length; j2++) {
+      if ((archives[j2].name || '') === parts2[0] && (archives[j2].gender || '') === parts2[1]) hits2.push(archives[j2]);
+    }
+    if (hits2.length !== 1) continue;
+    var nk2 = recNotesKeyFor(hits2[0], suffix2);
+    if (!nk2 || nk2 === key2) continue;
+    var ov3 = null, nv3 = null;
+    try { ov3 = localStorage.getItem(key2); nv3 = localStorage.getItem(nk2); } catch (e) {}
+    if (ov3 == null) continue;
+    if (nv3 != null && nv3 !== '') {
+      if (String(nv3).indexOf(String(ov3)) >= 0) { try { localStorage.removeItem(key2); } catch (e) {} }
+      continue;
+    }
+    try { localStorage.setItem(nk2, ov3); localStorage.removeItem(key2); } catch (e) {}
+  }
 }
 
 // 编辑弹窗 — 历法切换
@@ -10290,6 +10317,7 @@ function liunianYearOf(cd, dyIdx, lnIdx) {
 
 // v0.56.0 运列表头年份小字（大运=该运起始年，流年=当年）
 function dyLnYearHtml(y) { return (y !== null && y !== undefined && y !== '') ? '<span class="dyln-yr">'+y+'</span>' : ''; }
+function gzYearLabel(y) { return y ? CONST.TG[((y - 4) % 10 + 10) % 10] + CONST.DZ[((y - 4) % 12 + 12) % 12] : ''; }
 
 // 把 root 内唯一的 .jieqi-section 整块替换为 buildJieqiHtml(year, lng) 的产物，
 // 并回写 root._jieqiYear / root._jieqiLng。不触碰 luck-section / chart / 事件绑定（节气块纯展示）。
@@ -10785,6 +10813,7 @@ function toggleTwinRec(btn) {
 
 var flowMonthOn = false;
 var flowDayOn = false;
+var flowNewCal = false;
 
 function flowMonths(year) {
   return CONST.MONTH_TERM.map(function(term, index) {
@@ -10797,7 +10826,13 @@ function flowMonths(year) {
 }
 
 function flowControlsHTML() {
-  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label></span>';
+  return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label><label><input type="checkbox" data-flow="newcal" onchange="RENDER.setFlowNewCal(this.checked)">新历</label></span>';
+}
+
+function setFlowNewCal(checked) {
+  flowNewCal = checked;
+  document.querySelectorAll('[data-flow="newcal"]').forEach(function(input) { input.checked = checked; });
+  document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
 }
 
 function locateFlowDate(input) {
@@ -10852,7 +10887,7 @@ function setFlowVisible(kind, checked) {
   if (kind === 'month') { flowMonthOn = checked; if (!checked) flowDayOn = false; }
   else { flowDayOn = checked; if (checked) flowMonthOn = true; }
   document.querySelectorAll('[data-flow]').forEach(function(input) {
-    input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn;
+    input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
   });
   document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
 }
@@ -10917,14 +10952,14 @@ function _refreshFlowInner(root, data, year) {
         var index = columnIndex * perColumn + entryIndex;
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
-        var label = kind === 'month' ? (item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        var label = kind === 'month' ? (flowNewCal && item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
         return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
     return '<div class="flow-table-wrap"><table class="luck-table flow-table"><tbody><tr class="luck-row liu-row"><td class="cell rtag">' + title + '</td>' + cells.join('') + '</tr></tbody></table></div>';
   }
-  panel.innerHTML = '<div class="luck-table-label">' + state.year + ' 年 · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
+  panel.innerHTML = '<div class="luck-table-label">' + (flowNewCal ? state.year + ' 年' : gzYearLabel(state.year) + '年') + ' · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
   panel.querySelectorAll('[data-flow-month]').forEach(function(buttonEl) {
     buttonEl.onclick = function() { state.month = Number(buttonEl.dataset.flowMonth); state.day = null; refreshFlow(root, data); };
   });
@@ -10955,9 +10990,11 @@ function _refreshFlowInner(root, data, year) {
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月' + dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月'));
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()));
-  document.querySelectorAll('[data-flow]').forEach(function(input) { input.checked = input.dataset.flow === 'month' ? flowMonthOn : flowDayOn; });
+  appendColumn(selected, 'col-lm', '流月' + (flowNewCal ? dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月') : ''));
+  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + (flowNewCal ? dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()) : ''));
+  document.querySelectorAll('[data-flow]').forEach(function(input) {
+    input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
+  });
 }
 
 // ===== 转换太极点：点击原局四柱天干/藏干弹窗换十神参照系（仅单盘主表） =====
@@ -13057,7 +13094,7 @@ function cmpSetState(entries) {
     return {
       gan: gan, zhi: zhi,
       rs: taijiStemRs(gan, type) || ((type === 'ri' && !getTaiji().active) ? '日主' : shiShen(riGan, gan, false)),
-      cg: cangGanText(zhi, riGan, 1, type),
+      cg: (CANG_GAN[zhi] || []).map(function(c) { return c + shiShen(riGan, c); }).join('·'),
       ny: NAYIN[gan + zhi] || '',
       xy: changSheng(riGan, zhi),
       zz: changSheng(gan, zhi),
@@ -13204,6 +13241,7 @@ function cmpSetState(entries) {
     setFlowVisible: setFlowVisible,
     flowMonths: flowMonths,
     flowControlsHTML: flowControlsHTML,
+    setFlowNewCal: setFlowNewCal,
     locateFlowDate: locateFlowDate,
     refreshFlow: refreshFlow,
     applyLevelRows: applyLevelRows,
@@ -16858,10 +16896,31 @@ function captureScreenshot() {
       A.migrateOrphanRecNotes();
       tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
       tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
+      var ok2 = 'bz_rec_notes_迁测新名|女|1981|9|6|20|0';
+      localStorage.setItem(ok2, '时辰改记W');
+      localStorage.removeItem(nk);
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T06: 时辰变更断链key按名回收', localStorage.getItem(nk), '时辰改记W'));
+      tests.push(eq('MIG T07: 回收后旧key已删', localStorage.getItem(ok2), null));
+      localStorage.setItem(ok2, '另W');
+      localStorage.setItem(nk, '已有V');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T08: 新key已有不同内容不覆盖', localStorage.getItem(ok2), '另W'));
+      tests.push(eq('MIG T09: 新key保持原值', localStorage.getItem(nk), '已有V'));
+      var archList2 = JSON.parse(localStorage.getItem('bz_archives_v2'));
+      var twin1 = Object.assign({}, migArch, { id:'mig-t10a', name:'迁测重名' });
+      var twin2 = Object.assign({}, migArch, { id:'mig-t10b', name:'迁测重名' });
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList2.concat([twin1, twin2])));
+      var ok3 = 'bz_rec_notes_迁测重名|女|1981|9|6|23|0';
+      localStorage.setItem(ok3, '重名R');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T10: 同名双档案不误吞', localStorage.getItem(ok3), '重名R'));
     } finally {
       if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
       localStorage.removeItem(ok);
       localStorage.removeItem(nk);
+      localStorage.removeItem('bz_rec_notes_迁测新名|女|1981|9|6|20|0');
+      localStorage.removeItem('bz_rec_notes_迁测重名|女|1981|9|6|23|0');
     }
   })();
 
@@ -17392,8 +17451,10 @@ function captureScreenshot() {
       tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
-      tests.push(eq('流月：按钮为新历起始月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
-      tests.push(eq('流月：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
+      tests.push(eq('流月：默认农历按钮节气序', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
+      tests.push(eq('流月：默认农历末月节气序', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '12月'));
+      tests.push(eq('流月：默认农历面板标签干支年', flowRoot.querySelector('.luck-table-label').textContent.indexOf('丙午年') === 0, true));
+      tests.push(eq('流月：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
@@ -17410,7 +17471,6 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
-      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
@@ -17418,7 +17478,16 @@ function captureScreenshot() {
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
       var hdrDate = new Date(Number(dayButton.dataset.flowDay));
+      tests.push(eq('流日：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-ld')), '流日|单'));
+      flowRoot.querySelector('[data-flow="newcal"]').click();
+      tests.push(eq('新历：勾选后按钮起始新历月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
+      tests.push(eq('新历：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
+      tests.push(eq('新历：面板标签公历年', flowRoot.querySelector('.luck-table-label').textContent.indexOf(flowRoot._flowState.year + ' 年') === 0, true));
+      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
+      flowRoot.querySelector('[data-flow="newcal"]').click();
+      tests.push(eq('新历：取消后回农历按钮', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
+      tests.push(eq('新历：取消后列头回纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
@@ -17608,6 +17677,9 @@ function captureScreenshot() {
     tests.push(eq(sec + ' T02f: 三垣四槽齐全', ['胎年', '胎元', '命宫', '身宫'].every(function(w) { return txt47.indexOf(w) >= 0; }), true));
     tests.push(eq(sec + ' T02g: 含大运首步干支', txt47.indexOf('【大运】') >= 0 && txt47.indexOf(d47.daYun[0].gan + d47.daYun[0].zhi) >= 0, true));
     tests.push(eq(sec + ' T02h: 含起运与 2026 丙午流年', txt47.indexOf('起运') >= 0 && txt47.indexOf('丙午') >= 0, true));
+    tests.push(eq(sec + ' T02i: 无HTML标签残留', txt47.indexOf('<span') < 0 && txt47.indexOf('<br') < 0, true));
+    var cg47 = (CONST.CANG_GAN[d47.ri.zhi] || []).map(function(c) { return c + A47.shiShen(d47.ri.gan, c); }).join('·');
+    tests.push(eq(sec + ' T02j: 藏干纯文本串入文', txt47.indexOf('藏干 ' + cg47) >= 0, true));
 
     // T03: 隐私——displayName 优先，真名不落文本
     var d3 = A47.paipan('真名不该出现', '男', 1982, 10, 18, 5, 1);

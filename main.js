@@ -3256,10 +3256,31 @@ function captureScreenshot() {
       A.migrateOrphanRecNotes();
       tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
       tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
+      var ok2 = 'bz_rec_notes_迁测新名|女|1981|9|6|20|0';
+      localStorage.setItem(ok2, '时辰改记W');
+      localStorage.removeItem(nk);
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T06: 时辰变更断链key按名回收', localStorage.getItem(nk), '时辰改记W'));
+      tests.push(eq('MIG T07: 回收后旧key已删', localStorage.getItem(ok2), null));
+      localStorage.setItem(ok2, '另W');
+      localStorage.setItem(nk, '已有V');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T08: 新key已有不同内容不覆盖', localStorage.getItem(ok2), '另W'));
+      tests.push(eq('MIG T09: 新key保持原值', localStorage.getItem(nk), '已有V'));
+      var archList2 = JSON.parse(localStorage.getItem('bz_archives_v2'));
+      var twin1 = Object.assign({}, migArch, { id:'mig-t10a', name:'迁测重名' });
+      var twin2 = Object.assign({}, migArch, { id:'mig-t10b', name:'迁测重名' });
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList2.concat([twin1, twin2])));
+      var ok3 = 'bz_rec_notes_迁测重名|女|1981|9|6|23|0';
+      localStorage.setItem(ok3, '重名R');
+      A.migrateOrphanRecNotes();
+      tests.push(eq('MIG T10: 同名双档案不误吞', localStorage.getItem(ok3), '重名R'));
     } finally {
       if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
       localStorage.removeItem(ok);
       localStorage.removeItem(nk);
+      localStorage.removeItem('bz_rec_notes_迁测新名|女|1981|9|6|20|0');
+      localStorage.removeItem('bz_rec_notes_迁测重名|女|1981|9|6|23|0');
     }
   })();
 
@@ -3790,8 +3811,10 @@ function captureScreenshot() {
       tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
-      tests.push(eq('流月：按钮为新历起始月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
-      tests.push(eq('流月：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
+      tests.push(eq('流月：默认农历按钮节气序', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
+      tests.push(eq('流月：默认农历末月节气序', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '12月'));
+      tests.push(eq('流月：默认农历面板标签干支年', flowRoot.querySelector('.luck-table-label').textContent.indexOf('丙午年') === 0, true));
+      tests.push(eq('流月：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
@@ -3808,7 +3831,6 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
-      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
@@ -3816,7 +3838,16 @@ function captureScreenshot() {
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
       var hdrDate = new Date(Number(dayButton.dataset.flowDay));
+      tests.push(eq('流日：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-ld')), '流日|单'));
+      flowRoot.querySelector('[data-flow="newcal"]').click();
+      tests.push(eq('新历：勾选后按钮起始新历月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
+      tests.push(eq('新历：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
+      tests.push(eq('新历：面板标签公历年', flowRoot.querySelector('.luck-table-label').textContent.indexOf(flowRoot._flowState.year + ' 年') === 0, true));
+      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
+      flowRoot.querySelector('[data-flow="newcal"]').click();
+      tests.push(eq('新历：取消后回农历按钮', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
+      tests.push(eq('新历：取消后列头回纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
@@ -4006,6 +4037,9 @@ function captureScreenshot() {
     tests.push(eq(sec + ' T02f: 三垣四槽齐全', ['胎年', '胎元', '命宫', '身宫'].every(function(w) { return txt47.indexOf(w) >= 0; }), true));
     tests.push(eq(sec + ' T02g: 含大运首步干支', txt47.indexOf('【大运】') >= 0 && txt47.indexOf(d47.daYun[0].gan + d47.daYun[0].zhi) >= 0, true));
     tests.push(eq(sec + ' T02h: 含起运与 2026 丙午流年', txt47.indexOf('起运') >= 0 && txt47.indexOf('丙午') >= 0, true));
+    tests.push(eq(sec + ' T02i: 无HTML标签残留', txt47.indexOf('<span') < 0 && txt47.indexOf('<br') < 0, true));
+    var cg47 = (CONST.CANG_GAN[d47.ri.zhi] || []).map(function(c) { return c + A47.shiShen(d47.ri.gan, c); }).join('·');
+    tests.push(eq(sec + ' T02j: 藏干纯文本串入文', txt47.indexOf('藏干 ' + cg47) >= 0, true));
 
     // T03: 隐私——displayName 优先，真名不落文本
     var d3 = A47.paipan('真名不该出现', '男', 1982, 10, 18, 5, 1);
