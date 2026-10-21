@@ -3685,6 +3685,106 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.63.0 多选流月/流日（层级关联：流日∈流月∈流年∈大运） =====
+  (function() {
+    tests.push({ section:'多选流月流日(v0.63.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.multiDLPickLm !== 'function' || typeof R.multiDLPickLd !== 'function') {
+      tests.push(fail('MLM 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    var pd63 = paipan('多选流月流日', '男', 1982, 10, 18, 5, 1);
+    var tst63 = document.createElement('div');
+    tst63.id = 'tst-mlm';
+    tst63.style.display = 'none';
+    document.body.appendChild(tst63);
+    try {
+      R.setMultiDLState({ on: false, dys: [], lns: [] });
+      R.renderChart(pd63, undefined, 'tst-mlm');
+      tst63._paipanData = tst63._paipanData || pd63;
+      var dA63 = 1;
+      var lnA63 = pd63.daYun[dA63].startYear + 1;
+      R.setMultiDLState({ on: true, dys: [dA63], lns: [lnA63] });
+      // 约束1：流月只能挂已勾流年
+      R.multiDLPickLm(tst63, lnA63 + 1, 2);
+      tests.push(eq('MLM: 点未勾流年的月不生效', R.multiDLState().lms.length, 0));
+      R.multiDLPickLm(tst63, lnA63, 2);
+      R.multiDLPickLm(tst63, lnA63, 5);
+      R.multiDLPickLm(tst63, lnA63, 8);
+      tests.push(eq('MLM: 勾3个月收录', JSON.stringify(R.multiDLState().lms), JSON.stringify([{y:lnA63,m:2},{y:lnA63,m:5},{y:lnA63,m:8}])));
+      // 插列：主段 hd = 7 + (流年1复用0) + 月3 + 日0 = 10
+      R.applyMultiDL(tst63, pd63);
+      var hd63 = tst63.querySelector('table.chart tr.hd');
+      tests.push(eq('MLM: 主段hd列数=7+月3', hd63 ? hd63.querySelectorAll('th').length : 0, 10));
+      var lmThs = hd63 ? hd63.querySelectorAll('th.col-lm') : [];
+      tests.push(eq('MLM: 流月列表头数=3', lmThs.length, 3));
+      var lmHeads = Array.prototype.map.call(lmThs, function(e) { return e.textContent; }).join('|');
+      tests.push(eq('MLM: 流月表头含月序3/6/9', /3月/.test(lmHeads) && /6月/.test(lmHeads) && /9月/.test(lmHeads), true));
+      var gz63 = CONST.TG[((lnA63 - 4) % 10 + 10) % 10] + CONST.DZ[((lnA63 - 4) % 12 + 12) % 12];
+      tests.push(eq('MLM: 流月表头含流年归属=' + lnA63, lmHeads.indexOf(String(lnA63)) >= 0 || lmHeads.indexOf(gz63) >= 0, true));
+      var rs63 = tst63.querySelector('tr[data-row-type="dy1"]');
+      var rsTds63 = rs63 ? rs63.querySelectorAll('td') : [];
+      tests.push(eq('MLM: 主星行列数=7+月3', rsTds63.length, 10));
+      var lmGz = R.flowMonths ? R.flowMonths(lnA63)[2] : null;
+      tests.push(eq('MLM: 流月一主星=' + (lmGz ? lmGz.gan : ''), rsTds63[7] ? rsTds63[7].textContent : '', lmGz ? shiShen(pd63.ri.gan, lmGz.gan) : ''));
+      var lmGan63 = tst63.querySelector('tr[data-row-type="ln1"]');
+      var lmGanTds = lmGan63 ? lmGan63.querySelectorAll('td') : [];
+      tests.push(eq('MLM: 流月一干=' + (lmGz ? lmGz.gan : ''), lmGanTds[7] ? lmGanTds[7].textContent : '', lmGz ? lmGz.gan : ''));
+      // 约束2：流日只能挂已勾流月
+      var lm2 = R.flowMonths(lnA63)[2];
+      var dOk63 = lm2 && lm2.start ? lm2.start.getTime() + 3 * 86400000 : 0;
+      var dBadM = 3;
+      R.multiDLPickLd(tst63, lnA63, dBadM, dOk63);
+      tests.push(eq('MLM: 点未勾流月的日不生效', R.multiDLState().lds.length, 0));
+      R.multiDLPickLd(tst63, lnA63, 2, dOk63);
+      tests.push(eq('MLM: 勾流日收录', R.multiDLState().lds.length, 1));
+      R.applyMultiDL(tst63, pd63);
+      hd63 = tst63.querySelector('table.chart tr.hd');
+      tests.push(eq('MLM: 加流日后主段hd列数=11', hd63 ? hd63.querySelectorAll('th').length : 0, 11));
+      var ldTh = hd63 ? hd63.querySelector('th.col-ld') : null;
+      tests.push(eq('MLM: 流日列表头存在含日期', ldTh ? /流日/.test(ldTh.textContent) && /\//.test(ldTh.textContent) : false, true));
+      var sep63 = tst63.querySelector('tr.sanyuan-sep td');
+      tests.push(eq('MLM: 三垣分隔行 colspan=7+月3+日1', sep63 ? sep63.getAttribute('colspan') : '', '11'));
+      // 约束3：取消流月联动清其流日
+      R.multiDLPickLm(tst63, lnA63, 2);
+      tests.push(eq('MLM: 取消流月后lms减1', R.multiDLState().lms.length, 2));
+      tests.push(eq('MLM: 取消流月其流日被清', R.multiDLState().lds.length, 0));
+      // 约束4：取消流年联动清其流月（multiDLPickLn 级联）
+      R.multiDLPickLm(tst63, lnA63, 4);
+      var lnIdx63 = -1;
+      for (var q63 = 0; q63 < 10; q63++) { if (R.liunianYearOf(pd63, dA63, q63) === lnA63) { lnIdx63 = q63; break; } }
+      R.multiDLPickLn(tst63, dA63, lnIdx63, null);
+      var stLn63 = R.multiDLState();
+      tests.push(eq('MLM: 取消流年后其流月被清', stLn63.lms.length, 0));
+      tests.push(eq('MLM: 级联后lds同步清空', stLn63.lds.length, 0));
+      // 上限：流月≤4 挤最旧
+      R.setMultiDLState({ on: true, dys: [dA63], lns: [lnA63] });
+      for (var mi63 = 0; mi63 < 6; mi63++) R.multiDLPickLm(tst63, lnA63, mi63);
+      var cap63 = R.multiDLState().lms;
+      tests.push(eq('MLM: 流月上限=4', cap63.length, 4));
+      tests.push(eq('MLM: 挤掉最旧(月0/1不留给5个时)', cap63[0].m, 2));
+      // 上限：流日≤4
+      var lm0 = R.flowMonths(lnA63)[0];
+      R.multiDLPickLm(tst63, lnA63, 0);
+      for (var dj63 = 0; dj63 < 6; dj63++) R.multiDLPickLd(tst63, lnA63, 0, lm0.start.getTime() + dj63 * 86400000);
+      tests.push(eq('MLM: 流日上限=4', R.multiDLState().lds.length, 4));
+      // 关闭全清（toggle 为纯翻转，先置 on 再关）
+      R.setMultiDLState({ on: true, dys: [dA63], lns: [lnA63], lms: [{y:lnA63,m:1}], lds: [{y:lnA63,m:1,d:1}] });
+      R.toggleMultiDL();
+      var off63 = R.multiDLState();
+      tests.push(eq('MLM: 关闭多选全清', off63.on + '/' + off63.lns.length + '/' + off63.lms.length + '/' + off63.lds.length, 'false/0/0/0'));
+      // 关闭恢复：重渲染回 7 列
+      R.setMultiDLState({ on: false, dys: [], lns: [] });
+      R.renderChart(pd63, undefined, 'tst-mlm');
+      var hdOff63 = tst63.querySelector('table.chart tr.hd');
+      tests.push(eq('MLM: 关闭后恢复7列', hdOff63 ? hdOff63.querySelectorAll('th').length : 0, 7));
+    } finally {
+      R.setMultiDLState({ on: false, dys: [], lns: [] });
+      if (tst63.parentNode) tst63.parentNode.removeChild(tst63);
+      tests.push(eq('MLM 现场还原: 测试容器已移除', !document.getElementById('tst-mlm'), true));
+    }
+  })();
+
   // ===== v0.49.0 流月/流月日勾选条对齐（tabs 行 stretch 环境下垂直居中） =====
   (function() {
     tests.push({ section:'双胞胎流月日勾选条对齐(v0.49.0)' });

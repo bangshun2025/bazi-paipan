@@ -4,6 +4,24 @@
 
 ---
 
+## v0.63.0（2026-10-21）新功能：多选流月 + 多选流日
+
+**需求**：参照多选岁运（v0.57.0-0.60.x）设计多选流月、多选流日，并修复大运→流年→流月→流日四层归属与联动。
+
+**实现**（render.js）：
+- 面板多选：流月面板月格、流日面板日格可多选（`multiDLPickLm`/`multiDLPickLd`，上限 `MDL_LM_MAX=4`/`MDL_LD_MAX=4`），只能挂已勾流年/已勾流月，取消上层联动清下层（`_mdlPruneLds`）；显示序升序（`_mdlSortLms`/`_mdlSortLds`）与勾选序解耦
+- 主表插列：`applyMultiDL` 在流年列右侧插 `col-lm`/`col-ld` 列，hd 表头「流月·己巳·1月」两行式文案（`lmHeadLabel`/`ldHeadLabel`），多选开启时清掉单选插列
+- 状态挂载：`setMultiDLState`/`multiDLState` 支持 `lms`/`lds`；`syncMultiDLBtn` 同步按钮态
+
+**修复**（本版抓到的三个集成 bug）：
+1. `refreshFlow` 无条件 `querySelectorAll('.col-lm,.col-ld').forEach(remove)` 把 `applyMultiDL` 刚插的列删光——断言环境（隐藏容器无 `.luck-section`）refreshFlow 早退，掩盖此 bug；改为 `_multiDL.on` 守卫（多选时表列归 applyMultiDL 管）
+2. `multiDLPickLm`/`multiDLPickLd` 内 `APP.doPaipan()` 渲染会清 `container._flowState`，面板年跳回当前年，月格选中态丢失、后续日格点击全被「未勾流月」拒掉——doPaipan 之后恢复各面板 `_flowState = {year, month, day}` 并 `refreshFlow`（与 v0.63 `multiDLPickLn` 联动修复同构）
+3. hd 流月/流日表头文案 `dyLnYearHtml(lmHeadLabel(...))` 双重包裹，去掉外层
+
+**测试**：MLM 断言 +24 条（收录/上限/升序/级联/关闭全清/恢复7列）；真实页面 UI 实测 14 条全绿（点月格 lms+col-lm、点日格 lds+col-ld、级联取消、关闭还原）；CDP 回归 1474 断言 2 败均为历史已知环境性（RECFL F01 / T02 新 profile 无档案名），MLM 24 全过；check-release.sh 六道全绿，index≡standalone md5 一致。
+
+---
+
 ## v0.62.0（2026-10-21）修复：复制盘面藏干纯文本化（去 HTML 标签）
 
 **需求**：复制盘面粘贴出来的文本藏干段夹杂 `<span class="metal">庚</span> 才<br>` 等 HTML 代码，要求修正易读。

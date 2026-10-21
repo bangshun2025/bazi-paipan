@@ -1367,7 +1367,7 @@ function _refreshFlowInner(root, data, year) {
   panel._flowRoot = root;
   panel._flowData = data;
   panel.hidden = !flowMonthOn;
-  table.querySelectorAll('.col-lm,.col-ld').forEach(function(cell) { cell.remove(); });
+  if (!_multiDL.on) table.querySelectorAll('.col-lm,.col-ld').forEach(function(cell) { cell.remove(); });
   if (!flowMonthOn) { panel.innerHTML = ''; return; }
   var months = flowMonths(state.year);
   var selected = months[state.month];
@@ -1391,19 +1391,32 @@ function _refreshFlowInner(root, data, year) {
         var index = columnIndex * perColumn + entryIndex;
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
+        var picked = kind === 'month' ? _mdlHasLm(state.year, index) : _mdlHasLd(state.year, state.month, item.ms);
         var label = kind === 'month' ? (flowNewCal && item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
-        return '<button type="button" class="li' + (active ? ' cur' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
+        return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
     return '<div class="flow-table-wrap"><table class="luck-table flow-table"><tbody><tr class="luck-row liu-row"><td class="cell rtag">' + title + '</td>' + cells.join('') + '</tr></tbody></table></div>';
   }
-  panel.innerHTML = '<div class="luck-table-label">' + (flowNewCal ? state.year + ' 年' : gzYearLabel(state.year) + '年') + ' · 十二节气月</div>' + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
+  panel.innerHTML = '<div class="luck-table-label">' + (flowNewCal ? state.year + ' 年' : gzYearLabel(state.year) + '年') + ' · 十二节气月</div>' + (_multiDL.on ? '<div class="flow-msel-hint">多选模式：先在运表勾大运/流年，再勾流月（≤' + MDL_LM_MAX + '）与流日（≤' + MDL_LD_MAX + '）；未勾流年的月不响应，取消上层联动清下层</div>' : '') + flowTable(months, 'month', '流月') + (flowDayOn ? '<div class="luck-table-label flow-day-label">' + selected.gan + selected.zhi + '月 · 流日</div>' + flowTable(days, 'day', '流日') + '<div class="flow-note">' + (days.length ? '交节日同时列入相邻两月，以交节时刻为界。' : '该年份节气数据超出范围，无法展开流日。') + '</div>' : '');
   panel.querySelectorAll('[data-flow-month]').forEach(function(buttonEl) {
-    buttonEl.onclick = function() { state.month = Number(buttonEl.dataset.flowMonth); state.day = null; refreshFlow(root, data); };
+    var mIdx = Number(buttonEl.dataset.flowMonth);
+    buttonEl.onclick = function() {
+      if (_multiDL.on) {
+        state.month = mIdx; state.day = null;
+        multiDLPickLm(root, state.year, mIdx);
+        return;
+      }
+      state.month = mIdx; state.day = null; refreshFlow(root, data);
+    };
   });
   panel.querySelectorAll('[data-flow-day]').forEach(function(buttonEl) {
-    buttonEl.onclick = function() { state.day = Number(buttonEl.dataset.flowDay); refreshFlow(root, data); };
+    var dMs = Number(buttonEl.dataset.flowDay);
+    buttonEl.onclick = function() {
+      if (_multiDL.on) { multiDLPickLd(root, state.year, state.month, dMs); return; }
+      state.day = dMs; refreshFlow(root, data);
+    };
   });
   function appendColumn(pillar, className, title) {
     var gan = pillar.gan, zhi = pillar.zhi;
@@ -1429,8 +1442,11 @@ function _refreshFlowInner(root, data, year) {
       row.appendChild(cell);
     });
   }
-  appendColumn(selected, 'col-lm', '流月' + (flowNewCal ? dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月') : ''));
-  if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + (flowNewCal ? dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()) : ''));
+  // v0.63.0 多选模式下主表流月/流日列由 applyMultiDL 统一插（此处单选列会被其清除，直接跳过省一次重复插）
+  if (!_multiDL.on) {
+    appendColumn(selected, 'col-lm', '流月' + (flowNewCal ? dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月') : ''));
+    if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + (flowNewCal ? dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()) : ''));
+  }
   document.querySelectorAll('[data-flow]').forEach(function(input) {
     input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
   });
@@ -1947,11 +1963,11 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
 // ============ v0.57.0 多选岁运 ============
 // 状态：on 开关；dys 已勾大运索引（≤2，点击序，超出挤掉最早）；lns 已勾流年年份（升序，只能属于已勾大运）。
 // 主表插列由 applyMultiDL 在 renderChart 尾部做 DOM 注入：早大运=主段时柱右 col-dy，晚大运=三垣段身宫右 col-dy2（复用占位列），流年按归属跟各自大运（col-ln 复用+右扩）；显示序按起始年升序与点击序解耦。取消/挤出大运时其底下的流年联动清除（_mdlPruneLns）。
-var _multiDL = { on: false, dys: [], lns: [] };
+var _multiDL = { on: false, dys: [], lns: [], lms: [], lds: [] };
 
 function toggleMultiDL() {
   _multiDL.on = !_multiDL.on;
-  if (!_multiDL.on) { _multiDL.dys = []; _multiDL.lns = []; }
+  if (!_multiDL.on) { _multiDL.dys = []; _multiDL.lns = []; _multiDL.lms = []; _multiDL.lds = []; }
   syncMultiDLBtn();
   if (window.APP && APP.doPaipan) APP.doPaipan();
   return _multiDL.on;
@@ -1963,16 +1979,44 @@ function syncMultiDLBtn() {
 }
 
 function multiDLState() {
-  return { on: _multiDL.on, dys: _multiDL.dys.slice(), lns: _multiDL.lns.slice() };
+  return { on: _multiDL.on, dys: _multiDL.dys.slice(), lns: _multiDL.lns.slice(), lms: _multiDL.lms.map(function(x) { return { y: x.y, m: x.m }; }), lds: _multiDL.lds.map(function(x) { return { y: x.y, m: x.m, d: x.d }; }) };
 }
 
 function setMultiDLState(st) {
   _multiDL.on = !!st.on;
   _multiDL.dys = (st.dys || []).slice();
   _multiDL.lns = (st.lns || []).slice().sort(function(a, b) { return a - b; });
+  _multiDL.lms = (st.lms || []).slice();
+  _multiDL.lds = (st.lds || []).slice();
+  _mdlSortLms();
+  _mdlSortLds();
 }
 
-// 流年只能挂在已勾大运底下：大运变更后剪掉失去归属的流年（十年运区间=startYear..+9）
+function _mdlHasLm(y, m) {
+  return _multiDL.lms.some(function(x) { return x.y === y && x.m === m; });
+}
+
+function _mdlHasLd(y, m, d) {
+  return _multiDL.lds.some(function(x) { return x.y === y && x.m === m && x.d === d; });
+}
+
+function _mdlSortLms() {
+  _multiDL.lms.sort(function(a, b) { return a.y - b.y || a.m - b.m; });
+}
+
+function _mdlSortLds() {
+  _multiDL.lds.sort(function(a, b) { return a.y - b.y || a.m - b.m || a.d - b.d; });
+}
+
+// 流日只能挂在已勾流月底下：流月变更后剪掉失去归属的流日
+function _mdlPruneLds() {
+  _multiDL.lds = _multiDL.lds.filter(function(x) { return _mdlHasLm(x.y, x.m); });
+}
+
+// 流月上限（超出挤掉年份/月份最旧的）
+var MDL_LM_MAX = 4, MDL_LD_MAX = 4;
+
+// 流年只能挂在已勾大运底下：大运变更后剪掉失去归属的流年（十年运区间=startYear..+9）；流月/流日级联剪
 function _mdlPruneLns(data) {
   if (!data || !data.daYun) return;
   var ok = {};
@@ -1982,6 +2026,8 @@ function _mdlPruneLns(data) {
     for (var yr = d.startYear; yr <= d.startYear + 9; yr++) ok[yr] = true;
   });
   _multiDL.lns = _multiDL.lns.filter(function(yr) { return ok[yr]; });
+  _multiDL.lms = _multiDL.lms.filter(function(x) { return _multiDL.lns.indexOf(x.y) >= 0; });
+  _mdlPruneLds();
 }
 
 // 多选模式点大运格（仅单人盘；双胞胎/合盘卡点击不响应）
@@ -2002,8 +2048,59 @@ function multiDLPickLn(container, di, liIdx, clickedEl) {
   if (yr === null || yr === undefined) return;
   var pos = _multiDL.lns.indexOf(yr);
   if (pos >= 0) _multiDL.lns.splice(pos, 1);
-  else { _multiDL.lns.push(yr); _multiDL.lns.sort(function(a, b) { return a - b; }); }
+  else _multiDL.lns.push(yr);
+  _multiDL.lns.sort(function(a, b) { return a - b; });
+  _multiDL.lms = _multiDL.lms.filter(function(x) { return _multiDL.lns.indexOf(x.y) >= 0; });
+  _mdlPruneLds();
   if (window.APP && APP.doPaipan) APP.doPaipan();
+  if (pos < 0) {
+    // 多选模式下点流年后面板联动切年（必须在 doPaipan 之后设，渲染会清 _flowState），否则后续点月全被「未勾流年」约束拒掉
+    document.querySelectorAll('.flow-panel').forEach(function(panel) {
+      var root = panel._flowRoot;
+      if (root) { root._flowState = { year: yr, month: 0, day: null }; refreshFlow(root, panel._flowData); }
+    });
+  }
+}
+
+// 多选模式勾流月（面板月格）：只能挂已勾流年，取消时联动清其流日；返回是否发生了勾选变更
+function multiDLPickLm(container, y, m) {
+  if (!_multiDL.on || _multiDL.lns.indexOf(y) < 0) return false;
+  var pos = -1;
+  for (var i = 0; i < _multiDL.lms.length; i++) {
+    if (_multiDL.lms[i].y === y && _multiDL.lms[i].m === m) { pos = i; break; }
+  }
+  if (pos >= 0) { _multiDL.lms.splice(pos, 1); _mdlPruneLds(); }
+  else { if (_multiDL.lms.length >= MDL_LM_MAX) _multiDL.lms.shift(); _multiDL.lms.push({ y: y, m: m }); }
+  _mdlSortLms();
+  if (window.APP && APP.doPaipan) {
+    APP.doPaipan();
+    // doPaipan 渲染会清 _flowState，面板年必须在其后恢复，否则月格选中态丢失
+    document.querySelectorAll('.flow-panel').forEach(function(panel) {
+      var root = panel._flowRoot;
+      if (root) { root._flowState = { year: y, month: m, day: null }; refreshFlow(root, panel._flowData); }
+    });
+  }
+  return true;
+}
+
+// 多选模式勾流日（面板日格）：只能挂已勾流月
+function multiDLPickLd(container, y, m, d) {
+  if (!_multiDL.on || !_mdlHasLm(y, m)) return false;
+  var pos = -1;
+  for (var i = 0; i < _multiDL.lds.length; i++) {
+    if (_multiDL.lds[i].y === y && _multiDL.lds[i].m === m && _multiDL.lds[i].d === d) { pos = i; break; }
+  }
+  if (pos >= 0) _multiDL.lds.splice(pos, 1);
+  else { if (_multiDL.lds.length >= MDL_LD_MAX) _multiDL.lds.shift(); _multiDL.lds.push({ y: y, m: m, d: d }); }
+  _mdlSortLds();
+  if (window.APP && APP.doPaipan) {
+    APP.doPaipan();
+    document.querySelectorAll('.flow-panel').forEach(function(panel) {
+      var root = panel._flowRoot;
+      if (root) { root._flowState = { year: y, month: m, day: d }; refreshFlow(root, panel._flowData); }
+    });
+  }
+  return true;
 }
 
 function _mdlPill(data) {
@@ -2082,12 +2179,14 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   else cell.innerHTML = '';
 }
 
-// 渲染后 DOM 插列：仅当多选开启且有勾选。原 col-ln 列复用为第一个流年列。
+// 渲染后 DOM 插列：仅当多选开启且有勾选。原 col-ln 列复用为第一个流年列；v0.63.0 流月/流日列挂主段流年列右侧（col-lm/col-ld），多选模式下清掉单选插列。
 function applyMultiDL(root, data) {
   syncMultiDLBtn();
   var table = root.querySelector ? root.querySelector('table.chart') : null;
   if (!table || !data || !data.daYun || !data.daYun.length) return;
-  if (!_multiDL.on || (!_multiDL.dys.length && !_multiDL.lns.length)) return;
+  if (!_multiDL.on) return;
+  table.querySelectorAll('.col-lm,.col-ld').forEach(function(cell) { cell.remove(); });
+  if (!_multiDL.dys.length && !_multiDL.lns.length && !_multiDL.lms.length && !_multiDL.lds.length) return;
   var daYun = data.daYun;
   var nowY = new Date().getFullYear();
   var curIdx = 0;
@@ -2105,18 +2204,32 @@ function applyMultiDL(root, data) {
     if (dy2 && p._yr >= dy2.startYear && p._yr <= dy2.startYear + 9) lns2.push(p);
     else lns1.push(p);
   });
+  // v0.63.0 流月/流日列：挂主段流年列右侧，显示序升序与勾选序解耦
+  var pLms = _multiDL.lms.map(function(x) {
+    var mo = (flowMonths(x.y) || [])[x.m];
+    if (!mo) return null;
+    var p = pill(mo.gan, mo.zhi); p._lm = x; return p;
+  }).filter(function(p) { return !!p; });
+  var pLds = _multiDL.lds.map(function(x) {
+    var dt = new Date(x.d);
+    var pl = ALGO.dayPillar(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+    var p = pill(pl.gan, pl.zhi); p._ld = x; return p;
+  });
+  function lmHeadLabel(x) { return (flowNewCal ? x.y + '年' : gzYearLabel(x.y)) + '·' + (x.m + 1) + '月'; }
+  function ldHeadLabel(x) { var dt = new Date(x.d); return (flowNewCal ? x.y + '年' : gzYearLabel(x.y)) + '·' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate(); }
   var refs = _zuoRefs(data);
   var sshCg = sshSelectedGroups().length > 0;
   var riGan = data.ri.gan;
   var nMain = Math.max(0, lns1.length - 1);
   var nSy = Math.max(0, lns2.length - 1);
+  var nLm = pLms.length, nLd = pLds.length;
 
   var trs = table.querySelectorAll('tr');
   for (var r = 0; r < trs.length; r++) {
     var tr = trs[r];
     if (tr.classList.contains('sanyuan-sep')) {
       var c0 = tr.querySelector('td');
-      if (c0) c0.setAttribute('colspan', 7 + nMain + nSy);
+      if (c0) c0.setAttribute('colspan', 7 + nMain + nSy + nLm + nLd);
       continue;
     }
     var isHd = tr.classList.contains('hd');
@@ -2174,6 +2287,20 @@ function applyMultiDL(root, data) {
             ref = thn;
           }
         }
+        for (var mi = 0; mi < nLm; mi++) {
+          var thm = document.createElement(cellTag);
+          thm.className = 'col-lm';
+          thm.innerHTML = '流月' + lmHeadLabel(pLms[mi]._lm);
+          ref.insertAdjacentElement('afterend', thm);
+          ref = thm;
+        }
+        for (var di2 = 0; di2 < nLd; di2++) {
+          var thd = document.createElement(cellTag);
+          thd.className = 'col-ld';
+          thd.innerHTML = '流日' + ldHeadLabel(pLds[di2]._ld);
+          ref.insertAdjacentElement('afterend', thd);
+          ref = thd;
+        }
       } else {
         _mdlFillCell(dyCell, tr, pDy1, true, false, refs, sshCg, riGan);
         if (lns1.length) {
@@ -2185,6 +2312,23 @@ function applyMultiDL(root, data) {
             _mdlFillCell(tdn, tr, lns1[lj], false, false, refs, sshCg, riGan);
             ref2 = tdn;
           }
+        }
+        var lmRef = lns1.length ? ref2 : lnCell;
+        for (var mj = 0; mj < nLm; mj++) {
+          var tdm = document.createElement('td');
+          lmRef.insertAdjacentElement('afterend', tdm);
+          _mdlFillCell(tdm, tr, pLms[mj], false, false, refs, sshCg, riGan);
+          tdm.classList.remove('col-ln');
+          tdm.classList.add('col-lm');
+          lmRef = tdm;
+        }
+        for (var dj = 0; dj < nLd; dj++) {
+          var tdd = document.createElement('td');
+          lmRef.insertAdjacentElement('afterend', tdd);
+          _mdlFillCell(tdd, tr, pLds[dj], false, false, refs, sshCg, riGan);
+          tdd.classList.remove('col-ln');
+          tdd.classList.add('col-ld');
+          lmRef = tdd;
         }
       }
     }
@@ -3707,6 +3851,8 @@ function cmpSetState(entries) {
     setMultiDLState: setMultiDLState,
     multiDLPickDy: multiDLPickDy,
     multiDLPickLn: multiDLPickLn,
+    multiDLPickLm: multiDLPickLm,
+    multiDLPickLd: multiDLPickLd,
     applyMultiDL: applyMultiDL,
     renderCmpTrack: renderCmpTrack,
     getCmpTaiji: getCmpTaiji,
