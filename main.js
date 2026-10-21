@@ -3722,6 +3722,7 @@ function captureScreenshot() {
       tests.push(eq('MLM: 流月表头含月序3/6/9', /3月/.test(lmHeads) && /6月/.test(lmHeads) && /9月/.test(lmHeads), true));
       var gz63 = CONST.TG[((lnA63 - 4) % 10 + 10) % 10] + CONST.DZ[((lnA63 - 4) % 12 + 12) % 12];
       tests.push(eq('MLM: 流月表头含流年归属=' + lnA63, lmHeads.indexOf(String(lnA63)) >= 0 || lmHeads.indexOf(gz63) >= 0, true));
+      tests.push(eq('MLM: 流月表头两行式(dyln-yr)', Array.prototype.every.call(lmThs, function(e) { return !!e.querySelector('.dyln-yr'); }), true));
       var rs63 = tst63.querySelector('tr[data-row-type="dy1"]');
       var rsTds63 = rs63 ? rs63.querySelectorAll('td') : [];
       tests.push(eq('MLM: 主星行列数=7+月3', rsTds63.length, 10));
@@ -3743,6 +3744,7 @@ function captureScreenshot() {
       tests.push(eq('MLM: 加流日后主段hd列数=11', hd63 ? hd63.querySelectorAll('th').length : 0, 11));
       var ldTh = hd63 ? hd63.querySelector('th.col-ld') : null;
       tests.push(eq('MLM: 流日列表头存在含日期', ldTh ? /流日/.test(ldTh.textContent) && /\//.test(ldTh.textContent) : false, true));
+      tests.push(eq('MLM: 流日列表头两行式(dyln-yr)', ldTh ? !!ldTh.querySelector('.dyln-yr') : false, true));
       var sep63 = tst63.querySelector('tr.sanyuan-sep td');
       tests.push(eq('MLM: 三垣分隔行 colspan=7+月3+日1', sep63 ? sep63.getAttribute('colspan') : '', '11'));
       // 约束3：取消流月联动清其流日

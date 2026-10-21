@@ -2290,14 +2290,14 @@ function applyMultiDL(root, data) {
         for (var mi = 0; mi < nLm; mi++) {
           var thm = document.createElement(cellTag);
           thm.className = 'col-lm';
-          thm.innerHTML = '流月' + lmHeadLabel(pLms[mi]._lm);
+          thm.innerHTML = '流月' + dyLnYearHtml(lmHeadLabel(pLms[mi]._lm));
           ref.insertAdjacentElement('afterend', thm);
           ref = thm;
         }
         for (var di2 = 0; di2 < nLd; di2++) {
           var thd = document.createElement(cellTag);
           thd.className = 'col-ld';
-          thd.innerHTML = '流日' + ldHeadLabel(pLds[di2]._ld);
+          thd.innerHTML = '流日' + dyLnYearHtml(ldHeadLabel(pLds[di2]._ld));
           ref.insertAdjacentElement('afterend', thd);
           ref = thd;
         }

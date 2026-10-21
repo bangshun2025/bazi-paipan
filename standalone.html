@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.63.0 | 2026-10-21 -->
+<!-- 八字排盘 ·  从真版 v0.63.1 | 2026-10-21 -->
+<!-- v0.63.1: 修复多选流月/流日列头一行式回归：hd 表头恢复 dyLnYearHtml(lmHeadLabel/ldHeadLabel) 两行式包裹，与大运/流年列头同构（v0.63.0 把双重包裹误当 bug 剥掉所致）；断言+2（流月/流日列表头 dyln-yr 两行式） -->
 <!-- v0.63.0: 多选流月+多选流日（参照多选岁运四层归属）：流月面板月格/流日面板日格可多选（≤4/≤4，显示序升序与勾选序解耦），只能挂已勾流年/流月，取消上层联动清下层；主表插 col-lm/col-ld 列（挂流年列右侧，hd 流月·己巳·1月两行式文案）| 修复：①refreshFlow 无条件清 col-lm/col-ld 把 applyMultiDL 插列删光（多选时改 _multiDL.on 守卫，断言环境无 luck-section 早退掩盖此 bug）；②multiDLPickLm/Ld 的 doPaipan 清 _flowState 致面板年跳回当前年、选中态丢失（doPaipan 后恢复面板 state）；③hd 流月/流日文案 dyLnYearHtml 双重包裹 | 断言 MLM +24 条 + 流月/流日面板既有断言 -->
 <!-- v0.61.0: 流年流月流日新历/农历切换勾选（运流区头部「新历」勾选框，默认农历）：农历=按钮节气月序(1月寅…12月丑)+列头纯流月/流日+面板标签干支年；勾选=按钮新历起始月+列头两行式(dyln-yr)+面板标签公历年；对比盘次条静态勾选框三HTML同步；断言+8条双向 | 修复：孤儿记录扫描二轮按名字+性别回收（时辰/历法变更断链 key），同名双档案不误吞；MIG+5条 -->
 <!-- v0.60.3: 运流月日新历化 — ①运流区流月按钮由节气月序号(1~12月)改为新历起始月(寅月→2月…丑月→跨年1月)；②运流项流月列头「流月」→「流月·N月」(选中节气月起始的新历月)、流日列头「流日」→「流日·M/D」(新历月/日)；单人/双胞胎/合盘卡全走 refreshFlow 同路径 -->
@@ -11853,14 +11854,14 @@ function applyMultiDL(root, data) {
         for (var mi = 0; mi < nLm; mi++) {
           var thm = document.createElement(cellTag);
           thm.className = 'col-lm';
-          thm.innerHTML = '流月' + lmHeadLabel(pLms[mi]._lm);
+          thm.innerHTML = '流月' + dyLnYearHtml(lmHeadLabel(pLms[mi]._lm));
           ref.insertAdjacentElement('afterend', thm);
           ref = thm;
         }
         for (var di2 = 0; di2 < nLd; di2++) {
           var thd = document.createElement(cellTag);
           thd.className = 'col-ld';
-          thd.innerHTML = '流日' + ldHeadLabel(pLds[di2]._ld);
+          thd.innerHTML = '流日' + dyLnYearHtml(ldHeadLabel(pLds[di2]._ld));
           ref.insertAdjacentElement('afterend', thd);
           ref = thd;
         }
@@ -17510,6 +17511,7 @@ function captureScreenshot() {
       tests.push(eq('MLM: 流月表头含月序3/6/9', /3月/.test(lmHeads) && /6月/.test(lmHeads) && /9月/.test(lmHeads), true));
       var gz63 = CONST.TG[((lnA63 - 4) % 10 + 10) % 10] + CONST.DZ[((lnA63 - 4) % 12 + 12) % 12];
       tests.push(eq('MLM: 流月表头含流年归属=' + lnA63, lmHeads.indexOf(String(lnA63)) >= 0 || lmHeads.indexOf(gz63) >= 0, true));
+      tests.push(eq('MLM: 流月表头两行式(dyln-yr)', Array.prototype.every.call(lmThs, function(e) { return !!e.querySelector('.dyln-yr'); }), true));
       var rs63 = tst63.querySelector('tr[data-row-type="dy1"]');
       var rsTds63 = rs63 ? rs63.querySelectorAll('td') : [];
       tests.push(eq('MLM: 主星行列数=7+月3', rsTds63.length, 10));
@@ -17531,6 +17533,7 @@ function captureScreenshot() {
       tests.push(eq('MLM: 加流日后主段hd列数=11', hd63 ? hd63.querySelectorAll('th').length : 0, 11));
       var ldTh = hd63 ? hd63.querySelector('th.col-ld') : null;
       tests.push(eq('MLM: 流日列表头存在含日期', ldTh ? /流日/.test(ldTh.textContent) && /\//.test(ldTh.textContent) : false, true));
+      tests.push(eq('MLM: 流日列表头两行式(dyln-yr)', ldTh ? !!ldTh.querySelector('.dyln-yr') : false, true));
       var sep63 = tst63.querySelector('tr.sanyuan-sep td');
       tests.push(eq('MLM: 三垣分隔行 colspan=7+月3+日1', sep63 ? sep63.getAttribute('colspan') : '', '11'));
       // 约束3：取消流月联动清其流日
