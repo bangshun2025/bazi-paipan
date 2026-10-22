@@ -4471,6 +4471,24 @@ function captureScreenshot() {
     var panelHtml = S.renderPanel();
     tests.push(eq(sec + ' T23: 十神popover自有类名且非宫位类', (panelHtml.indexOf('class="ssh-popover"') >= 0 && panelHtml.indexOf('class="gz-popover"') < 0) ? 'Y' : 'N', 'Y'));
 
+    // v0.63.2：宫位网格重建曾扫全局 .gz-cb-grid，把十神网格覆盖成宫位项（点十神出现宫位界面）
+    var GWm = window.GONGWEI;
+    tests.push(eq(sec + ' T24: 十神网格自有类名 ssh-cb-grid', panelHtml.indexOf('ssh-cb-grid') >= 0 ? 'Y' : 'N', 'Y'));
+    if (GWm && typeof GWm.rebuildGzCbGrid === 'function') {
+      var mix = document.createElement('div');
+      mix.className = 'gz-panel-wrapper';
+      mix.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      mix.innerHTML = '<div class="gz-popover"><div class="gz-cb-grid">GZ-OLD</div></div>'
+        + '<div class="ssh-popover"><div class="gz-cb-grid ssh-cb-grid">SSH-OWN</div></div>';
+      document.body.appendChild(mix);
+      GWm.rebuildGzCbGrid();
+      tests.push(eq(sec + ' T25: 宫位重建不覆盖十神网格', mix.querySelector('.ssh-cb-grid').textContent, 'SSH-OWN'));
+      tests.push(eq(sec + ' T26: 宫位网格照常重建', mix.querySelector('.gz-popover .gz-cb-grid').textContent === 'GZ-OLD' ? 'N' : 'Y', 'Y'));
+      document.body.removeChild(mix);
+    } else {
+      tests.push(fail(sec + ' T25: GONGWEI.rebuildGzCbGrid 已挂载', '缺失'));
+    }
+
     localStorage.setItem('bz_ssh_selected_v1', '[]');
     R.renderChart(pd, undefined, 'tst-out');
     tests.push(eq(sec + ' T15: 清空后无组行', host.querySelector('tr.ssh-gan-row') ? 'N' : 'Y', 'Y'));

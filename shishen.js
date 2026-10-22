@@ -134,7 +134,7 @@
     return '<div class="gz-panel-wrapper">'
       + '<button class="btn-simple ssh-trigger" onclick="SSH.togglePanel(event)">十神<span class="ssh-count"> ' + sel.length + '</span> ▾</button>'
       + '<div class="ssh-popover" onclick="event.stopPropagation()">'
-      + '<div class="gz-cb-grid">' + cbGridHtml() + '</div>'
+      + '<div class="gz-cb-grid ssh-cb-grid">' + cbGridHtml() + '</div>'
       + '<div class="gz-popover-actions">'
       + '<button onclick="SSH.selectAll()">全选</button>'
       + '<button onclick="SSH.clearAll()">清空</button>'
@@ -177,7 +177,7 @@
 
   // 勾选变化后刷新所有已注入的 SSH 面板（主页 topbar 与对比页各一份，只动 cb-grid 与计数，保 popover 开合状态）
   function rebuildPanels() {
-    var grids = document.querySelectorAll('.ssh-popover .gz-cb-grid');
+    var grids = document.querySelectorAll('.ssh-popover .ssh-cb-grid');
     for (var i = 0; i < grids.length; i++) grids[i].innerHTML = cbGridHtml();
     var counts = document.querySelectorAll('.ssh-trigger .ssh-count');
     var n = loadSelected().length;

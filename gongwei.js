@@ -499,7 +499,7 @@ function syncGzCheckboxes() {
 
 // ===== v0.13.2 重建 popover 勾选网格（排序后顺序联动；v0.38.0 起重建全部实例）=====
 function rebuildGzCbGrid() {
-  var grids = document.querySelectorAll('.gz-cb-grid');
+  var grids = document.querySelectorAll('.gz-popover .gz-cb-grid');
   if (!grids.length) return;
   var favGroups = getFavGroups();
   var items = '';

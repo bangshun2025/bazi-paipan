@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.63.1 | 2026-10-21 -->
+<!-- 八字排盘 ·  从真版 v0.63.2 | 2026-10-22 -->
+<!-- v0.63.2: 修复点十神弹出宫位界面 — gongwei rebuildGzCbGrid 扫全局 .gz-cb-grid，把十神 popover 的网格覆盖成宫位项；改为只重建 .gz-popover 内网格，十神网格改自有类 ssh-cb-grid（shishen renderPanel/rebuildPanels 同步），断言+3（T24 类名/T25 不覆盖/T26 宫位照常重建） -->
 <!-- v0.63.1: 修复多选流月/流日列头一行式回归：hd 表头恢复 dyLnYearHtml(lmHeadLabel/ldHeadLabel) 两行式包裹，与大运/流年列头同构（v0.63.0 把双重包裹误当 bug 剥掉所致）；断言+2（流月/流日列表头 dyln-yr 两行式） -->
 <!-- v0.63.0: 多选流月+多选流日（参照多选岁运四层归属）：流月面板月格/流日面板日格可多选（≤4/≤4，显示序升序与勾选序解耦），只能挂已勾流年/流月，取消上层联动清下层；主表插 col-lm/col-ld 列（挂流年列右侧，hd 流月·己巳·1月两行式文案）| 修复：①refreshFlow 无条件清 col-lm/col-ld 把 applyMultiDL 插列删光（多选时改 _multiDL.on 守卫，断言环境无 luck-section 早退掩盖此 bug）；②multiDLPickLm/Ld 的 doPaipan 清 _flowState 致面板年跳回当前年、选中态丢失（doPaipan 后恢复面板 state）；③hd 流月/流日文案 dyLnYearHtml 双重包裹 | 断言 MLM +24 条 + 流月/流日面板既有断言 -->
 <!-- v0.61.0: 流年流月流日新历/农历切换勾选（运流区头部「新历」勾选框，默认农历）：农历=按钮节气月序(1月寅…12月丑)+列头纯流月/流日+面板标签干支年；勾选=按钮新历起始月+列头两行式(dyln-yr)+面板标签公历年；对比盘次条静态勾选框三HTML同步；断言+8条双向 | 修复：孤儿记录扫描二轮按名字+性别回收（时辰/历法变更断链 key），同名双档案不误吞；MIG+5条 -->
