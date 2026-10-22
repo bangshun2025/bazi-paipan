@@ -468,33 +468,26 @@ function xyRowMainNoLuck(ps) {
 // 外层独立 td（renderChart 内的 td() 局部函数此处不可见）
 function sshTd(cls, txt) { return '<td class="' + (cls || '') + '">' + (txt || '') + '</td>'; }
 
-// 藏干横排单元：只输出非空层等宽 span（单字层自然居中），与对应名行逐位对齐；太极藏干点保留 taiji-ring
-function sshCgSpans(p, colKey, twin, riGan) {
+// 藏气竖排单元：每层一行「藏干 | 十神 | 组对应名」，组对应名按勾选顺序在右侧竖排堆叠（整块居中于该层）
+function sshCgVert(p, colKey, twin, riGan, groups) {
   var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
   var t = getTaiji();
   var out = '';
   for (var i = 0; i < 3; i++) {
     var l = layers[i];
     if (!l) continue;
-    if (t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan) {
-      out += '<span class="ssh-cg-g"><span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
-    } else {
-      out += '<span class="ssh-cg-g"><span class="' + wxClass(l.gan) + '">' + l.gan + '</span></span>';
+    var g = (t.active && t.kind === 'cang' && colKey === t.col && l.gan === t.gan)
+      ? '<span class="taiji-ring ' + wxClass(l.gan) + '">' + l.gan + '</span>'
+      : '<span class="' + wxClass(l.gan) + '">' + l.gan + '</span>';
+    var ns = '';
+    for (var k = 0; k < groups.length; k++) {
+      ns += '<span class="ssh-cg-n">' + sshEsc(sshMapName(groups[k], shiShen(riGan, l.gan, false))) + '</span>';
     }
+    out += '<span class="ssh-cg-l"><span class="ssh-cg-g">' + g + '</span>'
+      + '<span class="ssh-cg-t">' + sshEsc(l.shiShen) + '</span>'
+      + (ns ? '<span class="ssh-cg-ns">' + ns + '</span>' : '') + '</span>';
   }
-  return out;
-}
-
-// 藏干对应名单元：与 sshCgSpans 同源非空层序列，逐位映射组内对应名
-function sshCgNameCell(group, p, colKey, twin, riGan) {
-  var layers = cangGanLayers(p.zhi, riGan, twin, colKey);
-  var out = '';
-  for (var i = 0; i < 3; i++) {
-    var l = layers[i];
-    if (!l) continue;
-    out += '<span class="ssh-cg-i"><span class="ssh-cg-i-t">' + sshEsc(sshMapName(group, shiShen(riGan, l.gan, false))) + '</span></span>';
-  }
-  return out;
+  return '<span class="ssh-cg-v">' + out + '</span>';
 }
 
 function sshGanCell(group, rs) {
@@ -507,25 +500,10 @@ function sshGanRow(group, pNian, pYue, pRi, pShi, pDy, pLn) {
     + sshTd('sep col-dy', sshGanCell(group, pDy.rs)) + sshTd('col-ln', sshGanCell(group, pLn.rs)) + '</tr>';
 }
 
-function sshCgRow(group, pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan) {
-  return '<tr class="rm ssh-cg-row" data-row-type="ssh-cg" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
-    + sshTd('', sshCgNameCell(group, pNian, 'nian', twin, riGan)) + sshTd('', sshCgNameCell(group, pYue, 'yue', twin, riGan))
-    + sshTd('', sshCgNameCell(group, pRi, 'ri', twin, riGan)) + sshTd('', sshCgNameCell(group, pShi, 'shi', twin, riGan))
-    + sshTd('sep col-dy', sshCgNameCell(group, pDy, 'dayun', 0, riGan)) + sshTd('col-ln', sshCgNameCell(group, pLn, 'liunian', 0, riGan)) + '</tr>';
-}
-
 // v0.55.0 三垣区组名行：胎年/胎元/命宫/身宫主星十神映射对应名
 function sshGanRowSy(group, pTaiNian, pTai, pMing, pShen) {
   return '<tr class="rm ssh-gan-row" data-sec="sanyuan" data-row-type="ssh-gan" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
     + sshTd('', sshGanCell(group, pTaiNian.rs)) + sshTd('', sshGanCell(group, pTai.rs)) + sshTd('', sshGanCell(group, pMing.rs)) + sshTd('', sshGanCell(group, pShen.rs))
-    + sshTd('sep', '') + sshTd('col-ln', '') + '</tr>';
-}
-
-// v0.55.0 三垣区藏干对应名行：与三垣藏气横排同源层序列
-function sshCgRowSy(group, pTaiNian, pTai, pMing, pShen, twin, riGan) {
-  return '<tr class="rm ssh-cg-row" data-sec="sanyuan" data-row-type="ssh-cg" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
-    + sshTd('', sshCgNameCell(group, pTaiNian, 'taiNian', twin, riGan)) + sshTd('', sshCgNameCell(group, pTai, 'tai', twin, riGan))
-    + sshTd('', sshCgNameCell(group, pMing, 'ming', twin, riGan)) + sshTd('', sshCgNameCell(group, pShen, 'shen', twin, riGan))
     + sshTd('sep', '') + sshTd('col-ln', '') + '</tr>';
 }
 
@@ -917,12 +895,12 @@ function renderChart(data, twin, targetId, opts) {
   var sshSel = sshSelectedGroups();
   var sshCg = sshSel.length > 0;
   mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')
-    +td('', sshCg ? sshCgSpans(pNian,'nian',twin,riGan) : pNian.cg)
-    +td('', sshCg ? sshCgSpans(pYue,'yue',twin,riGan) : pYue.cg)
-    +td('', sshCg ? sshCgSpans(pRi,'ri',twin,riGan) : pRi.cg)
-    +td('', sshCg ? sshCgSpans(pShi,'shi',twin,riGan) : pShi.cg)
-    +td('sep col-dy', sshCg ? sshCgSpans(pDy,'dayun',0,riGan) : pDy.cg)
-    +td('col-ln', sshCg ? sshCgSpans(pLn,'liunian',0,riGan) : pLn.cg)+'</tr>';
+    +td('', sshCg ? sshCgVert(pNian,'nian',twin,riGan,sshSel) : pNian.cg)
+    +td('', sshCg ? sshCgVert(pYue,'yue',twin,riGan,sshSel) : pYue.cg)
+    +td('', sshCg ? sshCgVert(pRi,'ri',twin,riGan,sshSel) : pRi.cg)
+    +td('', sshCg ? sshCgVert(pShi,'shi',twin,riGan,sshSel) : pShi.cg)
+    +td('sep col-dy', sshCg ? sshCgVert(pDy,'dayun',0,riGan,sshSel) : pDy.cg)
+    +td('col-ln', sshCg ? sshCgVert(pLn,'liunian',0,riGan,sshSel) : pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
   // 纳音 — splice 后索引从 6 偏移至 4
   mainRows[4] = '<tr class="rn" data-row-type="nayin dy3">'+rl('纳音')+td('',pNian.ny)+td('',pYue.ny)+td('',pRi.ny)+td('',pShi.ny)+td('sep col-dy',pDy.ny)+td('col-ln',pLn.ny)+'</tr>';
@@ -938,16 +916,13 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // v0.29.0 星曜行：插入「藏气」与「纳音」之间（index-independent，既有索引一字不改）
   insertBeforeNayin(mainRows, xyRowMain({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen }, pDy, pLn));
-  // v0.53.0 十神组行：组名行插主星行后、藏干对应名行插藏气行后（index-independent）
+  // v0.53.0 十神组行：组名行插主星行后（藏干对应名并入藏气单元，不再单起行）
   if (sshSel.length) {
     var sshGanRows = [];
-    var sshCgRows = [];
     for (var si = 0; si < sshSel.length; si++) {
       sshGanRows.push(sshGanRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn));
-      sshCgRows.push(sshCgRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn, twin, riGan));
     }
     insertAfterAnchor(mainRows, /data-row-type="dy1"/, sshGanRows);
-    insertAfterAnchor(mainRows, /data-row-type="ln2"/, sshCgRows);
   }
   // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时（index-independent 锚点插入，自带 7 列）
   insertAfterAnchor(mainRows, /data-row-type="zhuzuo ln3"/, ZUO_GROUP.map(function(k){ return zuoRowMain(pAll, k, luckCols); }));
@@ -982,10 +957,10 @@ function renderChart(data, twin, targetId, opts) {
     td(pShen.wz,pShen.zhi,' data-gk="zhi" data-gz="'+pShen.zhi+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rh" data-sec="sanyuan cangqi" data-row-type="sy-cg">'+rl('藏气')
-    +td('', sshCg ? sshCgSpans(pTaiNian,'taiNian',twin,riGan) : pTaiNian.cg)
-    +td('', sshCg ? sshCgSpans(pTai,'tai',twin,riGan) : pTai.cg)
-    +td('', sshCg ? sshCgSpans(pMing,'ming',twin,riGan) : pMing.cg)
-    +td('', sshCg ? sshCgSpans(pShen,'shen',twin,riGan) : pShen.cg)
+    +td('', sshCg ? sshCgVert(pTaiNian,'taiNian',twin,riGan,sshSel) : pTaiNian.cg)
+    +td('', sshCg ? sshCgVert(pTai,'tai',twin,riGan,sshSel) : pTai.cg)
+    +td('', sshCg ? sshCgVert(pMing,'ming',twin,riGan,sshSel) : pMing.cg)
+    +td('', sshCg ? sshCgVert(pShen,'shen',twin,riGan,sshSel) : pShen.cg)
     +emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
@@ -999,16 +974,13 @@ function renderChart(data, twin, targetId, opts) {
   insertAfterAnchor(syRows, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(pAll, k, true); }));
   insertAfterAnchor(syRows, /data-row-type="zizuo"/, SIT_MAIN_KEYS.map(function(k){ return sitRowSy(pAll, k, true, SIT_MAIN_COL); }));
   insertAfterAnchor(syRows, /data-row-type="zuoshi"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(pAll, k, true); }));
-  // v0.55.0 十神组行（三垣区）：组名行插主星行后、藏干对应名行插藏气行后
+  // v0.55.0 十神组行（三垣区）：组名行插主星行后（藏干对应名并入藏气单元）
   if (sshSel.length) {
     var syGanRows = [];
-    var syCgRows = [];
     for (var syi = 0; syi < sshSel.length; syi++) {
       syGanRows.push(sshGanRowSy(sshSel[syi], pTaiNian, pTai, pMing, pShen));
-      syCgRows.push(sshCgRowSy(sshSel[syi], pTaiNian, pTai, pMing, pShen, twin, riGan));
     }
     insertAfterAnchor(syRows, /data-row-type="sy-rs"/, syGanRows);
-    insertAfterAnchor(syRows, /data-row-type="sy-cg"/, syCgRows);
   }
   chartRows.push.apply(chartRows, syRows);
 
@@ -1932,7 +1904,7 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
     if (u[6] !== undefined) tds[6].setAttribute('data-xy-gz', u[6]);
   });
 
-  // v0.53.0 十神组行大运/流年列同步：组名行按 rs 映射，对应名行按藏干层映射（参照干 refs.riGan）
+  // v0.53.0 十神组行大运/流年列同步：组名行按 rs 映射（藏干对应名已并入藏气单元）
   var sshTrs = tableEl.querySelectorAll('tr[data-ssh-group]');
   for (var st = 0; st < sshTrs.length; st++) {
     var sshTr = sshTrs[st];
@@ -1940,14 +1912,8 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
     if (!grp) continue;
     var sshTds = sshTr.querySelectorAll('td');
     if (sshTds.length < 7) continue;
-    if (/\bssh-cg\b/.test(sshTr.getAttribute('data-row-type') || '')) {
-      if (!refs || !refs.riGan) continue;
-      sshTds[5].innerHTML = sshCgNameCell(grp, pDy, 'dayun', 0, refs.riGan);
-      sshTds[6].innerHTML = sshCgNameCell(grp, pLn, 'liunian', 0, refs.riGan);
-    } else {
-      sshTds[5].innerHTML = sshGanCell(grp, pDy.rs);
-      sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
-    }
+    sshTds[5].innerHTML = sshGanCell(grp, pDy.rs);
+    sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
   }
 
   // v0.56.0 运列表头年份同步（大运=该运起始年，运前无大运年份置空；流年=换算年份）
@@ -2138,7 +2104,7 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   var gName = tr.getAttribute('data-ssh-group');
   if (gName) {
     var grp = sshGroupByName(gName);
-    if (grp) cell.innerHTML = /ssh-cg/.test(t) ? sshCgNameCell(grp, p, isDy ? 'dayun' : 'liunian', 0, riGan) : sshGanCell(grp, p.rs);
+    if (grp) cell.innerHTML = sshGanCell(grp, p.rs);
     return;
   }
   var X = window.XINGYAO;
@@ -2169,7 +2135,7 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   if (/\bdy1\b/.test(t)) cell.innerHTML = p.rs;
   else if (/\bln1\b/.test(t)) cell.innerHTML = p.gan;
   else if (/\bdy2\b/.test(t)) cell.innerHTML = p.zhi;
-  else if (/\bln2\b/.test(t)) cell.innerHTML = sshCg ? sshCgSpans(p, isDy ? 'dayun' : 'liunian', 0, riGan) : p.cg;
+  else if (/\bln2\b/.test(t)) cell.innerHTML = sshCg ? sshCgVert(p, isDy ? 'dayun' : 'liunian', 0, riGan, sshSelectedGroups()) : p.cg;
   else if (/\bnayin\b/.test(t)) cell.innerHTML = p.ny;
   else if (/\bnayun\b/.test(t)) cell.innerHTML = p.nayun;
   else if (/\bzhuzuo\b/.test(t)) cell.innerHTML = p.xy;
