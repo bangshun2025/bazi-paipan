@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.69.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.70.0 | 2026-10-23 -->
+<!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
 <!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
 <!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
 <!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
@@ -985,6 +986,10 @@
   .ssh-cg-t { min-width: 1em; text-align: center; font-size: 11px; }
   .ssh-cg-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
   .ssh-cg-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
+  /* v0.70.0 十干对应：置于十神组名左侧，竖线分隔 */
+  .gy-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
+  .gy-n { font-size: 10px; line-height: 1.2; color: var(--c-ink); opacity: .85; white-space: nowrap; }
+  .gy-sep { border-left: 1px solid var(--c-line); padding-left: .4em; margin-left: .4em; }
   /* v0.68.0 藏气逐层分隔线：每层（藏干+十神+组对应名）之间加细线，对应名三列统一左对齐 */
   .chart.ssh-on td > .ssh-cg-v { width: 100%; }
   .chart.ssh-on .ssh-cg-v > .ssh-cg-l { align-self: stretch; }

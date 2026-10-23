@@ -4840,6 +4840,49 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.70.0 十干对应 =====
+  (function() {
+    var G = window.GAN;
+    tests.push(eq('GA1: 十干键序', G.GAN_KEYS.join(''), '甲乙丙丁戊己庚辛壬癸'));
+    tests.push(eq('GA2: 默认组名', G.DEFAULT_GROUPS[0].name, '德性'));
+    tests.push(eq('GA3: 甲对应怜悯', G.mapName(G.DEFAULT_GROUPS[0], '甲'), '怜悯'));
+    tests.push(eq('GA4: 戊对应诚信', G.mapName(G.DEFAULT_GROUPS[0], '戊'), '诚信'));
+    tests.push(eq('GA5: 未配置天干返回空串', G.mapName(G.DEFAULT_GROUPS[0], '乙'), ''));
+
+    var selBackup = G.loadSelected();
+    var sshBackup = SSH.loadSelected();
+    try {
+      G.persistSelected(['德性']);
+      var sshSelNow = SSH.loadSelected();
+      if (sshSelNow.indexOf('军队') < 0) SSH.persistSelected(sshSelNow.concat(['军队']));
+      RENDER.renderChart(window._paipanData, 1, 'output');
+      var riGan = window._paipanData.ri.gan;
+      var riExpect = G.mapName(G.DEFAULT_GROUPS[0], riGan);
+      var td = document.querySelector('.chart tr.rg td[data-gk="gan"][data-pk="ri"]');
+      var gy = td ? td.querySelector('.gy-n') : null;
+      tests.push(eq('GA6: 日柱天干对应名', gy ? gy.textContent : '', riExpect));
+      var sep = td ? td.querySelector('.ssh-g-ns.gy-sep') : null;
+      tests.push(eq('GA7: 十神组名前有竖线分隔', !!sep, true));
+      var a = td ? td.querySelector('.gy-ns') : null;
+      var b = td ? td.querySelector('.ssh-g-ns') : null;
+      tests.push(eq('GA8: 对应名排在十神组名之前', !!(a && b && (a.compareDocumentPosition(b) & 4)), true));
+
+      var cgTr = document.querySelector('.chart tr[data-sec="cangqi"]');
+      var l0 = cgTr ? cgTr.cells[3].querySelector('.ssh-cg-l') : null;
+      var cgGan = l0 ? l0.querySelector('.ssh-cg-g').textContent : '';
+      var cgExpect = G.mapName(G.DEFAULT_GROUPS[0], cgGan);
+      var cgGy = l0 ? l0.querySelector('.gy-n') : null;
+      tests.push(eq('GA9: 藏气层藏干对应名', cgGy ? cgGy.textContent : '', cgExpect));
+      tests.push(eq('GA10: 藏气层竖线分隔', l0 ? !!l0.querySelector('.ssh-cg-ns.gy-sep') : false, true));
+    } catch (e) {
+      tests.push(fail('GA6: 十干对应渲染异常', String(e)));
+    } finally {
+      G.persistSelected(selBackup);
+      SSH.persistSelected(sshBackup);
+      RENDER.renderChart(window._paipanData, 1, 'output');
+    }
+  })();
+
   // ===== v0.54.0 合盘档案 =====
   (function() {
     tests.push({ section:'合盘档案(v0.54.0)' });

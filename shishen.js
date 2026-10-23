@@ -1,11 +1,19 @@
-/* 八字排盘 v0.53.0 — shishen.js 十神组：勾选组在主表插行（天干组名行 + 藏干对应名行），设置弹窗维护「组→十神对应名」映射，localStorage 持久化 */
+/* 八字排盘 v0.70.0 — shishen.js */
 (function() {
   'use strict';
 
   var GROUPS_KEY = 'bz_ssh_groups_v1';
   var SEL_KEY = 'bz_ssh_selected_v1';
 
+  var GAN_GROUPS_KEY = 'bz_gan_groups_v1';
+  var GAN_SEL_KEY = 'bz_gan_selected_v1';
+
   var SHI_SHEN_KEYS = ['七杀', '正官', '枭神', '正印', '比肩', '劫财', '正财', '偏财', '食神', '伤官'];
+  var GAN_KEYS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+
+  var DEFAULT_GAN_GROUPS = [
+    { name: '德性', map: { '甲': '怜悯', '乙': '', '丙': '', '丁': '', '戊': '诚信', '己': '', '庚': '', '辛': '', '壬': '', '癸': '' } }
+  ];
 
   var DEFAULT_GROUPS = [
     {
@@ -20,6 +28,7 @@
 
   var _lsOk = true;
   var _draft = [];
+  var _ganDraft = [];
 
   function lsGet(key) {
     try { return localStorage.getItem(key); } catch (e) { _lsOk = false; return null; }
@@ -32,7 +41,8 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function normalizeGroups(raw) {
+  function normalizeGroups(raw, keys) {
+    keys = keys || SHI_SHEN_KEYS;
     var arr = Array.isArray(raw) ? raw : [];
     var out = [];
     var seen = {};
@@ -44,8 +54,8 @@
       seen[name] = 1;
       var src = (g.map && typeof g.map === 'object') ? g.map : {};
       var map = {};
-      for (var j = 0; j < SHI_SHEN_KEYS.length; j++) {
-        var k = SHI_SHEN_KEYS[j];
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
         map[k] = String(src[k] == null ? '' : src[k]).trim();
       }
       out.push({ name: name, map: map });
@@ -53,35 +63,39 @@
     return out;
   }
 
-  function loadGroups() {
-    var raw = lsGet(GROUPS_KEY);
-    if (raw == null) return JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+  function loadGroups(key, defs, keys) {
+    key = key || GROUPS_KEY;
+    defs = defs || DEFAULT_GROUPS;
+    var raw = lsGet(key);
+    if (raw == null) return JSON.parse(JSON.stringify(defs));
     try {
-      var parsed = normalizeGroups(JSON.parse(raw));
-      return parsed.length ? parsed : JSON.parse(JSON.stringify(DEFAULT_GROUPS));
-    } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_GROUPS)); }
+      var parsed = normalizeGroups(JSON.parse(raw), keys);
+      return parsed.length ? parsed : JSON.parse(JSON.stringify(defs));
+    } catch (e) { return JSON.parse(JSON.stringify(defs)); }
   }
 
-  function persistGroups(groups) {
-    return lsSet(GROUPS_KEY, JSON.stringify(normalizeGroups(groups)));
+  function persistGroups(groups, key, keys) {
+    return lsSet(key || GROUPS_KEY, JSON.stringify(normalizeGroups(groups, keys)));
   }
 
-  function loadSelected() {
-    var raw = lsGet(SEL_KEY);
-    if (raw == null) return ['军队'];
+  function loadSelected(key) {
+    var isGan = (key === GAN_SEL_KEY);
+    var dflt = isGan ? [] : ['军队'];
+    var raw = lsGet(key || SEL_KEY);
+    if (raw == null) return dflt.slice();
     try {
       var arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return ['军队'];
+      if (!Array.isArray(arr)) return dflt.slice();
       var out = [];
       for (var i = 0; i < arr.length; i++) {
         if (typeof arr[i] === 'string' && arr[i] && out.indexOf(arr[i]) < 0) out.push(arr[i]);
       }
       return out;
-    } catch (e) { return ['军队']; }
+    } catch (e) { return dflt.slice(); }
   }
 
-  function persistSelected(sel) {
-    return lsSet(SEL_KEY, JSON.stringify(sel));
+  function persistSelected(sel, key) {
+    return lsSet(key || SEL_KEY, JSON.stringify(sel));
   }
 
   // 勾选顺序即主表行顺序；组不存在或重复勾选时静默丢弃
@@ -110,6 +124,124 @@
   function mapName(group, ssName) {
     if (!group || !ssName || !group.map) return '';
     return group.map[ssName] || '';
+  }
+
+  // ===== 十干对应（v0.70.0）：与十神组同构，独立组表 + 独立勾选，渲染在十神组名左侧、竖线分隔 =====
+  function loadGanGroups() { return loadGroups(GAN_GROUPS_KEY, DEFAULT_GAN_GROUPS, GAN_KEYS); }
+  function persistGanGroups(groups) { return persistGroups(groups, GAN_GROUPS_KEY, GAN_KEYS); }
+  function loadGanSelected() { return loadSelected(GAN_SEL_KEY); }
+  function persistGanSelected(sel) { return persistSelected(sel, GAN_SEL_KEY); }
+
+  function selectedGanGroups() {
+    var groups = loadGanGroups();
+    var sel = loadGanSelected();
+    var byName = {};
+    var out = [];
+    for (var i = 0; i < groups.length; i++) byName[groups[i].name] = groups[i];
+    for (var j = 0; j < sel.length; j++) {
+      var g = byName[sel[j]];
+      if (g && out.indexOf(g) < 0) out.push(g);
+    }
+    return out;
+  }
+
+  function ganGroupByName(name) {
+    var groups = loadGanGroups();
+    for (var i = 0; i < groups.length; i++) if (groups[i].name === name) return groups[i];
+    return null;
+  }
+
+  // 天干字 → 组内对应名；未配置返回空串
+  function ganMapName(group, gan) {
+    if (!group || !gan || !group.map) return '';
+    return group.map[gan] || '';
+  }
+
+  function ganCbGridHtml() {
+    var groups = loadGanGroups();
+    var sel = loadGanSelected();
+    if (!groups.length) {
+      return '<div style="text-align:center;color:var(--c-gray);padding:16px 0;font-size:12px;">暂无十干组，点击 ⚙ 十干设置添加</div>';
+    }
+    var items = '';
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i];
+      var checked = sel.indexOf(g.name) >= 0;
+      items += '<label class="gz-cb-item' + (checked ? ' checked' : '') + '">'
+        + '<input type="checkbox" value="' + esc(g.name) + '" onchange="GAN.toggleGroup(this.value, this.checked)"' + (checked ? ' checked' : '') + '>'
+        + '<span>' + esc(g.name) + '</span></label>';
+    }
+    return items;
+  }
+
+  function renderGanPanel() {
+    var sel = loadGanSelected();
+    return '<div class="gz-panel-wrapper">'
+      + '<button class="btn-simple gan-trigger" onclick="GAN.togglePanel(event)">十干<span class="gan-count"> ' + sel.length + '</span> ▾</button>'
+      + '<div class="gan-popover" onclick="event.stopPropagation()">'
+      + '<div class="gz-cb-grid gan-cb-grid">' + ganCbGridHtml() + '</div>'
+      + '<div class="gz-popover-actions">'
+      + '<button onclick="GAN.selectAll()">全选</button>'
+      + '<button onclick="GAN.clearAll()">清空</button>'
+      + '<button class="gz-settings-btn" onclick="GAN.closePanel();GAN.openSettings();">⚙ 十干设置</button>'
+      + '</div></div></div>';
+  }
+
+  function ganPopOf(e) {
+    var t = e && e.target && e.target.closest ? e.target : null;
+    var wrapper = t ? t.closest('.gz-panel-wrapper') : null;
+    return wrapper ? wrapper.querySelector('.gan-popover') : document.querySelector('.gan-popover');
+  }
+
+  function toggleGanPanel(e) {
+    if (e) e.stopPropagation();
+    var pop = ganPopOf(e);
+    if (!pop) return;
+    if (!pop.classList.contains('open')) {
+      var others = document.querySelectorAll('.gz-popover, .ssh-popover');
+      for (var i = 0; i < others.length; i++) others[i].classList.remove('open');
+    }
+    pop.classList.toggle('open');
+  }
+
+  function closeGanPanel() {
+    var pops = document.querySelectorAll('.gan-popover');
+    for (var i = 0; i < pops.length; i++) pops[i].classList.remove('open');
+  }
+
+  document.addEventListener('click', function(e) {
+    var pops = document.querySelectorAll('.gan-popover');
+    for (var i = 0; i < pops.length; i++) {
+      var w = pops[i].closest('.gz-panel-wrapper');
+      if (pops[i].classList.contains('open') && w && !w.contains(e.target)) pops[i].classList.remove('open');
+    }
+  });
+
+  function toggleGanGroup(name, checked) {
+    var sel = loadGanSelected();
+    var idx = sel.indexOf(name);
+    if (checked && idx < 0) sel.push(name);
+    else if (!checked && idx >= 0) sel.splice(idx, 1);
+    persistGanSelected(sel);
+    rebuildPanels();
+    refresh();
+  }
+
+  function ganSelectAll() {
+    var groups = loadGanGroups();
+    var sel = [];
+    for (var i = 0; i < groups.length; i++) sel.push(groups[i].name);
+    persistGanSelected(sel);
+    rebuildPanels();
+    refresh();
+    closeGanPanel();
+  }
+
+  function ganClearAll() {
+    persistGanSelected([]);
+    rebuildPanels();
+    refresh();
+    closeGanPanel();
   }
 
   function cbGridHtml() {
@@ -155,14 +287,14 @@
     if (!pop) return;
     // v0.60.2 互斥：两按钮 onclick 均 stopPropagation，document 委托收不到，打开十神面板前显式关宫位
     if (!pop.classList.contains('open')) {
-      var gzs = document.querySelectorAll('.gz-popover');
+      var gzs = document.querySelectorAll('.gz-popover, .gan-popover');
       for (var i = 0; i < gzs.length; i++) gzs[i].classList.remove('open');
     }
     pop.classList.toggle('open');
   }
 
   function closePanel() {
-    var pops = document.querySelectorAll('.ssh-popover');
+    var pops = document.querySelectorAll('.ssh-popover, .gan-popover');
     for (var i = 0; i < pops.length; i++) pops[i].classList.remove('open');
   }
 
@@ -182,6 +314,11 @@
     var counts = document.querySelectorAll('.ssh-trigger .ssh-count');
     var n = loadSelected().length;
     for (var j = 0; j < counts.length; j++) counts[j].textContent = ' ' + n;
+    var ggrids = document.querySelectorAll('.gan-popover .gan-cb-grid');
+    for (var m = 0; m < ggrids.length; m++) ggrids[m].innerHTML = ganCbGridHtml();
+    var gcounts = document.querySelectorAll('.gan-trigger .gan-count');
+    var gn = loadGanSelected().length;
+    for (var q = 0; q < gcounts.length; q++) gcounts[q].textContent = ' ' + gn;
   }
 
   // 勾选变化后重渲当前视图：对比页 overlay 打开 → renderCmpTrack；否则主页主表全量重渲
@@ -345,6 +482,128 @@
     refresh();
   }
 
+  // ===== 十干设置弹窗（骨架复用 gz-settings-*） =====
+  function buildGanSettingsModal() {
+    var div = document.createElement('div');
+    div.className = 'gz-settings-overlay';
+    div.id = 'ganSettingsOverlay';
+    div.innerHTML = '<div class="gz-settings-modal" style="max-width:680px;">'
+      + '<div class="gz-settings-header"><span class="gz-settings-title">十干设置</span>'
+      + '<button class="gz-settings-close" onclick="GAN.closeSettings()">✕</button></div>'
+      + '<div id="ganSettingsList" style="overflow-y:auto;padding:12px 18px;flex:1;"></div>'
+      + '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 18px 14px;border-top:1px solid var(--c-line);">'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="btn-simple" onclick="GAN.addGroup()">+ 新增组</button>'
+      + '<button class="btn-simple" onclick="GAN.resetGroups()">恢复默认</button>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="btn-simple" onclick="GAN.closeSettings()">取消</button>'
+      + '<button class="btn-simple active" onclick="GAN.saveSettings()">保存</button>'
+      + '</div>'
+      + '</div></div>';
+    div.addEventListener('click', function(e) { if (e.target === div) closeGanSettings(); });
+    document.body.appendChild(div);
+  }
+
+  function renderGanSettingsList() {
+    var host = document.getElementById('ganSettingsList');
+    if (!host) return;
+    var html = '';
+    for (var i = 0; i < _ganDraft.length; i++) {
+      var g = _ganDraft[i];
+      var fields = '';
+      for (var j = 0; j < GAN_KEYS.length; j++) {
+        var k = GAN_KEYS[j];
+        fields += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;">'
+          + '<span style="width:20px;flex-shrink:0;color:var(--c-gray);">' + k + '</span>'
+          + '<input type="text" value="' + esc(g.map[k]) + '" oninput="GAN.setMap(' + i + ',\'' + k + '\',this.value)" '
+          + 'style="flex:1;min-width:0;padding:3px 6px;border:1px solid var(--c-line);border-radius:3px;font-size:12px;background:transparent;color:var(--c-ink);">'
+          + '</label>';
+      }
+      html += '<div style="border:1px solid var(--c-line);border-radius:4px;padding:10px 12px;margin-bottom:10px;">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+        + '<input type="text" value="' + esc(g.name) + '" oninput="GAN.setGroupName(' + i + ',this.value)" placeholder="组名" '
+        + 'style="width:140px;padding:3px 6px;border:1px solid var(--c-line);border-radius:3px;font-size:13px;background:transparent;color:var(--c-ink);">'
+        + '<button class="btn-simple" style="margin-left:auto;" onclick="GAN.removeGroup(' + i + ')">删除</button>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 16px;">' + fields + '</div>'
+        + '</div>';
+    }
+    if (!_ganDraft.length) {
+      html = '<div style="text-align:center;color:var(--c-gray);padding:24px 0;font-size:13px;">暂无十干组，点击「+ 新增组」创建</div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function openGanSettings() {
+    closeGanPanel();
+    var overlay = document.getElementById('ganSettingsOverlay');
+    if (!overlay) {
+      buildGanSettingsModal();
+      overlay = document.getElementById('ganSettingsOverlay');
+    }
+    _ganDraft = loadGanGroups();
+    renderGanSettingsList();
+    overlay.classList.add('show');
+  }
+
+  function closeGanSettings() {
+    var ov = document.getElementById('ganSettingsOverlay');
+    if (ov) ov.classList.remove('show');
+    _ganDraft = [];
+  }
+
+  function setGanGroupName(i, v) {
+    if (_ganDraft[i]) _ganDraft[i].name = v;
+  }
+
+  function setGanMap(i, key, v) {
+    if (_ganDraft[i] && _ganDraft[i].map && GAN_KEYS.indexOf(key) >= 0) _ganDraft[i].map[key] = v;
+  }
+
+  function addGanGroup() {
+    var n = _ganDraft.length + 1;
+    var name = '新组';
+    while (true) {
+      var dup = false;
+      for (var i = 0; i < _ganDraft.length; i++) {
+        if (_ganDraft[i].name === name) { dup = true; break; }
+      }
+      if (!dup) break;
+      name = '新组' + (++n);
+    }
+    var map = {};
+    for (var j = 0; j < GAN_KEYS.length; j++) map[GAN_KEYS[j]] = '';
+    _ganDraft.push({ name: name, map: map });
+    renderGanSettingsList();
+  }
+
+  function removeGanGroup(i) {
+    _ganDraft.splice(i, 1);
+    renderGanSettingsList();
+  }
+
+  function resetGanGroups() {
+    _ganDraft = JSON.parse(JSON.stringify(DEFAULT_GAN_GROUPS));
+    renderGanSettingsList();
+  }
+
+  function saveGanSettings() {
+    var groups = normalizeGroups(_ganDraft, GAN_KEYS);
+    persistGanGroups(groups);
+    var names = {};
+    for (var i = 0; i < groups.length; i++) names[groups[i].name] = 1;
+    var oldSel = loadGanSelected();
+    var sel = [];
+    for (var j = 0; j < oldSel.length; j++) {
+      if (names[oldSel[j]] && sel.indexOf(oldSel[j]) < 0) sel.push(oldSel[j]);
+    }
+    persistGanSelected(sel);
+    closeGanSettings();
+    rebuildPanels();
+    refresh();
+  }
+
   window.SSH = {
     SHI_SHEN_KEYS: SHI_SHEN_KEYS,
     DEFAULT_GROUPS: DEFAULT_GROUPS,
@@ -370,6 +629,34 @@
     removeGroup: removeGroup,
     resetGroups: resetGroups,
     saveSettings: saveSettings,
+    refresh: refresh
+  };
+
+  // 十干对应：与 SSH 同构的独立命名空间（独立组表 + 独立勾选，不改动十神组配置）
+  window.GAN = {
+    GAN_KEYS: GAN_KEYS,
+    DEFAULT_GROUPS: DEFAULT_GAN_GROUPS,
+    loadGroups: loadGanGroups,
+    persistGroups: persistGanGroups,
+    loadSelected: loadGanSelected,
+    persistSelected: persistGanSelected,
+    selectedGroups: selectedGanGroups,
+    groupByName: ganGroupByName,
+    mapName: ganMapName,
+    renderPanel: renderGanPanel,
+    togglePanel: toggleGanPanel,
+    closePanel: closeGanPanel,
+    toggleGroup: toggleGanGroup,
+    selectAll: ganSelectAll,
+    clearAll: ganClearAll,
+    openSettings: openGanSettings,
+    closeSettings: closeGanSettings,
+    setGroupName: setGanGroupName,
+    setMap: setGanMap,
+    addGroup: addGanGroup,
+    removeGroup: removeGanGroup,
+    resetGroups: resetGanGroups,
+    saveSettings: saveGanSettings,
     refresh: refresh
   };
 })();
