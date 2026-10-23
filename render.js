@@ -490,21 +490,15 @@ function sshCgVert(p, colKey, twin, riGan, groups) {
   return '<span class="ssh-cg-v">' + out + '</span>';
 }
 
-function sshGanCell(group, rs) {
-  return sshEsc(sshMapName(group, rs));
-}
-
-function sshGanRow(group, pNian, pYue, pRi, pShi, pDy, pLn) {
-  return '<tr class="rm ssh-gan-row" data-row-type="ssh-gan" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
-    + sshTd('', sshGanCell(group, pNian.rs)) + sshTd('', sshGanCell(group, pYue.rs)) + sshTd('', sshGanCell(group, pRi.rs)) + sshTd('', sshGanCell(group, pShi.rs))
-    + sshTd('sep col-dy', sshGanCell(group, pDy.rs)) + sshTd('col-ln', sshGanCell(group, pLn.rs)) + '</tr>';
-}
-
-// v0.55.0 三垣区组名行：胎年/胎元/命宫/身宫主星十神映射对应名
-function sshGanRowSy(group, pTaiNian, pTai, pMing, pShen) {
-  return '<tr class="rm ssh-gan-row" data-sec="sanyuan" data-row-type="ssh-gan" data-ssh-group="' + sshEsc(group.name) + '"><td class="rl">' + sshEsc(group.name) + '</td>'
-    + sshTd('', sshGanCell(group, pTaiNian.rs)) + sshTd('', sshGanCell(group, pTai.rs)) + sshTd('', sshGanCell(group, pMing.rs)) + sshTd('', sshGanCell(group, pShen.rs))
-    + sshTd('sep', '') + sshTd('col-ln', '') + '</tr>';
+// 天干单元：天干在左，组对应名按勾选顺序右侧竖排堆叠（与藏气同构）
+function sshGanVert(ganHtml, rs, groups) {
+  if (!groups || !groups.length) return ganHtml;
+  var ns = '';
+  for (var k = 0; k < groups.length; k++) {
+    ns += '<span class="ssh-g-n">' + sshEsc(sshMapName(groups[k], rs)) + '</span>';
+  }
+  return '<span class="ssh-g-v"><span class="ssh-g-l"><span class="ssh-g-g">' + ganHtml + '</span>'
+    + (ns ? '<span class="ssh-g-ns">' + ns + '</span>' : '') + '</span></span>';
 }
 
 // 三垣区核心 5 列（尾部 sep/col-ln 由调用方或 si 循环补）；不带 xy1，避免 _applyDLUpdates 误命中
@@ -874,15 +868,16 @@ function renderChart(data, twin, targetId, opts) {
 
   // 主星行特殊处理：大运流年需要真实数据
   var mainRows = bp.main.slice();
+  var sshSel = sshSelectedGroups();
   // 主星行(0)：用 pDy.rs / pLn.rs 替换占位
   mainRows[0] = '<tr class="rs" data-row-type="dy1">'+rl('主星')+td('',pNian.rs)+td('',pYue.rs)+td('',pRi.rs)+td('',pShi.rs)+td('sep col-dy',pDy.rs)+td('col-ln',pLn.rs)+'</tr>';
   // 天干行(1)
   mainRows[1] = '<tr class="rg" data-row-type="ln1">'+rl('')+
-    td(pNian.wg,stemCellHtml(pNian,'nian'),' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
-    td(pYue.wg,stemCellHtml(pYue,'yue'),' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
-    td(pRi.wg,stemCellHtml(pRi,'ri'),' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
-    td(pShi.wg,stemCellHtml(pShi,'shi'),' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
-    td('sep col-dy '+pDy.wg,pDy.gan)+td('col-ln '+pLn.wg,pLn.gan)+'</tr>';
+    td(pNian.wg,sshGanVert(stemCellHtml(pNian,'nian'), pNian.rs, sshSel),' data-gk="gan" data-gz="'+pNian.gan+'" data-pk="nian"')+
+    td(pYue.wg,sshGanVert(stemCellHtml(pYue,'yue'), pYue.rs, sshSel),' data-gk="gan" data-gz="'+pYue.gan+'" data-pk="yue"')+
+    td(pRi.wg,sshGanVert(stemCellHtml(pRi,'ri'), pRi.rs, sshSel),' data-gk="gan" data-gz="'+pRi.gan+'" data-pk="ri"')+
+    td(pShi.wg,sshGanVert(stemCellHtml(pShi,'shi'), pShi.rs, sshSel),' data-gk="gan" data-gz="'+pShi.gan+'" data-pk="shi"')+
+    td('sep col-dy '+pDy.wg,sshGanVert(pDy.gan, pDy.rs, sshSel))+td('col-ln '+pLn.wg,sshGanVert(pLn.gan, pLn.rs, sshSel))+'</tr>';
   // 地支行(2)
   mainRows[2] = '<tr class="rg" data-row-type="dy2">'+rl('')+
     td(pNian.wz,pNian.zhi,' data-gk="zhi" data-gz="'+pNian.zhi+'" data-pk="nian"')+
@@ -891,8 +886,7 @@ function renderChart(data, twin, targetId, opts) {
     td(pShi.wz,pShi.zhi,' data-gk="zhi" data-gz="'+pShi.zhi+'" data-pk="shi"')+
     td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
-  // v0.53.0 十神组行：勾选组时藏气行横排化（等宽 span 逐位对齐对应名行）
-  var sshSel = sshSelectedGroups();
+  // v0.64.0 十神组：勾选组时藏气行竖排三列
   var sshCg = sshSel.length > 0;
   mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')
     +td('', sshCg ? sshCgVert(pNian,'nian',twin,riGan,sshSel) : pNian.cg)
@@ -916,14 +910,7 @@ function renderChart(data, twin, targetId, opts) {
   mainRows[9] = '<tr class="rm" data-row-type="shensha dy6">'+rl('神煞')+td('',pNian.sh)+td('',pYue.sh)+td('',pRi.sh)+td('',pShi.sh)+td('sep col-dy',pDy.sh)+td('col-ln',pLn.sh)+'</tr>';
   // v0.29.0 星曜行：插入「藏气」与「纳音」之间（index-independent，既有索引一字不改）
   insertBeforeNayin(mainRows, xyRowMain({ nian:pNian, yue:pYue, ri:pRi, shi:pShi, tai:pTai, ming:pMing, shen:pShen }, pDy, pLn));
-  // v0.53.0 十神组行：组名行插主星行后（藏干对应名并入藏气单元，不再单起行）
-  if (sshSel.length) {
-    var sshGanRows = [];
-    for (var si = 0; si < sshSel.length; si++) {
-      sshGanRows.push(sshGanRow(sshSel[si], pNian, pYue, pRi, pShi, pDy, pLn));
-    }
-    insertAfterAnchor(mainRows, /data-row-type="dy1"/, sshGanRows);
-  }
+  // v0.65.0 十神组对应名并入天干单元（不再另起组名行）
   // v0.43.0 追加：主坐后插七坐组，自坐后插坐年~坐时（index-independent 锚点插入，自带 7 列）
   insertAfterAnchor(mainRows, /data-row-type="zhuzuo ln3"/, ZUO_GROUP.map(function(k){ return zuoRowMain(pAll, k, luckCols); }));
   insertAfterAnchor(mainRows, /data-row-type="zizuo dy5"/, SIT_MAIN_KEYS.map(function(k){ return sitRowMain(pAll, k, luckCols); }));
@@ -945,10 +932,10 @@ function renderChart(data, twin, targetId, opts) {
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan" data-row-type="sy-rs">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
-    td(pTaiNian.wg,stemCellHtml(pTaiNian,'taiNian'),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
-    td(pTai.wg,stemCellHtml(pTai,'tai'),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
-    td(pMing.wg,stemCellHtml(pMing,'ming'),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
-    td(pShen.wg,stemCellHtml(pShen,'shen'),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
+    td(pTaiNian.wg,sshGanVert(stemCellHtml(pTaiNian,'taiNian'), pTaiNian.rs, sshSel),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
+    td(pTai.wg,sshGanVert(stemCellHtml(pTai,'tai'), pTai.rs, sshSel),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
+    td(pMing.wg,sshGanVert(stemCellHtml(pMing,'ming'), pMing.rs, sshSel),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
+    td(pShen.wg,sshGanVert(stemCellHtml(pShen,'shen'), pShen.rs, sshSel),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
     td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
@@ -974,14 +961,7 @@ function renderChart(data, twin, targetId, opts) {
   insertAfterAnchor(syRows, /data-row-type="zhuzuo"/, ZUO_GROUP.map(function(k){ return zuoRowSy(pAll, k, true); }));
   insertAfterAnchor(syRows, /data-row-type="zizuo"/, SIT_MAIN_KEYS.map(function(k){ return sitRowSy(pAll, k, true, SIT_MAIN_COL); }));
   insertAfterAnchor(syRows, /data-row-type="zuoshi"/, SIT_SY_KEYS.map(function(k){ return sitRowSy(pAll, k, true); }));
-  // v0.55.0 十神组行（三垣区）：组名行插主星行后（藏干对应名并入藏气单元）
-  if (sshSel.length) {
-    var syGanRows = [];
-    for (var syi = 0; syi < sshSel.length; syi++) {
-      syGanRows.push(sshGanRowSy(sshSel[syi], pTaiNian, pTai, pMing, pShen));
-    }
-    insertAfterAnchor(syRows, /data-row-type="sy-rs"/, syGanRows);
-  }
+  // v0.65.0 三垣区组对应名并入天干单元（不再另起组名行）
   chartRows.push.apply(chartRows, syRows);
 
   // ---- 大运流年表 HTML ----
@@ -1470,6 +1450,10 @@ function taijiDispatch(e, scope, td, info) {
   }
   showTaijiMenu(e, info);
 }
+function cellGanText(td) {
+  var g = td.querySelector('.ssh-g-g');
+  return (g ? g.textContent : td.textContent).trim();
+}
 function bindTaijiClicks(container) {
   container.querySelectorAll('tr[data-row-type="ln1"]').forEach(function(tr) {
     var scope = taijiScopeOf(tr);
@@ -1478,7 +1462,7 @@ function bindTaijiClicks(container) {
       var i = td.cellIndex;
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
-        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: TAIJI_COLS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: cellGanText(td), col: TAIJI_COLS[i - 1], kind: 'gan' });
       });
     });
   });
@@ -1506,7 +1490,7 @@ function bindTaijiClicks(container) {
       if (i < 1 || i > 4) return;
       td.addEventListener('click', function(e) {
         if (!td.textContent.trim()) return;
-        taijiDispatch(e, scope, td, { gan: td.textContent.trim(), col: SY_KEYS[i - 1], kind: 'gan' });
+        taijiDispatch(e, scope, td, { gan: cellGanText(td), col: SY_KEYS[i - 1], kind: 'gan' });
       });
     });
   });
@@ -1888,6 +1872,7 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
     }
   }
 
+  var dlGroups = sshSelectedGroups();
   updates.forEach(function(u) {
     var row = getRow(u[0]);
     if (!row) return;
@@ -1897,24 +1882,17 @@ function _applyDLUpdates(tableEl, pDy, pLn, isSingle, refs, yr) {
       tds[5].className = 'sep col-dy ' + u[3];
       tds[6].className = 'col-ln ' + u[4];
     }
-    tds[5].innerHTML = u[1] || '';
-    tds[6].innerHTML = u[2] || '';
+    if (u[0] === 'ln1' && dlGroups.length) {
+      tds[5].innerHTML = sshGanVert(u[1] || '', pDy.rs, dlGroups);
+      tds[6].innerHTML = sshGanVert(u[2] || '', pLn.rs, dlGroups);
+    } else {
+      tds[5].innerHTML = u[1] || '';
+      tds[6].innerHTML = u[2] || '';
+    }
     // v0.29.0 星曜行：把当前大运/流年干支回写到 data-xy-gz，供值级刷新复用（既有条目 u[5]/u[6] 为 undefined，零影响）
     if (u[5] !== undefined) tds[5].setAttribute('data-xy-gz', u[5]);
     if (u[6] !== undefined) tds[6].setAttribute('data-xy-gz', u[6]);
   });
-
-  // v0.53.0 十神组行大运/流年列同步：组名行按 rs 映射（藏干对应名已并入藏气单元）
-  var sshTrs = tableEl.querySelectorAll('tr[data-ssh-group]');
-  for (var st = 0; st < sshTrs.length; st++) {
-    var sshTr = sshTrs[st];
-    var grp = sshGroupByName(sshTr.getAttribute('data-ssh-group'));
-    if (!grp) continue;
-    var sshTds = sshTr.querySelectorAll('td');
-    if (sshTds.length < 7) continue;
-    sshTds[5].innerHTML = sshGanCell(grp, pDy.rs);
-    sshTds[6].innerHTML = sshGanCell(grp, pLn.rs);
-  }
 
   // v0.56.0 运列表头年份同步（大运=该运起始年，运前无大运年份置空；流年=换算年份）
   if (yr) {
@@ -2101,12 +2079,6 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   else if (/\bdy2\b/.test(t)) colorCls = ' ' + p.wz;
   cell.className = isDy ? (isDy2 ? 'sep col-dy2' : (isSy ? 'sep' : 'sep col-dy')) : 'col-ln';
   cell.className += colorCls;
-  var gName = tr.getAttribute('data-ssh-group');
-  if (gName) {
-    var grp = sshGroupByName(gName);
-    if (grp) cell.innerHTML = sshGanCell(grp, p.rs);
-    return;
-  }
   var X = window.XINGYAO;
   if (isXy) {
     var gz = p.gan + p.zhi;
@@ -2133,7 +2105,7 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
     return;
   }
   if (/\bdy1\b/.test(t)) cell.innerHTML = p.rs;
-  else if (/\bln1\b/.test(t)) cell.innerHTML = p.gan;
+  else if (/\bln1\b/.test(t)) cell.innerHTML = sshCg ? sshGanVert(p.gan, p.rs, sshSelectedGroups()) : p.gan;
   else if (/\bdy2\b/.test(t)) cell.innerHTML = p.zhi;
   else if (/\bln2\b/.test(t)) cell.innerHTML = sshCg ? sshCgVert(p, isDy ? 'dayun' : 'liunian', 0, riGan, sshSelectedGroups()) : p.cg;
   else if (/\bnayin\b/.test(t)) cell.innerHTML = p.ny;

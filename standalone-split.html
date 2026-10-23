@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.64.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.65.0 | 2026-10-23 -->
+<!-- v0.65.0: 天干十神对应名并入天干单元右侧 — 删除独立组名行，天干在左、组对应名右侧竖排堆叠（与藏气同构）；主星/天干/地支/藏气四行左对齐；断言 T06/T08/T09/T12d/T12e/T13/T14/T15/T17/T18/T19/X08/X09 -->
 <!-- v0.64.0: 十神藏气排版回归竖形 — 勾选十神组后藏气不再横排化，每层一行「藏干 十神」+ 右侧组对应名（多组竖排堆叠、整块居中于该层），删除独立的组对应名行；断言 T07/T11/T12/T12b/T12c/T21/T22/X05/X06/X07 + T10c/T10d/T10e -->
 <!-- v0.63.2: 修复点十神弹出宫位界面 — gongwei rebuildGzCbGrid 扫全局 .gz-cb-grid，把十神 popover 的网格覆盖成宫位项；改为只重建 .gz-popover 内网格，十神网格改自有类 ssh-cb-grid（shishen renderPanel/rebuildPanels 同步），断言+3（T24 类名/T25 不覆盖/T26 宫位照常重建） -->
 <!-- v0.63.1: 修复多选流月/流日列头一行式回归：hd 表头恢复 dyLnYearHtml(lmHeadLabel/ldHeadLabel) 两行式包裹，与大运/流年列头同构（v0.63.0 把双重包裹误当 bug 剥掉所致）；断言+2（流月/流日列表头 dyln-yr 两行式） -->
@@ -953,9 +954,18 @@
   .cmp-gz-host { display:inline-flex; }
   .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover { z-index:30; }
   .archive-row-cmp { flex:0 0 auto; margin-right:2px; cursor:pointer; }
-  /* v0.58.0 十神组行修正：非空层居中、字号统一 11px（优先级压过 .chart .rm td/.rl 的 17px）、收窄占位防撑爆列宽 */
-  .chart tr.ssh-gan-row > td { font-size: 11px; padding: 1px 4px; }
-  .chart tr.ssh-gan-row .rl { color: var(--c-gray); font-size: 11px; }
+  /* v0.65.0 十神对应名并入天干单元：天干在左、组对应名右侧竖排堆叠（与藏气同构） */
+  .ssh-g-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .ssh-g-l { display: flex; align-items: center; gap: .12em; }
+  .ssh-g-g { min-width: 1em; text-align: center; }
+  .ssh-g-g .taiji-ring { min-width: 1em; }
+  .ssh-g-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .25em; }
+  .ssh-g-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
+  /* v0.65.0 主星/天干/地支/藏气四行左对齐：甲、戌、戊纵向同一左缘 */
+  .chart tr[data-row-type="dy1"] > td:not(.rl),
+  .chart tr[data-row-type="ln1"] > td:not(.rl),
+  .chart tr[data-row-type="dy2"] > td:not(.rl),
+  .chart tr[data-row-type="ln2"] > td:not(.rl) { text-align: left; padding-left: 8px; }
   /* v0.64.0 藏气竖排三列：藏干 | 十神 | 组对应名（多组名右侧竖排堆叠、整块居中于该层） */
   .ssh-cg-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
   .ssh-cg-l { display: flex; align-items: center; gap: .1em; }
