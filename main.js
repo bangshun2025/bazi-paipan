@@ -4704,6 +4704,74 @@ function captureScreenshot() {
     R.renderChart(pd2, undefined, 'tst-out');
   })();
 
+  // ===== v0.71.0 勾选十神/十干时运流区移到主表下方 =====
+  (function() {
+    var sec = 'LKM';
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof paipan !== 'function') {
+      tests.push(fail(sec + ' 前置: RENDER/paipan 挂载', '缺失'));
+      return;
+    }
+    var SKEY = 'bz_ssh_selected_v1', GKEY = 'bz_gan_selected_v1', RKEY = 'bz_rec_mode';
+    var sSsh = localStorage.getItem(SKEY), sGan = localStorage.getItem(GKEY), sRec = localStorage.getItem(RKEY);
+    var host = document.getElementById('tst-out');
+    if (!host) { host = document.createElement('div'); host.id = 'tst-out'; document.body.appendChild(host); }
+    var prevCss = host.getAttribute('style') || '';
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+    var pd = paipan('LKM运流下移', '男', 1984, 11, 15, 12, 0);
+
+    function geo() {
+      var bc = host.querySelector('.body-cols');
+      var main = host.querySelector('.main-col');
+      var luck = host.querySelector('.luck-col');
+      var chart = main ? main.querySelector('table.chart') : null;
+      var secEl = luck ? luck.querySelector('.luck-section') : null;
+      var mb = main ? main.getBoundingClientRect() : null;
+      var lb = luck ? luck.getBoundingClientRect() : null;
+      return {
+        cls: bc ? bc.className : '',
+        below: (mb && lb) ? (lb.top >= mb.bottom - 1) : null,
+        side: (mb && lb) ? (lb.left >= mb.right - 1) : null,
+        chartW: chart ? Math.round(chart.getBoundingClientRect().width) : 0,
+        mainL: mb ? Math.round(mb.left) : 0,
+        luckL: lb ? Math.round(lb.left) : 0,
+        overflow: secEl ? (secEl.scrollWidth - secEl.clientWidth) : -1,
+        luckInMain: (luck && main) ? luck.parentElement === main : null
+      };
+    }
+    function render(ssh, gan, rec) {
+      localStorage.setItem(SKEY, JSON.stringify(ssh));
+      localStorage.setItem(GKEY, JSON.stringify(gan));
+      if (typeof rec === 'string') localStorage.setItem(RKEY, rec);
+      R.renderChart(pd, undefined, 'tst-out');
+      return geo();
+    }
+    try {
+      var on = render(['军队'], [], '0');
+      tests.push(eq(sec + ' Y01: 勾选十神组时 body-cols 带 luck-moved', on.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' Y02: 勾选十神组时不用 luck-below（避免主表被拉伸）', on.cls.indexOf('luck-below') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y03: 运流区移到主表下方', on.below, true));
+      tests.push(eq(sec + ' Y04: 运流区不再与主表并排', on.side, false));
+      var off = render([], [], '0');
+      tests.push(eq(sec + ' Y05: 未勾选时回并排右侧', (off.side === true && off.below === false) ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' Y06: 未勾选时无 luck-moved', off.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y07: 下移不拉伸主表（两态主表宽差 ≤2px）', Math.abs(on.chartW - off.chartW) <= 2 ? 'Y' : 'N(' + on.chartW + '/' + off.chartW + ')', 'Y'));
+      tests.push(eq(sec + ' Y08: 下移后主表与运流区左缘对齐（差 ≤1px）', Math.abs(on.mainL - on.luckL) <= 1 ? 'Y' : 'N(' + on.mainL + '/' + on.luckL + ')', 'Y'));
+      tests.push(eq(sec + ' Y09: 下移后运流表格无横向溢出', on.overflow <= 1 ? 'Y' : 'N(' + on.overflow + ')', 'Y'));
+      var ganOnly = render([], ['德性'], '0');
+      tests.push(eq(sec + ' Y10: 只勾十干组也下移', ganOnly.below === true ? 'Y' : 'N', 'Y'));
+      var rec = render(['军队'], [], '1');
+      tests.push(eq(sec + ' Y11: 分析记录模式优先，勾选十神也不下移', rec.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y12: 记录模式下运流区仍在 main-col 内', rec.luckInMain === true ? 'Y' : 'N', 'Y'));
+    } finally {
+      if (sSsh === null) localStorage.removeItem(SKEY); else localStorage.setItem(SKEY, sSsh);
+      if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
+      if (sRec === null) localStorage.removeItem(RKEY); else localStorage.setItem(RKEY, sRec);
+      host.setAttribute('style', prevCss);
+      R.renderChart(pd, undefined, 'tst-out');
+    }
+  })();
+
   // ===== v0.69.0 档案防丢：多标签合并 / 删除墓碑 / 备份提醒 =====
   (function() {
     tests.push({ section:'档案防丢(v0.69.0)' });

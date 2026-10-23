@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.70.2 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.71.0 | 2026-10-23 -->
+<!-- v0.71.0: 勾选十神或十干任一组时，运流整区自动从右栏移到主表下方（新增 luck-moved 布局：flex column + fit-content 居中，主表保持原宽不被拉伸、左缘与运流区对齐；分析记录模式优先，不开下移） -->
 <!-- v0.70.2: 天干行与藏气行的十干/十神分区竖线上下对齐 —— 十干区固定 34px、竖线前后间距改定值 px，天干行 flex gap 差额用 6.3px margin 补齐（四柱实测差 0.07px） -->
 <!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
 <!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
@@ -847,6 +848,10 @@
   /* ===== v0.37.0 盘面对比 ===== */
   .body-cols.luck-below { display:block; }
   .body-cols.luck-below .luck-col { min-width:0; position:static; margin-top:10px; }
+  /* v0.71.0: 勾选十神/十干时运流区移到主表下方 —— 主表保持原宽不拉伸，运流区按内容宽左对齐 */
+  .body-cols.luck-moved { display:flex; flex-direction:column; align-items:flex-start; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }
+  .body-cols.luck-moved .main-col { width:auto; max-width:100%; }
+  .body-cols.luck-moved .luck-col { min-width:0; position:static; margin-top:12px; width:auto; max-width:100%; flex:0 0 auto; }
   .cmp-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.45); z-index:1000; }
   .cmp-overlay.show { display:flex; flex-direction:column; }
   .cmp-dialog { position:relative; flex:1; display:flex; flex-direction:column; width:100%; height:100%; background:var(--c-paper); overflow:hidden; }

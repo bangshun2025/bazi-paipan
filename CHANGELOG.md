@@ -4,6 +4,42 @@
 
 ---
 
+## v0.71.0（2026-10-23）勾选十神/十干时运流区移到主表下方
+
+**需求（邦顺）**：点十神或十干按钮后，运流整区从右方调整到下方。
+
+**背景**：v0.67.0 为了让左盘左对齐后右盘不显得突兀，给 `.luck-col` 加了 `ssh-on` 左对齐——结果右栏格子从居中变贴左，表格宽度算法也跟着变，整块往左缩，左右两栏开始不协调。与其继续在右栏里调和，不如把运流区直接放到主表下方：空间全宽，表格 816px 不再横向溢出。
+
+**做法**：新增 `luck-moved` 布局（不动原来的 `luck-below`，双胞胎卡仍在用它）。
+
+```css
+.body-cols.luck-moved { display:flex; flex-direction:column; align-items:flex-start;
+                        width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }
+.body-cols.luck-moved .main-col { width:auto; max-width:100%; }
+.body-cols.luck-moved .luck-col { min-width:0; position:static; margin-top:12px; width:auto; max-width:100%; flex:0 0 auto; }
+```
+
+三个细节：
+
+1. **不复用 `luck-below`**：它是 `display:block`，会让 `.chart { width:100% }` 把主表拉到 1302px 全宽，四柱分得太开。实测后改用 flex column + `fit-content`，主表维持 680px 原宽。
+2. **`width:fit-content` + `margin:auto`**：下移后整块居中（左缘 347 / 右缘 1165），主表与运流区左缘都落在 347，对齐。
+3. **分析记录模式优先**：`recOn` 为真时不下移，运流区仍按原逻辑移进 `main-col` 左下，避免两个下移机制打架。
+
+**触发条件**：`sshSel.length || ganSel.length`——勾了十神或十干任一组就下移，全部取消即回右栏。
+
+**验证**：
+- 回归断言 **1489 条全过**（v0.70.2 为 1477；本版 +12 = LKM Y01–Y12）。
+- 真实点击实测（1512 窗口）：
+
+| 状态 | body-cols 类 | 主表 | 运流区 | 关系 |
+|---|---|---|---|---|
+| 未勾选 | `body-cols` | 105–785 / 680px | 105 起、801 并排、606px | 并排右侧 |
+| 勾十神 | `body-cols luck-moved` | 347–1027 / 680px | 347 起、782 顶、818px | 下方左对齐 |
+| 只勾十干 | `body-cols luck-moved` | 347–1032 / 685px | 347 起、782 顶、818px | 下方左对齐 |
+
+- 下移后主表宽度不变（680/680，差 0px）；运流表格横向溢出 212px → 0。
+- 窄屏 480 实测正常：主表 442px，运流区接在下方，页面无横向溢出。
+
 ## v0.70.2（2026-10-23）天干与藏干的分区竖线上下对齐
 
 **需求（邦顺）**：天干行的竖线与藏气层的竖线要上下对齐，一条线贯下来。

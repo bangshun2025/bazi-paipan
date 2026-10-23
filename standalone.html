@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.70.2 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.71.0 | 2026-10-23 -->
+<!-- v0.71.0: 勾选十神或十干任一组时，运流整区自动从右栏移到主表下方（新增 luck-moved 布局：flex column + fit-content 居中，主表保持原宽不被拉伸、左缘与运流区对齐；分析记录模式优先，不开下移） -->
 <!-- v0.70.2: 天干行与藏气行的十干/十神分区竖线上下对齐 —— 十干区固定 34px、竖线前后间距改定值 px，天干行 flex gap 差额用 6.3px margin 补齐（四柱实测差 0.07px） -->
 <!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
 <!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
@@ -884,6 +885,10 @@
   /* ===== v0.37.0 盘面对比 ===== */
   .body-cols.luck-below { display:block; }
   .body-cols.luck-below .luck-col { min-width:0; position:static; margin-top:10px; }
+  /* v0.71.0: 勾选十神/十干时运流区移到主表下方 —— 主表保持原宽不拉伸，运流区按内容宽左对齐 */
+  .body-cols.luck-moved { display:flex; flex-direction:column; align-items:flex-start; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }
+  .body-cols.luck-moved .main-col { width:auto; max-width:100%; }
+  .body-cols.luck-moved .luck-col { min-width:0; position:static; margin-top:12px; width:auto; max-width:100%; flex:0 0 auto; }
   .cmp-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.45); z-index:1000; }
   .cmp-overlay.show { display:flex; flex-direction:column; }
   .cmp-dialog { position:relative; flex:1; display:flex; flex-direction:column; width:100%; height:100%; background:var(--c-paper); overflow:hidden; }
@@ -11339,8 +11344,9 @@ function renderChart(data, twin, targetId, opts) {
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
-  const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
+  const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
+  const bodyCls = opts.luckBelow ? 'body-cols luck-below' : ((sshOn && !recOn) ? 'body-cols luck-moved' : 'body-cols');
   const luckColHtml = `
       <div class="luck-col${recOn ? ' luck-rec-below' : ''}${(sshSel.length || ganSel.length) ? ' ssh-on' : ''}">
         <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -19245,6 +19251,74 @@ function captureScreenshot() {
       (luckOff ? cssAlign(luckOff.querySelector('.luck-row .cell')) : 'X'), 'center/off/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
+  })();
+
+  // ===== v0.71.0 勾选十神/十干时运流区移到主表下方 =====
+  (function() {
+    var sec = 'LKM';
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof paipan !== 'function') {
+      tests.push(fail(sec + ' 前置: RENDER/paipan 挂载', '缺失'));
+      return;
+    }
+    var SKEY = 'bz_ssh_selected_v1', GKEY = 'bz_gan_selected_v1', RKEY = 'bz_rec_mode';
+    var sSsh = localStorage.getItem(SKEY), sGan = localStorage.getItem(GKEY), sRec = localStorage.getItem(RKEY);
+    var host = document.getElementById('tst-out');
+    if (!host) { host = document.createElement('div'); host.id = 'tst-out'; document.body.appendChild(host); }
+    var prevCss = host.getAttribute('style') || '';
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+    var pd = paipan('LKM运流下移', '男', 1984, 11, 15, 12, 0);
+
+    function geo() {
+      var bc = host.querySelector('.body-cols');
+      var main = host.querySelector('.main-col');
+      var luck = host.querySelector('.luck-col');
+      var chart = main ? main.querySelector('table.chart') : null;
+      var secEl = luck ? luck.querySelector('.luck-section') : null;
+      var mb = main ? main.getBoundingClientRect() : null;
+      var lb = luck ? luck.getBoundingClientRect() : null;
+      return {
+        cls: bc ? bc.className : '',
+        below: (mb && lb) ? (lb.top >= mb.bottom - 1) : null,
+        side: (mb && lb) ? (lb.left >= mb.right - 1) : null,
+        chartW: chart ? Math.round(chart.getBoundingClientRect().width) : 0,
+        mainL: mb ? Math.round(mb.left) : 0,
+        luckL: lb ? Math.round(lb.left) : 0,
+        overflow: secEl ? (secEl.scrollWidth - secEl.clientWidth) : -1,
+        luckInMain: (luck && main) ? luck.parentElement === main : null
+      };
+    }
+    function render(ssh, gan, rec) {
+      localStorage.setItem(SKEY, JSON.stringify(ssh));
+      localStorage.setItem(GKEY, JSON.stringify(gan));
+      if (typeof rec === 'string') localStorage.setItem(RKEY, rec);
+      R.renderChart(pd, undefined, 'tst-out');
+      return geo();
+    }
+    try {
+      var on = render(['军队'], [], '0');
+      tests.push(eq(sec + ' Y01: 勾选十神组时 body-cols 带 luck-moved', on.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' Y02: 勾选十神组时不用 luck-below（避免主表被拉伸）', on.cls.indexOf('luck-below') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y03: 运流区移到主表下方', on.below, true));
+      tests.push(eq(sec + ' Y04: 运流区不再与主表并排', on.side, false));
+      var off = render([], [], '0');
+      tests.push(eq(sec + ' Y05: 未勾选时回并排右侧', (off.side === true && off.below === false) ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' Y06: 未勾选时无 luck-moved', off.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y07: 下移不拉伸主表（两态主表宽差 ≤2px）', Math.abs(on.chartW - off.chartW) <= 2 ? 'Y' : 'N(' + on.chartW + '/' + off.chartW + ')', 'Y'));
+      tests.push(eq(sec + ' Y08: 下移后主表与运流区左缘对齐（差 ≤1px）', Math.abs(on.mainL - on.luckL) <= 1 ? 'Y' : 'N(' + on.mainL + '/' + on.luckL + ')', 'Y'));
+      tests.push(eq(sec + ' Y09: 下移后运流表格无横向溢出', on.overflow <= 1 ? 'Y' : 'N(' + on.overflow + ')', 'Y'));
+      var ganOnly = render([], ['德性'], '0');
+      tests.push(eq(sec + ' Y10: 只勾十干组也下移', ganOnly.below === true ? 'Y' : 'N', 'Y'));
+      var rec = render(['军队'], [], '1');
+      tests.push(eq(sec + ' Y11: 分析记录模式优先，勾选十神也不下移', rec.cls.indexOf('luck-moved') >= 0 ? 'Y' : 'N', 'N'));
+      tests.push(eq(sec + ' Y12: 记录模式下运流区仍在 main-col 内', rec.luckInMain === true ? 'Y' : 'N', 'Y'));
+    } finally {
+      if (sSsh === null) localStorage.removeItem(SKEY); else localStorage.setItem(SKEY, sSsh);
+      if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
+      if (sRec === null) localStorage.removeItem(RKEY); else localStorage.setItem(RKEY, sRec);
+      host.setAttribute('style', prevCss);
+      R.renderChart(pd, undefined, 'tst-out');
+    }
   })();
 
   // ===== v0.69.0 档案防丢：多标签合并 / 删除墓碑 / 备份提醒 =====

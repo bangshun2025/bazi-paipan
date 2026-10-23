@@ -1098,8 +1098,9 @@ function renderChart(data, twin, targetId, opts) {
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
       <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
     </div>`;
-  const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
+  const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
+  const bodyCls = opts.luckBelow ? 'body-cols luck-below' : ((sshOn && !recOn) ? 'body-cols luck-moved' : 'body-cols');
   const luckColHtml = `
       <div class="luck-col${recOn ? ' luck-rec-below' : ''}${(sshSel.length || ganSel.length) ? ' ssh-on' : ''}">
         <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
