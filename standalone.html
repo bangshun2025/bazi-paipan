@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.70.1 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.70.2 | 2026-10-23 -->
+<!-- v0.70.2: 天干行与藏气行的十干/十神分区竖线上下对齐 —— 十干区固定 34px、竖线前后间距改定值 px，天干行 flex gap 差额用 6.3px margin 补齐（四柱实测差 0.07px） -->
 <!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
 <!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
 <!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
@@ -645,7 +646,7 @@
   .ssh-g-l { display: flex; align-items: center; gap: .12em; }
   .ssh-g-g { min-width: 1em; text-align: center; }
   .ssh-g-g .taiji-ring { min-width: 1em; }
-  .ssh-g-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .25em; }
+  .ssh-g-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: 6.3px; }
   .ssh-g-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
   /* v0.68.0 勾选十神组：全盘统一左对齐 —— 表头柱名（年柱/月柱…）、宫位映射行、主星/干支/藏气/
      纳音/纳运/主坐/自坐/空亡/神煞/星曜，以及表内大运/流年两列一并对齐；取消勾选回到居中排盘 */
@@ -659,13 +660,17 @@
   .ssh-cg-g { min-width: 1em; text-align: center; }
   .ssh-cg-g .taiji-ring { min-width: 1em; }
   .ssh-cg-t { min-width: 1em; text-align: center; font-size: 11px; }
-  .ssh-cg-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
+  .ssh-cg-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: 8px; }
   .ssh-cg-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
   /* v0.70.0 十干对应：置于十神组名左侧，竖线分隔 */
-  .gy-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
+  .gy-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: 8px;
+    font-size: 10px; min-width: 34px; }
   .gy-n { font-size: 10px; line-height: 1.2; color: var(--c-ink); opacity: .85; white-space: nowrap; }
-  .gy-sep { border-left: 1px solid var(--c-line); padding-left: .4em; margin-left: .4em; }
-  .gy-ns.gy-empty { min-width: 1.1em; }
+  .gy-sep { border-left: 1px solid var(--c-line); padding-left: 8px; margin-left: 8px; }
+  /* 天干行 flex gap 为 .12em(3.36px)、藏气行 .1em(1.7px)，用 margin 补齐使竖线同 x */
+  .ssh-g-ns.gy-sep { margin-left: 6.3px; }
+  /* v0.70.2 竖线上下对齐：十干区固定 34px、竖线前后 8px 定值，天干行（28px 字号）与藏气行（17px 字号）
+     前缀宽度 31.36 / 31.4 本就几乎相等，统一后两行竖线落在同一 x 上 */
   /* v0.68.0 藏气逐层分隔线：每层（藏干+十神+组对应名）之间加细线，对应名三列统一左对齐 */
   .chart.ssh-on td > .ssh-cg-v { width: 100%; }
   .chart.ssh-on .ssh-cg-v > .ssh-cg-l { align-self: stretch; }
@@ -19436,6 +19441,28 @@ function captureScreenshot() {
       }
       var emptyNs = emptyGanTd ? emptyGanTd.querySelector('.ssh-g-ns') : null;
       tests.push(eq('GA16: 空十干格的十神名留在竖线右侧区', emptyNs ? emptyNs.className.indexOf('gy-sep') >= 0 : false, true));
+
+      var alignBad = [];
+      var cgRowA = document.querySelector('.chart tr[data-sec="cangqi"]');
+      var ganCellsA = document.querySelectorAll('.chart tr.rg td[data-gk="gan"]');
+      for (var qa = 0; qa < ganCellsA.length; qa++) {
+        var gtdA = ganCellsA[qa];
+        var gRect = gtdA.getBoundingClientRect();
+        var mate = null;
+        if (cgRowA) {
+          for (var qb = 0; qb < cgRowA.cells.length; qb++) {
+            if (Math.abs(cgRowA.cells[qb].getBoundingClientRect().left - gRect.left) < 1) { mate = cgRowA.cells[qb]; break; }
+          }
+        }
+        if (!mate) continue;
+        var gSepA = gtdA.querySelector('.ssh-g-ns.gy-sep');
+        var cSepA = mate.querySelector('.ssh-cg-l .ssh-cg-ns.gy-sep');
+        if (!gSepA || !cSepA) continue;
+        var gOff = gSepA.getBoundingClientRect().left - gRect.left;
+        var cOff = cSepA.getBoundingClientRect().left - mate.getBoundingClientRect().left;
+        if (Math.abs(gOff - cOff) > 1) alignBad.push((gtdA.getAttribute('data-pk') || qa) + ':' + (gOff - cOff).toFixed(1));
+      }
+      tests.push(eq('GA17: 天干与藏气竖线上下对齐（≤1px）', alignBad.join('|'), ''));
     } catch (e) {
       tests.push(fail('GA6: 十干对应渲染异常', String(e)));
     } finally {

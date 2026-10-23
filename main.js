@@ -4898,6 +4898,28 @@ function captureScreenshot() {
       }
       var emptyNs = emptyGanTd ? emptyGanTd.querySelector('.ssh-g-ns') : null;
       tests.push(eq('GA16: 空十干格的十神名留在竖线右侧区', emptyNs ? emptyNs.className.indexOf('gy-sep') >= 0 : false, true));
+
+      var alignBad = [];
+      var cgRowA = document.querySelector('.chart tr[data-sec="cangqi"]');
+      var ganCellsA = document.querySelectorAll('.chart tr.rg td[data-gk="gan"]');
+      for (var qa = 0; qa < ganCellsA.length; qa++) {
+        var gtdA = ganCellsA[qa];
+        var gRect = gtdA.getBoundingClientRect();
+        var mate = null;
+        if (cgRowA) {
+          for (var qb = 0; qb < cgRowA.cells.length; qb++) {
+            if (Math.abs(cgRowA.cells[qb].getBoundingClientRect().left - gRect.left) < 1) { mate = cgRowA.cells[qb]; break; }
+          }
+        }
+        if (!mate) continue;
+        var gSepA = gtdA.querySelector('.ssh-g-ns.gy-sep');
+        var cSepA = mate.querySelector('.ssh-cg-l .ssh-cg-ns.gy-sep');
+        if (!gSepA || !cSepA) continue;
+        var gOff = gSepA.getBoundingClientRect().left - gRect.left;
+        var cOff = cSepA.getBoundingClientRect().left - mate.getBoundingClientRect().left;
+        if (Math.abs(gOff - cOff) > 1) alignBad.push((gtdA.getAttribute('data-pk') || qa) + ':' + (gOff - cOff).toFixed(1));
+      }
+      tests.push(eq('GA17: 天干与藏气竖线上下对齐（≤1px）', alignBad.join('|'), ''));
     } catch (e) {
       tests.push(fail('GA6: 十干对应渲染异常', String(e)));
     } finally {
