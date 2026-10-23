@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.70.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.70.1 | 2026-10-23 -->
+<!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
 <!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
 <!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
 <!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
@@ -631,13 +632,13 @@
   .gz-trigger:hover .gz-summary { color: var(--c-paper); opacity: 0.8; }
 
   /* Popover */
-  .gz-popover, .ssh-popover {
+  .gz-popover, .ssh-popover, .gan-popover {
     display: none; position: absolute; top: 100%; right: 0; z-index: 100;
     background: var(--gz-popover-bg); border: 1px solid var(--gz-popover-border);
     border-radius: 4px; box-shadow: var(--gz-popover-shadow);
     padding: 12px 14px; min-width: 280px; margin-top: 4px;
   }
-  .gz-popover.open, .ssh-popover.open { display: block; }
+  .gz-popover.open, .ssh-popover.open, .gan-popover.open { display: block; }
 
   /* v0.65.0 十神对应名并入天干单元：天干在左、组对应名右侧竖排堆叠（与藏气同构） */
   .ssh-g-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
@@ -664,6 +665,7 @@
   .gy-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
   .gy-n { font-size: 10px; line-height: 1.2; color: var(--c-ink); opacity: .85; white-space: nowrap; }
   .gy-sep { border-left: 1px solid var(--c-line); padding-left: .4em; margin-left: .4em; }
+  .gy-ns.gy-empty { min-width: 1.1em; }
   /* v0.68.0 藏气逐层分隔线：每层（藏干+十神+组对应名）之间加细线，对应名三列统一左对齐 */
   .chart.ssh-on td > .ssh-cg-v { width: 100%; }
   .chart.ssh-on .ssh-cg-v > .ssh-cg-l { align-self: stretch; }
@@ -713,7 +715,7 @@
 
   /* 移动端适配 */
   @media (max-width: 480px) {
-    .gz-popover, .ssh-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
+    .gz-popover, .ssh-popover, .gan-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
       transform: translateY(-50%); max-width: 90vw; }
     .gz-cb-grid { grid-template-columns: 1fr; }
   }
@@ -995,7 +997,7 @@
   .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
-  .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover { z-index:30; }
+  .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover, .cmp-gz-host .gan-popover { z-index:30; }
   .archive-row-cmp { flex:0 0 auto; margin-right:2px; cursor:pointer; }
 </style>
 <script>
@@ -10730,10 +10732,16 @@ function sshCgVert(p, colKey, twin, riGan, groups, ganGroups) {
       var gv = ganMapName(ganGroups[m], l.gan);
       if (gv) gy += '<span class="gy-n">' + sshEsc(gv) + '</span>';
     }
-    out += '<span class="ssh-cg-l"><span class="ssh-cg-g">' + g + '</span>'
-      + '<span class="ssh-cg-t">' + sshEsc(l.shiShen) + '</span>'
-      + (gy ? '<span class="gy-ns">' + gy + '</span>' : '')
-      + (ns ? '<span class="ssh-cg-ns' + (gy ? ' gy-sep' : '') + '">' + ns + '</span>' : '') + '</span>';
+    var cgHead = '<span class="ssh-cg-l"><span class="ssh-cg-g">' + g + '</span>'
+      + '<span class="ssh-cg-t">' + sshEsc(l.shiShen) + '</span>';
+    // 十干组勾选后固定两区（十干｜十神），该干无对应词也留竖线与占位，避免十神名左移进十干区
+    if (!(ganGroups && ganGroups.length)) {
+      out += cgHead + (ns ? '<span class="ssh-cg-ns">' + ns + '</span>' : '') + '</span>';
+      continue;
+    }
+    out += cgHead
+      + '<span class="gy-ns' + (gy ? '' : ' gy-empty') + '">' + gy + '</span>'
+      + '<span class="ssh-cg-ns gy-sep' + (ns ? '' : ' gy-empty') + '">' + ns + '</span></span>';
   }
   return '<span class="ssh-cg-v">' + out + '</span>';
 }
@@ -10753,10 +10761,15 @@ function sshGanVert(ganHtml, rs, groups, gan, ganGroups) {
       if (gv) gy += '<span class="gy-n">' + sshEsc(gv) + '</span>';
     }
   }
-  if (!ns && !gy) return ganHtml;
-  return '<span class="ssh-g-v"><span class="ssh-g-l"><span class="ssh-g-g">' + ganHtml + '</span>'
-    + (gy ? '<span class="gy-ns">' + gy + '</span>' : '')
-    + (ns ? '<span class="ssh-g-ns' + (gy ? ' gy-sep' : '') + '">' + ns + '</span>' : '')
+  var head = '<span class="ssh-g-v"><span class="ssh-g-l"><span class="ssh-g-g">' + ganHtml + '</span>';
+  // 十干组勾选后固定两区（十干｜十神），该干无对应词也保留竖线与占位
+  if (!(ganGroups && ganGroups.length)) {
+    if (!ns) return ganHtml;
+    return head + '<span class="ssh-g-ns">' + ns + '</span></span></span>';
+  }
+  return head
+    + '<span class="gy-ns' + (gy ? '' : ' gy-empty') + '">' + gy + '</span>'
+    + '<span class="ssh-g-ns gy-sep' + (ns ? '' : ' gy-empty') + '">' + ns + '</span>'
     + '</span></span>';
 }
 
@@ -19374,6 +19387,14 @@ function captureScreenshot() {
     tests.push(eq('GA4: 戊对应诚信', G.mapName(G.DEFAULT_GROUPS[0], '戊'), '诚信'));
     tests.push(eq('GA5: 未配置天干返回空串', G.mapName(G.DEFAULT_GROUPS[0], '乙'), ''));
 
+    var gp = document.querySelector('.gan-popover');
+    tests.push(eq('GA11: 十干面板默认不展开', gp ? getComputedStyle(gp).display : 'none-el', 'none'));
+    var gTrig = gp ? gp.parentNode.querySelector('.gan-trigger') : null;
+    if (gTrig) gTrig.click();
+    tests.push(eq('GA12: 点十干按钮才弹出', gp ? getComputedStyle(gp).display : 'none-el', 'block'));
+    if (gTrig) gTrig.click();
+    tests.push(eq('GA13: 再点收起面板', gp ? getComputedStyle(gp).display : 'none-el', 'none'));
+
     var selBackup = G.loadSelected();
     var sshBackup = SSH.loadSelected();
     try {
@@ -19399,6 +19420,22 @@ function captureScreenshot() {
       var cgGy = l0 ? l0.querySelector('.gy-n') : null;
       tests.push(eq('GA9: 藏气层藏干对应名', cgGy ? cgGy.textContent : '', cgExpect));
       tests.push(eq('GA10: 藏气层竖线分隔', l0 ? !!l0.querySelector('.ssh-cg-ns.gy-sep') : false, true));
+
+      var allGy = document.querySelectorAll('.chart .gy-ns');
+      var filledGy = document.querySelectorAll('.chart .gy-ns:not(.gy-empty)');
+      var noSep = 0;
+      for (var ai = 0; ai < allGy.length; ai++) {
+        if (!allGy[ai].parentNode.querySelector('.gy-sep')) noSep++;
+      }
+      tests.push(eq('GA14: 已有空十干占位（十干组勾选但该干无词）', allGy.length > filledGy.length, true));
+      tests.push(eq('GA15: 每个十干区（含空占位）都带分区竖线', allGy.length > 0 && noSep === 0, true));
+      var emptyGanTd = null;
+      var ganTds = document.querySelectorAll('.chart tr.rg td[data-gk="gan"]');
+      for (var gi = 0; gi < ganTds.length; gi++) {
+        if (ganTds[gi].querySelector('.gy-ns.gy-empty')) { emptyGanTd = ganTds[gi]; break; }
+      }
+      var emptyNs = emptyGanTd ? emptyGanTd.querySelector('.ssh-g-ns') : null;
+      tests.push(eq('GA16: 空十干格的十神名留在竖线右侧区', emptyNs ? emptyNs.className.indexOf('gy-sep') >= 0 : false, true));
     } catch (e) {
       tests.push(fail('GA6: 十干对应渲染异常', String(e)));
     } finally {

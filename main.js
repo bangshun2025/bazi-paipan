@@ -4849,6 +4849,14 @@ function captureScreenshot() {
     tests.push(eq('GA4: 戊对应诚信', G.mapName(G.DEFAULT_GROUPS[0], '戊'), '诚信'));
     tests.push(eq('GA5: 未配置天干返回空串', G.mapName(G.DEFAULT_GROUPS[0], '乙'), ''));
 
+    var gp = document.querySelector('.gan-popover');
+    tests.push(eq('GA11: 十干面板默认不展开', gp ? getComputedStyle(gp).display : 'none-el', 'none'));
+    var gTrig = gp ? gp.parentNode.querySelector('.gan-trigger') : null;
+    if (gTrig) gTrig.click();
+    tests.push(eq('GA12: 点十干按钮才弹出', gp ? getComputedStyle(gp).display : 'none-el', 'block'));
+    if (gTrig) gTrig.click();
+    tests.push(eq('GA13: 再点收起面板', gp ? getComputedStyle(gp).display : 'none-el', 'none'));
+
     var selBackup = G.loadSelected();
     var sshBackup = SSH.loadSelected();
     try {
@@ -4874,6 +4882,22 @@ function captureScreenshot() {
       var cgGy = l0 ? l0.querySelector('.gy-n') : null;
       tests.push(eq('GA9: 藏气层藏干对应名', cgGy ? cgGy.textContent : '', cgExpect));
       tests.push(eq('GA10: 藏气层竖线分隔', l0 ? !!l0.querySelector('.ssh-cg-ns.gy-sep') : false, true));
+
+      var allGy = document.querySelectorAll('.chart .gy-ns');
+      var filledGy = document.querySelectorAll('.chart .gy-ns:not(.gy-empty)');
+      var noSep = 0;
+      for (var ai = 0; ai < allGy.length; ai++) {
+        if (!allGy[ai].parentNode.querySelector('.gy-sep')) noSep++;
+      }
+      tests.push(eq('GA14: 已有空十干占位（十干组勾选但该干无词）', allGy.length > filledGy.length, true));
+      tests.push(eq('GA15: 每个十干区（含空占位）都带分区竖线', allGy.length > 0 && noSep === 0, true));
+      var emptyGanTd = null;
+      var ganTds = document.querySelectorAll('.chart tr.rg td[data-gk="gan"]');
+      for (var gi = 0; gi < ganTds.length; gi++) {
+        if (ganTds[gi].querySelector('.gy-ns.gy-empty')) { emptyGanTd = ganTds[gi]; break; }
+      }
+      var emptyNs = emptyGanTd ? emptyGanTd.querySelector('.ssh-g-ns') : null;
+      tests.push(eq('GA16: 空十干格的十神名留在竖线右侧区', emptyNs ? emptyNs.className.indexOf('gy-sep') >= 0 : false, true));
     } catch (e) {
       tests.push(fail('GA6: 十干对应渲染异常', String(e)));
     } finally {

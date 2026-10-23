@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.70.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.70.1 | 2026-10-23 -->
+<!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
 <!-- v0.70.0: 新增十干对应（独立组表 + 勾选，天干/藏气单元显示在十神组名之前，竖线分隔；按钮「十干」置于「十神」左侧，设置弹窗维护十天干映射） -->
 <!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
 <!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
@@ -633,13 +634,13 @@
   .gz-trigger:hover .gz-summary { color: var(--c-paper); opacity: 0.8; }
 
   /* Popover */
-  .gz-popover, .ssh-popover {
+  .gz-popover, .ssh-popover, .gan-popover {
     display: none; position: absolute; top: 100%; right: 0; z-index: 100;
     background: var(--gz-popover-bg); border: 1px solid var(--gz-popover-border);
     border-radius: 4px; box-shadow: var(--gz-popover-shadow);
     padding: 12px 14px; min-width: 280px; margin-top: 4px;
   }
-  .gz-popover.open, .ssh-popover.open { display: block; }
+  .gz-popover.open, .ssh-popover.open, .gan-popover.open { display: block; }
 
   /* Checkbox grid */
   .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
@@ -681,7 +682,7 @@
 
   /* 移动端适配 */
   @media (max-width: 480px) {
-    .gz-popover, .ssh-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
+    .gz-popover, .ssh-popover, .gan-popover { position: fixed; top: 50%; left: 5vw; right: 5vw;
       transform: translateY(-50%); max-width: 90vw; }
     .gz-cb-grid { grid-template-columns: 1fr; }
   }
@@ -963,7 +964,7 @@
   .cmp-bar .cmp-chip { flex:0 0 calc((100% - (var(--cmp-cols,3) - 1) * 6px) / var(--cmp-cols,3)); justify-content:center; min-width:0; }
   .cmp-zoom-val { min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cmp-gz-host { display:inline-flex; }
-  .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover { z-index:30; }
+  .cmp-gz-host .gz-popover, .cmp-gz-host .ssh-popover, .cmp-gz-host .gan-popover { z-index:30; }
   .archive-row-cmp { flex:0 0 auto; margin-right:2px; cursor:pointer; }
   /* v0.65.0 十神对应名并入天干单元：天干在左、组对应名右侧竖排堆叠（与藏气同构） */
   .ssh-g-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
@@ -990,6 +991,7 @@
   .gy-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
   .gy-n { font-size: 10px; line-height: 1.2; color: var(--c-ink); opacity: .85; white-space: nowrap; }
   .gy-sep { border-left: 1px solid var(--c-line); padding-left: .4em; margin-left: .4em; }
+  .gy-ns.gy-empty { min-width: 1.1em; }
   /* v0.68.0 藏气逐层分隔线：每层（藏干+十神+组对应名）之间加细线，对应名三列统一左对齐 */
   .chart.ssh-on td > .ssh-cg-v { width: 100%; }
   .chart.ssh-on .ssh-cg-v > .ssh-cg-l { align-self: stretch; }

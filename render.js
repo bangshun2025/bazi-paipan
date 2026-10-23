@@ -496,10 +496,16 @@ function sshCgVert(p, colKey, twin, riGan, groups, ganGroups) {
       var gv = ganMapName(ganGroups[m], l.gan);
       if (gv) gy += '<span class="gy-n">' + sshEsc(gv) + '</span>';
     }
-    out += '<span class="ssh-cg-l"><span class="ssh-cg-g">' + g + '</span>'
-      + '<span class="ssh-cg-t">' + sshEsc(l.shiShen) + '</span>'
-      + (gy ? '<span class="gy-ns">' + gy + '</span>' : '')
-      + (ns ? '<span class="ssh-cg-ns' + (gy ? ' gy-sep' : '') + '">' + ns + '</span>' : '') + '</span>';
+    var cgHead = '<span class="ssh-cg-l"><span class="ssh-cg-g">' + g + '</span>'
+      + '<span class="ssh-cg-t">' + sshEsc(l.shiShen) + '</span>';
+    // 十干组勾选后固定两区（十干｜十神），该干无对应词也留竖线与占位，避免十神名左移进十干区
+    if (!(ganGroups && ganGroups.length)) {
+      out += cgHead + (ns ? '<span class="ssh-cg-ns">' + ns + '</span>' : '') + '</span>';
+      continue;
+    }
+    out += cgHead
+      + '<span class="gy-ns' + (gy ? '' : ' gy-empty') + '">' + gy + '</span>'
+      + '<span class="ssh-cg-ns gy-sep' + (ns ? '' : ' gy-empty') + '">' + ns + '</span></span>';
   }
   return '<span class="ssh-cg-v">' + out + '</span>';
 }
@@ -519,10 +525,15 @@ function sshGanVert(ganHtml, rs, groups, gan, ganGroups) {
       if (gv) gy += '<span class="gy-n">' + sshEsc(gv) + '</span>';
     }
   }
-  if (!ns && !gy) return ganHtml;
-  return '<span class="ssh-g-v"><span class="ssh-g-l"><span class="ssh-g-g">' + ganHtml + '</span>'
-    + (gy ? '<span class="gy-ns">' + gy + '</span>' : '')
-    + (ns ? '<span class="ssh-g-ns' + (gy ? ' gy-sep' : '') + '">' + ns + '</span>' : '')
+  var head = '<span class="ssh-g-v"><span class="ssh-g-l"><span class="ssh-g-g">' + ganHtml + '</span>';
+  // 十干组勾选后固定两区（十干｜十神），该干无对应词也保留竖线与占位
+  if (!(ganGroups && ganGroups.length)) {
+    if (!ns) return ganHtml;
+    return head + '<span class="ssh-g-ns">' + ns + '</span></span></span>';
+  }
+  return head
+    + '<span class="gy-ns' + (gy ? '' : ' gy-empty') + '">' + gy + '</span>'
+    + '<span class="ssh-g-ns gy-sep' + (ns ? '' : ' gy-empty') + '">' + ns + '</span>'
     + '</span></span>';
 }
 
