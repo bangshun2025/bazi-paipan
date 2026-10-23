@@ -4595,10 +4595,25 @@ function captureScreenshot() {
       tests.push(eq(sec + ' X07: 对应名列逐层左缘一致且右于十神', (xn.filter(function(v) { return v !== xn[0]; }).length === 0 && xn[0] > xt[0]) ? 'Y' : 'N', 'Y'));
       tests.push(eq(sec + ' X08: 天干组名竖排右于天干字', (xGanRight !== null && xGanNsLeft >= xGanRight) ? 'Y' : 'N', 'Y'));
       tests.push(eq(sec + ' X09: 天干/地支/藏气三行左对齐', (ganAlign === 'left' && zhiAlign === 'left' && cgAlign === 'left') ? 'Y' : 'N', 'Y'));
+      var tblOn = host2.querySelector('table.chart');
+      tests.push(eq(sec + ' X10: 勾选十神组时主表带 ssh-on', tblOn && tblOn.classList.contains('ssh-on') ? 'Y' : 'N', 'Y'));
     } else {
       tests.push(fail(sec + ' X00b: 藏气竖排逐层行存在', '不足两层'));
     }
+    // v0.67.0 未勾选十神组 → 回到居中排盘（v0.65.0 的四行左对齐曾无条件生效）
+    // 注意：键缺失时 loadSelected() 默认 ['军队']，必须显式写 '[]' 才是「未勾选」
+    localStorage.setItem('bz_ssh_selected_v1', '[]');
+    R.renderChart(pd2, undefined, 'tst-out');
+    var tblOff = host2.querySelector('table.chart');
+    var ganOff = host2.querySelector('tr[data-row-type="ln1"] td[data-gk="gan"]');
+    var zhiOff = host2.querySelector('tr[data-row-type="dy2"] td[data-gk="zhi"]');
+    var cgOff = host2.querySelector('tr[data-row-type="ln2"] td:nth-child(2)');
+    var cssAlign = function(c) { return c ? window.getComputedStyle(c).textAlign : 'X'; };
+    tests.push(eq(sec + ' X11: 未勾选时主表无 ssh-on', tblOff && tblOff.classList.contains('ssh-on') ? 'Y' : 'N', 'N'));
+    tests.push(eq(sec + ' X12: 未勾选时天干格沿用居中', cssAlign(ganOff), 'center'));
+    tests.push(eq(sec + ' X13: 未勾选时地支/藏气沿用居中', cssAlign(zhiOff) + '/' + cssAlign(cgOff), 'center/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
+    R.renderChart(pd2, undefined, 'tst-out');
   })();
 
   // ===== v0.54.0 合盘档案 =====

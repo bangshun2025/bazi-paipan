@@ -4,6 +4,28 @@
 
 ---
 
+## v0.67.0（2026-10-23）排版回退修复：未勾选十神时恢复居中排盘
+
+**需求**：默认盘面天干地支被强制靠左，不符合原样；靠左只应在点击十神按钮、勾选组别之后才出现。
+
+**病根**：v0.65.0 引入的四行左对齐是**无条件 CSS**——`.chart tr[data-row-type="dy1"|"ln1"|"dy2"|"ln2"] > td:not(.rl) { text-align: left }`，与十神勾选状态无关，只要表格在就生效。而基础规则 `.chart th,.chart td{text-align:center}` 被其覆盖，用户看到的默认盘面即左贴。
+
+**改动**：
+
+1. **CSS 条件化**（index.html / standalone.html / standalone-split.html 同改）：选择器前置 `.chart.ssh-on`，即四行左对齐仅在主表带 `ssh-on` 类时生效。
+2. **render.js `renderChart`**：主表标签按勾选状态打类——`<table class="chart level-0${sshSel.length ? ' ssh-on' : ''}">`，切换勾选即时重渲染。
+3. **main.js 断言 +4**（十神节，X10–X13）：勾选时主表带 `ssh-on`；未勾选时无 `ssh-on`、天干格 `text-align: center`、地支与藏气均 `center`。
+
+**证据**：断言总数 1511（v0.66.0 为 1507，file:// 口径），全部通过；`check-release.sh` 6/6；`index.html` ≡ `standalone.html` md5 `f9326b2278ec60edd82f7bc7262449f8`（1,569,327 字节），`standalone-split.html` md5 `506abb06790a0b33dc8867fab2551c08`（121,603 字节）。
+
+**真机实测**（独立 Chrome，file:// 隔离环境，乾造 1990-1-1 12:00 己巳/丙子/丙寅/甲午）：
+
+- 未勾选：`sel=[]`、`ssh-on` 无、天干/地支/藏气三行均 `center`、天干字偏心 0px、按钮「十神 0 ▾」
+- 勾选「军队」：`sel=["军队"]`、`ssh-on` 有、三行均 `left`、组名块 `.ssh-g-ns` 出现、按钮「十神 1 ▾」
+- 再取消：回到 `[]`、`center`、偏心 0px——往返可逆
+
+---
+
 ## v0.66.0（2026-10-23）分析记录防丢 + 一键备份
 
 **需求**：分析记录老「像丢了」——李程 734 字其实一直在，只是取不到。要求：指纹取不到时别再显示空白；并且能一键导出/导入备份。

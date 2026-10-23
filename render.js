@@ -1086,7 +1086,7 @@ function renderChart(data, twin, targetId, opts) {
     <div class="${bodyCls}">
       <div class="main-col">
         <div class="chart-wrap">
-        <table class="chart level-0">${chartRows.join('\n')}</table>
+        <table class="chart level-0${sshSel.length ? ' ssh-on' : ''}">${chartRows.join('\n')}</table>
         </div>
 ${recOn ? luckColHtml : ''}
       </div>
