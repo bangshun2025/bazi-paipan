@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.68.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.69.0 | 2026-10-23 -->
+<!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
 <!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
 <!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
 <!-- v0.67.0: 修复未勾选十神组时天干地支被强制靠左 — v0.65.0 的四行左对齐 CSS 无条件生效，现改为只在 .chart.ssh-on（已勾选十神组）时生效，未勾选回到居中排盘；断言 X10/X11/X12/X13 -->
@@ -531,6 +532,11 @@
   .archive-row-btn:hover { opacity:.85; }
   .archive-modal-empty { display:flex; align-items:center; justify-content:center; height:100%; min-height:200px; text-align:center; padding:40px 20px; color:var(--c-gray); font-size:14px; }
   /* v0.32.0 档案标签：标签栏筛选 + 默认标签选择 + 行内标签输入 */
+  /* v0.69.0 备份强提示 */
+  .archive-backup-warn { margin:0 20px 8px; padding:7px 10px; background:#fdf3e3;
+    border:1px solid #e0b978; border-radius:2px; color:#8a5a12; font-size:12px;
+    line-height:1.5; cursor:pointer; }
+  .archive-backup-warn:hover { background:#f9e8cd; }
   .archive-modal-tagbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 20px; border-bottom:1px solid var(--c-line); max-height:92px; overflow-y:auto; }
   .archive-tag-label { font-size:12px; color:var(--c-gray); font-family:var(--font-body); }
   .archive-tag-chip { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
@@ -1043,8 +1049,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
       <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
       <span style="margin-left:4px;">
-        <label style="cursor:pointer;"><input type="radio" name="calType" id="calSolar" checked onchange="APP.toggleCalendar('solar')">新历</label>
-        <label style="cursor:pointer;"><input type="radio" name="calType" id="calLunar" onchange="APP.toggleCalendar('lunar')">农历</label>
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calSolar" checked onchange="APP.toggleCalendar('solar', true)">新历</label>
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calLunar" onchange="APP.toggleCalendar('lunar', true)">农历</label>
       </span>
       <input type="number" id="inYear" value="1982" min="1000" max="2100" style="width:72px;"> <span style="font-size:13px;">年</span>
       <span id="inMonthCell"><input type="number" id="inMonth" value="10" min="1" max="12" style="width:48px;"></span> <span style="font-size:13px;">月</span>
@@ -1152,6 +1158,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <span class="archive-modal-title">📋 档案</span>
         <span style="display:flex;align-items:center;gap:8px;"><button class="btn" id="btnHePanEntry" onclick="HEPAN.openPanel()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▤ 合盘</button><button class="btn" id="btnArchiveCompare" onclick="COMPARE.open()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▦ 盘面对比</button><button class="btn btn-default-tag" id="btnDefaultTag" onclick="ARCHIVE.toggleDefaultTagPicker()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🏷 默认标签</button><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
       </div>
+      <div class="archive-backup-warn" id="archiveBackupWarn" style="display:none;"
+        onclick="ARCHIVE.exportBackup()" title="点击立即导出备份"></div>
       <div class="archive-modal-tagbar" id="archive-tag-bar"></div>
       <div class="archive-tag-default-panel" id="archive-tag-default-panel" style="display:none;"></div>
       <div class="archive-modal-search">
@@ -4665,6 +4673,34 @@ function lunarToSolar(ly, lm, ld, isLeap) {
   return normalizeDate(solarY, solarM, solarD);
 }
 
+// 公历转农历（查表法）
+function solarToLunar(gy, gm, gd) {
+  var idx = gy - 1000;
+  if (idx < 0 || idx >= LUNAR_INFO.length) return null;
+  var ny = LUNAR_NEW_YEAR[idx];
+  var ord = Math.floor(Date.UTC(gy, gm - 1, gd) / 86400000);
+  if (ord < Math.floor(Date.UTC(gy, ny[0] - 1, ny[1]) / 86400000)) {
+    idx -= 1;
+    if (idx < 0) return null;
+    ny = LUNAR_NEW_YEAR[idx];
+  }
+  var ly = 1000 + idx;
+  var info = LUNAR_INFO[idx];
+  var leapMonth = info & 0xF;
+  var rest = ord - Math.floor(Date.UTC(ly, ny[0] - 1, ny[1]) / 86400000);
+  for (var m = 1; m <= 12; m++) {
+    var md = monthDays(info, m, false, leapMonth);
+    if (rest < md) return { y: ly, m: m, d: rest + 1, isLeap: false };
+    rest -= md;
+    if (m === leapMonth) {
+      var ld = monthDays(info, m, true, leapMonth);
+      if (rest < ld) return { y: ly, m: m, d: rest + 1, isLeap: true };
+      rest -= ld;
+    }
+  }
+  return null;
+}
+
 // 儒略历→格里历（JD 桥接）：1582-10-04 及更早的西历日期按史学界惯例是儒略历，
 // 排盘需先换算成格里历（如王阳明生：儒 1472-10-31 = 格 1472-11-09）
 function julianToGregorian(y, m, d) {
@@ -5285,6 +5321,7 @@ function buildShunLabel(shun, gender, nianGan) {
     monthDays: monthDays,
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
+    solarToLunar: solarToLunar,
     julianToGregorian: julianToGregorian,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,
@@ -5511,30 +5548,157 @@ function initPresetArchives() {
   try { migrateOrphanRecNotes(); } catch (e) {}
 }
 
-// ===== v0.9.0 核心读写函数 =====
-function getArchives() {
+// ===== v0.69.0 防丢：版本戳 / 删除墓碑 / 读改写合并 =====
+// 病根：saveArchives 整表覆盖。两个标签页各持一份内存副本，后写的一方会把
+// 另一方才新增的档案整段抹掉（renderArchiveModal 排序回写同样会触发）。
+// 对策：每次写前比对版本戳，发现外部写过就先按 id 合并再落盘；删除另记墓碑，
+// 避免合并时把已删档案复活。
+var ARCH_REV_KEY = 'bz_archives_rev';
+var ARCH_TOMB_KEY = 'bz_archives_tomb';
+var TRASH_REV_KEY = 'bz_trash_rev';
+var BACKUP_AT_KEY = 'bz_last_backup_at';
+var _archRevSeen = null;
+var _trashRevSeen = null;
+var _quotaWarnAt = 0;
+
+function readNum(key) {
+  try { return Number(localStorage.getItem(key)) || 0; } catch(e) { return 0; }
+}
+function writeNum(key, n) {
+  try { localStorage.setItem(key, String(n)); } catch(e) {}
+}
+function readRawArr(key) {
   try {
-    var arr = JSON.parse(localStorage.getItem(ARCH_KEY));
-    if (!arr || !Array.isArray(arr)) return [];
-    return arr;
+    var arr = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(arr) ? arr : [];
   } catch(e) { return []; }
 }
 
-function saveArchives(arr) {
-  localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+function archKeyOf(a) {
+  if (!a) return '';
+  if (a.id !== undefined && a.id !== null && a.id !== '') return 'id:' + a.id;
+  return 'fp:' + (a.name || '') + '|' + (a.gender || '') + '|'
+    + (a.year || '') + '-' + (a.month || '') + '-' + (a.day || '')
+    + '|' + (a.hour || '') + ':' + (a.min || 0);
+}
+function archTs(a) {
+  var t = Date.parse((a && (a.updatedAt || a.createdAt)) || '');
+  return isNaN(t) ? 0 : t;
+}
+function getTomb() {
+  try {
+    var o = JSON.parse(localStorage.getItem(ARCH_TOMB_KEY));
+    return (o && typeof o === 'object') ? o : {};
+  } catch(e) { return {}; }
+}
+function addTomb(id) {
+  if (id === undefined || id === null || id === '') return;
+  var t = getTomb();
+  t[String(id)] = Date.now();
+  try { localStorage.setItem(ARCH_TOMB_KEY, JSON.stringify(t)); } catch(e) {}
 }
 
+// 合并两份档案表：同键取 updatedAt 较新者，两侧独有都保留，墓碑命中的丢弃
+function mergeArchives(a, b) {
+  var tomb = getTomb();
+  var out = [];
+  var seen = {};
+  function take(list) {
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it) continue;
+      var k = archKeyOf(it);
+      if (!k) continue;
+      var tid = (it.id !== undefined && it.id !== null) ? String(it.id) : '';
+      if (tid && tomb[tid] && archTs(it) <= Number(tomb[tid])) continue;
+      if (!(k in seen)) { seen[k] = out.length; out.push(it); continue; }
+      var cur = out[seen[k]];
+      if (archTs(it) > archTs(cur)) out[seen[k]] = it;
+    }
+  }
+  take(a);
+  take(b);
+  return out;
+}
+
+function onStorageWriteFail() {
+  var now = Date.now();
+  try { setBackupHint('保存失败：本地存储已满，请立即点「导出备份」'); } catch(e) {}
+  if (now - _quotaWarnAt < 60000) return;
+  _quotaWarnAt = now;
+  try {
+    alert('⚠ 保存失败：浏览器本地存储已满。\n\n请立刻点「⬇ 导出备份」把档案存成 JSON 文件，'
+      + '再清理旧档案或分析记录后重试。');
+  } catch(e) {}
+}
+
+// 写档案：外部变更过（版本戳前进）就先合并，内容没变则不写、不广播
+function writeArchives(arr) {
+  // 本地传入的排在前面（显示顺序 = 索引顺序），盘上独有项追加末尾，保证不丢
+  var out = mergeArchives(arr || [], readRawArr(ARCH_KEY));
+  var json = JSON.stringify(out);
+  var old = null;
+  try { old = localStorage.getItem(ARCH_KEY); } catch(e) {}
+  if (json !== old) {
+    try { localStorage.setItem(ARCH_KEY, json); }
+    catch(e) { onStorageWriteFail(); return false; }
+  }
+  _archRevSeen = Date.now();
+  writeNum(ARCH_REV_KEY, _archRevSeen);
+  return true;
+}
+
+// ===== v0.9.0 核心读写函数 =====
+function getArchives() {
+  var arr = readRawArr(ARCH_KEY);
+  _archRevSeen = readNum(ARCH_REV_KEY);
+  return arr;
+}
+
+function saveArchives(arr) {
+  return writeArchives(arr);
+}
+
+// 强制整表写（迁移/初始化用，不合并）
 function saveArchivesRaw(arr) {
-  localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+  try { localStorage.setItem(ARCH_KEY, JSON.stringify(arr || [])); }
+  catch(e) { onStorageWriteFail(); return false; }
+  _archRevSeen = Date.now();
+  writeNum(ARCH_REV_KEY, _archRevSeen);
+  return true;
 }
 
 function getTrash() {
-  try { return JSON.parse(localStorage.getItem(TRASH_KEY)) || []; }
-  catch(e) { return []; }
+  var arr = readRawArr(TRASH_KEY);
+  _trashRevSeen = readNum(TRASH_REV_KEY);
+  return arr;
 }
 
 function saveTrash(arr) {
-  localStorage.setItem(TRASH_KEY, JSON.stringify(arr));
+  var out = arr || [];
+  var merged = [];
+  var seen = {};
+  [out, readRawArr(TRASH_KEY)].forEach(function(list) {
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it) continue;
+      var k = archKeyOf(it) + '|' + (it.deletedAt || '');
+      if (seen[k]) continue;
+      seen[k] = true;
+      merged.push(it);
+    }
+  });
+  out = merged;
+  var json = JSON.stringify(out);
+  var old = null;
+  try { old = localStorage.getItem(TRASH_KEY); } catch(e) {}
+  if (json !== old) {
+    try { localStorage.setItem(TRASH_KEY, json); }
+    catch(e) { onStorageWriteFail(); return false; }
+  }
+  _trashRevSeen = Date.now();
+  writeNum(TRASH_REV_KEY, _trashRevSeen);
+  return true;
 }
 
 // ===== 隐私模式（v0.19.0）=====
@@ -5726,6 +5890,7 @@ function moveToTrash(idx) {
   if (!confirm('确定删除「' + getDisplayName(a) + '」的档案？可在回收站恢复。' + extraMsg)) return;
   var ts = new Date().toISOString();
   var trashItem = Object.assign({}, a, {deletedAt: ts});
+  addTomb(a.id);
   var trash = getTrash();
   trash.push(trashItem);
   saveTrash(trash);
@@ -6441,6 +6606,7 @@ function renderArchiveModal() {
   saveArchives(archives);
 
   renderTagBar();
+  renderArchiveBackupWarn();
 
   var k = _searchKeyword.trim().toLowerCase();
   if (archives.length === 0) {
@@ -6642,8 +6808,37 @@ function exportBackup() {
   a.click();
   document.body.removeChild(a);
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+  writeNum(BACKUP_AT_KEY, Date.now());
+  renderArchiveBackupWarn();
   setBackupHint('已导出 ' + data.archives.length + ' 条档案、' + Object.keys(data.recNotes).length + ' 条分析记录');
   return data;
+}
+
+// ===== v0.69.0 备份强提示 =====
+// 档案只在浏览器本地，清缓存 / 换电脑即归零；距上次导出超 7 天就顶上常驻警示
+var BACKUP_WARN_DAYS = 7;
+
+function backupAgeDays() {
+  var t = readNum(BACKUP_AT_KEY);
+  if (!t) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function backupWarnText(archiveCount) {
+  var n = (archiveCount === undefined) ? getArchives().length : archiveCount;
+  if (!n) return '';
+  var d = backupAgeDays();
+  if (d === null) return '⚠ 还没导出过备份 · 清浏览器缓存会全部丢失，点此导出';
+  if (d >= BACKUP_WARN_DAYS) return '⚠ 已 ' + d + ' 天未导出备份 · 清浏览器缓存会全部丢失，点此导出';
+  return '';
+}
+
+function renderArchiveBackupWarn() {
+  var el = document.getElementById('archiveBackupWarn');
+  if (!el) return;
+  var msg = backupWarnText();
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
 }
 
 function pickImportBackup() {
@@ -6728,6 +6923,13 @@ function onImportFile(input) {
     getArchives: getArchives,
     saveArchives: saveArchives,
     saveArchivesRaw: saveArchivesRaw,
+    mergeArchives: mergeArchives,
+    archKeyOf: archKeyOf,
+    addTomb: addTomb,
+    getTomb: getTomb,
+    backupAgeDays: backupAgeDays,
+    backupWarnText: backupWarnText,
+    renderArchiveBackupWarn: renderArchiveBackupWarn,
     getTrash: getTrash,
     saveTrash: saveTrash,
     refreshArchiveModalIfOpen: refreshArchiveModalIfOpen,
@@ -6802,6 +7004,19 @@ function onImportFile(input) {
     deleteNote: deleteNote,
     noteKey: noteKey,
   };
+
+  // ===== v0.69.0 跨标签页同步：别的窗口写过档案，本页立刻跟上 =====
+  // 只更新基线 + 重渲染，不写盘，避免两个标签页互相触发写入
+  window.addEventListener('storage', function(e) {
+    if (!e.key) return;
+    if (e.key === ARCH_KEY || e.key === ARCH_REV_KEY) {
+      _archRevSeen = readNum(ARCH_REV_KEY);
+      try { refreshArchiveModalIfOpen(); } catch (err) {}
+      try { renderArchiveBackupWarn(); } catch (err) {}
+    } else if (e.key === TRASH_KEY || e.key === TRASH_REV_KEY) {
+      _trashRevSeen = readNum(TRASH_REV_KEY);
+    }
+  });
 
   // ===== v0.32.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
   // archive.js 早于 main.js 加载，__testAppend（main.js 定义）此刻尚不存在，
@@ -14032,6 +14247,7 @@ function cmpSetState(entries) {
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
+  var solarToLunar = ALGO.solarToLunar;
   var updateSolarPreview = ALGO.updateSolarPreview;
   var getLng = ALGO.getLng;
   var dayOfYear = ALGO.dayOfYear;
@@ -14290,8 +14506,22 @@ function setupTwinTypeChange() {
   });
 }
 
-function toggleCalendar(type) {
+function toggleCalendar(type, convert) {
   if (calendarType === type) return;
+  var snap = null;
+  if (convert) {
+    var y0 = parseInt(document.getElementById('inYear').value);
+    var d0 = parseInt(document.getElementById('inDay').value);
+    var m0 = parseInt((document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value);
+    if (!isNaN(y0) && !isNaN(m0) && !isNaN(d0)) {
+      if (calendarType === 'solar') {
+        snap = solarToLunar(y0, m0, d0);
+      } else {
+        var s0 = lunarToSolar(y0, m0, d0, document.getElementById('inLeap').checked);
+        if (s0) snap = { y: s0.y, m: s0.m, d: s0.d, isLeap: false };
+      }
+    }
+  }
   calendarType = type;
   var isLunar = (type === 'lunar');
   var monthCell = document.getElementById('inMonthCell');
@@ -14309,6 +14539,16 @@ function toggleCalendar(type) {
     document.getElementById('inLeapGroup').style.display = 'none';
     document.getElementById('inLeap').checked = false;
     document.getElementById('inDay').max = 31;
+  }
+  if (snap) {
+    document.getElementById('inYear').value = snap.y;
+    document.getElementById('inDay').value = snap.d;
+    if (isLunar) {
+      document.getElementById('inMonthSelect').value = snap.m;
+      document.getElementById('inLeap').checked = !!snap.isLeap;
+    } else {
+      document.getElementById('inMonth').value = snap.m;
+    }
   }
   document.getElementById('calSolar').checked = !isLunar;
   document.getElementById('calLunar').checked = isLunar;
@@ -18668,6 +18908,142 @@ function captureScreenshot() {
       (luckOff ? cssAlign(luckOff.querySelector('.luck-row .cell')) : 'X'), 'center/off/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
+  })();
+
+  // ===== v0.69.0 档案防丢：多标签合并 / 删除墓碑 / 备份提醒 =====
+  (function() {
+    tests.push({ section:'档案防丢(v0.69.0)' });
+    var A = window.ARCHIVE;
+    var KEY = window.CONST.ARCH_KEY;
+    var REV = 'bz_archives_rev', TOMB = 'bz_archives_tomb', BAT = 'bz_last_backup_at';
+    if (!A || typeof A.mergeArchives !== 'function' || typeof A.backupWarnText !== 'function') {
+      tests.push(fail('TB 前置: ARCHIVE 防丢接口挂载', '缺失'));
+      return;
+    }
+    var bak = {};
+    [KEY, REV, TOMB, BAT].forEach(function(k) { bak[k] = localStorage.getItem(k); });
+    var mk = function(id, name, up) {
+      return { id:id, name:name, gender:'男', year:1990, month:1, day:1, hour:12, min:0,
+               updatedAt:up || '2026-01-01T00:00:00.000Z' };
+    };
+    try {
+      // TB1 另一标签页新增后用旧副本写回 → 新档案不丢
+      localStorage.setItem(KEY, JSON.stringify([mk('tb1a','甲')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.getArchives();
+      localStorage.setItem(KEY, JSON.stringify([mk('tb1a','甲'), mk('tb1b','乙','2026-01-02T00:00:00.000Z')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([mk('tb1a','甲')]);
+      var ids1 = A.getArchives().map(function(x){ return x.id; }).sort().join(',');
+      tests.push(eq('TB1: 旧副本写回不覆盖另一标签的新档案', ids1, 'tb1a,tb1b'));
+
+      // TB2 同 id 冲突取 updatedAt 较新者
+      localStorage.setItem(KEY, JSON.stringify([mk('tb2a','远端新','2026-03-01T00:00:00.000Z')]));
+      localStorage.removeItem(REV);
+      A.getArchives();
+      localStorage.setItem(KEY, JSON.stringify([mk('tb2a','远端新','2026-03-01T00:00:00.000Z')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([mk('tb2a','本地旧','2026-02-01T00:00:00.000Z')]);
+      var got2 = A.getArchives().filter(function(x){ return x.id === 'tb2a'; })[0];
+      tests.push(eq('TB2: 同 id 取 updatedAt 较新的一条', got2 && got2.name, '远端新'));
+
+      // TB3 墓碑：已删档案不会被另一标签的旧副本复活
+      localStorage.setItem(KEY, JSON.stringify([mk('tb3a','已删')]));
+      localStorage.removeItem(REV);
+      A.getArchives();
+      A.addTomb('tb3a');
+      localStorage.setItem(KEY, JSON.stringify([mk('tb3a','已删')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([]);
+      tests.push(eq('TB3: 删除墓碑防止复活', String(A.getArchives().length), '0'));
+
+      // TB4 幂等：内容相同不推进版本戳
+      localStorage.setItem(KEY, JSON.stringify([mk('tb4a','幂等')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.saveArchives([mk('tb4a','幂等')]);
+      var rev1 = localStorage.getItem(REV);
+      A.saveArchives([mk('tb4a','幂等')]);
+      tests.push(eq('TB4: 内容不变不重复写盘', localStorage.getItem(REV), rev1));
+
+      // TB9 同 id 同 updatedAt（如改名未刷新时间戳）→ 本地优先，不回退旧值
+      localStorage.setItem(KEY, JSON.stringify([mk('tb9a','旧名','2026-01-01T00:00:00.000Z')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.saveArchives([mk('tb9a','新名','2026-01-01T00:00:00.000Z')]);
+      var got9 = A.getArchives().filter(function(x){ return x.id === 'tb9a'; })[0];
+      tests.push(eq('TB9: 改名平局时本地优先', got9 && got9.name, '新名'));
+
+      // TB5-TB7 备份提醒文案
+      localStorage.setItem(KEY, JSON.stringify([mk('tb5a','提示')]));
+      localStorage.removeItem(BAT);
+      var w1 = A.backupWarnText();
+      localStorage.setItem(BAT, String(Date.now() - 10 * 86400000));
+      var w2 = A.backupWarnText();
+      localStorage.setItem(BAT, String(Date.now() - 2 * 86400000));
+      var w3 = A.backupWarnText();
+      var w4 = A.backupWarnText(0);
+      tests.push(eq('TB5: 从未备份有警示', w1.indexOf('还没导出') >= 0 ? 'Y' : 'N:' + w1, 'Y'));
+      tests.push(eq('TB6: 超 7 天警示带天数', w2.indexOf('已 10 天') >= 0 ? 'Y' : 'N:' + w2, 'Y'));
+      tests.push(eq('TB7: 7 天内 / 零档案不警示', (w3 || 'EMPTY') + '/' + (w4 || 'EMPTY'), 'EMPTY/EMPTY'));
+
+      // TB8 警示条元素与显隐联动
+      var el = document.getElementById('archiveBackupWarn');
+      localStorage.removeItem(BAT);
+      A.renderArchiveBackupWarn();
+      var shown = el && el.style.display !== 'none' && el.textContent.indexOf('还没导出') >= 0;
+      localStorage.setItem(BAT, String(Date.now()));
+      A.renderArchiveBackupWarn();
+      tests.push(eq('TB8: 警示条按备份状态显隐', (shown ? 'Y' : 'N') + '/' + (el ? el.style.display : 'X'), 'Y/none'));
+    } catch (e) {
+      tests.push(fail('TB00: 防丢测试异常', String(e)));
+    } finally {
+      Object.keys(bak).forEach(function(k) {
+        if (bak[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, bak[k]);
+      });
+      try { A.renderArchiveBackupWarn(); } catch (e) {}
+    }
+  })();
+
+  // ===== v0.69.0 历法切换自动换算 =====
+  (function() {
+    var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };
+    tests.push(eq('CF1: 公历 1990-01-01 → 农历腊月初五', f(ALGO.solarToLunar(1990, 1, 1)), '1989-12-5'));
+    tests.push(eq('CF2: 公历 2023-03-22 → 闰二月初一', f(ALGO.solarToLunar(2023, 3, 22)), '2023-2-1L'));
+    tests.push(eq('CF3: 公历 2026-10-23 → 九月十四', f(ALGO.solarToLunar(2026, 10, 23)), '2026-9-14'));
+    var s = ALGO.lunarToSolar(2023, 2, 1, true);
+    tests.push(eq('CF4: 闰二月往返回公历', s ? (s.y + '-' + s.m + '-' + s.d) : 'null', '2023-3-22'));
+    tests.push(eq('CF5: 越界年份返回 null', String(ALGO.solarToLunar(999, 1, 1)), 'null'));
+
+    var y0 = document.getElementById('inYear').value;
+    var d0 = document.getElementById('inDay').value;
+    var m0 = (document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value;
+    var lp0 = document.getElementById('inLeap') ? document.getElementById('inLeap').checked : false;
+    var t0 = calendarType;
+    try {
+      if (calendarType !== 'solar') toggleCalendar('solar');
+      document.getElementById('inYear').value = '1990';
+      document.getElementById('inMonth').value = '1';
+      document.getElementById('inDay').value = '1';
+      toggleCalendar('lunar', true);
+      var got = [document.getElementById('inYear').value,
+        document.getElementById('inMonthSelect').value,
+        document.getElementById('inDay').value].join('-');
+      tests.push(eq('CF6: 切农历自动换算表单', got, '1989-12-5'));
+      toggleCalendar('solar', true);
+      var back = [document.getElementById('inYear').value,
+        document.getElementById('inMonth').value,
+        document.getElementById('inDay').value].join('-');
+      tests.push(eq('CF7: 切回新历还原日期', back, '1990-1-1'));
+    } catch (e) {
+      tests.push(fail('CF6: 历法切换异常', String(e)));
+    } finally {
+      if (calendarType !== t0) toggleCalendar(t0);
+      document.getElementById('inYear').value = y0;
+      document.getElementById('inDay').value = d0;
+      var mc = document.getElementById('inMonth') || document.getElementById('inMonthSelect');
+      if (mc) mc.value = m0;
+      var lp = document.getElementById('inLeap');
+      if (lp) lp.checked = lp0;
+    }
   })();
 
   // ===== v0.54.0 合盘档案 =====

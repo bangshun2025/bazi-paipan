@@ -41,6 +41,7 @@
   var monthDays = ALGO.monthDays;
   var normalizeDate = ALGO.normalizeDate;
   var lunarToSolar = ALGO.lunarToSolar;
+  var solarToLunar = ALGO.solarToLunar;
   var updateSolarPreview = ALGO.updateSolarPreview;
   var getLng = ALGO.getLng;
   var dayOfYear = ALGO.dayOfYear;
@@ -299,8 +300,22 @@ function setupTwinTypeChange() {
   });
 }
 
-function toggleCalendar(type) {
+function toggleCalendar(type, convert) {
   if (calendarType === type) return;
+  var snap = null;
+  if (convert) {
+    var y0 = parseInt(document.getElementById('inYear').value);
+    var d0 = parseInt(document.getElementById('inDay').value);
+    var m0 = parseInt((document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value);
+    if (!isNaN(y0) && !isNaN(m0) && !isNaN(d0)) {
+      if (calendarType === 'solar') {
+        snap = solarToLunar(y0, m0, d0);
+      } else {
+        var s0 = lunarToSolar(y0, m0, d0, document.getElementById('inLeap').checked);
+        if (s0) snap = { y: s0.y, m: s0.m, d: s0.d, isLeap: false };
+      }
+    }
+  }
   calendarType = type;
   var isLunar = (type === 'lunar');
   var monthCell = document.getElementById('inMonthCell');
@@ -318,6 +333,16 @@ function toggleCalendar(type) {
     document.getElementById('inLeapGroup').style.display = 'none';
     document.getElementById('inLeap').checked = false;
     document.getElementById('inDay').max = 31;
+  }
+  if (snap) {
+    document.getElementById('inYear').value = snap.y;
+    document.getElementById('inDay').value = snap.d;
+    if (isLunar) {
+      document.getElementById('inMonthSelect').value = snap.m;
+      document.getElementById('inLeap').checked = !!snap.isLeap;
+    } else {
+      document.getElementById('inMonth').value = snap.m;
+    }
   }
   document.getElementById('calSolar').checked = !isLunar;
   document.getElementById('calLunar').checked = isLunar;
@@ -4677,6 +4702,142 @@ function captureScreenshot() {
       (luckOff ? cssAlign(luckOff.querySelector('.luck-row .cell')) : 'X'), 'center/off/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
+  })();
+
+  // ===== v0.69.0 档案防丢：多标签合并 / 删除墓碑 / 备份提醒 =====
+  (function() {
+    tests.push({ section:'档案防丢(v0.69.0)' });
+    var A = window.ARCHIVE;
+    var KEY = window.CONST.ARCH_KEY;
+    var REV = 'bz_archives_rev', TOMB = 'bz_archives_tomb', BAT = 'bz_last_backup_at';
+    if (!A || typeof A.mergeArchives !== 'function' || typeof A.backupWarnText !== 'function') {
+      tests.push(fail('TB 前置: ARCHIVE 防丢接口挂载', '缺失'));
+      return;
+    }
+    var bak = {};
+    [KEY, REV, TOMB, BAT].forEach(function(k) { bak[k] = localStorage.getItem(k); });
+    var mk = function(id, name, up) {
+      return { id:id, name:name, gender:'男', year:1990, month:1, day:1, hour:12, min:0,
+               updatedAt:up || '2026-01-01T00:00:00.000Z' };
+    };
+    try {
+      // TB1 另一标签页新增后用旧副本写回 → 新档案不丢
+      localStorage.setItem(KEY, JSON.stringify([mk('tb1a','甲')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.getArchives();
+      localStorage.setItem(KEY, JSON.stringify([mk('tb1a','甲'), mk('tb1b','乙','2026-01-02T00:00:00.000Z')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([mk('tb1a','甲')]);
+      var ids1 = A.getArchives().map(function(x){ return x.id; }).sort().join(',');
+      tests.push(eq('TB1: 旧副本写回不覆盖另一标签的新档案', ids1, 'tb1a,tb1b'));
+
+      // TB2 同 id 冲突取 updatedAt 较新者
+      localStorage.setItem(KEY, JSON.stringify([mk('tb2a','远端新','2026-03-01T00:00:00.000Z')]));
+      localStorage.removeItem(REV);
+      A.getArchives();
+      localStorage.setItem(KEY, JSON.stringify([mk('tb2a','远端新','2026-03-01T00:00:00.000Z')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([mk('tb2a','本地旧','2026-02-01T00:00:00.000Z')]);
+      var got2 = A.getArchives().filter(function(x){ return x.id === 'tb2a'; })[0];
+      tests.push(eq('TB2: 同 id 取 updatedAt 较新的一条', got2 && got2.name, '远端新'));
+
+      // TB3 墓碑：已删档案不会被另一标签的旧副本复活
+      localStorage.setItem(KEY, JSON.stringify([mk('tb3a','已删')]));
+      localStorage.removeItem(REV);
+      A.getArchives();
+      A.addTomb('tb3a');
+      localStorage.setItem(KEY, JSON.stringify([mk('tb3a','已删')]));
+      localStorage.setItem(REV, String(Date.now() + 1000));
+      A.saveArchives([]);
+      tests.push(eq('TB3: 删除墓碑防止复活', String(A.getArchives().length), '0'));
+
+      // TB4 幂等：内容相同不推进版本戳
+      localStorage.setItem(KEY, JSON.stringify([mk('tb4a','幂等')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.saveArchives([mk('tb4a','幂等')]);
+      var rev1 = localStorage.getItem(REV);
+      A.saveArchives([mk('tb4a','幂等')]);
+      tests.push(eq('TB4: 内容不变不重复写盘', localStorage.getItem(REV), rev1));
+
+      // TB9 同 id 同 updatedAt（如改名未刷新时间戳）→ 本地优先，不回退旧值
+      localStorage.setItem(KEY, JSON.stringify([mk('tb9a','旧名','2026-01-01T00:00:00.000Z')]));
+      localStorage.removeItem(REV); localStorage.removeItem(TOMB);
+      A.saveArchives([mk('tb9a','新名','2026-01-01T00:00:00.000Z')]);
+      var got9 = A.getArchives().filter(function(x){ return x.id === 'tb9a'; })[0];
+      tests.push(eq('TB9: 改名平局时本地优先', got9 && got9.name, '新名'));
+
+      // TB5-TB7 备份提醒文案
+      localStorage.setItem(KEY, JSON.stringify([mk('tb5a','提示')]));
+      localStorage.removeItem(BAT);
+      var w1 = A.backupWarnText();
+      localStorage.setItem(BAT, String(Date.now() - 10 * 86400000));
+      var w2 = A.backupWarnText();
+      localStorage.setItem(BAT, String(Date.now() - 2 * 86400000));
+      var w3 = A.backupWarnText();
+      var w4 = A.backupWarnText(0);
+      tests.push(eq('TB5: 从未备份有警示', w1.indexOf('还没导出') >= 0 ? 'Y' : 'N:' + w1, 'Y'));
+      tests.push(eq('TB6: 超 7 天警示带天数', w2.indexOf('已 10 天') >= 0 ? 'Y' : 'N:' + w2, 'Y'));
+      tests.push(eq('TB7: 7 天内 / 零档案不警示', (w3 || 'EMPTY') + '/' + (w4 || 'EMPTY'), 'EMPTY/EMPTY'));
+
+      // TB8 警示条元素与显隐联动
+      var el = document.getElementById('archiveBackupWarn');
+      localStorage.removeItem(BAT);
+      A.renderArchiveBackupWarn();
+      var shown = el && el.style.display !== 'none' && el.textContent.indexOf('还没导出') >= 0;
+      localStorage.setItem(BAT, String(Date.now()));
+      A.renderArchiveBackupWarn();
+      tests.push(eq('TB8: 警示条按备份状态显隐', (shown ? 'Y' : 'N') + '/' + (el ? el.style.display : 'X'), 'Y/none'));
+    } catch (e) {
+      tests.push(fail('TB00: 防丢测试异常', String(e)));
+    } finally {
+      Object.keys(bak).forEach(function(k) {
+        if (bak[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, bak[k]);
+      });
+      try { A.renderArchiveBackupWarn(); } catch (e) {}
+    }
+  })();
+
+  // ===== v0.69.0 历法切换自动换算 =====
+  (function() {
+    var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };
+    tests.push(eq('CF1: 公历 1990-01-01 → 农历腊月初五', f(ALGO.solarToLunar(1990, 1, 1)), '1989-12-5'));
+    tests.push(eq('CF2: 公历 2023-03-22 → 闰二月初一', f(ALGO.solarToLunar(2023, 3, 22)), '2023-2-1L'));
+    tests.push(eq('CF3: 公历 2026-10-23 → 九月十四', f(ALGO.solarToLunar(2026, 10, 23)), '2026-9-14'));
+    var s = ALGO.lunarToSolar(2023, 2, 1, true);
+    tests.push(eq('CF4: 闰二月往返回公历', s ? (s.y + '-' + s.m + '-' + s.d) : 'null', '2023-3-22'));
+    tests.push(eq('CF5: 越界年份返回 null', String(ALGO.solarToLunar(999, 1, 1)), 'null'));
+
+    var y0 = document.getElementById('inYear').value;
+    var d0 = document.getElementById('inDay').value;
+    var m0 = (document.getElementById('inMonthSelect') || document.getElementById('inMonth')).value;
+    var lp0 = document.getElementById('inLeap') ? document.getElementById('inLeap').checked : false;
+    var t0 = calendarType;
+    try {
+      if (calendarType !== 'solar') toggleCalendar('solar');
+      document.getElementById('inYear').value = '1990';
+      document.getElementById('inMonth').value = '1';
+      document.getElementById('inDay').value = '1';
+      toggleCalendar('lunar', true);
+      var got = [document.getElementById('inYear').value,
+        document.getElementById('inMonthSelect').value,
+        document.getElementById('inDay').value].join('-');
+      tests.push(eq('CF6: 切农历自动换算表单', got, '1989-12-5'));
+      toggleCalendar('solar', true);
+      var back = [document.getElementById('inYear').value,
+        document.getElementById('inMonth').value,
+        document.getElementById('inDay').value].join('-');
+      tests.push(eq('CF7: 切回新历还原日期', back, '1990-1-1'));
+    } catch (e) {
+      tests.push(fail('CF6: 历法切换异常', String(e)));
+    } finally {
+      if (calendarType !== t0) toggleCalendar(t0);
+      document.getElementById('inYear').value = y0;
+      document.getElementById('inDay').value = d0;
+      var mc = document.getElementById('inMonth') || document.getElementById('inMonthSelect');
+      if (mc) mc.value = m0;
+      var lp = document.getElementById('inLeap');
+      if (lp) lp.checked = lp0;
+    }
   })();
 
   // ===== v0.54.0 合盘档案 =====

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.68.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.69.0 | 2026-10-23 -->
+<!-- v0.69.0: 档案防丢（跨标签页合并写 + 删除墓碑 + 备份提醒）+ 新历↔农历切换自动换算日期（含闰月） -->
 <!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
 <!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
 <!-- v0.67.0: 修复未勾选十神组时天干地支被强制靠左 — v0.65.0 的四行左对齐 CSS 无条件生效，现改为只在 .chart.ssh-on（已勾选十神组）时生效，未勾选回到居中排盘；断言 X10/X11/X12/X13 -->
@@ -533,6 +534,11 @@
   .archive-row-btn:hover { opacity:.85; }
   .archive-modal-empty { display:flex; align-items:center; justify-content:center; height:100%; min-height:200px; text-align:center; padding:40px 20px; color:var(--c-gray); font-size:14px; }
   /* v0.32.0 档案标签：标签栏筛选 + 默认标签选择 + 行内标签输入 */
+  /* v0.69.0 备份强提示 */
+  .archive-backup-warn { margin:0 20px 8px; padding:7px 10px; background:#fdf3e3;
+    border:1px solid #e0b978; border-radius:2px; color:#8a5a12; font-size:12px;
+    line-height:1.5; cursor:pointer; }
+  .archive-backup-warn:hover { background:#f9e8cd; }
   .archive-modal-tagbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 20px; border-bottom:1px solid var(--c-line); max-height:92px; overflow-y:auto; }
   .archive-tag-label { font-size:12px; color:var(--c-gray); font-family:var(--font-body); }
   .archive-tag-chip { font-size:12px; padding:3px 10px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
@@ -1031,8 +1037,8 @@
       <label id="inGenderLabel" for="inGender">性别</label><select id="inGender"><option value="男" selected>男</option><option value="女">女</option></select>
       <span id="inGender2Group" style="display:none;"><label for="inGender2">老二</label><select id="inGender2"><option value="男">男</option><option value="女" selected>女</option></select></span>
       <span style="margin-left:4px;">
-        <label style="cursor:pointer;"><input type="radio" name="calType" id="calSolar" checked onchange="APP.toggleCalendar('solar')">新历</label>
-        <label style="cursor:pointer;"><input type="radio" name="calType" id="calLunar" onchange="APP.toggleCalendar('lunar')">农历</label>
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calSolar" checked onchange="APP.toggleCalendar('solar', true)">新历</label>
+        <label style="cursor:pointer;"><input type="radio" name="calType" id="calLunar" onchange="APP.toggleCalendar('lunar', true)">农历</label>
       </span>
       <input type="number" id="inYear" value="1982" min="1000" max="2100" style="width:72px;"> <span style="font-size:13px;">年</span>
       <span id="inMonthCell"><input type="number" id="inMonth" value="10" min="1" max="12" style="width:48px;"></span> <span style="font-size:13px;">月</span>
@@ -1141,6 +1147,8 @@
         <span class="archive-modal-title">📋 档案</span>
         <span style="display:flex;align-items:center;gap:8px;"><button class="btn" id="btnHePanEntry" onclick="HEPAN.openPanel()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▤ 合盘</button><button class="btn" id="btnArchiveCompare" onclick="COMPARE.open()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">▦ 盘面对比</button><button class="btn btn-default-tag" id="btnDefaultTag" onclick="ARCHIVE.toggleDefaultTagPicker()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🏷 默认标签</button><button class="btn btn-privacy" id="btnPrivacy2" onclick="ARCHIVE.togglePrivacy()" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">🔒 隐私</button><button class="archive-modal-close" onclick="ARCHIVE.closeArchivePanel()">✕</button></span>
       </div>
+      <div class="archive-backup-warn" id="archiveBackupWarn" style="display:none;"
+        onclick="ARCHIVE.exportBackup()" title="点击立即导出备份"></div>
       <div class="archive-modal-tagbar" id="archive-tag-bar"></div>
       <div class="archive-tag-default-panel" id="archive-tag-default-panel" style="display:none;"></div>
       <div class="archive-modal-search">

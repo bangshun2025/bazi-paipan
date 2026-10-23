@@ -178,30 +178,157 @@ function initPresetArchives() {
   try { migrateOrphanRecNotes(); } catch (e) {}
 }
 
-// ===== v0.9.0 核心读写函数 =====
-function getArchives() {
+// ===== v0.69.0 防丢：版本戳 / 删除墓碑 / 读改写合并 =====
+// 病根：saveArchives 整表覆盖。两个标签页各持一份内存副本，后写的一方会把
+// 另一方才新增的档案整段抹掉（renderArchiveModal 排序回写同样会触发）。
+// 对策：每次写前比对版本戳，发现外部写过就先按 id 合并再落盘；删除另记墓碑，
+// 避免合并时把已删档案复活。
+var ARCH_REV_KEY = 'bz_archives_rev';
+var ARCH_TOMB_KEY = 'bz_archives_tomb';
+var TRASH_REV_KEY = 'bz_trash_rev';
+var BACKUP_AT_KEY = 'bz_last_backup_at';
+var _archRevSeen = null;
+var _trashRevSeen = null;
+var _quotaWarnAt = 0;
+
+function readNum(key) {
+  try { return Number(localStorage.getItem(key)) || 0; } catch(e) { return 0; }
+}
+function writeNum(key, n) {
+  try { localStorage.setItem(key, String(n)); } catch(e) {}
+}
+function readRawArr(key) {
   try {
-    var arr = JSON.parse(localStorage.getItem(ARCH_KEY));
-    if (!arr || !Array.isArray(arr)) return [];
-    return arr;
+    var arr = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(arr) ? arr : [];
   } catch(e) { return []; }
 }
 
-function saveArchives(arr) {
-  localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+function archKeyOf(a) {
+  if (!a) return '';
+  if (a.id !== undefined && a.id !== null && a.id !== '') return 'id:' + a.id;
+  return 'fp:' + (a.name || '') + '|' + (a.gender || '') + '|'
+    + (a.year || '') + '-' + (a.month || '') + '-' + (a.day || '')
+    + '|' + (a.hour || '') + ':' + (a.min || 0);
+}
+function archTs(a) {
+  var t = Date.parse((a && (a.updatedAt || a.createdAt)) || '');
+  return isNaN(t) ? 0 : t;
+}
+function getTomb() {
+  try {
+    var o = JSON.parse(localStorage.getItem(ARCH_TOMB_KEY));
+    return (o && typeof o === 'object') ? o : {};
+  } catch(e) { return {}; }
+}
+function addTomb(id) {
+  if (id === undefined || id === null || id === '') return;
+  var t = getTomb();
+  t[String(id)] = Date.now();
+  try { localStorage.setItem(ARCH_TOMB_KEY, JSON.stringify(t)); } catch(e) {}
 }
 
+// 合并两份档案表：同键取 updatedAt 较新者，两侧独有都保留，墓碑命中的丢弃
+function mergeArchives(a, b) {
+  var tomb = getTomb();
+  var out = [];
+  var seen = {};
+  function take(list) {
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it) continue;
+      var k = archKeyOf(it);
+      if (!k) continue;
+      var tid = (it.id !== undefined && it.id !== null) ? String(it.id) : '';
+      if (tid && tomb[tid] && archTs(it) <= Number(tomb[tid])) continue;
+      if (!(k in seen)) { seen[k] = out.length; out.push(it); continue; }
+      var cur = out[seen[k]];
+      if (archTs(it) > archTs(cur)) out[seen[k]] = it;
+    }
+  }
+  take(a);
+  take(b);
+  return out;
+}
+
+function onStorageWriteFail() {
+  var now = Date.now();
+  try { setBackupHint('保存失败：本地存储已满，请立即点「导出备份」'); } catch(e) {}
+  if (now - _quotaWarnAt < 60000) return;
+  _quotaWarnAt = now;
+  try {
+    alert('⚠ 保存失败：浏览器本地存储已满。\n\n请立刻点「⬇ 导出备份」把档案存成 JSON 文件，'
+      + '再清理旧档案或分析记录后重试。');
+  } catch(e) {}
+}
+
+// 写档案：外部变更过（版本戳前进）就先合并，内容没变则不写、不广播
+function writeArchives(arr) {
+  // 本地传入的排在前面（显示顺序 = 索引顺序），盘上独有项追加末尾，保证不丢
+  var out = mergeArchives(arr || [], readRawArr(ARCH_KEY));
+  var json = JSON.stringify(out);
+  var old = null;
+  try { old = localStorage.getItem(ARCH_KEY); } catch(e) {}
+  if (json !== old) {
+    try { localStorage.setItem(ARCH_KEY, json); }
+    catch(e) { onStorageWriteFail(); return false; }
+  }
+  _archRevSeen = Date.now();
+  writeNum(ARCH_REV_KEY, _archRevSeen);
+  return true;
+}
+
+// ===== v0.9.0 核心读写函数 =====
+function getArchives() {
+  var arr = readRawArr(ARCH_KEY);
+  _archRevSeen = readNum(ARCH_REV_KEY);
+  return arr;
+}
+
+function saveArchives(arr) {
+  return writeArchives(arr);
+}
+
+// 强制整表写（迁移/初始化用，不合并）
 function saveArchivesRaw(arr) {
-  localStorage.setItem(ARCH_KEY, JSON.stringify(arr));
+  try { localStorage.setItem(ARCH_KEY, JSON.stringify(arr || [])); }
+  catch(e) { onStorageWriteFail(); return false; }
+  _archRevSeen = Date.now();
+  writeNum(ARCH_REV_KEY, _archRevSeen);
+  return true;
 }
 
 function getTrash() {
-  try { return JSON.parse(localStorage.getItem(TRASH_KEY)) || []; }
-  catch(e) { return []; }
+  var arr = readRawArr(TRASH_KEY);
+  _trashRevSeen = readNum(TRASH_REV_KEY);
+  return arr;
 }
 
 function saveTrash(arr) {
-  localStorage.setItem(TRASH_KEY, JSON.stringify(arr));
+  var out = arr || [];
+  var merged = [];
+  var seen = {};
+  [out, readRawArr(TRASH_KEY)].forEach(function(list) {
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it) continue;
+      var k = archKeyOf(it) + '|' + (it.deletedAt || '');
+      if (seen[k]) continue;
+      seen[k] = true;
+      merged.push(it);
+    }
+  });
+  out = merged;
+  var json = JSON.stringify(out);
+  var old = null;
+  try { old = localStorage.getItem(TRASH_KEY); } catch(e) {}
+  if (json !== old) {
+    try { localStorage.setItem(TRASH_KEY, json); }
+    catch(e) { onStorageWriteFail(); return false; }
+  }
+  _trashRevSeen = Date.now();
+  writeNum(TRASH_REV_KEY, _trashRevSeen);
+  return true;
 }
 
 // ===== 隐私模式（v0.19.0）=====
@@ -393,6 +520,7 @@ function moveToTrash(idx) {
   if (!confirm('确定删除「' + getDisplayName(a) + '」的档案？可在回收站恢复。' + extraMsg)) return;
   var ts = new Date().toISOString();
   var trashItem = Object.assign({}, a, {deletedAt: ts});
+  addTomb(a.id);
   var trash = getTrash();
   trash.push(trashItem);
   saveTrash(trash);
@@ -1108,6 +1236,7 @@ function renderArchiveModal() {
   saveArchives(archives);
 
   renderTagBar();
+  renderArchiveBackupWarn();
 
   var k = _searchKeyword.trim().toLowerCase();
   if (archives.length === 0) {
@@ -1309,8 +1438,37 @@ function exportBackup() {
   a.click();
   document.body.removeChild(a);
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+  writeNum(BACKUP_AT_KEY, Date.now());
+  renderArchiveBackupWarn();
   setBackupHint('已导出 ' + data.archives.length + ' 条档案、' + Object.keys(data.recNotes).length + ' 条分析记录');
   return data;
+}
+
+// ===== v0.69.0 备份强提示 =====
+// 档案只在浏览器本地，清缓存 / 换电脑即归零；距上次导出超 7 天就顶上常驻警示
+var BACKUP_WARN_DAYS = 7;
+
+function backupAgeDays() {
+  var t = readNum(BACKUP_AT_KEY);
+  if (!t) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function backupWarnText(archiveCount) {
+  var n = (archiveCount === undefined) ? getArchives().length : archiveCount;
+  if (!n) return '';
+  var d = backupAgeDays();
+  if (d === null) return '⚠ 还没导出过备份 · 清浏览器缓存会全部丢失，点此导出';
+  if (d >= BACKUP_WARN_DAYS) return '⚠ 已 ' + d + ' 天未导出备份 · 清浏览器缓存会全部丢失，点此导出';
+  return '';
+}
+
+function renderArchiveBackupWarn() {
+  var el = document.getElementById('archiveBackupWarn');
+  if (!el) return;
+  var msg = backupWarnText();
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
 }
 
 function pickImportBackup() {
@@ -1395,6 +1553,13 @@ function onImportFile(input) {
     getArchives: getArchives,
     saveArchives: saveArchives,
     saveArchivesRaw: saveArchivesRaw,
+    mergeArchives: mergeArchives,
+    archKeyOf: archKeyOf,
+    addTomb: addTomb,
+    getTomb: getTomb,
+    backupAgeDays: backupAgeDays,
+    backupWarnText: backupWarnText,
+    renderArchiveBackupWarn: renderArchiveBackupWarn,
     getTrash: getTrash,
     saveTrash: saveTrash,
     refreshArchiveModalIfOpen: refreshArchiveModalIfOpen,
@@ -1469,6 +1634,19 @@ function onImportFile(input) {
     deleteNote: deleteNote,
     noteKey: noteKey,
   };
+
+  // ===== v0.69.0 跨标签页同步：别的窗口写过档案，本页立刻跟上 =====
+  // 只更新基线 + 重渲染，不写盘，避免两个标签页互相触发写入
+  window.addEventListener('storage', function(e) {
+    if (!e.key) return;
+    if (e.key === ARCH_KEY || e.key === ARCH_REV_KEY) {
+      _archRevSeen = readNum(ARCH_REV_KEY);
+      try { refreshArchiveModalIfOpen(); } catch (err) {}
+      try { renderArchiveBackupWarn(); } catch (err) {}
+    } else if (e.key === TRASH_KEY || e.key === TRASH_REV_KEY) {
+      _trashRevSeen = readNum(TRASH_REV_KEY);
+    }
+  });
 
   // ===== v0.32.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）=====
   // archive.js 早于 main.js 加载，__testAppend（main.js 定义）此刻尚不存在，

@@ -77,6 +77,34 @@ function lunarToSolar(ly, lm, ld, isLeap) {
   return normalizeDate(solarY, solarM, solarD);
 }
 
+// 公历转农历（查表法）
+function solarToLunar(gy, gm, gd) {
+  var idx = gy - 1000;
+  if (idx < 0 || idx >= LUNAR_INFO.length) return null;
+  var ny = LUNAR_NEW_YEAR[idx];
+  var ord = Math.floor(Date.UTC(gy, gm - 1, gd) / 86400000);
+  if (ord < Math.floor(Date.UTC(gy, ny[0] - 1, ny[1]) / 86400000)) {
+    idx -= 1;
+    if (idx < 0) return null;
+    ny = LUNAR_NEW_YEAR[idx];
+  }
+  var ly = 1000 + idx;
+  var info = LUNAR_INFO[idx];
+  var leapMonth = info & 0xF;
+  var rest = ord - Math.floor(Date.UTC(ly, ny[0] - 1, ny[1]) / 86400000);
+  for (var m = 1; m <= 12; m++) {
+    var md = monthDays(info, m, false, leapMonth);
+    if (rest < md) return { y: ly, m: m, d: rest + 1, isLeap: false };
+    rest -= md;
+    if (m === leapMonth) {
+      var ld = monthDays(info, m, true, leapMonth);
+      if (rest < ld) return { y: ly, m: m, d: rest + 1, isLeap: true };
+      rest -= ld;
+    }
+  }
+  return null;
+}
+
 // 儒略历→格里历（JD 桥接）：1582-10-04 及更早的西历日期按史学界惯例是儒略历，
 // 排盘需先换算成格里历（如王阳明生：儒 1472-10-31 = 格 1472-11-09）
 function julianToGregorian(y, m, d) {
@@ -697,6 +725,7 @@ function buildShunLabel(shun, gender, nianGan) {
     monthDays: monthDays,
     normalizeDate: normalizeDate,
     lunarToSolar: lunarToSolar,
+    solarToLunar: solarToLunar,
     julianToGregorian: julianToGregorian,
     updateSolarPreview: updateSolarPreview,
     getLng: getLng,
