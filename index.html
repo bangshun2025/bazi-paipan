@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.67.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.67.1 | 2026-10-23 -->
+<!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
 <!-- v0.67.0: 修复未勾选十神组时天干地支被强制靠左 — v0.65.0 的四行左对齐 CSS 无条件生效，现改为只在 .chart.ssh-on（已勾选十神组）时生效，未勾选回到居中排盘；断言 X10/X11/X12/X13 -->
 <!-- v0.66.0: 分析记录防丢 — 指纹键（姓名|性别|公历生日|时|分）取不到时不再空白：同生日（仅时/分不同）唯一命中自动回捞并提示，多条或不同生日则列出同名历史记录点选载入（载入后落到当前指纹）；档案弹窗底部新增「⬇ 导出备份 / ⬆ 导入备份」JSON（档案+回收站+分析记录，合并导入不覆盖）；断言 BK-T01…T18 -->
 <!-- v0.65.0: 天干十神对应名并入天干单元右侧 — 删除独立组名行，天干在左、组对应名右侧竖排堆叠（与藏气同构）；主星/天干/地支/藏气四行左对齐；断言 T06/T08/T09/T12d/T12e/T13/T14/T15/T17/T18/T19/X08/X09 -->
@@ -641,7 +642,12 @@
   .chart.ssh-on tr[data-row-type="dy1"] > td:not(.rl),
   .chart.ssh-on tr[data-row-type="ln1"] > td:not(.rl),
   .chart.ssh-on tr[data-row-type="dy2"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="ln2"] > td:not(.rl) { text-align: left; padding-left: 8px; }
+  .chart.ssh-on tr[data-row-type="ln2"] > td:not(.rl),
+  /* v0.67.1 同一规则扩到三垣四行：主星、天干、地支、藏气（胎年/胎元/命宫/身宫） */
+  .chart.ssh-on tr[data-row-type="sy-rs"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-gan"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-zhi"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-cg"] > td:not(.rl) { text-align: left; padding-left: 8px; }
   /* v0.64.0 藏气竖排三列：藏干 | 十神 | 组对应名（多组名右侧竖排堆叠、整块居中于该层） */
   .ssh-cg-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
   .ssh-cg-l { display: flex; align-items: center; gap: .1em; }
@@ -10647,13 +10653,13 @@ function renderChart(data, twin, targetId, opts) {
   syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年',' data-pk="taiNian"')+th('','胎元',' data-pk="tai"')+th('','命宫',' data-pk="ming"')+th('','身宫',' data-pk="shen"')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan" data-row-type="sy-rs">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+  syRows.push('<tr class="rg" data-sec="sanyuan" data-row-type="sy-gan">'+rl('')+
     td(pTaiNian.wg,sshGanVert(stemCellHtml(pTaiNian,'taiNian'), pTaiNian.rs, sshSel),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
     td(pTai.wg,sshGanVert(stemCellHtml(pTai,'tai'), pTai.rs, sshSel),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
     td(pMing.wg,sshGanVert(stemCellHtml(pMing,'ming'), pMing.rs, sshSel),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
     td(pShen.wg,sshGanVert(stemCellHtml(pShen,'shen'), pShen.rs, sshSel),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+  syRows.push('<tr class="rg" data-sec="sanyuan" data-row-type="sy-zhi">'+rl('')+
     td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
     td(pTai.wz,pTai.zhi,' data-gk="zhi" data-gz="'+pTai.zhi+'" data-pk="tai"')+
     td(pMing.wz,pMing.zhi,' data-gk="zhi" data-gz="'+pMing.zhi+'" data-pk="ming"')+
@@ -11879,6 +11885,8 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   var sec = tr.getAttribute('data-sec') || '';
   if (t === 'sy-rs') t = 'dy1';
   else if (t === 'sy-cg') t = 'ln2';
+  else if (t === 'sy-gan') t = 'ln1';
+  else if (t === 'sy-zhi') t = 'dy2';
   else if (!t && /sanyuan/.test(sec)) {
     if (tr.querySelector('td[data-gk="gan"]')) t = 'ln1';
     else if (tr.querySelector('td[data-gk="zhi"]')) t = 'dy2';
@@ -15943,7 +15951,7 @@ function captureScreenshot() {
     tests.push(eq('v0.29 T02:容器含 table.chart', !!tbl, true));
     if (tbl) {
       var EXP_MAIN = ['dy1','ln1','dy2','ln2','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','kongwang','shensha'];
-      var EXP_SY = ['sy-rs','sy-cg','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
+      var EXP_SY = ['sy-rs','sy-gan','sy-zhi','sy-cg','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
       var seq = typeSeq(tbl);
       tests.push(eq('v0.29 T02:主表+三垣行序（藏气→星曜→纳音）', seq.join(','), EXP_MAIN.concat(EXP_SY).join(',')));
       tests.push(eq('v0.29 T02:星曜行紧邻于纳音行之前', seq.indexOf('xingyao') === seq.indexOf('nayin') - 1, true));
@@ -17619,6 +17627,12 @@ function captureScreenshot() {
       var syRsTds = syRs57 ? syRs57.querySelectorAll('td') : [];
       tests.push(eq('MLT: 三垣主星行列数=7(大运二复用占位列)', syRsTds.length, 7));
       tests.push(eq('MLT: 身宫右大运二主星=' + pd57.daYun[dB57].gan, syRsTds[5] ? syRsTds[5].textContent : '', shiShen(pd57.ri.gan, pd57.daYun[dB57].gan)));
+      // 三垣干/支行为 sy-gan/sy-zhi，_mdlFillCell 需显式映射才不会被当成未知类型写空
+      var syRgTds = tab57.querySelectorAll('tr[data-row-type="sy-gan"] td');
+      var syRgTxt = syRgTds[5] ? syRgTds[5].textContent.trim() : '';
+      tests.push(eq('MLT: 三垣干行大运二天干=' + pd57.daYun[dB57].gan, syRgTxt.indexOf(pd57.daYun[dB57].gan) === 0 && syRgTxt.length ? 'Y' : 'N', 'Y'));
+      var syRzTds = tab57.querySelectorAll('tr[data-row-type="sy-zhi"] td');
+      tests.push(eq('MLT: 三垣支行者大运二地支=' + pd57.daYun[dB57].zhi, syRzTds[5] ? syRzTds[5].textContent.trim() : '', pd57.daYun[dB57].zhi));
       var sep57 = tab57.querySelector('tr.sanyuan-sep td');
       tests.push(eq('MLT: 三垣分隔行 colspan=7+主段1', sep57 ? sep57.getAttribute('colspan') : '', '8'));
       tests.push(eq('MLT: 三垣表头列数=7(大运二复用占位列)', syHd57 ? syHd57.querySelectorAll('th,td').length : 0, 7));
@@ -18575,6 +18589,18 @@ function captureScreenshot() {
       tests.push(eq(sec + ' X09: 天干/地支/藏气三行左对齐', (ganAlign === 'left' && zhiAlign === 'left' && cgAlign === 'left') ? 'Y' : 'N', 'Y'));
       var tblOn = host2.querySelector('table.chart');
       tests.push(eq(sec + ' X10: 勾选十神组时主表带 ssh-on', tblOn && tblOn.classList.contains('ssh-on') ? 'Y' : 'N', 'Y'));
+      // v0.67.1 同一规则扩到三垣：胎年/胎元/命宫/身宫的天干、地支、藏气三行
+      var padOf = function(sel) {
+        var c = host2.querySelector(sel);
+        return c ? window.getComputedStyle(c).paddingLeft : 'X';
+      };
+      tests.push(eq(sec + ' X14: 勾选十神组时三垣主星/天干/地支/藏气左对齐',
+        alignOf('tr[data-row-type="sy-rs"] td:nth-child(2)') + '/' +
+        alignOf('tr[data-row-type="sy-gan"] td[data-gk="gan"]') + '/' +
+        alignOf('tr[data-row-type="sy-zhi"] td[data-gk="zhi"]') + '/' +
+        alignOf('tr[data-row-type="sy-cg"] td:nth-child(2)'), 'left/left/left/left'));
+      tests.push(eq(sec + ' X15: 三垣与四柱左缘内距一致',
+        padOf('tr[data-row-type="sy-gan"] td[data-gk="gan"]') + '/' + padOf('tr[data-row-type="ln1"] td[data-gk="gan"]'), '8px/8px'));
     } else {
       tests.push(fail(sec + ' X00b: 藏气竖排逐层行存在', '不足两层'));
     }
@@ -18590,6 +18616,11 @@ function captureScreenshot() {
     tests.push(eq(sec + ' X11: 未勾选时主表无 ssh-on', tblOff && tblOff.classList.contains('ssh-on') ? 'Y' : 'N', 'N'));
     tests.push(eq(sec + ' X12: 未勾选时天干格沿用居中', cssAlign(ganOff), 'center'));
     tests.push(eq(sec + ' X13: 未勾选时地支/藏气沿用居中', cssAlign(zhiOff) + '/' + cssAlign(cgOff), 'center/center'));
+    tests.push(eq(sec + ' X16: 未勾选时三垣主星/天干/地支/藏气沿用居中',
+      cssAlign(host2.querySelector('tr[data-row-type="sy-rs"] td:nth-child(2)')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-gan"] td[data-gk="gan"]')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-zhi"] td[data-gk="zhi"]')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)')), 'center/center/center/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
   })();

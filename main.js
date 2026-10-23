@@ -1965,7 +1965,7 @@ function captureScreenshot() {
     tests.push(eq('v0.29 T02:容器含 table.chart', !!tbl, true));
     if (tbl) {
       var EXP_MAIN = ['dy1','ln1','dy2','ln2','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','kongwang','shensha'];
-      var EXP_SY = ['sy-rs','sy-cg','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
+      var EXP_SY = ['sy-rs','sy-gan','sy-zhi','sy-cg','xingyao','nayin','nayun','zhuzuo','nianzuo','yuezuo','shizuo','taizuo','mingzuo','shenzuo','zizuo','zuonian','zuoyue','zuori','zuoshi','zuotai','zuoming','zuoshen','kongwang','shensha'];
       var seq = typeSeq(tbl);
       tests.push(eq('v0.29 T02:主表+三垣行序（藏气→星曜→纳音）', seq.join(','), EXP_MAIN.concat(EXP_SY).join(',')));
       tests.push(eq('v0.29 T02:星曜行紧邻于纳音行之前', seq.indexOf('xingyao') === seq.indexOf('nayin') - 1, true));
@@ -3641,6 +3641,12 @@ function captureScreenshot() {
       var syRsTds = syRs57 ? syRs57.querySelectorAll('td') : [];
       tests.push(eq('MLT: 三垣主星行列数=7(大运二复用占位列)', syRsTds.length, 7));
       tests.push(eq('MLT: 身宫右大运二主星=' + pd57.daYun[dB57].gan, syRsTds[5] ? syRsTds[5].textContent : '', shiShen(pd57.ri.gan, pd57.daYun[dB57].gan)));
+      // 三垣干/支行为 sy-gan/sy-zhi，_mdlFillCell 需显式映射才不会被当成未知类型写空
+      var syRgTds = tab57.querySelectorAll('tr[data-row-type="sy-gan"] td');
+      var syRgTxt = syRgTds[5] ? syRgTds[5].textContent.trim() : '';
+      tests.push(eq('MLT: 三垣干行大运二天干=' + pd57.daYun[dB57].gan, syRgTxt.indexOf(pd57.daYun[dB57].gan) === 0 && syRgTxt.length ? 'Y' : 'N', 'Y'));
+      var syRzTds = tab57.querySelectorAll('tr[data-row-type="sy-zhi"] td');
+      tests.push(eq('MLT: 三垣支行者大运二地支=' + pd57.daYun[dB57].zhi, syRzTds[5] ? syRzTds[5].textContent.trim() : '', pd57.daYun[dB57].zhi));
       var sep57 = tab57.querySelector('tr.sanyuan-sep td');
       tests.push(eq('MLT: 三垣分隔行 colspan=7+主段1', sep57 ? sep57.getAttribute('colspan') : '', '8'));
       tests.push(eq('MLT: 三垣表头列数=7(大运二复用占位列)', syHd57 ? syHd57.querySelectorAll('th,td').length : 0, 7));
@@ -4597,6 +4603,18 @@ function captureScreenshot() {
       tests.push(eq(sec + ' X09: 天干/地支/藏气三行左对齐', (ganAlign === 'left' && zhiAlign === 'left' && cgAlign === 'left') ? 'Y' : 'N', 'Y'));
       var tblOn = host2.querySelector('table.chart');
       tests.push(eq(sec + ' X10: 勾选十神组时主表带 ssh-on', tblOn && tblOn.classList.contains('ssh-on') ? 'Y' : 'N', 'Y'));
+      // v0.67.1 同一规则扩到三垣：胎年/胎元/命宫/身宫的天干、地支、藏气三行
+      var padOf = function(sel) {
+        var c = host2.querySelector(sel);
+        return c ? window.getComputedStyle(c).paddingLeft : 'X';
+      };
+      tests.push(eq(sec + ' X14: 勾选十神组时三垣主星/天干/地支/藏气左对齐',
+        alignOf('tr[data-row-type="sy-rs"] td:nth-child(2)') + '/' +
+        alignOf('tr[data-row-type="sy-gan"] td[data-gk="gan"]') + '/' +
+        alignOf('tr[data-row-type="sy-zhi"] td[data-gk="zhi"]') + '/' +
+        alignOf('tr[data-row-type="sy-cg"] td:nth-child(2)'), 'left/left/left/left'));
+      tests.push(eq(sec + ' X15: 三垣与四柱左缘内距一致',
+        padOf('tr[data-row-type="sy-gan"] td[data-gk="gan"]') + '/' + padOf('tr[data-row-type="ln1"] td[data-gk="gan"]'), '8px/8px'));
     } else {
       tests.push(fail(sec + ' X00b: 藏气竖排逐层行存在', '不足两层'));
     }
@@ -4612,6 +4630,11 @@ function captureScreenshot() {
     tests.push(eq(sec + ' X11: 未勾选时主表无 ssh-on', tblOff && tblOff.classList.contains('ssh-on') ? 'Y' : 'N', 'N'));
     tests.push(eq(sec + ' X12: 未勾选时天干格沿用居中', cssAlign(ganOff), 'center'));
     tests.push(eq(sec + ' X13: 未勾选时地支/藏气沿用居中', cssAlign(zhiOff) + '/' + cssAlign(cgOff), 'center/center'));
+    tests.push(eq(sec + ' X16: 未勾选时三垣主星/天干/地支/藏气沿用居中',
+      cssAlign(host2.querySelector('tr[data-row-type="sy-rs"] td:nth-child(2)')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-gan"] td[data-gk="gan"]')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-zhi"] td[data-gk="zhi"]')) + '/' +
+      cssAlign(host2.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)')), 'center/center/center/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
   })();

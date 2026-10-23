@@ -931,13 +931,13 @@ function renderChart(data, twin, targetId, opts) {
   syRows.push('<tr class="hd" data-sec="sanyuan">'+th('rl','三垣')+th('','胎年',' data-pk="taiNian"')+th('','胎元',' data-pk="tai"')+th('','命宫',' data-pk="ming"')+th('','身宫',' data-pk="shen"')+emp('sep')+emp('col-ln')+'</tr>');
   // 用原始 data 生成三垣（不依赖 buildPillarRows 的 level-based 结构）
   syRows.push('<tr class="rs" data-sec="sanyuan" data-row-type="sy-rs">'+rl('主星')+td('',pTaiNian.rs)+td('',pTai.rs)+td('',pMing.rs)+td('',pShen.rs)+emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+  syRows.push('<tr class="rg" data-sec="sanyuan" data-row-type="sy-gan">'+rl('')+
     td(pTaiNian.wg,sshGanVert(stemCellHtml(pTaiNian,'taiNian'), pTaiNian.rs, sshSel),' data-gk="gan" data-gz="'+pTaiNian.gan+'" data-pk="taiNian"')+
     td(pTai.wg,sshGanVert(stemCellHtml(pTai,'tai'), pTai.rs, sshSel),' data-gk="gan" data-gz="'+pTai.gan+'" data-pk="tai"')+
     td(pMing.wg,sshGanVert(stemCellHtml(pMing,'ming'), pMing.rs, sshSel),' data-gk="gan" data-gz="'+pMing.gan+'" data-pk="ming"')+
     td(pShen.wg,sshGanVert(stemCellHtml(pShen,'shen'), pShen.rs, sshSel),' data-gk="gan" data-gz="'+pShen.gan+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
-  syRows.push('<tr class="rg" data-sec="sanyuan">'+rl('')+
+  syRows.push('<tr class="rg" data-sec="sanyuan" data-row-type="sy-zhi">'+rl('')+
     td(pTaiNian.wz,pTaiNian.zhi,' data-gk="zhi" data-gz="'+pTaiNian.zhi+'" data-pk="taiNian"')+
     td(pTai.wz,pTai.zhi,' data-gk="zhi" data-gz="'+pTai.zhi+'" data-pk="tai"')+
     td(pMing.wz,pMing.zhi,' data-gk="zhi" data-gz="'+pMing.zhi+'" data-pk="ming"')+
@@ -2163,6 +2163,8 @@ function _mdlFillCell(cell, tr, p, isDy, isDy2, refs, sshCg, riGan) {
   var sec = tr.getAttribute('data-sec') || '';
   if (t === 'sy-rs') t = 'dy1';
   else if (t === 'sy-cg') t = 'ln2';
+  else if (t === 'sy-gan') t = 'ln1';
+  else if (t === 'sy-zhi') t = 'dy2';
   else if (!t && /sanyuan/.test(sec)) {
     if (tr.querySelector('td[data-gk="gan"]')) t = 'ln1';
     else if (tr.querySelector('td[data-gk="zhi"]')) t = 'dy2';

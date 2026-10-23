@@ -4,6 +4,29 @@
 
 ---
 
+## v0.67.1（2026-10-23）左对齐规则扩到三垣：胎命身同受十神门控
+
+**需求**：v0.67.0 的门控规则（勾选十神组才左对齐，未勾选居中）也要作用于三垣的胎年/胎元/命宫/身宫。
+
+**病根**：v0.67.0 的 CSS 只按 `dy1/ln1/dy2/ln2` 命中四柱四行；三垣的主星行虽是 `sy-rs`、藏气行虽是 `sy-cg`，都不在 CSS 名单里，天干行与地支行更是**没有 `data-row-type` 标记**——因此勾选十神后三垣四行仍居中，与上方四柱 8px 左缘错位。
+
+**改动**：
+
+1. **render.js `renderChart`**：三垣天干行加 `data-row-type="sy-gan"`、地支行加 `data-row-type="sy-zhi"`（不复用 `ln1/dy2`，避免 `bindTaijiClicks` 等按 `tr[data-row-type="ln1"]` 取四柱行的逻辑误伤三垣）。
+2. **CSS 名单 +4**（三产物同改）：`.chart.ssh-on tr[data-row-type="sy-rs"|"sy-gan"|"sy-zhi"|"sy-cg"] > td:not(.rl) { text-align:left; padding-left:8px }`——与四柱主星/天干/地支/藏气同一套；纳音、纳运、主坐、自坐、空亡、神煞仍居中，与四柱一致。
+3. **render.js `_mdlFillCell` 补映射**：多运流注入原靠「无 `data-row-type` 且 `data-sec=sanyuan`」才认出干支行，加标记后会落进未知分支把单元格写空——补 `sy-gan→ln1`、`sy-zhi→dy2` 两条显式映射。
+4. **main.js 断言 +5**：X14（勾选时三垣主星/天干/地支/藏气均 `left`）、X15（三垣与四柱左缘内距同为 `8px`）、X16（未勾选时四行均 `center`），以及 2 条 MLT 回归锁（三垣干行/支行者的大运二列内容非空且正确）。
+5. **main.js 行序断言同步**（v0.29 T02）：三垣段期望值改为 `sy-rs, sy-gan, sy-zhi, sy-cg, xingyao…`。
+
+**证据**：同环境对照——上一版 1433 条全过，本版 1438 条全过（+5）；`check-release.sh` 6/6；`index.html` ≡ `standalone.html` md5 `b7fbb60bbaccffa919faabd378111a76`（1,572,071 字节），`standalone-split.html` md5 `ac4696b58d9bc20b665de9b40798c5bf`（122,222 字节）。
+
+**真机实测**（独立 Chrome，file:// 隔离环境，乾造 1984-11-15 12:00 甲子/乙亥/癸丑/戊午）：
+
+- 勾选「军队」：三垣 `sy-rs`/`sy-gan`/`sy-zhi`/`sy-cg` 四行全部 `left` + `padding-left 8px`，与四柱四行同缘；纳音仍 `center`
+- 未勾选：四行回落 `center`、`padding-left 4px`，盘面居中如初——往返可逆
+
+---
+
 ## v0.67.0（2026-10-23）排版回退修复：未勾选十神时恢复居中排盘
 
 **需求**：默认盘面天干地支被强制靠左，不符合原样；靠左只应在点击十神按钮、勾选组别之后才出现。

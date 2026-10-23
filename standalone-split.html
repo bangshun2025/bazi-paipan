@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.67.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.67.1 | 2026-10-23 -->
+<!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
 <!-- v0.67.0: 修复未勾选十神组时天干地支被强制靠左 — v0.65.0 的四行左对齐 CSS 无条件生效，现改为只在 .chart.ssh-on（已勾选十神组）时生效，未勾选回到居中排盘；断言 X10/X11/X12/X13 -->
 <!-- v0.66.0: 分析记录防丢 — 指纹键（姓名|性别|公历生日|时|分）取不到时不再空白：同生日（仅时/分不同）唯一命中自动回捞并提示，多条或不同生日则列出同名历史记录点选载入（载入后落到当前指纹）；档案弹窗底部新增「⬇ 导出备份 / ⬆ 导入备份」JSON（档案+回收站+分析记录，合并导入不覆盖）；断言 BK-T01…T18 -->
 <!-- v0.65.0: 天干十神对应名并入天干单元右侧 — 删除独立组名行，天干在左、组对应名右侧竖排堆叠（与藏气同构）；主星/天干/地支/藏气四行左对齐；断言 T06/T08/T09/T12d/T12e/T13/T14/T15/T17/T18/T19/X08/X09 -->
@@ -967,7 +968,12 @@
   .chart.ssh-on tr[data-row-type="dy1"] > td:not(.rl),
   .chart.ssh-on tr[data-row-type="ln1"] > td:not(.rl),
   .chart.ssh-on tr[data-row-type="dy2"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="ln2"] > td:not(.rl) { text-align: left; padding-left: 8px; }
+  .chart.ssh-on tr[data-row-type="ln2"] > td:not(.rl),
+  /* v0.67.1 同一规则扩到三垣四行：主星、天干、地支、藏气（胎年/胎元/命宫/身宫） */
+  .chart.ssh-on tr[data-row-type="sy-rs"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-gan"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-zhi"] > td:not(.rl),
+  .chart.ssh-on tr[data-row-type="sy-cg"] > td:not(.rl) { text-align: left; padding-left: 8px; }
   /* v0.64.0 藏气竖排三列：藏干 | 十神 | 组对应名（多组名右侧竖排堆叠、整块居中于该层） */
   .ssh-cg-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
   .ssh-cg-l { display: flex; align-items: center; gap: .1em; }
