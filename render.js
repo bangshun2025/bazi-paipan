@@ -1064,7 +1064,7 @@ function renderChart(data, twin, targetId, opts) {
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
   const recOn = !opts.luckBelow && isRecOn();
   const luckColHtml = `
-      <div class="luck-col${recOn ? ' luck-rec-below' : ''}">
+      <div class="luck-col${recOn ? ' luck-rec-below' : ''}${sshSel.length ? ' ssh-on' : ''}">
         <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
             <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>

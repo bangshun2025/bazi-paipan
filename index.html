@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.67.1 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.68.0 | 2026-10-23 -->
+<!-- v0.68.0: 勾选十神组时全盘统一左对齐 — 柱名表头（年柱/月柱/日柱/时柱）、宫位映射行、主星/干支/藏气/纳音/纳运/主坐/自坐/空亡/神煞/星曜、表内大运流年两列，以及右侧运流区与节气块一并左对齐；藏气组对应名三列左对齐并在层间加分隔线；未勾选仍居中；断言 X17/X18/X19/X20/X21/X22 -->
 <!-- v0.67.1: 四行左对齐规则扩到三垣 — 主星、天干、地支、藏气四行（胎年/胎元/命宫/身宫）同受 .chart.ssh-on 门控（未勾选十神组仍居中）；三垣天干/地支行新增 data-row-type="sy-gan"/"sy-zhi"；断言 X14/X15/X16 -->
 <!-- v0.67.0: 修复未勾选十神组时天干地支被强制靠左 — v0.65.0 的四行左对齐 CSS 无条件生效，现改为只在 .chart.ssh-on（已勾选十神组）时生效，未勾选回到居中排盘；断言 X10/X11/X12/X13 -->
 <!-- v0.66.0: 分析记录防丢 — 指纹键（姓名|性别|公历生日|时|分）取不到时不再空白：同生日（仅时/分不同）唯一命中自动回捞并提示，多条或不同生日则列出同名历史记录点选载入（载入后落到当前指纹）；档案弹窗底部新增「⬇ 导出备份 / ⬆ 导入备份」JSON（档案+回收站+分析记录，合并导入不覆盖）；断言 BK-T01…T18 -->
@@ -638,24 +639,28 @@
   .ssh-g-g .taiji-ring { min-width: 1em; }
   .ssh-g-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .25em; }
   .ssh-g-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
-  /* v0.67.0 四行左对齐仅在勾选十神组时生效；未勾选沿用居中排盘（v0.65.0 曾无条件生效） */
-  .chart.ssh-on tr[data-row-type="dy1"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="ln1"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="dy2"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="ln2"] > td:not(.rl),
-  /* v0.67.1 同一规则扩到三垣四行：主星、天干、地支、藏气（胎年/胎元/命宫/身宫） */
-  .chart.ssh-on tr[data-row-type="sy-rs"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="sy-gan"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="sy-zhi"] > td:not(.rl),
-  .chart.ssh-on tr[data-row-type="sy-cg"] > td:not(.rl) { text-align: left; padding-left: 8px; }
+  /* v0.68.0 勾选十神组：全盘统一左对齐 —— 表头柱名（年柱/月柱…）、宫位映射行、主星/干支/藏气/
+     纳音/纳运/主坐/自坐/空亡/神煞/星曜，以及表内大运/流年两列一并对齐；取消勾选回到居中排盘 */
+  .chart.ssh-on th,
+  .chart.ssh-on td { text-align: left; }
+  .chart.ssh-on th:not(.rl),
+  .chart.ssh-on td:not(.rl) { padding-left: 8px; }
   /* v0.64.0 藏气竖排三列：藏干 | 十神 | 组对应名（多组名右侧竖排堆叠、整块居中于该层） */
   .ssh-cg-v { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
   .ssh-cg-l { display: flex; align-items: center; gap: .1em; }
   .ssh-cg-g { min-width: 1em; text-align: center; }
   .ssh-cg-g .taiji-ring { min-width: 1em; }
   .ssh-cg-t { min-width: 1em; text-align: center; font-size: 11px; }
-  .ssh-cg-ns { display: inline-flex; flex-direction: column; align-items: center; margin-left: .3em; }
+  .ssh-cg-ns { display: inline-flex; flex-direction: column; align-items: flex-start; margin-left: .3em; }
   .ssh-cg-n { font-size: 10px; line-height: 1.2; color: var(--c-gray); white-space: nowrap; }
+  /* v0.68.0 藏气逐层分隔线：每层（藏干+十神+组对应名）之间加细线，对应名三列统一左对齐 */
+  .chart.ssh-on td > .ssh-cg-v { width: 100%; }
+  .chart.ssh-on .ssh-cg-v > .ssh-cg-l { align-self: stretch; }
+  .ssh-cg-l + .ssh-cg-l { border-top: 1px solid var(--c-line); margin-top: 4px; padding-top: 4px; }
+  .cmp-card .ssh-cg-l + .ssh-cg-l { border-top: none; margin-top: 0; padding-top: 0; }
+  /* v0.68.0 勾选十神组：右侧运流区（大运/始于/止于/流年）与节气块同步左对齐 */
+  .luck-col.ssh-on .luck-row .cell { text-align: left; }
+  .luck-col.ssh-on .jq-col { text-align: left; }
 
   /* Checkbox grid */
   .gz-cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
@@ -10786,7 +10791,7 @@ function renderChart(data, twin, targetId, opts) {
   const bodyCls = opts.luckBelow ? 'body-cols luck-below' : 'body-cols';
   const recOn = !opts.luckBelow && isRecOn();
   const luckColHtml = `
-      <div class="luck-col${recOn ? ' luck-rec-below' : ''}">
+      <div class="luck-col${recOn ? ' luck-rec-below' : ''}${sshSel.length ? ' ssh-on' : ''}">
         <div class="luck-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div class="info-row" style="margin-bottom:0;padding-bottom:0;border-bottom:none;flex:1">
             <div><span class="label">起运</span>${qiyunText} &nbsp; <span class="label">交运</span>${jyText}</div>
@@ -18601,6 +18606,41 @@ function captureScreenshot() {
         alignOf('tr[data-row-type="sy-cg"] td:nth-child(2)'), 'left/left/left/left'));
       tests.push(eq(sec + ' X15: 三垣与四柱左缘内距一致',
         padOf('tr[data-row-type="sy-gan"] td[data-gk="gan"]') + '/' + padOf('tr[data-row-type="ln1"] td[data-gk="gan"]'), '8px/8px'));
+      // v0.68.0 全盘统一左对齐：柱名表头、宫位映射行、纳音/纳运/主坐/自坐/空亡/神煞、表内大运流年列
+      var leftProbe = [
+        'tr.hd th:nth-child(2)', 'tr.hd th:nth-child(3)', 'tr.hd th:nth-child(4)', 'tr.hd th:nth-child(5)',
+        'tr[data-row-type~="nayin"] td:nth-child(2)', 'tr[data-row-type~="nayun"] td:nth-child(2)',
+        'tr[data-row-type~="zhuzuo"] td:nth-child(2)', 'tr[data-row-type~="zizuo"] td:nth-child(2)',
+        'tr[data-row-type~="kongwang"] td:nth-child(2)', 'tr[data-row-type~="shensha"] td:nth-child(2)',
+        'tr[data-row-type="ln1"] td.col-dy', 'tr[data-row-type="ln1"] td.col-ln'
+      ];
+      var notLeft = [];
+      for (var pi = 0; pi < leftProbe.length; pi++) {
+        var pc = host2.querySelector(leftProbe[pi]);
+        var pa = pc ? window.getComputedStyle(pc).textAlign : 'MISS';
+        if (pa !== 'left') notLeft.push(leftProbe[pi] + '=' + pa);
+      }
+      tests.push(eq(sec + ' X17: 勾选十神组时柱名表头/全部行/大运流年列均为左对齐', notLeft.length ? notLeft.join(',') : 'ALL_LEFT', 'ALL_LEFT'));
+      // 藏气逐层分隔线（首层无、层间有）+ 组对应名列统一左对齐
+      var dividerState = 'NO_MULTI';
+      var cgTds = host2.querySelectorAll('tr[data-row-type="ln2"] td');
+      for (var di = 1; di < cgTds.length; di++) {
+        var dls = cgTds[di].querySelectorAll('.ssh-cg-l');
+        if (dls.length < 2) continue;
+        var b0 = parseFloat(window.getComputedStyle(dls[0]).borderTopWidth) || 0;
+        var b1 = parseFloat(window.getComputedStyle(dls[1]).borderTopWidth) || 0;
+        dividerState = (b0 === 0 && b1 > 0) ? 'Y' : 'N(' + b0 + '/' + b1 + ')';
+        break;
+      }
+      tests.push(eq(sec + ' X18: 藏气层间有分隔线且首层无', dividerState, 'Y'));
+      var nsEl = host2.querySelector('.ssh-cg-ns');
+      tests.push(eq(sec + ' X19: 藏气组对应名列统一左对齐', nsEl ? window.getComputedStyle(nsEl).alignItems : 'MISS', 'flex-start'));
+      var luckOn = host2.querySelector('.luck-col');
+      tests.push(eq(sec + ' X20: 勾选十神组时运流区左对齐',
+        (luckOn && luckOn.classList.contains('ssh-on') ? 'Y' : 'N') + '/' +
+        (luckOn ? window.getComputedStyle(luckOn.querySelector('.luck-row .cell')).textAlign : 'X'), 'Y/left'));
+      var jqOn = host2.querySelector('.jq-col');
+      tests.push(eq(sec + ' X21: 勾选十神组时节气块左对齐', jqOn ? window.getComputedStyle(jqOn).textAlign : 'MISS', 'left'));
     } else {
       tests.push(fail(sec + ' X00b: 藏气竖排逐层行存在', '不足两层'));
     }
@@ -18621,6 +18661,11 @@ function captureScreenshot() {
       cssAlign(host2.querySelector('tr[data-row-type="sy-gan"] td[data-gk="gan"]')) + '/' +
       cssAlign(host2.querySelector('tr[data-row-type="sy-zhi"] td[data-gk="zhi"]')) + '/' +
       cssAlign(host2.querySelector('tr[data-row-type="sy-cg"] td:nth-child(2)')), 'center/center/center/center'));
+    var luckOff = host2.querySelector('.luck-col');
+    tests.push(eq(sec + ' X22: 未勾选时柱名表头/运流区沿用居中',
+      cssAlign(host2.querySelector('tr.hd th:nth-child(2)')) + '/' +
+      (luckOff && luckOff.classList.contains('ssh-on') ? 'on' : 'off') + '/' +
+      (luckOff ? cssAlign(luckOff.querySelector('.luck-row .cell')) : 'X'), 'center/off/center'));
     if (savedSel2 === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel2);
     R.renderChart(pd2, undefined, 'tst-out');
   })();
