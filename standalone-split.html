@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.72.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.73.0 | 2026-10-23 -->
 <!-- v0.71.0: 勾选十神或十干任一组时，运流整区自动从右栏移到主表下方（新增 luck-moved 布局：flex column + fit-content 居中，主表保持原宽不被拉伸、左缘与运流区对齐；分析记录模式优先，不开下移） -->
 <!-- v0.70.2: 天干行与藏气行的十干/十神分区竖线上下对齐 —— 十干区固定 34px、竖线前后间距改定值 px，天干行 flex gap 差额用 6.3px margin 补齐（四柱实测差 0.07px） -->
 <!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
@@ -913,6 +913,10 @@
   .flow-msel-hint { font-size:11px; color:var(--c-red); opacity:.75; margin:2px 0 4px; line-height:1.5; }
   .flow-table .li:focus-visible { outline:1px solid var(--c-red); outline-offset:-1px; }
   .flow-date { display:inline-block; min-width:32px; margin-right:4px; font-size:13px; color:var(--c-gray); font-family:var(--font-body); }
+  /* v0.73.0: 流月/流日改两行式 —— 日期在上、干支整块在下，农历月用汉字 */
+  .flow-table .li { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .flow-table .flow-date { min-width:0; margin-right:0; }
+  .flow-gz { display:inline-flex; white-space:nowrap; }
   .flow-day-label { margin-top:12px; }
   .flow-note { padding-top:6px; font-size:12px; color:var(--c-gray); }
   .luck-col.luck-rec-below .flow-table-wrap { contain: inline-size; }

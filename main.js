@@ -3950,14 +3950,14 @@ function captureScreenshot() {
       tests.push(eq('流月：默认隐藏', flowRoot.querySelector('.flow-panel').hidden, true));
       flowRoot.querySelector('[data-flow="month"]').click();
       tests.push(eq('流月：勾选展开十二月', flowRoot.querySelectorAll('[data-flow-month]').length, 12));
-      tests.push(eq('流月：默认农历按钮节气序', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
-      tests.push(eq('流月：默认农历末月节气序', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '12月'));
+      tests.push(eq('流月：默认农历按钮节气序', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '一月'));
+      tests.push(eq('流月：默认农历末月节气序', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '十二月'));
       tests.push(eq('流月：默认农历面板标签干支年', flowRoot.querySelector('.luck-table-label').textContent.indexOf('丙午年') === 0, true));
       tests.push(eq('流月：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
-      tests.push(eq('流月：干支使用五行配色', flowRoot.querySelector('[data-flow-month] span:not(.flow-date)').className, ALGO.wxClass(RENDER.flowMonths(flowRoot._flowState.year)[0].gan)));
+      tests.push(eq('流月：干支使用五行配色', flowRoot.querySelector('[data-flow-month] .flow-gz > span').className, ALGO.wxClass(RENDER.flowMonths(flowRoot._flowState.year)[0].gan)));
       tests.push(eq('流月：只显示流月列', flowRoot.querySelectorAll('tr.hd .col-lm').length, 2));
       tests.push(eq('流月：不显示流日列', flowRoot.querySelectorAll('.col-ld').length, 0));
       flowRoot.querySelector('[data-flow="day"]').click();
@@ -3985,7 +3985,7 @@ function captureScreenshot() {
       tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
       tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       flowRoot.querySelector('[data-flow="newcal"]').click();
-      tests.push(eq('新历：取消后回农历按钮', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '1月'));
+      tests.push(eq('新历：取消后回农历按钮', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '一月'));
       tests.push(eq('新历：取消后列头回纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
@@ -4027,6 +4027,26 @@ function captureScreenshot() {
       dateInput.value = '0999-01-01';
       dateInput.dispatchEvent(new Event('change', { bubbles: true }));
       tests.push(eq('新历定位：节气范围外提示', flowRoot.querySelector('.flow-date-status').textContent, '所选日期超出节气数据范围'));
+
+      // v0.73.0 两行式：日期在上、干支整块在下，农历月用汉字
+      flowRoot.style.cssText = 'position:fixed;left:-9999px;top:0;width:760px;display:block';
+      var mBtn = flowRoot.querySelector('[data-flow-month="0"]');
+      var mGz = mBtn.querySelector('.flow-gz');
+      tests.push(eq('两行式：流月干支整块包裹', mGz ? mGz.children.length : 0, 2));
+      tests.push(eq('两行式：流月干支不折行', mGz ? mGz.scrollWidth - mGz.clientWidth : -1, 0));
+      var mDateRect = mBtn.querySelector('.flow-date').getBoundingClientRect();
+      var mGzRect = mGz.getBoundingClientRect();
+      tests.push(eq('两行式：流月日期在干支上方', mDateRect.bottom <= mGzRect.top + 1, true));
+      tests.push(eq('两行式：流月两行居中对齐', Math.abs((mDateRect.left + mDateRect.right) / 2 - (mGzRect.left + mGzRect.right) / 2) <= 2, true));
+      var dBtn = flowRoot.querySelector('[data-flow-day]');
+      var dGz = dBtn.querySelector('.flow-gz');
+      var dDateRect = dBtn.querySelector('.flow-date').getBoundingClientRect();
+      var dGzRect = dGz.getBoundingClientRect();
+      tests.push(eq('两行式：流日干支整块包裹', dGz.children.length, 2));
+      tests.push(eq('两行式：流日日期在干支上方', dDateRect.bottom <= dGzRect.top + 1, true));
+      tests.push(eq('两行式：流日干支不折行', dGz.scrollWidth - dGz.clientWidth, 0));
+      tests.push(eq('两行式：流日日期为斜杠格式', /^\d{1,2}\/\d{1,2}$/.test(dBtn.querySelector('.flow-date').textContent), true));
+      tests.push(eq('两行式：农历月名全用汉字', Array.from(flowRoot.querySelectorAll('[data-flow-month] .flow-date')).map(function(el) { return el.textContent; }).join(','), '一月,二月,三月,四月,五月,六月,七月,八月,九月,十月,十一月,十二月'));
     } finally {
       RENDER.setFlowVisible('month', false);
       window._paipanData = oldData;

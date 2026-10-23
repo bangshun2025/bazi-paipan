@@ -1349,6 +1349,9 @@ function flowMonths(year) {
   });
 }
 
+var CN_MONTHS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+function cnMonthLabel(index) { return CN_MONTHS[index] + '月'; }
+
 function flowControlsHTML() {
   return '<span class="flow-date-picker"><label>新历 <input type="date" aria-label="新历流年流月流日" onchange="RENDER.locateFlowDate(this)"></label><button type="button" onclick="RENDER.locateFlowDate(this.previousElementSibling.querySelector(\'input\'))">定位</button><span class="flow-date-status" role="status"></span></span><span style="display:inline-flex;align-items:center;gap:10px;font-size:12px;white-space:nowrap"><label><input type="checkbox" data-flow="month" onchange="RENDER.setFlowVisible(\'month\',this.checked)">流月</label><label><input type="checkbox" data-flow="day" onchange="RENDER.setFlowVisible(\'day\',this.checked)">流月日</label><label><input type="checkbox" data-flow="newcal" onchange="RENDER.setFlowNewCal(this.checked)">新历</label></span>';
 }
@@ -1477,8 +1480,8 @@ function _refreshFlowInner(root, data, year) {
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
         var picked = kind === 'month' ? _mdlHasLm(state.year, index) : _mdlHasLd(state.year, state.month, item.ms);
-        var label = kind === 'month' ? (flowNewCal && item.start ? item.start.getUTCMonth() + 1 : index + 1) + '月' : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
-        return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></button>';
+        var label = kind === 'month' ? (flowNewCal && item.start ? (item.start.getUTCMonth() + 1) + '月' : cnMonthLabel(index)) : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
+        return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="flow-gz"><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></span></button>';
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
