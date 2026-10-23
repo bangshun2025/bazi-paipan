@@ -1258,9 +1258,138 @@ function deleteNote(id) {
   localStorage.removeItem(noteKey(id));
 }
 
+// ============================================================
+// v0.66.0 备份：档案 + 回收站 + 分析记录 一键导出 / 导入 JSON
+// 分析记录只存本机 localStorage（不上云），换电脑 / 清缓存前必须先导一份
+// ============================================================
+var REC_NOTES_PREFIX = 'bz_rec_notes_';
+var BACKUP_APP = 'bazi-paipan';
+
+function collectRecNotes() {
+  var out = {};
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(REC_NOTES_PREFIX) === 0) out[k] = localStorage.getItem(k) || '';
+    }
+  } catch (e) {}
+  return out;
+}
+
+function buildBackup() {
+  return {
+    app: BACKUP_APP,
+    exportedAt: new Date().toISOString(),
+    archives: getArchives(),
+    trash: getTrash(),
+    recNotes: collectRecNotes()
+  };
+}
+
+function backupFilename(t) {
+  t = t || new Date();
+  return '八字排盘备份-' + t.getFullYear() + pad(t.getMonth() + 1) + pad(t.getDate())
+    + '-' + pad(t.getHours()) + pad(t.getMinutes()) + '.json';
+}
+
+function setBackupHint(msg) {
+  var el = document.getElementById('archiveBackupHint');
+  if (el) el.textContent = msg || '';
+}
+
+function exportBackup() {
+  var data = buildBackup();
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = backupFilename();
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+  setBackupHint('已导出 ' + data.archives.length + ' 条档案、' + Object.keys(data.recNotes).length + ' 条分析记录');
+  return data;
+}
+
+function pickImportBackup() {
+  var el = document.getElementById('archiveImportFile');
+  if (el) { el.value = ''; el.click(); }
+}
+
+// 合并式导入：档案按 id、记录按键，已存在的一律跳过，绝不覆盖现有内容
+function importBackup(obj) {
+  var res = { addedArchives: 0, skippedArchives: 0, addedNotes: 0, keptNotes: 0, addedTrash: 0 };
+  if (!obj || !Array.isArray(obj.archives)) return res;
+  var arr = getArchives();
+  var ids = {};
+  for (var i = 0; i < arr.length; i++) if (arr[i] && arr[i].id) ids[arr[i].id] = true;
+  for (var j = 0; j < obj.archives.length; j++) {
+    var a = obj.archives[j];
+    if (!a || !a.id) continue;
+    if (ids[a.id]) { res.skippedArchives++; continue; }
+    arr.push(a);
+    ids[a.id] = true;
+    res.addedArchives++;
+  }
+  if (res.addedArchives) saveArchives(arr);
+  if (Array.isArray(obj.trash) && obj.trash.length) {
+    var tr = getTrash(), tids = {};
+    for (var m = 0; m < tr.length; m++) if (tr[m] && tr[m].id) tids[tr[m].id] = true;
+    for (var n = 0; n < obj.trash.length; n++) {
+      var t = obj.trash[n];
+      if (!t || !t.id || tids[t.id]) continue;
+      tr.push(t); tids[t.id] = true; res.addedTrash++;
+    }
+    if (res.addedTrash) saveTrash(tr);
+  }
+  var notes = obj.recNotes || {};
+  for (var k in notes) {
+    if (!Object.prototype.hasOwnProperty.call(notes, k) || k.indexOf(REC_NOTES_PREFIX) !== 0) continue;
+    var cur = '';
+    try { cur = localStorage.getItem(k) || ''; } catch (e) { cur = ''; }
+    if (cur.trim()) { res.keptNotes++; continue; }
+    try { localStorage.setItem(k, String(notes[k] == null ? '' : notes[k])); res.addedNotes++; } catch (e) {}
+  }
+  return res;
+}
+
+function onImportFile(input) {
+  var f = input && input.files && input.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    var obj = null;
+    try { obj = JSON.parse(String(reader.result)); } catch (e) { obj = null; }
+    if (!obj || !Array.isArray(obj.archives)) {
+      alert('这不是八字排盘的备份文件（缺少 archives 字段）');
+      input.value = '';
+      return;
+    }
+    var nNotes = obj.recNotes ? Object.keys(obj.recNotes).length : 0;
+    var ok = window.confirm('即将导入备份：\n· 档案 ' + obj.archives.length + ' 条（已存在的跳过）\n· 分析记录 ' + nNotes + ' 条（已有内容的不覆盖）\n\n不会删除或覆盖任何现有内容，是否继续？');
+    if (!ok) { input.value = ''; return; }
+    var r = importBackup(obj);
+    if (typeof refreshArchiveModalIfOpen === 'function') refreshArchiveModalIfOpen();
+    var msg = '导入完成：新增档案 ' + r.addedArchives + ' 条（跳过 ' + r.skippedArchives + '），新增记录 ' + r.addedNotes + ' 条（保留 ' + r.keptNotes + '）';
+    setBackupHint(msg);
+    alert(msg);
+    input.value = '';
+  };
+  reader.readAsText(f);
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
+    buildBackup: buildBackup,
+    exportBackup: exportBackup,
+    pickImportBackup: pickImportBackup,
+    importBackup: importBackup,
+    onImportFile: onImportFile,
+    collectRecNotes: collectRecNotes,
+    backupFilename: backupFilename,
     migrateFromV1: migrateFromV1,
     initPresetArchives: initPresetArchives,
     getArchives: getArchives,

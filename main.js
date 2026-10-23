@@ -4692,6 +4692,84 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.66.0 备份 + 分析记录指纹兜底 =====
+  (function() {
+    tests.push({ section:'备份与记录兜底(v0.66.0)' });
+    var sec = 'BK';
+    var A = window.ARCHIVE, R = window.RENDER;
+    if (!A || typeof A.buildBackup !== 'function' || !R || typeof R.bindRecPanel !== 'function') {
+      tests.push(fail(sec + ' T01: 前置 ARCHIVE.buildBackup / RENDER.bindRecPanel 已挂载', '缺失'));
+      return;
+    }
+    var P = 'bz_rec_notes_';
+    var K1 = P + '兜底测试|女|1990|5|5|10|0';
+    var K2 = P + '兜底测试|女|1990|5|5|7|7';
+    var K3 = P + '兜底测试|女|1991|6|6|9|9';
+    var KC = P + '兜底测试|女|1990|5|5|11|0';
+    var KN = P + '备份新|女|1991|1|1|1|1';
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    var savedPd = window._paipanData;
+    var host = document.createElement('div');
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    var panelHtml = '<div class="record-panel"><div class="rec-head"><span class="rec-status"></span></div><div class="rec-alts"></div><textarea class="rec-text"></textarea></div>';
+    try {
+      tests.push(eq(sec + ' T01: 备份 app 标记', A.buildBackup().app, 'bazi-paipan'));
+      tests.push(eq(sec + ' T02: 备份档案数=现有档案数', A.buildBackup().archives.length, A.getArchives().length));
+
+      localStorage.setItem(K1, '甲己合土');
+      localStorage.setItem(K3, '乙辛冲');
+      tests.push(eq(sec + ' T03: 备份含分析记录原文', A.buildBackup().recNotes[K1], '甲己合土'));
+
+      var n0 = A.getArchives().length;
+      var existingId = A.getArchives().length ? A.getArchives()[0].id : 'none';
+      var imp = A.importBackup({
+        app: 'bazi-paipan',
+        archives: [{ id: 'bk-new-1', name: '备份测试', gender: '男', year: 1990, month: 1, day: 1, hour: 12, min: 0 }]
+          .concat(existingId === 'none' ? [] : [{ id: existingId, name: '重复档案' }]),
+        recNotes: (function() { var o = {}; o[K1] = '不应覆盖'; o[KN] = '新记录'; return o; })()
+      });
+      tests.push(eq(sec + ' T04: 导入新增档案 1 条', imp.addedArchives, 1));
+      tests.push(eq(sec + ' T05: 已存在档案跳过', imp.skippedArchives, existingId === 'none' ? 0 : 1));
+      tests.push(eq(sec + ' T06: 已有记录不覆盖', localStorage.getItem(K1), '甲己合土'));
+      tests.push(eq(sec + ' T07: 新记录写入', localStorage.getItem(KN), '新记录'));
+      tests.push(eq(sec + ' T08: 档案总数 +1', A.getArchives().length, n0 + 1));
+
+      window._paipanData = { name: '兜底测试', gender: '女', y: 1990, m: 5, d: 5, h: 11, mi: 0 };
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      tests.push(eq(sec + ' T09: 同生日唯一记录自动回捞', host.querySelector('.rec-text').value, '甲己合土'));
+      tests.push(eq(sec + ' T10: 回捞提示文案', /同生日记录恢复/.test(host.querySelector('.rec-status').textContent) ? 'Y' : 'N', 'Y'));
+
+      localStorage.setItem(K2, '丙丁合木');
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      var ta2 = host.querySelector('.rec-text');
+      tests.push(eq(sec + ' T11: 同生日多条不自动填', ta2.value, ''));
+      tests.push(eq(sec + ' T12: 候选列出 3 条（同生日2+同名1）', host.querySelectorAll('.rec-alt').length, 3));
+
+      R.loadRecAlt(host.querySelector('.rec-alt'));
+      tests.push(eq(sec + ' T13: 点选载入候选原文', ta2.value.length > 0 ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' T14: 载入后落到当前指纹', (localStorage.getItem(KC) || '').length > 0 ? 'Y' : 'N', 'Y'));
+
+      window._paipanData = { name: '兜底测试', gender: '女', y: 1993, m: 1, d: 1, h: 3, mi: 3 };
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      tests.push(eq(sec + ' T15: 不同生日不自动填', host.querySelector('.rec-text').value, ''));
+      tests.push(eq(sec + ' T16: 同名记录全部列出', host.querySelectorAll('.rec-alt').length, 4));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      [K1, K2, K3, KC, KN].forEach(function(k) { localStorage.removeItem(k); });
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      window._paipanData = savedPd;
+      if (host.parentNode) host.parentNode.removeChild(host);
+      tests.push(eq(sec + ' T17: 测试后档案现场还原', A.getArchives().length, savedArch === null ? 0 : JSON.parse(savedArch).length));
+      tests.push(eq(sec + ' T18: 测试键已清理', [K1, K2, K3, KC, KN].filter(function(k) { return localStorage.getItem(k) !== null; }).length, 0));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

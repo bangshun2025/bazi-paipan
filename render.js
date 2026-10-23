@@ -1079,6 +1079,7 @@ function renderChart(data, twin, targetId, opts) {
   const recPanelHtml = `
       <div class="record-panel${recOn ? ' open' : ''}">
         <div class="rec-head"><span class="rec-title">分析记录</span><span class="rec-status" id="bzRecStatus"></span></div>
+        <div class="rec-alts"></div>
         <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
       </div>`;
   const html = topBarHtml + `
@@ -1125,6 +1126,94 @@ function recNotesKey(suffix) {
   if (!d) return null;
   return LS_REC_NOTES + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
+
+// ===== v0.66.0 分析记录防丢（指纹取不到时不再显示空白）=====
+// 键 = 姓名|性别|公历生日|时|分，任一位不同即取不到；改名/改生日/换时辰后内容看着像丢了。
+// 兜底顺序：精确键 → 同生日（仅时/分不同）唯一命中自动回捞 → 只列出同名历史记录供手动载入。
+var REC_ALT_LIMIT = 6;
+function recPad(n) { n = Number(n) || 0; return (n < 10 ? '0' : '') + n; }
+function recKeyParts(key) {
+  if (!key || key.indexOf(LS_REC_NOTES) !== 0) return null;
+  var raw = key.slice(LS_REC_NOTES.length), prefix = '';
+  if (raw.indexOf('twin|') === 0) { prefix = 'twin|'; raw = raw.slice(5); }
+  var p = raw.split('|');
+  if (p.length !== 7) return null;
+  return { prefix: prefix, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
+}
+function recNoteGet(key) {
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+function recNoteSet(key, val) {
+  try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
+}
+function recNoteCandidates(suffix) {
+  var out = { key: null, text: '', sameBirthday: [], sameName: [] };
+  var d = window._paipanData;
+  if (!d) return out;
+  var prefix = suffix || '';
+  out.key = LS_REC_NOTES + prefix + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var exact = recNoteGet(out.key);
+  if (exact.trim()) { out.text = exact; return out; }
+  var name = d.name || '', gender = d.gender || '';
+  if (!name) return out;
+  var ymd = [d.y, d.m, d.d].join('|');
+  var all = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k === out.key || k.indexOf(LS_REC_NOTES) !== 0) continue;
+      var p = recKeyParts(k);
+      if (!p || p.prefix !== prefix || p.name !== name || p.gender !== gender) continue;
+      var txt = recNoteGet(k);
+      if (!txt.trim()) continue;
+      all.push({ key: k, ymd: [p.y, p.m, p.d].join('|'), h: p.h, mi: p.mi, text: txt });
+    }
+  } catch (e) {}
+  for (var j = 0; j < all.length; j++) {
+    if (all[j].ymd === ymd) out.sameBirthday.push(all[j]);
+    else out.sameName.push(all[j]);
+  }
+  return out;
+}
+function recStatusShow(container, text, sticky) {
+  var st = container.querySelector('.rec-status');
+  if (!st) return;
+  st.textContent = text;
+  st.classList.add('show');
+  clearTimeout(st._t);
+  if (!sticky) st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
+}
+function recRenderAlts(container, list, hint, suffix) {
+  var box = container.querySelector('.rec-alts');
+  if (!box || !list.length) return;
+  var h = '<div style="font-size:12px;color:#a86400;margin:2px 0 4px;">' + hint + '</div>';
+  for (var i = 0; i < list.length && i < REC_ALT_LIMIT; i++) {
+    var it = list[i];
+    var label = it.ymd.replace(/\|/g, '-') + ' ' + recPad(it.h) + ':' + recPad(it.mi) + ' · ' + it.text.trim().length + ' 字';
+    h += '<button type="button" class="rec-alt" data-key="' + it.key.replace(/"/g, '&quot;') + '" data-suffix="' + (suffix || '') + '"'
+      + ' onclick="RENDER.loadRecAlt(this)"'
+      + ' style="margin:0 6px 4px 0;padding:2px 8px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;font-family:var(--font-display);">'
+      + label + '</button>';
+  }
+  box.innerHTML = h;
+  box.style.display = '';
+}
+function loadRecAlt(btn) {
+  var panel = btn && btn.closest ? btn.closest('.record-panel') : null;
+  var ta = panel ? panel.querySelector('.rec-text') : null;
+  var k = btn ? btn.getAttribute('data-key') : '';
+  if (!panel || !ta || !k) return;
+  var txt = recNoteGet(k);
+  if (!txt) return;
+  ta.value = txt;
+  recAutogrow(ta);
+  var cur = recNotesKey(btn.getAttribute('data-suffix') || '');
+  if (cur && cur !== k) recNoteSet(cur, txt);
+  var box = panel.querySelector('.rec-alts');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  var p = recKeyParts(k);
+  recStatusShow(panel, '已载入 ' + (p ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
+}
 function recAutogrow(ta) {
   ta.style.height = 'auto';
   ta.style.height = ta.scrollHeight + 'px';
@@ -1133,21 +1222,26 @@ function bindRecPanel(container, suffix) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
-  var key = recNotesKey(suffix);
-  if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
+  var cand = recNoteCandidates(suffix);
+  if (cand.text) {
+    ta.value = cand.text;
+  } else if (cand.sameBirthday.length === 1) {
+    ta.value = cand.sameBirthday[0].text;
+    recStatusShow(container, '已按同生日记录恢复（原 ' + recPad(cand.sameBirthday[0].h) + ':' + recPad(cand.sameBirthday[0].mi) + '）', true);
+  } else if (cand.sameBirthday.length + cand.sameName.length) {
+    var list = cand.sameBirthday.concat(cand.sameName);
+    var hint = cand.sameBirthday.length > 1
+      ? '同名同生日有 ' + cand.sameBirthday.length + ' 条记录（时辰不同），点选载入：'
+      : '有 ' + cand.sameName.length + ' 条同名记录（生日不同），点选载入：';
+    recRenderAlts(container, list, hint, suffix);
+  }
   recAutogrow(ta);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
     var k = recNotesKey(suffix);
     if (!k) return;
-    try { localStorage.setItem(k, ta.value); } catch (e) {}
-    var st = container.querySelector('.rec-status');
-    if (st) {
-      st.textContent = '已保存 ' + new Date().toTimeString().slice(0, 8);
-      st.classList.add('show');
-      clearTimeout(st._t);
-      st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
-    }
+    recNoteSet(k, ta.value);
+    recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
   });
 }
 function toggleRecMode(force, root) {
@@ -1186,6 +1280,7 @@ function twinRecPanelHtml() {
   var on = isRecOn();
   return '<div class="record-panel twin-rec' + (on ? ' open' : '') + '">'
     + '<div class="rec-head"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-status" role="status"></span></div>'
+    + '<div class="rec-alts"></div>'
     + '<textarea class="rec-text" placeholder="记录本次双胞胎合盘分析……写入即自动保存"></textarea>'
     + '</div>';
 }
@@ -3778,6 +3873,10 @@ function cmpSetState(entries) {
     renderChart: renderChart,
     bindEvents: bindEvents,
     toggleRecMode: toggleRecMode,
+    bindRecPanel: bindRecPanel,
+    recNotesKey: recNotesKey,
+    recNoteCandidates: recNoteCandidates,
+    loadRecAlt: loadRecAlt,
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     hiDy: hiDy,

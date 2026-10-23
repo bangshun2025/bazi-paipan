@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.65.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.66.0 | 2026-10-23 -->
+<!-- v0.66.0: 分析记录防丢 — 指纹键（姓名|性别|公历生日|时|分）取不到时不再空白：同生日（仅时/分不同）唯一命中自动回捞并提示，多条或不同生日则列出同名历史记录点选载入（载入后落到当前指纹）；档案弹窗底部新增「⬇ 导出备份 / ⬆ 导入备份」JSON（档案+回收站+分析记录，合并导入不覆盖）；断言 BK-T01…T18 -->
 <!-- v0.65.0: 天干十神对应名并入天干单元右侧 — 删除独立组名行，天干在左、组对应名右侧竖排堆叠（与藏气同构）；主星/天干/地支/藏气四行左对齐；断言 T06/T08/T09/T12d/T12e/T13/T14/T15/T17/T18/T19/X08/X09 -->
 <!-- v0.64.0: 十神藏气排版回归竖形 — 勾选十神组后藏气不再横排化，每层一行「藏干 十神」+ 右侧组对应名（多组竖排堆叠、整块居中于该层），删除独立的组对应名行；断言 T07/T11/T12/T12b/T12c/T21/T22/X05/X06/X07 + T10c/T10d/T10e -->
 <!-- v0.63.2: 修复点十神弹出宫位界面 — gongwei rebuildGzCbGrid 扫全局 .gz-cb-grid，把十神 popover 的网格覆盖成宫位项；改为只重建 .gz-popover 内网格，十神网格改自有类 ssh-cb-grid（shishen renderPanel/rebuildPanels 同步），断言+3（T24 类名/T25 不覆盖/T26 宫位照常重建） -->
@@ -1146,6 +1147,12 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         <button class="archive-search-btn" onclick="ARCHIVE.filterArchives(document.getElementById('archive-search-modal').value)">确定</button>
       </div>
       <div class="archive-modal-list" id="archive-modal-list"></div>
+      <div class="archive-modal-backup" id="archiveBackupBar" style="padding:8px 14px;border-top:1px solid var(--c-line);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button class="btn" id="btnExportBackup" onclick="ARCHIVE.exportBackup()" title="把全部档案与分析记录导出为 JSON 文件（换电脑 / 清缓存前先导一份）" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">&#11015; 导出备份</button>
+        <button class="btn" id="btnImportBackup" onclick="ARCHIVE.pickImportBackup()" title="从备份 JSON 导入档案与分析记录（已存在的跳过，不覆盖现有内容）" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">&#11014; 导入备份</button>
+        <input type="file" id="archiveImportFile" accept=".json,application/json" style="display:none" onchange="ARCHIVE.onImportFile(this)">
+        <span id="archiveBackupHint" style="font-size:12px;color:#8a6d3b;"></span>
+      </div>
     </div>
   </div>
 
@@ -6572,9 +6579,138 @@ function deleteNote(id) {
   localStorage.removeItem(noteKey(id));
 }
 
+// ============================================================
+// v0.66.0 备份：档案 + 回收站 + 分析记录 一键导出 / 导入 JSON
+// 分析记录只存本机 localStorage（不上云），换电脑 / 清缓存前必须先导一份
+// ============================================================
+var REC_NOTES_PREFIX = 'bz_rec_notes_';
+var BACKUP_APP = 'bazi-paipan';
+
+function collectRecNotes() {
+  var out = {};
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(REC_NOTES_PREFIX) === 0) out[k] = localStorage.getItem(k) || '';
+    }
+  } catch (e) {}
+  return out;
+}
+
+function buildBackup() {
+  return {
+    app: BACKUP_APP,
+    exportedAt: new Date().toISOString(),
+    archives: getArchives(),
+    trash: getTrash(),
+    recNotes: collectRecNotes()
+  };
+}
+
+function backupFilename(t) {
+  t = t || new Date();
+  return '八字排盘备份-' + t.getFullYear() + pad(t.getMonth() + 1) + pad(t.getDate())
+    + '-' + pad(t.getHours()) + pad(t.getMinutes()) + '.json';
+}
+
+function setBackupHint(msg) {
+  var el = document.getElementById('archiveBackupHint');
+  if (el) el.textContent = msg || '';
+}
+
+function exportBackup() {
+  var data = buildBackup();
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = backupFilename();
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+  setBackupHint('已导出 ' + data.archives.length + ' 条档案、' + Object.keys(data.recNotes).length + ' 条分析记录');
+  return data;
+}
+
+function pickImportBackup() {
+  var el = document.getElementById('archiveImportFile');
+  if (el) { el.value = ''; el.click(); }
+}
+
+// 合并式导入：档案按 id、记录按键，已存在的一律跳过，绝不覆盖现有内容
+function importBackup(obj) {
+  var res = { addedArchives: 0, skippedArchives: 0, addedNotes: 0, keptNotes: 0, addedTrash: 0 };
+  if (!obj || !Array.isArray(obj.archives)) return res;
+  var arr = getArchives();
+  var ids = {};
+  for (var i = 0; i < arr.length; i++) if (arr[i] && arr[i].id) ids[arr[i].id] = true;
+  for (var j = 0; j < obj.archives.length; j++) {
+    var a = obj.archives[j];
+    if (!a || !a.id) continue;
+    if (ids[a.id]) { res.skippedArchives++; continue; }
+    arr.push(a);
+    ids[a.id] = true;
+    res.addedArchives++;
+  }
+  if (res.addedArchives) saveArchives(arr);
+  if (Array.isArray(obj.trash) && obj.trash.length) {
+    var tr = getTrash(), tids = {};
+    for (var m = 0; m < tr.length; m++) if (tr[m] && tr[m].id) tids[tr[m].id] = true;
+    for (var n = 0; n < obj.trash.length; n++) {
+      var t = obj.trash[n];
+      if (!t || !t.id || tids[t.id]) continue;
+      tr.push(t); tids[t.id] = true; res.addedTrash++;
+    }
+    if (res.addedTrash) saveTrash(tr);
+  }
+  var notes = obj.recNotes || {};
+  for (var k in notes) {
+    if (!Object.prototype.hasOwnProperty.call(notes, k) || k.indexOf(REC_NOTES_PREFIX) !== 0) continue;
+    var cur = '';
+    try { cur = localStorage.getItem(k) || ''; } catch (e) { cur = ''; }
+    if (cur.trim()) { res.keptNotes++; continue; }
+    try { localStorage.setItem(k, String(notes[k] == null ? '' : notes[k])); res.addedNotes++; } catch (e) {}
+  }
+  return res;
+}
+
+function onImportFile(input) {
+  var f = input && input.files && input.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    var obj = null;
+    try { obj = JSON.parse(String(reader.result)); } catch (e) { obj = null; }
+    if (!obj || !Array.isArray(obj.archives)) {
+      alert('这不是八字排盘的备份文件（缺少 archives 字段）');
+      input.value = '';
+      return;
+    }
+    var nNotes = obj.recNotes ? Object.keys(obj.recNotes).length : 0;
+    var ok = window.confirm('即将导入备份：\n· 档案 ' + obj.archives.length + ' 条（已存在的跳过）\n· 分析记录 ' + nNotes + ' 条（已有内容的不覆盖）\n\n不会删除或覆盖任何现有内容，是否继续？');
+    if (!ok) { input.value = ''; return; }
+    var r = importBackup(obj);
+    if (typeof refreshArchiveModalIfOpen === 'function') refreshArchiveModalIfOpen();
+    var msg = '导入完成：新增档案 ' + r.addedArchives + ' 条（跳过 ' + r.skippedArchives + '），新增记录 ' + r.addedNotes + ' 条（保留 ' + r.keptNotes + '）';
+    setBackupHint(msg);
+    alert(msg);
+    input.value = '';
+  };
+  reader.readAsText(f);
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
+    buildBackup: buildBackup,
+    exportBackup: exportBackup,
+    pickImportBackup: pickImportBackup,
+    importBackup: importBackup,
+    onImportFile: onImportFile,
+    collectRecNotes: collectRecNotes,
+    backupFilename: backupFilename,
     migrateFromV1: migrateFromV1,
     initPresetArchives: initPresetArchives,
     getArchives: getArchives,
@@ -10658,6 +10794,7 @@ function renderChart(data, twin, targetId, opts) {
   const recPanelHtml = `
       <div class="record-panel${recOn ? ' open' : ''}">
         <div class="rec-head"><span class="rec-title">分析记录</span><span class="rec-status" id="bzRecStatus"></span></div>
+        <div class="rec-alts"></div>
         <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
       </div>`;
   const html = topBarHtml + `
@@ -10704,6 +10841,94 @@ function recNotesKey(suffix) {
   if (!d) return null;
   return LS_REC_NOTES + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
+
+// ===== v0.66.0 分析记录防丢（指纹取不到时不再显示空白）=====
+// 键 = 姓名|性别|公历生日|时|分，任一位不同即取不到；改名/改生日/换时辰后内容看着像丢了。
+// 兜底顺序：精确键 → 同生日（仅时/分不同）唯一命中自动回捞 → 只列出同名历史记录供手动载入。
+var REC_ALT_LIMIT = 6;
+function recPad(n) { n = Number(n) || 0; return (n < 10 ? '0' : '') + n; }
+function recKeyParts(key) {
+  if (!key || key.indexOf(LS_REC_NOTES) !== 0) return null;
+  var raw = key.slice(LS_REC_NOTES.length), prefix = '';
+  if (raw.indexOf('twin|') === 0) { prefix = 'twin|'; raw = raw.slice(5); }
+  var p = raw.split('|');
+  if (p.length !== 7) return null;
+  return { prefix: prefix, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
+}
+function recNoteGet(key) {
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+function recNoteSet(key, val) {
+  try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
+}
+function recNoteCandidates(suffix) {
+  var out = { key: null, text: '', sameBirthday: [], sameName: [] };
+  var d = window._paipanData;
+  if (!d) return out;
+  var prefix = suffix || '';
+  out.key = LS_REC_NOTES + prefix + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var exact = recNoteGet(out.key);
+  if (exact.trim()) { out.text = exact; return out; }
+  var name = d.name || '', gender = d.gender || '';
+  if (!name) return out;
+  var ymd = [d.y, d.m, d.d].join('|');
+  var all = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k === out.key || k.indexOf(LS_REC_NOTES) !== 0) continue;
+      var p = recKeyParts(k);
+      if (!p || p.prefix !== prefix || p.name !== name || p.gender !== gender) continue;
+      var txt = recNoteGet(k);
+      if (!txt.trim()) continue;
+      all.push({ key: k, ymd: [p.y, p.m, p.d].join('|'), h: p.h, mi: p.mi, text: txt });
+    }
+  } catch (e) {}
+  for (var j = 0; j < all.length; j++) {
+    if (all[j].ymd === ymd) out.sameBirthday.push(all[j]);
+    else out.sameName.push(all[j]);
+  }
+  return out;
+}
+function recStatusShow(container, text, sticky) {
+  var st = container.querySelector('.rec-status');
+  if (!st) return;
+  st.textContent = text;
+  st.classList.add('show');
+  clearTimeout(st._t);
+  if (!sticky) st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
+}
+function recRenderAlts(container, list, hint, suffix) {
+  var box = container.querySelector('.rec-alts');
+  if (!box || !list.length) return;
+  var h = '<div style="font-size:12px;color:#a86400;margin:2px 0 4px;">' + hint + '</div>';
+  for (var i = 0; i < list.length && i < REC_ALT_LIMIT; i++) {
+    var it = list[i];
+    var label = it.ymd.replace(/\|/g, '-') + ' ' + recPad(it.h) + ':' + recPad(it.mi) + ' · ' + it.text.trim().length + ' 字';
+    h += '<button type="button" class="rec-alt" data-key="' + it.key.replace(/"/g, '&quot;') + '" data-suffix="' + (suffix || '') + '"'
+      + ' onclick="RENDER.loadRecAlt(this)"'
+      + ' style="margin:0 6px 4px 0;padding:2px 8px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;font-family:var(--font-display);">'
+      + label + '</button>';
+  }
+  box.innerHTML = h;
+  box.style.display = '';
+}
+function loadRecAlt(btn) {
+  var panel = btn && btn.closest ? btn.closest('.record-panel') : null;
+  var ta = panel ? panel.querySelector('.rec-text') : null;
+  var k = btn ? btn.getAttribute('data-key') : '';
+  if (!panel || !ta || !k) return;
+  var txt = recNoteGet(k);
+  if (!txt) return;
+  ta.value = txt;
+  recAutogrow(ta);
+  var cur = recNotesKey(btn.getAttribute('data-suffix') || '');
+  if (cur && cur !== k) recNoteSet(cur, txt);
+  var box = panel.querySelector('.rec-alts');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  var p = recKeyParts(k);
+  recStatusShow(panel, '已载入 ' + (p ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
+}
 function recAutogrow(ta) {
   ta.style.height = 'auto';
   ta.style.height = ta.scrollHeight + 'px';
@@ -10712,21 +10937,26 @@ function bindRecPanel(container, suffix) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
-  var key = recNotesKey(suffix);
-  if (key) { try { ta.value = localStorage.getItem(key) || ''; } catch (e) {} }
+  var cand = recNoteCandidates(suffix);
+  if (cand.text) {
+    ta.value = cand.text;
+  } else if (cand.sameBirthday.length === 1) {
+    ta.value = cand.sameBirthday[0].text;
+    recStatusShow(container, '已按同生日记录恢复（原 ' + recPad(cand.sameBirthday[0].h) + ':' + recPad(cand.sameBirthday[0].mi) + '）', true);
+  } else if (cand.sameBirthday.length + cand.sameName.length) {
+    var list = cand.sameBirthday.concat(cand.sameName);
+    var hint = cand.sameBirthday.length > 1
+      ? '同名同生日有 ' + cand.sameBirthday.length + ' 条记录（时辰不同），点选载入：'
+      : '有 ' + cand.sameName.length + ' 条同名记录（生日不同），点选载入：';
+    recRenderAlts(container, list, hint, suffix);
+  }
   recAutogrow(ta);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
     var k = recNotesKey(suffix);
     if (!k) return;
-    try { localStorage.setItem(k, ta.value); } catch (e) {}
-    var st = container.querySelector('.rec-status');
-    if (st) {
-      st.textContent = '已保存 ' + new Date().toTimeString().slice(0, 8);
-      st.classList.add('show');
-      clearTimeout(st._t);
-      st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
-    }
+    recNoteSet(k, ta.value);
+    recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
   });
 }
 function toggleRecMode(force, root) {
@@ -10765,6 +10995,7 @@ function twinRecPanelHtml() {
   var on = isRecOn();
   return '<div class="record-panel twin-rec' + (on ? ' open' : '') + '">'
     + '<div class="rec-head"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-status" role="status"></span></div>'
+    + '<div class="rec-alts"></div>'
     + '<textarea class="rec-text" placeholder="记录本次双胞胎合盘分析……写入即自动保存"></textarea>'
     + '</div>';
 }
@@ -13357,6 +13588,10 @@ function cmpSetState(entries) {
     renderChart: renderChart,
     bindEvents: bindEvents,
     toggleRecMode: toggleRecMode,
+    bindRecPanel: bindRecPanel,
+    recNotesKey: recNotesKey,
+    recNoteCandidates: recNoteCandidates,
+    loadRecAlt: loadRecAlt,
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     hiDy: hiDy,
@@ -18431,6 +18666,84 @@ function captureScreenshot() {
       localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig(testEntries));
       localStorage.removeItem(NOTES_KEY + 'fp-' + H.entriesSig([{ type:'current' }, { type:'arch', id:'tst-arch-9' }]));
       tests.push(eq('HP16: 测试后现场还原', JSON.stringify(H.getHePans()), savedHp === null ? '[]' : JSON.stringify(JSON.parse(savedHp))));
+    }
+  })();
+
+  // ===== v0.66.0 备份 + 分析记录指纹兜底 =====
+  (function() {
+    tests.push({ section:'备份与记录兜底(v0.66.0)' });
+    var sec = 'BK';
+    var A = window.ARCHIVE, R = window.RENDER;
+    if (!A || typeof A.buildBackup !== 'function' || !R || typeof R.bindRecPanel !== 'function') {
+      tests.push(fail(sec + ' T01: 前置 ARCHIVE.buildBackup / RENDER.bindRecPanel 已挂载', '缺失'));
+      return;
+    }
+    var P = 'bz_rec_notes_';
+    var K1 = P + '兜底测试|女|1990|5|5|10|0';
+    var K2 = P + '兜底测试|女|1990|5|5|7|7';
+    var K3 = P + '兜底测试|女|1991|6|6|9|9';
+    var KC = P + '兜底测试|女|1990|5|5|11|0';
+    var KN = P + '备份新|女|1991|1|1|1|1';
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    var savedPd = window._paipanData;
+    var host = document.createElement('div');
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    var panelHtml = '<div class="record-panel"><div class="rec-head"><span class="rec-status"></span></div><div class="rec-alts"></div><textarea class="rec-text"></textarea></div>';
+    try {
+      tests.push(eq(sec + ' T01: 备份 app 标记', A.buildBackup().app, 'bazi-paipan'));
+      tests.push(eq(sec + ' T02: 备份档案数=现有档案数', A.buildBackup().archives.length, A.getArchives().length));
+
+      localStorage.setItem(K1, '甲己合土');
+      localStorage.setItem(K3, '乙辛冲');
+      tests.push(eq(sec + ' T03: 备份含分析记录原文', A.buildBackup().recNotes[K1], '甲己合土'));
+
+      var n0 = A.getArchives().length;
+      var existingId = A.getArchives().length ? A.getArchives()[0].id : 'none';
+      var imp = A.importBackup({
+        app: 'bazi-paipan',
+        archives: [{ id: 'bk-new-1', name: '备份测试', gender: '男', year: 1990, month: 1, day: 1, hour: 12, min: 0 }]
+          .concat(existingId === 'none' ? [] : [{ id: existingId, name: '重复档案' }]),
+        recNotes: (function() { var o = {}; o[K1] = '不应覆盖'; o[KN] = '新记录'; return o; })()
+      });
+      tests.push(eq(sec + ' T04: 导入新增档案 1 条', imp.addedArchives, 1));
+      tests.push(eq(sec + ' T05: 已存在档案跳过', imp.skippedArchives, existingId === 'none' ? 0 : 1));
+      tests.push(eq(sec + ' T06: 已有记录不覆盖', localStorage.getItem(K1), '甲己合土'));
+      tests.push(eq(sec + ' T07: 新记录写入', localStorage.getItem(KN), '新记录'));
+      tests.push(eq(sec + ' T08: 档案总数 +1', A.getArchives().length, n0 + 1));
+
+      window._paipanData = { name: '兜底测试', gender: '女', y: 1990, m: 5, d: 5, h: 11, mi: 0 };
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      tests.push(eq(sec + ' T09: 同生日唯一记录自动回捞', host.querySelector('.rec-text').value, '甲己合土'));
+      tests.push(eq(sec + ' T10: 回捞提示文案', /同生日记录恢复/.test(host.querySelector('.rec-status').textContent) ? 'Y' : 'N', 'Y'));
+
+      localStorage.setItem(K2, '丙丁合木');
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      var ta2 = host.querySelector('.rec-text');
+      tests.push(eq(sec + ' T11: 同生日多条不自动填', ta2.value, ''));
+      tests.push(eq(sec + ' T12: 候选列出 3 条（同生日2+同名1）', host.querySelectorAll('.rec-alt').length, 3));
+
+      R.loadRecAlt(host.querySelector('.rec-alt'));
+      tests.push(eq(sec + ' T13: 点选载入候选原文', ta2.value.length > 0 ? 'Y' : 'N', 'Y'));
+      tests.push(eq(sec + ' T14: 载入后落到当前指纹', (localStorage.getItem(KC) || '').length > 0 ? 'Y' : 'N', 'Y'));
+
+      window._paipanData = { name: '兜底测试', gender: '女', y: 1993, m: 1, d: 1, h: 3, mi: 3 };
+      host.innerHTML = panelHtml;
+      R.bindRecPanel(host);
+      tests.push(eq(sec + ' T15: 不同生日不自动填', host.querySelector('.rec-text').value, ''));
+      tests.push(eq(sec + ' T16: 同名记录全部列出', host.querySelectorAll('.rec-alt').length, 4));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      [K1, K2, K3, KC, KN].forEach(function(k) { localStorage.removeItem(k); });
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      window._paipanData = savedPd;
+      if (host.parentNode) host.parentNode.removeChild(host);
+      tests.push(eq(sec + ' T17: 测试后档案现场还原', A.getArchives().length, savedArch === null ? 0 : JSON.parse(savedArch).length));
+      tests.push(eq(sec + ' T18: 测试键已清理', [K1, K2, K3, KC, KN].filter(function(k) { return localStorage.getItem(k) !== null; }).length, 0));
     }
   })();
 
