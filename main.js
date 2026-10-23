@@ -4046,7 +4046,30 @@ function captureScreenshot() {
       tests.push(eq('两行式：流日日期在干支上方', dDateRect.bottom <= dGzRect.top + 1, true));
       tests.push(eq('两行式：流日干支不折行', dGz.scrollWidth - dGz.clientWidth, 0));
       tests.push(eq('两行式：流日日期为斜杠格式', /^\d{1,2}\/\d{1,2}$/.test(dBtn.querySelector('.flow-date').textContent), true));
-      tests.push(eq('两行式：农历月名全用汉字', Array.from(flowRoot.querySelectorAll('[data-flow-month] .flow-date')).map(function(el) { return el.textContent; }).join(','), '一月,二月,三月,四月,五月,六月,七月,八月,九月,十月,十一月,十二月'));
+      tests.push(eq('两行式：农历月名全用汉字', Array.from(flowRoot.querySelectorAll('[data-flow-month]')).sort(function(a, b) { return Number(a.dataset.flowMonth) - Number(b.dataset.flowMonth); }).map(function(btn) { return btn.querySelector('.flow-date').textContent; }).join(','), '一月,二月,三月,四月,五月,六月,七月,八月,九月,十月,十一月,十二月'));
+
+      // v0.74.0 顺排：从左到右逐格填满一行再换行（原为按列竖排）
+      var flowTables74 = flowRoot.querySelectorAll('.flow-table');
+      function flowRows74(table, attr) {
+        var cols = Array.from(table.querySelectorAll('td.cell')).filter(function(td) { return td.querySelector('[' + attr + ']'); });
+        var maxRows = Math.max.apply(null, cols.map(function(td) { return td.querySelectorAll('[' + attr + ']').length; }));
+        var rows = [];
+        for (var r = 0; r < maxRows; r++) {
+          rows.push(cols.map(function(td) { return td.querySelectorAll('[' + attr + ']')[r]; }).filter(Boolean));
+        }
+        return rows;
+      }
+      var mRows74 = flowRows74(flowTables74[0], 'data-flow-month');
+      var dRows74 = flowRows74(flowTables74[1], 'data-flow-day');
+      function flowLabels74(row) { return row.map(function(b) { return b.querySelector('.flow-date').textContent; }).join(' '); }
+      tests.push(eq('顺排：流月共两行', mRows74.length, 2));
+      tests.push(eq('顺排：流月第一行从左到右为上半年', flowLabels74(mRows74[0]), '一月 二月 三月 四月 五月 六月'));
+      tests.push(eq('顺排：流月第二行从左到右为下半年', flowLabels74(mRows74[1]), '七月 八月 九月 十月 十一月 十二月'));
+      tests.push(eq('顺排：流月首列竖读为隔六月', Array.from(flowTables74[0].querySelectorAll('td.cell')[1].querySelectorAll('.flow-date')).map(function(el) { return el.textContent; }).join(','), '一月,七月'));
+      tests.push(eq('顺排：流日每行六格', dRows74[0].length, 6));
+      tests.push(eq('顺排：流日第一行为连续六天', (function() { var ms = dRows74[0].map(function(b) { return Number(b.dataset.flowDay); }); return ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
+      tests.push(eq('顺排：流日整体按行连续递增', (function() { var ms = [].concat.apply([], dRows74).map(function(b) { return Number(b.dataset.flowDay); }); return ms.length > 27 && ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
+      tests.push(eq('顺排：流月日期与干支仍两行式', (function() { var b = flowTables74[0].querySelector('[data-flow-month]'); return b.querySelector('.flow-date').getBoundingClientRect().bottom <= b.querySelector('.flow-gz').getBoundingClientRect().top + 1; })(), true));
     } finally {
       RENDER.setFlowVisible('month', false);
       window._paipanData = oldData;

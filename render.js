@@ -1471,12 +1471,16 @@ function _refreshFlowInner(root, data, year) {
   if (!days.some(function(day) { return day.ms === state.day; })) state.day = days.length ? days[0].ms : null;
   var selectedDay = days.find(function(day) { return day.ms === state.day; });
   function flowTable(items, kind, title) {
-    var perColumn = Math.ceil(items.length / 6);
+    var rowCount = Math.ceil(items.length / 6);
     var cells = [];
     for (var columnIndex = 0; columnIndex < 6; columnIndex++) {
-      var entries = items.slice(columnIndex * perColumn, (columnIndex + 1) * perColumn);
-      var content = entries.map(function(item, entryIndex) {
-        var index = columnIndex * perColumn + entryIndex;
+      var entries = [];
+      for (var rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+        var at = rowIndex * 6 + columnIndex;
+        if (at < items.length) entries.push(at);
+      }
+      var content = entries.map(function(index) {
+        var item = items[index];
         var active = kind === 'month' ? index === state.month : item.ms === state.day;
         var value = kind === 'month' ? index : item.ms;
         var picked = kind === 'month' ? _mdlHasLm(state.year, index) : _mdlHasLd(state.year, state.month, item.ms);
