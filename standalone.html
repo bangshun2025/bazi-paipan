@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.71.0 | 2026-10-23 -->
+<!-- 八字排盘 ·  从真版 v0.72.0 | 2026-10-23 -->
 <!-- v0.71.0: 勾选十神或十干任一组时，运流整区自动从右栏移到主表下方（新增 luck-moved 布局：flex column + fit-content 居中，主表保持原宽不被拉伸、左缘与运流区对齐；分析记录模式优先，不开下移） -->
 <!-- v0.70.2: 天干行与藏气行的十干/十神分区竖线上下对齐 —— 十干区固定 34px、竖线前后间距改定值 px，天干行 flex gap 差额用 6.3px margin 补齐（四柱实测差 0.07px） -->
 <!-- v0.70.1: 十干面板改为点击弹出（.gan-popover 并入 popover 显示规则）；十干组勾选后十干区与十神区分区竖线常驻，无对应词的天干留空占位，十神名不再左移进十干区 -->
@@ -889,6 +889,12 @@
   .body-cols.luck-moved { display:flex; flex-direction:column; align-items:flex-start; width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; }
   .body-cols.luck-moved .main-col { width:auto; max-width:100%; }
   .body-cols.luck-moved .luck-col { min-width:0; position:static; margin-top:12px; width:auto; max-width:100%; flex:0 0 auto; }
+  /* v0.72.0: 下移后流月/流月日面板挪到运流表右侧 —— 运流表在左，流月右上、流日右下；窄屏仍上下堆叠 */
+  @media (min-width:1280px) {
+    .body-cols.luck-moved .luck-col:has(.flow-panel:not([hidden])) { display:grid; grid-template-columns:max-content minmax(0,1fr); column-gap:18px; align-items:start; }
+    .body-cols.luck-moved .luck-col:has(.flow-panel:not([hidden])) > .flow-panel { grid-column:2; grid-row:1 / span 99; min-width:0; }
+    .body-cols.luck-moved .luck-col:has(.flow-panel:not([hidden])) .flow-table { min-width:0; }
+  }
   .cmp-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.45); z-index:1000; }
   .cmp-overlay.show { display:flex; flex-direction:column; }
   .cmp-dialog { position:relative; flex:1; display:flex; flex-direction:column; width:100%; height:100%; background:var(--c-paper); overflow:hidden; }
@@ -19316,6 +19322,80 @@ function captureScreenshot() {
       if (sSsh === null) localStorage.removeItem(SKEY); else localStorage.setItem(SKEY, sSsh);
       if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
       if (sRec === null) localStorage.removeItem(RKEY); else localStorage.setItem(RKEY, sRec);
+      host.setAttribute('style', prevCss);
+      R.renderChart(pd, undefined, 'tst-out');
+    }
+  })();
+
+  // ===== v0.72.0 下移后流月/流日面板挪到运流表右侧 =====
+  (function() {
+    var sec = 'FLK';
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.setFlowVisible !== 'function' || typeof paipan !== 'function') {
+      tests.push(fail(sec + ' 前置: RENDER/paipan 挂载', '缺失'));
+      return;
+    }
+    var SKEY = 'bz_ssh_selected_v1', GKEY = 'bz_gan_selected_v1', RKEY = 'bz_rec_mode';
+    var sSsh = localStorage.getItem(SKEY), sGan = localStorage.getItem(GKEY), sRec = localStorage.getItem(RKEY);
+    var initPanel = document.querySelector('.flow-panel');
+    var wasHidden = initPanel ? initPanel.hidden : true;
+    var host = document.getElementById('tst-out');
+    if (!host) { host = document.createElement('div'); host.id = 'tst-out'; document.body.appendChild(host); }
+    var prevCss = host.getAttribute('style') || '';
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+    var pd = paipan('FLK流月右侧', '男', 1984, 11, 15, 12, 0);
+
+    function geo() {
+      var luck = host.querySelector('.luck-col');
+      var panel = host.querySelector('.flow-panel');
+      var secEl = luck ? luck.querySelector('.luck-section') : null;
+      var wraps = panel ? Array.prototype.slice.call(panel.querySelectorAll('.flow-table-wrap')) : [];
+      var lbls = panel ? Array.prototype.slice.call(panel.querySelectorAll('.luck-table-label')) : [];
+      var pb = panel ? panel.getBoundingClientRect() : null;
+      var sb = secEl ? secEl.getBoundingClientRect() : null;
+      return {
+        display: luck ? getComputedStyle(luck).display : '',
+        panelShown: panel ? !panel.hidden : false,
+        rightOfYun: (pb && sb) ? (pb.left >= sb.right - 1) : null,
+        overflow: wraps.length ? Math.max.apply(null, wraps.map(function(w) { return w.scrollWidth - w.clientWidth; })) : -1,
+        monthTop: lbls.length ? Math.round(lbls[0].getBoundingClientRect().top) : 0,
+        dayTop: lbls.length > 1 ? Math.round(lbls[1].getBoundingClientRect().top) : 0,
+        cellCount: (panel && panel.querySelector('.flow-table')) ? panel.querySelector('.flow-table').querySelectorAll('td.cell').length : 0,
+        panelW: pb ? Math.round(pb.width) : 0
+      };
+    }
+    function render(ssh, rec) {
+      localStorage.setItem(SKEY, JSON.stringify(ssh));
+      localStorage.setItem(GKEY, '[]');
+      localStorage.setItem(RKEY, rec || '0');
+      R.renderChart(pd, undefined, 'tst-out');
+      return geo();
+    }
+    try {
+      var noFlow = render(['军队']);
+      tests.push(eq(sec + ' Z01: 未开流月时运流区仍是单列', noFlow.display === 'grid' ? 'grid' : 'flow', 'flow'));
+      tests.push(eq(sec + ' Z02: 未开流月时面板隐藏', noFlow.panelShown, false));
+
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      var on = render(['军队']);
+      tests.push(eq(sec + ' Z03: 下移且开流月时运流区转为两列', on.display, 'grid'));
+      tests.push(eq(sec + ' Z04: 流月/流日面板落在运流表右侧', on.rightOfYun, true));
+      tests.push(eq(sec + ' Z05: 流月在上、流日在下', on.monthTop < on.dayTop ? 'Y' : 'N(' + on.monthTop + '/' + on.dayTop + ')', 'Y'));
+      tests.push(eq(sec + ' Z06: 两列时流表无横向溢出', on.overflow <= 1 ? 'Y' : 'N(' + on.overflow + ')', 'Y'));
+      tests.push(eq(sec + ' Z07: 流月表仍是六栏加行标', on.cellCount, 7));
+      tests.push(eq(sec + ' Z08: 右侧面板有实际宽度', on.panelW > 240 ? 'Y' : 'N(' + on.panelW + ')', 'Y'));
+
+      var offMoved = render([]);
+      tests.push(eq(sec + ' Z09: 未勾选十神时不两列（回右栏原位）', offMoved.display === 'grid' ? 'grid' : 'flow', 'flow'));
+
+      var recOn = render(['军队'], '1');
+      tests.push(eq(sec + ' Z10: 分析记录模式下不下移也不两列', recOn.display === 'grid' ? 'grid' : 'flow', 'flow'));
+    } finally {
+      if (sSsh === null) localStorage.removeItem(SKEY); else localStorage.setItem(SKEY, sSsh);
+      if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
+      if (sRec === null) localStorage.removeItem(RKEY); else localStorage.setItem(RKEY, sRec);
+      if (wasHidden) R.setFlowVisible('month', false);
       host.setAttribute('style', prevCss);
       R.renderChart(pd, undefined, 'tst-out');
     }

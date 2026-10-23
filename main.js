@@ -4772,6 +4772,80 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.72.0 下移后流月/流日面板挪到运流表右侧 =====
+  (function() {
+    var sec = 'FLK';
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof R.setFlowVisible !== 'function' || typeof paipan !== 'function') {
+      tests.push(fail(sec + ' 前置: RENDER/paipan 挂载', '缺失'));
+      return;
+    }
+    var SKEY = 'bz_ssh_selected_v1', GKEY = 'bz_gan_selected_v1', RKEY = 'bz_rec_mode';
+    var sSsh = localStorage.getItem(SKEY), sGan = localStorage.getItem(GKEY), sRec = localStorage.getItem(RKEY);
+    var initPanel = document.querySelector('.flow-panel');
+    var wasHidden = initPanel ? initPanel.hidden : true;
+    var host = document.getElementById('tst-out');
+    if (!host) { host = document.createElement('div'); host.id = 'tst-out'; document.body.appendChild(host); }
+    var prevCss = host.getAttribute('style') || '';
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1400px;z-index:-1;';
+    var pd = paipan('FLK流月右侧', '男', 1984, 11, 15, 12, 0);
+
+    function geo() {
+      var luck = host.querySelector('.luck-col');
+      var panel = host.querySelector('.flow-panel');
+      var secEl = luck ? luck.querySelector('.luck-section') : null;
+      var wraps = panel ? Array.prototype.slice.call(panel.querySelectorAll('.flow-table-wrap')) : [];
+      var lbls = panel ? Array.prototype.slice.call(panel.querySelectorAll('.luck-table-label')) : [];
+      var pb = panel ? panel.getBoundingClientRect() : null;
+      var sb = secEl ? secEl.getBoundingClientRect() : null;
+      return {
+        display: luck ? getComputedStyle(luck).display : '',
+        panelShown: panel ? !panel.hidden : false,
+        rightOfYun: (pb && sb) ? (pb.left >= sb.right - 1) : null,
+        overflow: wraps.length ? Math.max.apply(null, wraps.map(function(w) { return w.scrollWidth - w.clientWidth; })) : -1,
+        monthTop: lbls.length ? Math.round(lbls[0].getBoundingClientRect().top) : 0,
+        dayTop: lbls.length > 1 ? Math.round(lbls[1].getBoundingClientRect().top) : 0,
+        cellCount: (panel && panel.querySelector('.flow-table')) ? panel.querySelector('.flow-table').querySelectorAll('td.cell').length : 0,
+        panelW: pb ? Math.round(pb.width) : 0
+      };
+    }
+    function render(ssh, rec) {
+      localStorage.setItem(SKEY, JSON.stringify(ssh));
+      localStorage.setItem(GKEY, '[]');
+      localStorage.setItem(RKEY, rec || '0');
+      R.renderChart(pd, undefined, 'tst-out');
+      return geo();
+    }
+    try {
+      var noFlow = render(['军队']);
+      tests.push(eq(sec + ' Z01: 未开流月时运流区仍是单列', noFlow.display === 'grid' ? 'grid' : 'flow', 'flow'));
+      tests.push(eq(sec + ' Z02: 未开流月时面板隐藏', noFlow.panelShown, false));
+
+      R.setFlowVisible('month', true);
+      R.setFlowVisible('day', true);
+      var on = render(['军队']);
+      tests.push(eq(sec + ' Z03: 下移且开流月时运流区转为两列', on.display, 'grid'));
+      tests.push(eq(sec + ' Z04: 流月/流日面板落在运流表右侧', on.rightOfYun, true));
+      tests.push(eq(sec + ' Z05: 流月在上、流日在下', on.monthTop < on.dayTop ? 'Y' : 'N(' + on.monthTop + '/' + on.dayTop + ')', 'Y'));
+      tests.push(eq(sec + ' Z06: 两列时流表无横向溢出', on.overflow <= 1 ? 'Y' : 'N(' + on.overflow + ')', 'Y'));
+      tests.push(eq(sec + ' Z07: 流月表仍是六栏加行标', on.cellCount, 7));
+      tests.push(eq(sec + ' Z08: 右侧面板有实际宽度', on.panelW > 240 ? 'Y' : 'N(' + on.panelW + ')', 'Y'));
+
+      var offMoved = render([]);
+      tests.push(eq(sec + ' Z09: 未勾选十神时不两列（回右栏原位）', offMoved.display === 'grid' ? 'grid' : 'flow', 'flow'));
+
+      var recOn = render(['军队'], '1');
+      tests.push(eq(sec + ' Z10: 分析记录模式下不下移也不两列', recOn.display === 'grid' ? 'grid' : 'flow', 'flow'));
+    } finally {
+      if (sSsh === null) localStorage.removeItem(SKEY); else localStorage.setItem(SKEY, sSsh);
+      if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
+      if (sRec === null) localStorage.removeItem(RKEY); else localStorage.setItem(RKEY, sRec);
+      if (wasHidden) R.setFlowVisible('month', false);
+      host.setAttribute('style', prevCss);
+      R.renderChart(pd, undefined, 'tst-out');
+    }
+  })();
+
   // ===== v0.69.0 档案防丢：多标签合并 / 删除墓碑 / 备份提醒 =====
   (function() {
     tests.push({ section:'档案防丢(v0.69.0)' });
