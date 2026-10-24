@@ -5046,6 +5046,56 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.79.0 记录完整版提示 + 本地文件夹同步 =====
+  (function() {
+    var LS = 'bz_rec_notes_';
+    var kA = LS + 'TS甲|男|1990|5|6|10|0';
+    var kB = LS + 'TS甲|男|1990|5|6|12|30';
+    var LONG = '这是一份更完整的历史版本记录，内容远长于当前键里的短短几个字。';
+    var bak0 = window._paipanData;
+    try {
+      window._paipanData = { name: 'TS甲', gender: '男', y: 1990, m: 5, d: 6, h: 10, mi: 0 };
+      localStorage.setItem(kA, '短记录六字');
+      localStorage.setItem(kB, LONG);
+      var c1 = RENDER.recNoteCandidates('');
+      tests.push(eq('SN1: 精确键有内容仍收集更完整版本', String(c1.better.length), '1'));
+      tests.push(eq('SN2: 短记录不被包含时标 holds=N', c1.better[0] && c1.better[0].holds ? 'Y' : 'N', 'N'));
+      tests.push(eq('SN3: 更完整版本字数取较长者', c1.better[0] ? String(c1.better[0].text.trim().length) : '0', String(LONG.length)));
+      tests.push(eq('SN4: 当前键内容保持短版不受影响', c1.text, '短记录六字'));
+
+      localStorage.setItem(kA, '这是一份更完整的历史版本记录');
+      var c2 = RENDER.recNoteCandidates('');
+      tests.push(eq('SN5: 当前是完整版前缀时仍提示且 holds=Y',
+        (c2.better.length === 1 && c2.better[0].holds) ? 'Y' : 'N:' + c2.better.length, 'Y'));
+    } catch (e) {
+      tests.push(fail('SN00: 完整版探测异常', String(e)));
+    } finally {
+      window._paipanData = bak0;
+      localStorage.removeItem(kA);
+      localStorage.removeItem(kB);
+    }
+  })();
+  (function() {
+    try {
+      tests.push(eq('SN6: 本地同步能力探测返回布尔', typeof window.ARCHIVE.syncSupported(), 'boolean'));
+      var bf = window.ARCHIVE.syncBuildFiles();
+      var names = bf.map(function(x) { return x[0]; }).join(',');
+      tests.push(eq('SN7: 同步文件清单含固定三件',
+        ['archives.json', 'records.json', 'INDEX.md'].every(function(n) { return names.indexOf(n) >= 0; }) ? 'Y' : 'N:' + names, 'Y'));
+      var md = '';
+      for (var i = 0; i < bf.length; i++) {
+        if (bf[i][0].indexOf('盘面-') === 0) { md = bf[i][1]; break; }
+      }
+      tests.push(eq('SN8: 盘面 md 含四柱/大运/分析记录',
+        (md.indexOf('## 四柱') >= 0 && md.indexOf('## 大运') >= 0 && md.indexOf('## 分析记录') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN9: 同步按钮三件套与状态位齐备',
+        (document.getElementById('btnSyncFolder') && document.getElementById('btnSyncNow')
+          && document.getElementById('btnSyncOff') && document.getElementById('syncHint')) ? 'Y' : 'N', 'Y'));
+    } catch (e) {
+      tests.push(fail('SN10: 本地同步测试异常', String(e)));
+    }
+  })();
+
   // ===== v0.69.0 历法切换自动换算 =====
   (function() {
     var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };

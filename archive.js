@@ -275,6 +275,7 @@ function writeArchives(arr) {
   }
   _archRevSeen = Date.now();
   writeNum(ARCH_REV_KEY, _archRevSeen);
+  try { syncTouch(); } catch(e) {}
   return true;
 }
 
@@ -295,6 +296,7 @@ function saveArchivesRaw(arr) {
   catch(e) { onStorageWriteFail(); return false; }
   _archRevSeen = Date.now();
   writeNum(ARCH_REV_KEY, _archRevSeen);
+  try { syncTouch(); } catch(e) {}
   return true;
 }
 
@@ -1538,6 +1540,268 @@ function onImportFile(input) {
   reader.readAsText(f);
 }
 
+// ============================================================
+// v0.79.0 本地文件夹同步（File System Access API）
+// 档案 / 分析记录 / 每人盘面 Markdown 实时写入本地固定目录，
+// 数据不再只活在 localStorage 里，清缓存也不会归零。
+// ============================================================
+var SYNC_DB = 'bz_sync_db', SYNC_STORE = 'handles', SYNC_ID = 'dir';
+var SYNC_ON_KEY = 'bz_sync_on', SYNC_NAME_KEY = 'bz_sync_name', SYNC_AT_KEY = 'bz_sync_at';
+var _syncDir = null, _syncTimer = 0, _syncRunning = false, _syncPending = false;
+
+function syncSupported() {
+  return typeof window.showDirectoryPicker === 'function';
+}
+function syncPad2(n) {
+  n = Number(n) || 0;
+  return (n < 10 ? '0' : '') + n;
+}
+function syncOpenDb() {
+  return new Promise(function(res, rej) {
+    var r = indexedDB.open(SYNC_DB, 1);
+    r.onupgradeneeded = function() { r.result.createObjectStore(SYNC_STORE); };
+    r.onsuccess = function() { res(r.result); };
+    r.onerror = function() { rej(r.error); };
+  });
+}
+function syncDbOp(mode, fn) {
+  return syncOpenDb().then(function(db) {
+    return new Promise(function(res) {
+      var rq = fn(db.transaction(SYNC_STORE, mode).objectStore(SYNC_STORE));
+      rq.onsuccess = function() { res(rq.result); };
+      rq.onerror = function() { res(null); };
+    });
+  }).catch(function() { return null; });
+}
+function syncEl() { return document.getElementById('syncHint'); }
+function syncSetHint(text, color) {
+  var el = syncEl();
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = color || '#0a7d33';
+}
+function syncShowBtn(id, on) {
+  var b = document.getElementById(id);
+  if (b) b.style.display = on ? '' : 'none';
+}
+function syncStatus() {
+  var on = localStorage.getItem(SYNC_ON_KEY) === '1';
+  var nm = localStorage.getItem(SYNC_NAME_KEY) || '';
+  syncShowBtn('btnSyncOff', on && !!nm);
+  syncShowBtn('btnSyncNow', on && !!nm);
+  var pick = document.getElementById('btnSyncFolder');
+  if (pick) pick.textContent = (on && nm) ? ('📁 ' + nm) : '📁 本地同步';
+  if (!syncSupported()) {
+    syncSetHint('当前浏览器不支持本地同步（需 Chrome/Edge，且用 https 或 localhost 打开）', '#b3261e');
+    return;
+  }
+  if (!on || !nm) { syncSetHint('未开启：档案只存在浏览器里，清缓存会丢', '#b26a00'); return; }
+  var at = readNum(SYNC_AT_KEY);
+  var when = at ? new Date(at).toTimeString().slice(0, 8) : '—';
+  syncSetHint('已同步到「' + nm + '」· 上次 ' + when, '#0a7d33');
+}
+function syncGz(o) { return o && o.gan ? (o.gan + o.zhi) : '—'; }
+
+function syncChartMd(a, noteText) {
+  var L = [];
+  var nm = a.name || '未命名';
+  L.push('# ' + nm + '　' + (a.gender || ''));
+  L.push('');
+  L.push('出生：' + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day)
+    + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0));
+  if (a.updatedAt) L.push('');
+  if (a.updatedAt) L.push('档案更新：' + a.updatedAt);
+  L.push('');
+  var al = null;
+  try {
+    al = window.ALGO.paipan(nm, a.gender || '男', a.year, a.month, a.day, a.hour, a.min || 0);
+  } catch (e) {}
+  if (!al) {
+    L.push('（排盘失败：生日字段不完整）');
+    L.push('');
+    if (noteText) { L.push('## 分析记录'); L.push(''); L.push(noteText); }
+    return L.join('\n') + '\n';
+  }
+  var heads = ['年柱', '月柱', '日柱', '时柱'];
+  var g = [al.nian.gan, al.yue.gan, al.ri.gan, al.shi.gan];
+  var z = [al.nian.zhi, al.yue.zhi, al.ri.zhi, al.shi.zhi];
+  L.push('## 四柱');
+  L.push('');
+  L.push('| 　 | ' + heads.join(' | ') + ' |');
+  L.push('| --- | --- | --- | --- | --- |');
+  L.push('| 天干 | ' + g.join(' | ') + ' |');
+  L.push('| 地支 | ' + z.join(' | ') + ' |');
+  L.push('| 藏干 | ' + z.map(function(zz) { return (CANG_GAN[zz] || []).join(''); }).join(' | ') + ' |');
+  L.push('| 十神 | ' + g.map(function(gg, i) {
+    if (i === 2) return '日主';
+    var s = '';
+    try { s = window.ALGO.shiShen(al.ri.gan, gg, true) || ''; } catch (e) {}
+    return s || '—';
+  }).join(' | ') + ' |');
+  L.push('');
+  L.push('## 要位');
+  L.push('');
+  L.push('- 生肖：' + (al.shengXiao || '—'));
+  L.push('- 命宫：' + syncGz(al.ming));
+  L.push('- 身宫：' + syncGz(al.shen));
+  L.push('- 胎元：' + syncGz(al.tai));
+  L.push('- 胎年：' + syncGz(al.taiNian));
+  if (al.qiYun) {
+    L.push('- 起运：' + al.qiYun.years + ' 年 ' + al.qiYun.months + ' 个月 ' + al.qiYun.days + ' 天，'
+      + al.qiYun.jyYear + ' 年交运'
+      + (al.qiYun.shun === undefined || al.qiYun.shun === null ? '' : (al.qiYun.shun ? '（顺排）' : '（逆排）')));
+  }
+  L.push('');
+  if (al.daYun && al.daYun.length) {
+    L.push('## 大运');
+    L.push('');
+    L.push('| 起于 | 年龄 | 干支 |');
+    L.push('| --- | --- | --- |');
+    for (var i = 0; i < al.daYun.length; i++) {
+      L.push('| ' + al.daYun[i].startYear + ' | ' + al.daYun[i].startAge + ' 岁 | '
+        + al.daYun[i].gan + al.daYun[i].zhi + ' |');
+    }
+    L.push('');
+  }
+  L.push('## 分析记录');
+  L.push('');
+  L.push(noteText ? noteText : '（暂无）');
+  L.push('');
+  return L.join('\n');
+}
+
+function syncNoteOf(a, notes) {
+  var base = REC_NOTES_PREFIX + (a.name || '') + '|' + (a.gender || '') + '|'
+    + a.year + '|' + a.month + '|' + a.day + '|' + a.hour + '|' + (a.min || 0);
+  if (notes[base]) return notes[base];
+  var pfx = (a.name || '') + '|' + (a.gender || '') + '|' + a.year + '|' + a.month + '|' + a.day + '|';
+  var best = '';
+  for (var k in notes) {
+    if (k.indexOf(REC_NOTES_PREFIX + pfx) !== 0) continue;
+    if ((notes[k] || '').trim().length > best.trim().length) best = notes[k];
+  }
+  return best;
+}
+
+function syncBuildFiles() {
+  var arch = getArchives();
+  var notes = collectRecNotes();
+  var files = [];
+  files.push(['archives.json', JSON.stringify(arch, null, 2) + '\n']);
+  files.push(['records.json', JSON.stringify(notes, null, 2) + '\n']);
+  var used = {};
+  var idx = ['# 八字排盘档案总览', '', '更新时间：' + new Date().toISOString(), '',
+    '共 ' + arch.length + ' 份档案。每人一份「盘面-姓名.md」，含四柱、大运与分析记录。', '',
+    '| 姓名 | 性别 | 出生 | 记录字数 |', '| --- | --- | --- | --- |'];
+  for (var i = 0; i < arch.length; i++) {
+    var a = arch[i];
+    var nm = a.name || '未命名';
+    var note = syncNoteOf(a, notes);
+    var fn = '盘面-' + nm + '.md';
+    if (used[fn]) fn = '盘面-' + nm + '-' + (a.id || i) + '.md';
+    used[fn] = true;
+    files.push([fn, syncChartMd(a, note)]);
+    idx.push('| ' + nm + ' | ' + (a.gender || '') + ' | '
+      + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day) + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0)
+      + ' | ' + (note ? note.trim().length : 0) + ' |');
+  }
+  idx.push('');
+  files.push(['INDEX.md', idx.join('\n')]);
+  return files;
+}
+
+function syncWriteOne(dir, name, text) {
+  return dir.getFileHandle(name, { create: true }).then(function(fh) {
+    return fh.createWritable();
+  }).then(function(w) {
+    return w.write(text).then(function() { return w.close(); });
+  });
+}
+
+function syncAll() {
+  if (!_syncDir) return Promise.resolve(0);
+  if (_syncRunning) { _syncPending = true; return Promise.resolve(-1); }
+  _syncRunning = true;
+  var files = [];
+  try { files = syncBuildFiles(); } catch (e) { _syncRunning = false; return Promise.resolve(0); }
+  var p = Promise.resolve();
+  files.forEach(function(f) {
+    p = p.then(function() { return syncWriteOne(_syncDir, f[0], f[1]); });
+  });
+  return p.then(function() {
+    _syncRunning = false;
+    writeNum(SYNC_AT_KEY, Date.now());
+    syncStatus();
+    if (_syncPending) { _syncPending = false; return syncAll(); }
+    return files.length;
+  }).catch(function(err) {
+    _syncRunning = false;
+    syncSetHint('同步失败：' + (err && err.name === 'NotAllowedError' ? '目录权限已失效，点「本地同步」重新选择' : (err && err.message) || '未知错误'), '#b3261e');
+    return 0;
+  });
+}
+
+function syncTouch() {
+  if (!_syncDir) return;
+  if (localStorage.getItem(SYNC_ON_KEY) !== '1') return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(function() { syncAll(); }, 1200);
+}
+
+function pickSyncFolder() {
+  if (!syncSupported()) {
+    alert('当前浏览器不支持本地文件夹同步。\n\n请用 Chrome 或 Edge，通过 https:// 或 localhost 打开本页面（file:// 不支持）。');
+    return;
+  }
+  window.showDirectoryPicker({ mode: 'readwrite', id: 'bz-sync', startIn: 'documents' })
+    .then(function(handle) {
+      _syncDir = handle;
+      localStorage.setItem(SYNC_ON_KEY, '1');
+      localStorage.setItem(SYNC_NAME_KEY, handle.name || '已选目录');
+      return syncDbOp('readwrite', function(st) { return st.put(handle, SYNC_ID); })
+        .then(function() { return syncAll(); });
+    })
+    .then(function(n) {
+      if (n > 0) syncSetHint('已开启：' + n + ' 个文件已写入「' + (localStorage.getItem(SYNC_NAME_KEY) || '') + '」', '#0a7d33');
+    })
+    .catch(function(err) {
+      if (err && err.name === 'AbortError') return;
+      syncSetHint('选择目录失败：' + ((err && err.message) || '未知错误'), '#b3261e');
+    });
+}
+
+function syncAllNow() {
+  if (!_syncDir) { pickSyncFolder(); return; }
+  syncSetHint('正在同步……', '#b26a00');
+  syncAll().then(function(n) {
+    if (n > 0) syncSetHint('已同步 ' + n + ' 个文件 · ' + new Date().toTimeString().slice(0, 8), '#0a7d33');
+  });
+}
+
+function syncOff() {
+  if (!confirm('关闭后，档案与分析记录将不再写入本地文件夹（浏览器里的数据不受影响）。确定关闭？')) return;
+  clearTimeout(_syncTimer);
+  _syncDir = null;
+  localStorage.setItem(SYNC_ON_KEY, '0');
+  syncDbOp('readwrite', function(st) { return st['delete'](SYNC_ID); });
+  syncStatus();
+}
+
+function syncResume() {
+  if (!syncSupported()) { syncStatus(); return; }
+  if (localStorage.getItem(SYNC_ON_KEY) !== '1') { syncStatus(); return; }
+  syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
+    if (!h || !h.queryPermission) { syncStatus(); return; }
+    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+      if (perm === 'granted') {
+        _syncDir = h;
+        return syncAll();
+      }
+      syncSetHint('目录权限需重新授予，点「' + (localStorage.getItem(SYNC_NAME_KEY) || '本地同步') + '」重选一次即可', '#b26a00');
+    });
+  }).catch(function() { syncStatus(); });
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
@@ -1547,6 +1811,15 @@ function onImportFile(input) {
     importBackup: importBackup,
     onImportFile: onImportFile,
     collectRecNotes: collectRecNotes,
+    syncSupported: syncSupported,
+    syncStatus: syncStatus,
+    syncAll: syncAll,
+    syncAllNow: syncAllNow,
+    syncTouch: syncTouch,
+    syncResume: syncResume,
+    syncBuildFiles: syncBuildFiles,
+    pickSyncFolder: pickSyncFolder,
+    syncOff: syncOff,
     backupFilename: backupFilename,
     migrateFromV1: migrateFromV1,
     initPresetArchives: initPresetArchives,

@@ -1189,13 +1189,14 @@ function recNoteSet(key, val) {
   try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
 }
 function recNoteCandidates(suffix) {
-  var out = { key: null, text: '', sameBirthday: [], sameName: [] };
+  var out = { key: null, text: '', sameBirthday: [], sameName: [], better: [] };
   var d = window._paipanData;
   if (!d) return out;
   var prefix = suffix || '';
   out.key = LS_REC_NOTES + prefix + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
   var exact = recNoteGet(out.key);
-  if (exact.trim()) { out.text = exact; return out; }
+  // v0.79.0：精确键有内容也继续收集候选，否则档案改时辰后完整版被永久隐藏
+  if (exact.trim()) out.text = exact;
   var name = d.name || '', gender = d.gender || '';
   if (!name) return out;
   var ymd = [d.y, d.m, d.d].join('|');
@@ -1214,6 +1215,21 @@ function recNoteCandidates(suffix) {
   for (var j = 0; j < all.length; j++) {
     if (all[j].ymd === ymd) out.sameBirthday.push(all[j]);
     else out.sameName.push(all[j]);
+  }
+  // v0.79.0：当前键有内容时，找出更完整的历史版本（档案改时辰后完整版会隐身）
+  if (out.text.trim()) {
+    var cur = out.text.trim(), curLen = cur.length;
+    var pool = out.sameBirthday.concat(out.sameName);
+    for (var m = 0; m < pool.length; m++) {
+      var t = pool[m].text.trim();
+      if (t.length <= curLen) continue;
+      var holds = t.indexOf(cur) >= 0;
+      if (!holds && t.length < curLen * 1.2) continue;
+      pool[m].holds = holds;
+      out.better.push(pool[m]);
+    }
+    out.better.sort(function(a, b) { return b.text.trim().length - a.text.trim().length; });
+    out.better = out.better.slice(0, 1);
   }
   return out;
 }
@@ -1239,6 +1255,17 @@ function recRenderAlts(container, list, hint, suffix) {
   }
   box.innerHTML = h;
   box.style.display = '';
+}
+function recRenderBetter(container, list, suffix) {
+  var box = container.querySelector('.rec-alts');
+  if (!box || !list.length) return;
+  var ta = container.querySelector('.rec-text');
+  var curLen = ta ? (ta.value || '').trim().length : 0;
+  var best = list[0];
+  var bestLen = best.text.trim().length;
+  var hint = '⚠ 发现更完整的历史版本（' + bestLen + ' 字，当前 ' + curLen + ' 字'
+    + (best.holds ? '，已包含当前全部内容' : '，内容有差异') + '），点此载入：';
+  recRenderAlts(container, [best], hint, suffix);
 }
 function loadRecAlt(btn) {
   var panel = btn && btn.closest ? btn.closest('.record-panel') : null;
@@ -1267,6 +1294,7 @@ function bindRecPanel(container, suffix) {
   var cand = recNoteCandidates(suffix);
   if (cand.text) {
     ta.value = cand.text;
+    if (cand.better.length) recRenderBetter(container, cand.better, suffix);
   } else if (cand.sameBirthday.length === 1) {
     ta.value = cand.sameBirthday[0].text;
     recStatusShow(container, '已按同生日记录恢复（原 ' + recPad(cand.sameBirthday[0].h) + ':' + recPad(cand.sameBirthday[0].mi) + '）', true);
@@ -1284,6 +1312,7 @@ function bindRecPanel(container, suffix) {
     if (!k) return;
     recNoteSet(k, ta.value);
     recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
+    if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
   });
 }
 function toggleRecMode(force, root) {
@@ -3099,6 +3128,7 @@ window.addEventListener('DOMContentLoaded', function() {
   refreshArchiveModalIfOpen();
   APP.setupTwinTypeChange();
   doPaipan();
+  if (window.ARCHIVE && window.ARCHIVE.syncResume) window.ARCHIVE.syncResume();
 });
 
 // ============================================================

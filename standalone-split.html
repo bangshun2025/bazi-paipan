@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.78.0 | 2026-10-24 -->
-<!-- v0.78.0: 流日表改七列周历——首行表头周一~周日，日期按真实星期对齐（首日落在对应星期列），日与干支两行式不变；流月六列不变 -->
+<!-- 八字排盘 ·  从真版 v0.79.0 | 2026-10-24 -->
+<!-- v0.79.0: 记录面板补「更完整历史版本」探测——改档案时辰后旧版完整记录不再被永久隐藏，出提示条与载入按钮但不自动覆盖；新增本地文件夹即时同步（档案/盘面/分析记录自动落盘） -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
 <!-- v0.76.0: 时柱右侧运流区的流月/流日列表头对齐大运流年 —— 始终带月/日小字：农历列头中文月名（四月）、新历列头真公历月（5月）、流日恒公历 M/D；多选列头新历月修正为真公历月（旧序数立春月误写 1 月）；新历切换时多选列头联动刷新 -->
 <!-- v0.75.0: renderChart 末尾统一补挂宫位标签行 —— 修复十神/十干面板勾选与清空后宫位标签消失（勾选数据一直未丢） -->
@@ -1194,6 +1194,10 @@
         <button class="btn" id="btnExportBackup" onclick="ARCHIVE.exportBackup()" title="把全部档案与分析记录导出为 JSON 文件（换电脑 / 清缓存前先导一份）" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">&#11015; 导出备份</button>
         <button class="btn" id="btnImportBackup" onclick="ARCHIVE.pickImportBackup()" title="从备份 JSON 导入档案与分析记录（已存在的跳过，不覆盖现有内容）" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">&#11014; 导入备份</button>
         <input type="file" id="archiveImportFile" accept=".json,application/json" style="display:none" onchange="ARCHIVE.onImportFile(this)">
+        <button class="btn" id="btnSyncFolder" onclick="ARCHIVE.pickSyncFolder()" title="选一个本地文件夹，档案 / 盘面 / 分析记录自动写入（Chrome 或 Edge，需 https 或 localhost）" style="padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">&#128193; 本地同步</button>
+        <button class="btn" id="btnSyncNow" onclick="ARCHIVE.syncAllNow()" title="立即把当前全部档案与分析记录写入已选文件夹" style="display:none;padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">立即同步</button>
+        <button class="btn" id="btnSyncOff" onclick="ARCHIVE.syncOff()" title="停止写入本地文件夹（浏览器内数据不受影响）" style="display:none;padding:4px 10px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.05em;font-family:var(--font-display);">关闭同步</button>
+        <span id="syncHint" style="font-size:12px;flex-basis:100%;"></span>
         <span id="archiveBackupHint" style="font-size:12px;color:#8a6d3b;"></span>
       </div>
     </div>
