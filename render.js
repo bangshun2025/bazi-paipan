@@ -1119,6 +1119,14 @@ function renderChart(data, twin, targetId, opts) {
         <div class="rec-head"><span class="rec-title">分析记录</span><span class="rec-status" id="bzRecStatus"></span></div>
         <div class="rec-alts"></div>
         <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
+        <div class="rec-audio" data-suffix="">
+          <div class="rec-audio-bar">
+            <button type="button" class="rec-audio-btn" onclick="RENDER.recAudioToggle(this)" title="录制语音分析，自动挂在当前档案下">● 录音</button>
+            <span class="rec-audio-timer"></span>
+            <span class="rec-audio-hint">录音保存在本机浏览器</span>
+          </div>
+          <div class="rec-audio-list"></div>
+        </div>
       </div>`;
   const html = topBarHtml + `
     <div class="${bodyCls}">
@@ -1314,6 +1322,236 @@ function bindRecPanel(container, suffix) {
     recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
     if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
   });
+  var rp = ta.closest ? ta.closest('.record-panel') : null;
+  initRecAudioPanel(rp, suffix);
+}
+
+// ===== v0.80.0 分析记录·录音：面板内 MediaRecorder 录音，IndexedDB 存 blob（不进 localStorage），随档案指纹挂载 =====
+var LS_REC_AUDIO = 'bz_rec_audio_';
+function recAudioKey(suffix) {
+  var d = window._paipanData;
+  if (!d) return null;
+  return LS_REC_AUDIO + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+}
+function recAudioDb() {
+  return new Promise(function(res, rej) {
+    var rq = indexedDB.open('bz_rec_audio', 1);
+    rq.onupgradeneeded = function() {
+      var db = rq.result;
+      if (!db.objectStoreNames.contains('clips')) {
+        var st = db.createObjectStore('clips', { keyPath: 'id' });
+        st.createIndex('key', 'key', { unique: false });
+      }
+    };
+    rq.onsuccess = function() { res(rq.result); };
+    rq.onerror = function() { rej(rq.error); };
+  });
+}
+function recAudioStore(db, mode) { return db.transaction('clips', mode).objectStore('clips'); }
+function recAudioList(key) {
+  return recAudioDb().then(function(db) {
+    return new Promise(function(res, rej) {
+      var rq = recAudioStore(db, 'readonly').index('key').getAll(key);
+      rq.onsuccess = function() { db.close(); res((rq.result || []).sort(function(a, b) { return a.ts - b.ts; })); };
+      rq.onerror = function() { db.close(); rej(rq.error); };
+    });
+  });
+}
+function recAudioPut(clip) {
+  return recAudioDb().then(function(db) {
+    return new Promise(function(res, rej) {
+      var rq = recAudioStore(db, 'readwrite').put(clip);
+      rq.onsuccess = function() { db.close(); res(true); };
+      rq.onerror = function() { db.close(); rej(rq.error); };
+    });
+  });
+}
+function recAudioDel(id) {
+  return recAudioDb().then(function(db) {
+    return new Promise(function(res, rej) {
+      var rq = recAudioStore(db, 'readwrite').delete(id);
+      rq.onsuccess = function() { db.close(); res(true); };
+      rq.onerror = function() { db.close(); rej(rq.error); };
+    });
+  });
+}
+function recAudioClearKey(key) {
+  return recAudioDb().then(function(db) {
+    return new Promise(function(res, rej) {
+      var st = recAudioStore(db, 'readwrite');
+      var rq = st.index('key').getAll(key);
+      rq.onsuccess = function() {
+        var rows = rq.result || [];
+        for (var i = 0; i < rows.length; i++) st.delete(rows[i].id);
+        st.transaction.oncomplete = function() { db.close(); res(rows.length); };
+      };
+      rq.onerror = function() { db.close(); rej(rq.error); };
+    });
+  });
+}
+function recAudioRewriteKey(oldKey, newKey) {
+  return recAudioList(oldKey).then(function(rows) {
+    if (!rows.length) return 0;
+    return recAudioDb().then(function(db) {
+      return new Promise(function(res, rej) {
+        var st = recAudioStore(db, 'readwrite');
+        for (var i = 0; i < rows.length; i++) {
+          st.delete(rows[i].id);
+          rows[i].key = newKey;
+          rows[i].id = newKey + '|' + rows[i].ts;
+          st.put(rows[i]);
+        }
+        st.transaction.oncomplete = function() { db.close(); res(rows.length); };
+        st.transaction.onerror = function() { db.close(); rej(st.transaction.error); };
+      });
+    });
+  });
+}
+function recAudioFmt(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  return Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + (sec % 60);
+}
+function recAudioExt(mime) {
+  mime = mime || '';
+  if (mime.indexOf('mp4') >= 0) return 'm4a';
+  if (mime.indexOf('ogg') >= 0) return 'ogg';
+  return 'webm';
+}
+function initRecAudioPanel(panel, suffix) {
+  if (!panel || panel._raBound) return;
+  panel._raBound = true;
+  var au = panel.querySelector('.rec-audio');
+  if (!au) return;
+  au.setAttribute('data-suffix', suffix || '');
+  var k = recAudioKey(suffix);
+  if (!k) return;
+  recAudioList(k).then(function(list) { renderRecAudioList(panel, list); }).catch(function() {});
+}
+function renderRecAudioList(panel, list) {
+  var box = panel.querySelector('.rec-audio-list');
+  if (!box) return;
+  panel._raClips = {};
+  if (!list.length) { box.innerHTML = '<div class="rec-audio-empty">暂无录音</div>'; return; }
+  var h = '';
+  for (var i = list.length - 1; i >= 0; i--) {
+    var c = list[i];
+    panel._raClips[c.id] = c;
+    h += '<div class="rec-audio-item" data-id="' + c.id.replace(/"/g, '&quot;') + '">'
+      + '<button type="button" class="ra-play" onclick="RENDER.recAudioPlay(this)" title="播放/暂停">▶</button>'
+      + '<span class="ra-name">' + c.name + ' · ' + recAudioFmt(c.dur) + '</span>'
+      + '<a class="ra-dl" href="#" onclick="return RENDER.recAudioDownload(this)" title="下载">下载</a>'
+      + '<button type="button" class="ra-del" onclick="RENDER.recAudioDelete(this)" title="删除">✕</button>'
+      + '</div>';
+  }
+  box.innerHTML = h;
+}
+function recAudioStopPlayback(panel) {
+  if (panel._raAudio) { try { panel._raAudio.pause(); } catch (e) {} }
+  if (panel._raPlayBtn) { panel._raPlayBtn.textContent = '▶'; }
+  if (panel._raUrl) { try { URL.revokeObjectURL(panel._raUrl); } catch (e) {} }
+  panel._raAudio = null; panel._raAudioId = null; panel._raUrl = null; panel._raPlayBtn = null;
+}
+function recAudioPlay(btn) {
+  var panel = btn.closest('.record-panel');
+  var item = btn.closest('.rec-audio-item');
+  if (!panel || !item) return;
+  var clip = panel._raClips && panel._raClips[item.getAttribute('data-id')];
+  if (!clip || !clip.blob) return;
+  if (panel._raAudioId === clip.id && panel._raAudio) {
+    if (panel._raAudio.paused) { panel._raAudio.play(); btn.textContent = '⏸'; }
+    else { panel._raAudio.pause(); btn.textContent = '▶'; }
+    return;
+  }
+  recAudioStopPlayback(panel);
+  var url = URL.createObjectURL(clip.blob);
+  var au = new Audio(url);
+  panel._raAudio = au; panel._raAudioId = clip.id; panel._raUrl = url; panel._raPlayBtn = btn;
+  au.onended = function() { if (panel._raPlayBtn === btn) btn.textContent = '▶'; };
+  au.play();
+  btn.textContent = '⏸';
+}
+function recAudioDownload(a) {
+  var panel = a.closest('.record-panel');
+  var item = a.closest('.rec-audio-item');
+  if (!panel || !item) return false;
+  var clip = panel._raClips && panel._raClips[item.getAttribute('data-id')];
+  if (!clip || !clip.blob) return false;
+  a.href = URL.createObjectURL(clip.blob);
+  a.download = clip.fname || '录音.' + recAudioExt(clip.mime);
+  return true;
+}
+function recAudioDelete(btn) {
+  var panel = btn.closest('.record-panel');
+  var item = btn.closest('.rec-audio-item');
+  if (!panel || !item) return;
+  var id = item.getAttribute('data-id');
+  if (!confirm('删除这条录音？删除后不可恢复。')) return;
+  if (panel._raAudioId === id) recAudioStopPlayback(panel);
+  var au = panel.querySelector('.rec-audio');
+  var suffix = au ? (au.getAttribute('data-suffix') || '') : '';
+  var k = recAudioKey(suffix);
+  recAudioDel(id).then(function() {
+    recStatusShow(panel, '已删除录音');
+    if (!k) return null;
+    return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
+  }).catch(function(e) { recStatusShow(panel, '删除失败：' + (e && e.message || e), true); });
+}
+function recAudioToggle(btn) {
+  var panel = btn.closest('.record-panel');
+  if (!panel) return;
+  if (panel._raRec) { try { panel._raRec.stop(); } catch (e) {} return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    recStatusShow(panel, '当前环境不支持录音', true); return;
+  }
+  var au = panel.querySelector('.rec-audio');
+  var suffix = au ? (au.getAttribute('data-suffix') || '') : '';
+  var k = recAudioKey(suffix);
+  if (!k) { recStatusShow(panel, '请先排盘再录音', true); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    var mimes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    var mime = '';
+    for (var i = 0; i < mimes.length; i++) {
+      if (MediaRecorder.isTypeSupported(mimes[i])) { mime = mimes[i]; break; }
+    }
+    var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    var chunks = [];
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() {
+      try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
+      clearInterval(panel._raTimer);
+      var dur = Math.max(1, Math.round((Date.now() - panel._raT0) / 1000));
+      var m = mr.mimeType || mime || 'audio/webm';
+      var blob = new Blob(chunks, { type: m.split(';')[0] });
+      panel._raRec = null;
+      btn.textContent = '● 录音'; btn.classList.remove('recording');
+      var tEl = panel.querySelector('.rec-audio-timer');
+      if (tEl) tEl.textContent = '';
+      var now = new Date();
+      var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
+      var d0 = window._paipanData;
+      var clip = {
+        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        blob: blob
+      };
+      recAudioPut(clip).then(function() {
+        recStatusShow(panel, '已保存录音 ' + recAudioFmt(dur));
+        return recAudioList(k);
+      }).then(function(list) { renderRecAudioList(panel, list); }).catch(function(e) {
+        recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
+      });
+    };
+    panel._raRec = mr;
+    panel._raT0 = Date.now();
+    mr.start();
+    btn.textContent = '■ 停止'; btn.classList.add('recording');
+    var timerEl = panel.querySelector('.rec-audio-timer');
+    panel._raTimer = setInterval(function() {
+      if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - panel._raT0) / 1000));
+    }, 250);
+  }).catch(function(err) {
+    recStatusShow(panel, '无法访问麦克风：' + (err && (err.name || err.message) || err), true);
+  });
 }
 function toggleRecMode(force, root) {
   var on = typeof force === 'boolean' ? force : !isRecOn();
@@ -1353,6 +1591,14 @@ function twinRecPanelHtml() {
     + '<div class="rec-head"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-status" role="status"></span></div>'
     + '<div class="rec-alts"></div>'
     + '<textarea class="rec-text" placeholder="记录本次双胞胎合盘分析……写入即自动保存"></textarea>'
+    + '<div class="rec-audio" data-suffix="">'
+    + '<div class="rec-audio-bar">'
+    + '<button type="button" class="rec-audio-btn" onclick="RENDER.recAudioToggle(this)" title="录制语音分析，自动挂在当前档案下">● 录音</button>'
+    + '<span class="rec-audio-timer"></span>'
+    + '<span class="rec-audio-hint">录音保存在本机浏览器</span>'
+    + '</div>'
+    + '<div class="rec-audio-list"></div>'
+    + '</div>'
     + '</div>';
 }
 function toggleTwinRec(btn) {
@@ -3998,6 +4244,16 @@ function cmpSetState(entries) {
     loadRecAlt: loadRecAlt,
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
+    recAudioToggle: recAudioToggle,
+    recAudioPlay: recAudioPlay,
+    recAudioDelete: recAudioDelete,
+    recAudioDownload: recAudioDownload,
+    recAudioKey: recAudioKey,
+    recAudioList: recAudioList,
+    recAudioPut: recAudioPut,
+    recAudioDel: recAudioDel,
+    recAudioClearKey: recAudioClearKey,
+    recAudioRewriteKey: recAudioRewriteKey,
     hiDy: hiDy,
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,

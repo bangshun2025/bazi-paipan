@@ -5566,6 +5566,66 @@ window.__testAppend = function(t) {
   document.title = failed === 0 ? '✅ 全部通过 — 八字排盘回归测试' : '❌ ' + failed + ' 失败 — 八字排盘回归测试';
 };
 
+  // ===== v0.80.0 分析记录·录音（IndexedDB 异步断言，经 __testAppend 追加统一统计） =====
+  (async function() {
+    var push = function(t) { if (window.__testAppend) window.__testAppend(t); };
+    try {
+      var R = window.RENDER;
+      if (!R || typeof R.recAudioToggle !== 'function' || typeof R.recAudioKey !== 'function') {
+        push({ ok: false, label: 'AUD 前置: RENDER.recAudioToggle/recAudioKey 已挂载', detail: '缺失' });
+        return;
+      }
+      push({ ok: true, label: 'AUD 前置: RENDER.recAudioToggle/recAudioKey 已挂载' });
+      var oldPdA = window._paipanData;
+      var pdA = paipan('录音测试', '男', 1983, 4, 12, 8, 30);
+      window._paipanData = pdA;
+      var ka = R.recAudioKey('');
+      var kaTwin = R.recAudioKey('twin|');
+      var fp = [pdA.name, pdA.gender, pdA.y, pdA.m, pdA.d, pdA.h, pdA.mi].join('|');
+      push({ ok: ka === 'bz_rec_audio_' + fp, label: 'AUD T01: 键指纹 姓名|性别|y|m|d|h|mi', detail: ka });
+      push({ ok: kaTwin === 'bz_rec_audio_twin|' + fp, label: 'AUD T01: 双胞胎键带 twin| 前缀' });
+      await R.recAudioClearKey(ka); await R.recAudioClearKey(kaTwin);
+      var mkBlob = function(n) { return new Blob([new Uint8Array(n)], { type: 'audio/webm' }); };
+      var t1 = Date.now() - 60000, t2 = Date.now();
+      await R.recAudioPut({ id: ka + '|' + t1, key: ka, name: '04-12 08:30', ts: t1, dur: 35, mime: 'audio/webm;codecs=opus', fname: '录音-测试1.webm', blob: mkBlob(1024) });
+      await R.recAudioPut({ id: ka + '|' + t2, key: ka, name: '04-12 08:31', ts: t2, dur: 12, mime: 'audio/webm;codecs=opus', fname: '录音-测试2.webm', blob: mkBlob(2048) });
+      var l1 = await R.recAudioList(ka);
+      push({ ok: l1.length === 2 && l1[0].ts < l1[1].ts, label: 'AUD T02: 两条录音按时间升序', detail: String(l1.length) + ' 条' });
+      push({ ok: !!(l1[0].blob instanceof Blob && l1[0].blob.size === 1024 && l1[0].dur === 35), label: 'AUD T02: blob 与时长完整存储' });
+      var kb = 'bz_rec_audio_录音改名|男|1983|4|12|8|30';
+      await R.recAudioRewriteKey(ka, kb);
+      var l2 = await R.recAudioList(kb), l3 = await R.recAudioList(ka);
+      push({ ok: l2.length === 2 && l2[0].key === kb && l2[0].id === kb + '|' + t1, label: 'AUD T03: 迁移后新键 2 条（档案改名场景）' });
+      push({ ok: l3.length === 0, label: 'AUD T03: 迁移后旧键清空' });
+      await R.recAudioDel(kb + '|' + t1);
+      var l4 = await R.recAudioList(kb);
+      push({ ok: l4.length === 1 && l4[0].id === kb + '|' + t2, label: 'AUD T04: 删除后剩 1 条' });
+      var savedModeA = localStorage.getItem('bz_rec_mode');
+      localStorage.setItem('bz_rec_mode', '1');
+      var tstA = document.createElement('div');
+      tstA.id = 'tst-audio';
+      document.body.appendChild(tstA);
+      R.renderChart(pdA, undefined, 'tst-audio');
+      var raEl = tstA.querySelector('.record-panel .rec-audio');
+      var raBtn = tstA.querySelector('.rec-audio-btn');
+      push({ ok: !!raEl, label: 'AUD T05: 记录面板含录音区' });
+      push({ ok: !!raBtn && (raBtn.getAttribute('onclick') || '').indexOf('RENDER.recAudioToggle') >= 0, label: 'AUD T05: 录音按钮接线 recAudioToggle' });
+      push({ ok: !!raEl && raEl.getAttribute('data-suffix') === '' && !!tstA.querySelector('.rec-audio-list'), label: 'AUD T05: suffix 空 + 列表容器在' });
+      await new Promise(function(r) { setTimeout(r, 200); });
+      var raList = tstA.querySelector('.rec-audio-list');
+      push({ ok: !!raList && raList.textContent.indexOf('暂无录音') >= 0, label: 'AUD T06: 空列表提示「暂无录音」', detail: raList ? raList.textContent.slice(0, 12) : '' });
+      try {
+        if (savedModeA === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedModeA);
+        window._paipanData = oldPdA;
+        if (tstA.parentNode) tstA.parentNode.removeChild(tstA);
+      } catch (e) {}
+      var c1 = await R.recAudioClearKey(ka), c2 = await R.recAudioClearKey(kb), c3 = await R.recAudioClearKey(kaTwin);
+      push({ ok: c1 === 0 && c2 === 1 && c3 === 0, label: 'AUD 现场: IndexedDB 测试录音清理', detail: c1 + '/' + c2 + '/' + c3 });
+    } catch (e) {
+      push({ ok: false, label: 'AUD 异常', detail: e && e.message ? e.message : String(e) });
+    }
+  })();
+
 
   // ===== 挂载到全局命名空间 =====
   window.APP = {

@@ -733,6 +733,7 @@ function saveEdit() {
   archives[_editIdx] = Object.assign({}, old, edited);
   saveArchives(archives);
   migrateRecNotesKeys(old, edited);
+  try { migrateRecAudioKeys(old, edited); } catch (e) {}
   // 直接关闭弹窗（不经过 closeEditPanel，避免"未保存修改"确认）
   document.getElementById('editOverlay').classList.remove('show');
   _editOriginal = null;
@@ -824,6 +825,22 @@ function migrateOrphanRecNotes() {
       continue;
     }
     try { localStorage.setItem(nk2, ov3); localStorage.removeItem(key2); } catch (e) {}
+  }
+}
+
+// ===== v0.80.0 录音随档案变更迁移（IndexedDB fire-and-forget，键指纹与分析记录同构） =====
+function migrateRecAudioKeys(oldA, newA) {
+  if (!window.RENDER || typeof window.RENDER.recAudioRewriteKey !== 'function') return;
+  for (var i = 0; i < REC_SUFFIXES.length; i++) {
+    var ok = recNotesKeyFor(oldA, REC_SUFFIXES[i]);
+    var nk = recNotesKeyFor(newA, REC_SUFFIXES[i]);
+    if (!ok || !nk || ok === nk) continue;
+    try {
+      window.RENDER.recAudioRewriteKey(
+        'bz_rec_audio_' + ok.slice(REC_NOTES_PREFIX.length),
+        'bz_rec_audio_' + nk.slice(REC_NOTES_PREFIX.length)
+      ).catch(function() {});
+    } catch (e) {}
   }
 }
 
@@ -1850,6 +1867,7 @@ function syncResume() {
     saveEdit: saveEdit,
     migrateRecNotesKeys: migrateRecNotesKeys,
     migrateOrphanRecNotes: migrateOrphanRecNotes,
+    migrateRecAudioKeys: migrateRecAudioKeys,
     recNotesKeyFor: recNotesKeyFor,
     editCalChange: editCalChange,
     editSolarToggle: editSolarToggle,

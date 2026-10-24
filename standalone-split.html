@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.79.0 | 2026-10-24 -->
+<!-- 八字排盘 ·  从真版 v0.80.0 | 2026-10-24 -->
+<!-- v0.80.0: 分析记录新增录音记录 —— 面板内 MediaRecorder 麦克风录音，IndexedDB 存储（不占 localStorage），自动挂在对应档案指纹下（双胞胎带 twin| 隔离），列表可播放/下载/删除；档案改名改生日时录音随 migrateRecAudioKeys 迁移 -->
 <!-- v0.79.0: 记录面板补「更完整历史版本」探测——改档案时辰后旧版完整记录不再被永久隐藏，出提示条与载入按钮但不自动覆盖；新增本地文件夹即时同步（档案/盘面/分析记录自动落盘） -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
 <!-- v0.76.0: 时柱右侧运流区的流月/流日列表头对齐大运流年 —— 始终带月/日小字：农历列头中文月名（四月）、新历列头真公历月（5月）、流日恒公历 M/D；多选列头新历月修正为真公历月（旧序数立春月误写 1 月）；新历切换时多选列头联动刷新 -->
@@ -436,6 +437,22 @@
   .rec-text::-webkit-scrollbar { width:8px; }
   .rec-text::-webkit-scrollbar-thumb { background:var(--c-gray); border:2px solid var(--c-paper); border-radius:4px; }
   .rec-text::-webkit-scrollbar-track { background:transparent; }
+  .rec-audio { border-top:0.5px solid var(--c-line); padding:8px 10px 10px; flex:0 0 auto; }
+  .rec-audio-bar { display:flex; align-items:center; gap:8px; }
+  .rec-audio-btn { padding:3px 12px; background:var(--c-paper); color:var(--c-ink); border:1px solid var(--c-line); border-radius:2px; cursor:pointer; font-size:12px; font-family:var(--font-display); }
+  .rec-audio-btn:hover { border-color:var(--c-ink); }
+  .rec-audio-btn.recording { background:var(--c-red); color:var(--c-paper); border-color:var(--c-red); }
+  .rec-audio-timer { font-size:12px; color:var(--c-red); font-variant-numeric:tabular-nums; min-width:32px; }
+  .rec-audio-hint { font-size:11px; color:var(--c-gray); }
+  .rec-audio-list { margin-top:6px; }
+  .rec-audio-empty { font-size:12px; color:var(--c-gray); }
+  .rec-audio-item { display:flex; align-items:center; gap:8px; padding:3px 0; font-size:12px; color:var(--c-ink); border-bottom:0.5px dashed var(--c-line); }
+  .rec-audio-item:last-child { border-bottom:none; }
+  .ra-play { width:20px; height:20px; line-height:18px; padding:0; text-align:center; background:var(--c-paper); color:var(--c-ink); border:1px solid var(--c-line); border-radius:50%; cursor:pointer; font-size:10px; }
+  .ra-play:hover { border-color:var(--c-ink); }
+  .ra-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ra-dl, .ra-del { font-size:11px; color:var(--c-gray); background:none; border:none; cursor:pointer; padding:0; text-decoration:none; font-family:var(--font-body); }
+  .ra-dl:hover, .ra-del:hover { color:var(--c-red); }
   .luck-col.luck-rec-below { position:static; margin-top:14px; }
   .luck-section { border:0.5px solid var(--c-line); overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
