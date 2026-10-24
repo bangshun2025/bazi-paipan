@@ -5136,6 +5136,48 @@ function captureScreenshot() {
       tests.push(fail('SNV0: 版本管理测试异常', String(e)));
     }
   })();
+  // ===== v0.82.0 录音自动转录 =====
+  (function() {
+    var bakPd = window._paipanData;
+    var bakCfg = localStorage.getItem('bz_ai_cfg');
+    try {
+      window._paipanData = { name: '转录测试', gender: '男', y: 1990, m: 1, d: 1, h: 12, mi: 0 };
+      var clipT = { id: 't1', key: 'k', name: '10-24 12:05', ts: Date.now(), dur: 65 };
+      tests.push(eq('SN12-1: 转录稿文件名（姓名-录音稿-时间）',
+        RENDER.bzTfName(clipT), '转录测试-录音稿-10-24_12-05.md'));
+      RENDER.bzAiSave('sk-test');
+      var cfg = RENDER.bzAiCfg();
+      tests.push(eq('SN12-2: 转录设置读写往返',
+        cfg.sfKey === 'sk-test' ? 'Y' : 'N', 'Y'));
+      var prompt = RENDER.bzPromptOf(clipT, '原始识别内容一段');
+      tests.push(eq('SN12-3: prompt 含盘面/知识库/原始识别',
+        (prompt.indexOf('【盘面资料】') >= 0 && prompt.indexOf('十神做功') >= 0
+          && prompt.indexOf('【原始识别文字】') >= 0 && prompt.indexOf('原始识别内容一段') >= 0) ? 'Y' : 'N', 'Y'));
+      var md = RENDER.bzTranscriptMd(clipT, '总述与要点', '原始识别内容一段');
+      tests.push(eq('SN12-4: 录音稿 md 含标题/来源/原始识别',
+        (md.indexOf('# 录音稿 · 10-24 12:05（转录测试）') === 0 && md.indexOf('时长：1:05') >= 0
+          && md.indexOf('## 原始识别') >= 0 && md.indexOf('总述与要点') >= 0) ? 'Y' : 'N', 'Y'));
+      var holder = document.createElement('div');
+      holder.innerHTML = '<div class="rec-audio-list"></div>';
+      var clipR = { id: 'r1', key: 'k', name: '10-24 12:05', ts: 1, dur: 30,
+        transcript: { text: '稿', raw: '原', ts: 1 }, tfname: 'x.md' };
+      RENDER.renderRecAudioList(holder, [clipR]);
+      var tfBtn = holder.querySelector('.ra-tf');
+      tests.push(eq('SN12-5: 有稿条目渲染转录按钮且绿色',
+        (tfBtn && tfBtn.getAttribute('style').indexOf('#0a7d33') >= 0) ? 'Y' : 'N', 'Y'));
+      RENDER.renderRecAudioList(holder, [{ id: 'r2', key: 'k', name: 'n', ts: 1, dur: 1 }]);
+      tests.push(eq('SN12-6: 无稿条目转录按钮置灰',
+        (holder.querySelector('.ra-tf').getAttribute('style').indexOf('#bbb') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN12-7: 转录接口齐备',
+        (typeof RENDER.transcribeClip === 'function' && typeof RENDER.bzViewTranscript === 'function'
+          && typeof RENDER.bzAiSettings === 'function' && typeof window.ARCHIVE.syncChartMd === 'function') ? 'Y' : 'N', 'Y'));
+    } catch (e) {
+      tests.push(fail('SN12-0: 转录测试异常', String(e)));
+    } finally {
+      window._paipanData = bakPd;
+      if (bakCfg === null) localStorage.removeItem('bz_ai_cfg'); else localStorage.setItem('bz_ai_cfg', bakCfg);
+    }
+  })();
   // ===== v0.69.0 历法切换自动换算 =====
   (function() {
     var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };

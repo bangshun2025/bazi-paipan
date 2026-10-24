@@ -1893,6 +1893,7 @@ function syncVerDecide(a, idx, noteText, now) {
     syncBuildFiles: syncBuildFiles,
     syncWriteBlob: syncWriteBlob,
     syncDeleteFile: syncDeleteFile,
+    syncChartMd: syncChartMd,
     syncVerDecide: syncVerDecide,
     syncVerReset: syncVerReset,
     pickSyncFolder: pickSyncFolder,

@@ -1440,6 +1440,8 @@ function renderRecAudioList(panel, list) {
       + '<button type="button" class="ra-play" onclick="RENDER.recAudioPlay(this)" title="播放/暂停">▶</button>'
       + '<span class="ra-name">' + c.name + ' · ' + recAudioFmt(c.dur) + '</span>'
       + '<a class="ra-dl" href="#" onclick="return RENDER.recAudioDownload(this)" title="下载">下载</a>'
+      + '<button type="button" class="ra-tf" onclick="RENDER.bzViewTranscript(this)" title="' + (c.transcript ? '查看转录稿' : '转录') + '"'
+      + ' style="color:' + (c.transcript ? '#0a7d33' : '#bbb') + ';border:0;background:none;cursor:pointer;">📝</button>'
       + '<button type="button" class="ra-del" onclick="RENDER.recAudioDelete(this)" title="删除">✕</button>'
       + '</div>';
   }
@@ -1493,12 +1495,212 @@ function recAudioDelete(btn) {
   var clip = panel._raClips && panel._raClips[id];
   recAudioDel(id).then(function() {
     try {
-      if (clip && window.ARCHIVE && window.ARCHIVE.syncDeleteFile) window.ARCHIVE.syncDeleteFile('录音', clip.fname);
+      if (clip && window.ARCHIVE && window.ARCHIVE.syncDeleteFile) {
+        window.ARCHIVE.syncDeleteFile('录音', clip.fname);
+        if (clip.tfname) window.ARCHIVE.syncDeleteFile('录音稿', clip.tfname);
+      }
     } catch (e) {}
     recStatusShow(panel, '已删除录音');
     if (!k) return null;
     return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
   }).catch(function(e) { recStatusShow(panel, '删除失败：' + (e && e.message || e), true); });
+}
+// ===== v0.82.0 录音自动转录：blob→wav16k→SiliconFlow ASR→Qwen 整理→录音稿落盘「录音稿/」，key 存 localStorage 不进仓库 =====
+var BZ_AI_LS = 'bz_ai_cfg';
+var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
+var BZ_LLM_MODEL = 'Qwen/Qwen2.5-72B-Instruct';
+var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
+var BZ_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
+function bzAiCfg() {
+  try { return JSON.parse(localStorage.getItem(BZ_AI_LS) || '{}') || {}; } catch (e) { return {}; }
+}
+function bzAiSave(sfKey) {
+  localStorage.setItem(BZ_AI_LS, JSON.stringify({ sfKey: sfKey || '', llmKey: '' }));
+}
+function bzWav16k(blob) {
+  var AB = blob.arrayBuffer ? blob.arrayBuffer() : new Promise(function(res, rej) {
+    var r = new FileReader(); r.onload = function() { res(r.result); }; r.onerror = rej; r.readAsArrayBuffer(blob);
+  });
+  var AC = window.AudioContext || window.webkitAudioContext;
+  return AB.then(function(buf) { return new AC().decodeAudioData(buf); }).then(function(src) {
+    var rate = 16000, len = Math.max(1, Math.ceil(src.duration * rate));
+    var oc = new OfflineAudioContext(1, len, rate);
+    var s = oc.createBufferSource(); s.buffer = src; s.connect(oc.destination); s.start(0);
+    return oc.startRendering();
+  }).then(function(out) {
+    var ch = out.getChannelData(0), n = ch.length;
+    var buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    function ws(o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+    ws(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    ws(36, 'data'); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) { var x = Math.max(-1, Math.min(1, ch[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7FFF, true); }
+    return new Blob([buf], { type: 'audio/wav' });
+  });
+}
+function bzAsr(wavBlob, key) {
+  var fd = new FormData();
+  fd.append('file', wavBlob, 'audio.wav');
+  fd.append('model', BZ_ASR_MODEL);
+  return fetch(BZ_ASR_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd })
+    .then(function(r) {
+      return r.json().then(function(j) {
+        if (!r.ok) throw new Error((j && (j.message || (j.error && j.error.message))) || ('HTTP ' + r.status));
+        return j;
+      });
+    })
+    .then(function(j) { return (j.text || '').trim(); });
+}
+function bzLlm(prompt, key) {
+  return fetch(BZ_LLM_BASE + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+    body: JSON.stringify({ model: BZ_LLM_MODEL, messages: [{ role: 'user', content: prompt }], max_tokens: 8192, temperature: 0.3 })
+  }).then(function(r) {
+    return r.json().then(function(j) {
+      if (!r.ok) throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status));
+      return j;
+    });
+  }).then(function(j) {
+    var m = j.choices && j.choices[0] && j.choices[0].message;
+    return ((m && m.content) || '').trim();
+  });
+}
+function bzPromptOf(clip, raw) {
+  var d = window._paipanData || {};
+  var chart = '';
+  try {
+    if (window.ARCHIVE && window.ARCHIVE.syncChartMd) {
+      chart = window.ARCHIVE.syncChartMd({ name: d.name, gender: d.gender, year: d.y, month: d.m, day: d.d, hour: d.h, min: d.mi });
+    }
+  } catch (e) {}
+  if (chart.length > 3500) chart = chart.slice(0, 3500) + '\n…（已截断）';
+  return [
+    '你是八字命理分析师的录音稿编辑。下面是同一段录音的「盘面资料」和「语音识别原始文字」。请把原始文字整理成高质量分析录音稿：',
+    '1. 只修正语音识别的错别字与断句（尤其命理术语：十神、食伤、官杀、印星、比劫、财星、宫位、大运、流年、天干地支名），不改原意，不增删观点，不添加录音里没有的内容；',
+    '2. 口语顺成可读书面语，保留讲解的条理；',
+    '3. 输出 markdown，格式固定：先一段 2-3 句「总述」概括这段录音讲了什么；空一行；然后「## 要点」，每行一条「- **要点标题**：细节」，共 3-8 条；',
+    '4. 不要输出任何额外说明、前后缀或代码块标记。',
+    '知识库术语参考：' + BZ_KB_LINES,
+    '',
+    '【盘面资料】',
+    chart || '（无盘面）',
+    '',
+    '【原始识别文字】',
+    raw
+  ].join('\n');
+}
+function bzTfName(clip) {
+  return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
+    + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
+}
+function bzTranscriptMd(clip, answer, raw) {
+  var d = window._paipanData || {};
+  var L = [];
+  L.push('# 录音稿 · ' + clip.name + (d.name ? '（' + d.name + '）' : ''));
+  L.push('');
+  L.push('> 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
+  L.push('');
+  L.push(answer);
+  L.push('');
+  L.push('## 原始识别');
+  L.push('');
+  L.push(raw);
+  L.push('');
+  return L.join('\n');
+}
+function transcribeClip(clip, panel) {
+  var cfg = bzAiCfg();
+  if (!cfg.sfKey) {
+    if (panel) recStatusShow(panel, '未配置转录 API Key，点条目📝可配置', true);
+    return Promise.resolve(false);
+  }
+  if (panel) recStatusShow(panel, '转录中…（' + clip.name + '）');
+  return bzWav16k(clip.blob)
+    .then(function(wav) { return bzAsr(wav, cfg.sfKey); })
+    .then(function(raw) {
+      if (!raw) throw new Error('识别结果为空');
+      return bzLlm(bzPromptOf(clip, raw), cfg.sfKey).then(function(ans) { return { raw: raw, ans: ans }; });
+    })
+    .then(function(r) {
+      clip.transcript = { text: r.ans, raw: r.raw, ts: Date.now() };
+      clip.tfname = clip.tfname || bzTfName(clip);
+      var md = bzTranscriptMd(clip, r.ans, r.raw);
+      try {
+        if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) {
+          window.ARCHIVE.syncWriteBlob('录音稿', clip.tfname, new Blob([md], { type: 'text/markdown' }));
+        }
+      } catch (e) {}
+      return recAudioPut(clip);
+    })
+    .then(function() {
+      if (panel) recStatusShow(panel, '转录完成：' + clip.name);
+      return recAudioList(clip.key);
+    })
+    .then(function(list) { if (panel) renderRecAudioList(panel, list); return true; })
+    .catch(function(e) {
+      if (panel) recStatusShow(panel, '转录失败：' + (e && e.message || e), true);
+      return false;
+    });
+}
+function bzEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function bzAiSettings(panel, clip) {
+  var old = document.getElementById('bzAiOverlay');
+  if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'bzAiOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99990;display:flex;align-items:center;justify-content:center;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:20px 22px;width:min(92vw,420px);font-size:14px;line-height:1.6;color:#333;';
+  box.innerHTML = '<div style="font-weight:700;margin-bottom:10px;">转录设置（只保存在本机浏览器）</div>'
+    + '<label style="display:block;margin:8px 0 4px;">SiliconFlow API Key（语音转文字 + 稿件整理）</label>'
+    + '<input id="bzAiSfKey" type="password" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ddd;border-radius:8px;">'
+    + '<div style="margin-top:14px;text-align:right;">'
+    + '<button id="bzAiCancel" type="button" style="padding:7px 14px;border:1px solid #ddd;background:#fff;border-radius:8px;margin-right:8px;">取消</button>'
+    + '<button id="bzAiOk" type="button" style="padding:7px 14px;border:0;background:#2f6fed;color:#fff;border-radius:8px;">保存</button></div>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  var c = bzAiCfg();
+  document.getElementById('bzAiSfKey').value = c.sfKey || '';
+  document.getElementById('bzAiCancel').onclick = function() { ov.remove(); };
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  document.getElementById('bzAiOk').onclick = function() {
+    bzAiSave(document.getElementById('bzAiSfKey').value.trim());
+    ov.remove();
+    if (panel) recStatusShow(panel, '转录设置已保存');
+    if (clip) transcribeClip(clip, panel);
+  };
+}
+function bzViewTranscript(btn) {
+  var panel = btn.closest('.record-panel');
+  var item = btn.closest('.rec-audio-item');
+  if (!panel || !item) return;
+  var clip = panel._raClips && panel._raClips[item.getAttribute('data-id')];
+  if (!clip) return;
+  if (!clip.transcript) { transcribeClip(clip, panel); return; }
+  var old = document.getElementById('bzTfOverlay');
+  if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'bzTfOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99990;display:flex;align-items:center;justify-content:center;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;width:min(94vw,640px);max-height:82vh;overflow:auto;font-size:14px;line-height:1.7;color:#333;';
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+    + '<b>' + bzEsc(clip.name) + ' · 转录稿</b>'
+    + '<span><a href="#" id="bzTfCopy" style="margin-right:10px;">复制</a><a href="#" id="bzTfClose">关闭</a></span></div>'
+    + '<pre id="bzTfBody" style="white-space:pre-wrap;word-break:break-word;background:#f7f8fa;border-radius:8px;padding:12px;margin:0;font-family:inherit;">'
+    + bzEsc(clip.transcript.text) + '</pre>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  ov.onclick = function(e) { if (e.target === ov || e.target.id === 'bzTfClose') { e.preventDefault(); ov.remove(); } };
+  document.getElementById('bzTfCopy').onclick = function(e) {
+    e.preventDefault();
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(clip.transcript.text);
+  };
 }
 function recAudioToggle(btn) {
   var panel = btn.closest('.record-panel');
@@ -1543,6 +1745,7 @@ function recAudioToggle(btn) {
         try {
           if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob);
         } catch (e) {}
+        transcribeClip(clip, panel);
         return recAudioList(k);
       }).then(function(list) { renderRecAudioList(panel, list); }).catch(function(e) {
         recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
@@ -4257,8 +4460,20 @@ function cmpSetState(entries) {
     recAudioDownload: recAudioDownload,
     recAudioKey: recAudioKey,
     recAudioList: recAudioList,
+    renderRecAudioList: renderRecAudioList,
     recAudioPut: recAudioPut,
     recAudioDel: recAudioDel,
+    bzAiCfg: bzAiCfg,
+    bzAiSave: bzAiSave,
+    bzWav16k: bzWav16k,
+    bzAsr: bzAsr,
+    bzLlm: bzLlm,
+    bzPromptOf: bzPromptOf,
+    bzTfName: bzTfName,
+    bzTranscriptMd: bzTranscriptMd,
+    transcribeClip: transcribeClip,
+    bzViewTranscript: bzViewTranscript,
+    bzAiSettings: bzAiSettings,
     recAudioClearKey: recAudioClearKey,
     recAudioRewriteKey: recAudioRewriteKey,
     hiDy: hiDy,
