@@ -1718,6 +1718,8 @@ function syncBuildFiles() {
     if (used[fn]) fn = '盘面-' + nm + '-' + (a.id || i) + '.md';
     used[fn] = true;
     files.push([fn, syncChartMd(a, note)]);
+    var vf = syncVerDecide(a, i, note, Date.now());
+    if (vf) files.push([vf, '<!-- 八字排盘记录版本 ' + new Date().toISOString() + ' -->\n' + syncChartMd(a, note)]);
     idx.push('| ' + nm + ' | ' + (a.gender || '') + ' | '
       + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day) + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0)
       + ' | ' + (note ? note.trim().length : 0) + ' |');
@@ -1819,6 +1821,54 @@ function syncResume() {
   }).catch(function() { syncStatus(); });
 }
 
+function syncSubDir(sub) {
+  if (!_syncDir) return Promise.resolve(null);
+  return _syncDir.getDirectoryHandle(sub, { create: true }).catch(function() { return null; });
+}
+function syncWriteBlob(sub, name, blob) {
+  if (!_syncDir || !name || !blob) return Promise.resolve(false);
+  return syncSubDir(sub).then(function(d) {
+    if (!d) return false;
+    return d.getFileHandle(name, { create: true }).then(function(fh) {
+      return fh.createWritable();
+    }).then(function(w) { return w.write(blob).then(function() { return w.close(); }); });
+  }).then(function(ok) {
+    if (ok) { writeNum(SYNC_AT_KEY, Date.now()); syncStatus(); }
+    return !!ok;
+  }).catch(function() { return false; });
+}
+function syncDeleteFile(sub, name) {
+  if (!_syncDir || !name) return Promise.resolve(false);
+  return syncSubDir(sub).then(function(d) {
+    if (!d) return false;
+    return d.removeEntry(name).then(function() { return true; }).catch(function() { return false; });
+  });
+}
+
+// ===== v0.81.0 分析记录版本管理：内容变化落「历史/盘面-姓名-时间.md」，10 分钟窗内持续编辑复用同一版 =====
+var _syncVerMemo = {};
+function syncVerReset() { _syncVerMemo = {}; }
+function syncVerKey(a, idx) {
+  return (a.name || '') + '|' + (a.gender || '') + '|' + a.year + '|' + a.month + '|'
+    + a.day + '|' + a.hour + '|' + (a.min || 0) + '|' + (a.id || idx);
+}
+function syncVerDecide(a, idx, noteText, now) {
+  now = new Date(now);
+  var vk = syncVerKey(a, idx);
+  var memo = _syncVerMemo[vk];
+  if (!memo) { _syncVerMemo[vk] = { text: noteText || '', at: now.getTime(), file: '', bornAt: 0 }; return ''; }
+  if ((memo.text || '') === (noteText || '')) return '';
+  if (memo.file && now.getTime() - memo.bornAt < 600000) {
+    memo.text = noteText || ''; memo.at = now.getTime();
+    return memo.file;
+  }
+  var file = '历史/盘面-' + (a.name || '未命名') + '-'
+    + syncPad2(now.getMonth() + 1) + '-' + syncPad2(now.getDate()) + '_'
+    + syncPad2(now.getHours()) + '-' + syncPad2(now.getMinutes()) + '-' + syncPad2(now.getSeconds()) + '.md';
+  memo.text = noteText || ''; memo.at = now.getTime(); memo.bornAt = now.getTime(); memo.file = file;
+  return file;
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
@@ -1835,6 +1885,10 @@ function syncResume() {
     syncTouch: syncTouch,
     syncResume: syncResume,
     syncBuildFiles: syncBuildFiles,
+    syncWriteBlob: syncWriteBlob,
+    syncDeleteFile: syncDeleteFile,
+    syncVerDecide: syncVerDecide,
+    syncVerReset: syncVerReset,
     pickSyncFolder: pickSyncFolder,
     syncOff: syncOff,
     backupFilename: backupFilename,

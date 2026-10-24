@@ -5088,14 +5088,54 @@ function captureScreenshot() {
       }
       tests.push(eq('SN8: 盘面 md 含四柱/大运/分析记录',
         (md.indexOf('## 四柱') >= 0 && md.indexOf('## 大运') >= 0 && md.indexOf('## 分析记录') >= 0) ? 'Y' : 'N', 'Y'));
-      tests.push(eq('SN9: 同步按钮三件套与状态位齐备',
-        (document.getElementById('btnSyncFolder') && document.getElementById('btnSyncNow')
-          && document.getElementById('btnSyncOff') && document.getElementById('syncHint')) ? 'Y' : 'N', 'Y'));
+    tests.push(eq('SN9: 同步按钮三件套与状态位齐备',
+      (document.getElementById('btnSyncFolder') && document.getElementById('btnSyncNow')
+        && document.getElementById('btnSyncOff') && document.getElementById('syncHint')) ? 'Y' : 'N', 'Y'));
+    tests.push(eq('SN11: 录音 blob 写/删接口齐备',
+      (typeof window.ARCHIVE.syncWriteBlob === 'function' && typeof window.ARCHIVE.syncDeleteFile === 'function') ? 'Y' : 'N', 'Y'));
+  } catch (e) {
+    tests.push(fail('SN10: 本地同步测试异常', String(e)));
+  }
+  })();
+  (function() {
+    try {
+      var VA = { name: '版本测试', gender: '男', year: 1990, month: 1, day: 1, hour: 12, min: 0, id: 'vt' };
+      var T0 = new Date(2026, 9, 24, 12, 0, 0).getTime();
+      window.ARCHIVE.syncVerReset();
+      tests.push(eq('SNV1: 首次见到只记基线不落版本',
+        window.ARCHIVE.syncVerDecide(VA, 0, '第一版内容', T0), ''));
+      var v2 = window.ARCHIVE.syncVerDecide(VA, 0, '第二版内容', T0 + 60000);
+      tests.push(eq('SNV2: 修改后落版本文件（历史/盘面-姓名-时间）',
+        (v2.indexOf('历史/盘面-版本测试-10-24_12-01-') === 0) ? 'Y' : 'N:' + v2, 'Y'));
+      tests.push(eq('SNV3: 10 分钟窗内再改复用同一版',
+        window.ARCHIVE.syncVerDecide(VA, 0, '第三版内容', T0 + 120000), v2));
+      var v4 = window.ARCHIVE.syncVerDecide(VA, 0, '第四版内容', T0 + 660000);
+      tests.push(eq('SNV4: 超 10 分钟落新版本', (v4 && v4 !== v2 && v4.indexOf('历史/盘面-版本测试-10-24_12-11-') === 0) ? 'Y' : 'N:' + v4, 'Y'));
+      tests.push(eq('SNV5: 内容未变不再落版',
+        window.ARCHIVE.syncVerDecide(VA, 0, '第四版内容', T0 + 670000), ''));
+      window.ARCHIVE.syncVerReset();
+      tests.push(eq('SNV6: 重置后重建基线不落版',
+        window.ARCHIVE.syncVerDecide(VA, 0, '第四版内容', T0 + 630000), ''));
+      window.ARCHIVE.syncVerReset();
+      var arch = window.ARCHIVE.getArchives();
+      var a0 = arch && arch[0];
+      if (a0) {
+        var nk = 'bz_rec_notes_' + (a0.name || '') + '|' + (a0.gender || '') + '|' + a0.year + '|'
+          + a0.month + '|' + a0.day + '|' + a0.hour + '|' + (a0.min || 0);
+        window.ARCHIVE.syncBuildFiles();
+        var savedNote = localStorage.getItem(nk);
+        localStorage.setItem(nk, (savedNote || '') + ' SNV版本测试增量');
+        var hist = window.ARCHIVE.syncBuildFiles().filter(function(x) { return x[0].indexOf('历史/') === 0; });
+        tests.push(eq('SNV7: 改记录后再同步输出含版本文件', hist.length >= 1 ? 'Y' : 'N', 'Y'));
+        if (savedNote === null) localStorage.removeItem(nk); else localStorage.setItem(nk, savedNote);
+      } else {
+        tests.push(fail('SNV7: 无档案可测版本集成'));
+      }
+      window.ARCHIVE.syncVerReset();
     } catch (e) {
-      tests.push(fail('SN10: 本地同步测试异常', String(e)));
+      tests.push(fail('SNV0: 版本管理测试异常', String(e)));
     }
   })();
-
   // ===== v0.69.0 历法切换自动换算 =====
   (function() {
     var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };

@@ -1123,7 +1123,7 @@ function renderChart(data, twin, targetId, opts) {
           <div class="rec-audio-bar">
             <button type="button" class="rec-audio-btn" onclick="RENDER.recAudioToggle(this)" title="录制语音分析，自动挂在当前档案下">● 录音</button>
             <span class="rec-audio-timer"></span>
-            <span class="rec-audio-hint">录音保存在本机浏览器</span>
+            <span class="rec-audio-hint">录音自动存入本地同步文件夹（未开启时仅存浏览器）</span>
           </div>
           <div class="rec-audio-list"></div>
         </div>
@@ -1490,7 +1490,11 @@ function recAudioDelete(btn) {
   var au = panel.querySelector('.rec-audio');
   var suffix = au ? (au.getAttribute('data-suffix') || '') : '';
   var k = recAudioKey(suffix);
+  var clip = panel._raClips && panel._raClips[id];
   recAudioDel(id).then(function() {
+    try {
+      if (clip && window.ARCHIVE && window.ARCHIVE.syncDeleteFile) window.ARCHIVE.syncDeleteFile('录音', clip.fname);
+    } catch (e) {}
     recStatusShow(panel, '已删除录音');
     if (!k) return null;
     return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
@@ -1536,6 +1540,9 @@ function recAudioToggle(btn) {
       };
       recAudioPut(clip).then(function() {
         recStatusShow(panel, '已保存录音 ' + recAudioFmt(dur));
+        try {
+          if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob);
+        } catch (e) {}
         return recAudioList(k);
       }).then(function(list) { renderRecAudioList(panel, list); }).catch(function(e) {
         recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
