@@ -1151,6 +1151,10 @@ ${recPanelHtml}
   container._paipanData = data;
   bindEvents(data, container);
   bindRecPanel(container);
+  // v0.75.0 渲染统一补挂宫位标签行：innerHTML 重置会冲掉 .gz-tags，
+  // 此前只有 doPaipan/renderCmpTrack/applyTaiji 显式补挂，十神/十干面板的 refresh() 漏挂，
+  // 表现为勾选/清空十神十干后宫位标签行消失（勾选数据本身未丢）
+  if (window.GONGWEI && typeof GONGWEI.updateGongWeiTags === 'function') GONGWEI.updateGongWeiTags();
 }
 
 // ===== v0.43.6 分析记录：记录区占运流区原位，运流移左下；写入即存 localStorage =====
@@ -1359,6 +1363,16 @@ function flowControlsHTML() {
 function setFlowNewCal(checked) {
   flowNewCal = checked;
   document.querySelectorAll('[data-flow="newcal"]').forEach(function(input) { input.checked = checked; });
+  // v0.76.0 多选列头标签由 applyMultiDL 在渲染期算，切新历需重渲主表并恢复面板状态
+  if (_multiDL.on && window.APP && APP.doPaipan) {
+    var savedFlows = [];
+    document.querySelectorAll('.flow-panel').forEach(function(panel) {
+      if (panel._flowRoot && panel._flowRoot._flowState) savedFlows.push({ root: panel._flowRoot, st: panel._flowRoot._flowState, data: panel._flowData });
+    });
+    APP.doPaipan();
+    savedFlows.forEach(function(s) { s.root._flowState = s.st; refreshFlow(s.root, s.data); });
+    return;
+  }
   document.querySelectorAll('.flow-panel').forEach(function(panel) { refreshFlow(panel._flowRoot, panel._flowData); });
 }
 
@@ -1535,9 +1549,11 @@ function _refreshFlowInner(root, data, year) {
     });
   }
   // v0.63.0 多选模式下主表流月/流日列由 applyMultiDL 统一插（此处单选列会被其清除，直接跳过省一次重复插）
+  // v0.76.0 列头对齐大运流年：始终带 dyln-yr 月/日小字，标签算法与面板按钮一致
   if (!_multiDL.on) {
-    appendColumn(selected, 'col-lm', '流月' + (flowNewCal ? dyLnYearHtml((selected.start ? selected.start.getUTCMonth() + 1 : state.month + 1) + '月') : ''));
-    if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + (flowNewCal ? dyLnYearHtml((selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()) : ''));
+    var yrTag63 = flowNewCal ? state.year + '年' : gzYearLabel(state.year);
+    appendColumn(selected, 'col-lm', '流月' + dyLnYearHtml(yrTag63 + '·' + (flowNewCal && selected.start ? (selected.start.getUTCMonth() + 1) + '月' : cnMonthLabel(state.month))));
+    if (flowDayOn && selectedDay) appendColumn(selectedDay, 'col-ld', '流日' + dyLnYearHtml(yrTag63 + '·' + (selectedDay.date.getUTCMonth() + 1) + '/' + selectedDay.date.getUTCDate()));
   }
   document.querySelectorAll('[data-flow]').forEach(function(input) {
     input.checked = input.dataset.flow === 'month' ? flowMonthOn : input.dataset.flow === 'newcal' ? flowNewCal : flowDayOn;
@@ -2289,14 +2305,17 @@ function applyMultiDL(root, data) {
   var pLms = _multiDL.lms.map(function(x) {
     var mo = (flowMonths(x.y) || [])[x.m];
     if (!mo) return null;
-    var p = pill(mo.gan, mo.zhi); p._lm = x; return p;
+    var p = pill(mo.gan, mo.zhi); p._lm = x;
+    // v0.76.0 新历列头用真公历月（旧 x.m+1 是农历序数，立春月会写成 1 月）
+    p._lmLabel = flowNewCal && mo.start ? (mo.start.getUTCMonth() + 1) + '月' : cnMonthLabel(x.m);
+    return p;
   }).filter(function(p) { return !!p; });
   var pLds = _multiDL.lds.map(function(x) {
     var dt = new Date(x.d);
     var pl = ALGO.dayPillar(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
     var p = pill(pl.gan, pl.zhi); p._ld = x; return p;
   });
-  function lmHeadLabel(x) { return (flowNewCal ? x.y + '年' : gzYearLabel(x.y)) + '·' + (x.m + 1) + '月'; }
+  function lmHeadLabel(p) { var x = p._lm; return (flowNewCal ? x.y + '年' : gzYearLabel(x.y)) + '·' + p._lmLabel; }
   function ldHeadLabel(x) { var dt = new Date(x.d); return (flowNewCal ? x.y + '年' : gzYearLabel(x.y)) + '·' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate(); }
   var refs = _zuoRefs(data);
   var sshCg = sshSelectedGroups().length > 0 || ganSelectedGroups().length > 0;
@@ -2371,7 +2390,7 @@ function applyMultiDL(root, data) {
         for (var mi = 0; mi < nLm; mi++) {
           var thm = document.createElement(cellTag);
           thm.className = 'col-lm';
-          thm.innerHTML = '流月' + dyLnYearHtml(lmHeadLabel(pLms[mi]._lm));
+          thm.innerHTML = '流月' + dyLnYearHtml(lmHeadLabel(pLms[mi]));
           ref.insertAdjacentElement('afterend', thm);
           ref = thm;
         }
@@ -3896,6 +3915,7 @@ function cmpSetState(entries) {
 
   // ===== 挂载到全局命名空间 =====
   window.RENDER = {
+    gzYearLabel: gzYearLabel,
     toggleLevel: toggleLevel,
     setLevelPreset: setLevelPreset,
     setRowVisible: setRowVisible,

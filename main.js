@@ -410,6 +410,28 @@ const TIME_MOD = {
   '中午':12, '下午':12, '傍晚':12, '黄昏':12, '晚上':12, '夜里':12
 };
 
+// 十二时辰→小时（取时辰中点：正子0点、正午12点，真太阳时修正后仍不跨时辰）
+const HOUR_CN = { '子':0,'丑':2,'寅':4,'卯':6,'辰':8,'巳':10,'午':12,'未':14,'申':16,'酉':18,'戌':20,'亥':22 };
+
+// 中文农历日→数字（初一~卅九）
+function cnDay2num(s) {
+  const d = { '一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
+  let m;
+  if ((m = s.match(/^初([一二三四五六七八九])$/))) return d[m[1]];
+  if (s === '初十' || s === '十') return 10;
+  if ((m = s.match(/^十([一二三四五六七八九])$/))) return 10 + d[m[1]];
+  if (s === '二十' || s === '廿十') return 20;
+  if ((m = s.match(/^二十([一二三四五六七八九])$/))) return 20 + d[m[1]];
+  if ((m = s.match(/^廿([一二三四五六七八九])$/))) return 20 + d[m[1]];
+  if (s === '三十') return 30;
+  if ((m = s.match(/^三十([一二三四五六七八九])$/))) return 30 + d[m[1]];
+  if ((m = s.match(/^卅([一二三四五六七八九])$/))) return 30 + d[m[1]];
+  const n = parseInt(s);
+  return isNaN(n) ? null : n;
+}
+
+const LUNAR_MONTH_CN = { '正':1,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'冬':11,'十二':12,'腊':12 };
+
 function parseNaturalInput(text) {
   const result = { name:'', gender:'男', year:null, month:null, day:null, hour:null, min:0, prov:'', city:'', dist:'', calendarType:'solar' };
   let t = text.trim();
@@ -428,6 +450,17 @@ function parseNaturalInput(text) {
     result.month = parseInt(dateCN[2]);
     result.day = parseInt(dateCN[3]);
     t = t.replace(dateCN[0], ' ');
+  }
+  // v0.77.0 中文农历日期：1990年农历五月初五 / 1986年腊月廿三（中式写法默认按农历）
+  if (!result.year) {
+    const dateLunar = t.match(/(\d{4})\s*年\s*(?:农历|阴历|旧历|老历)?\s*(正|冬|腊|十一|十二|[一二三四五六七八九十])月\s*(初[一二三四五六七八九]|初十|十[一二三四五六七八九]|二十[一二三四五六七八九]?|廿[一二三四五六七八九]?|卅[一二三四五六七八九]?|三十[一二三四五六七八九]?)(?:日|号)?/);
+    if (dateLunar) {
+      result.year = parseInt(dateLunar[1]);
+      result.month = LUNAR_MONTH_CN[dateLunar[2]];
+      result.day = cnDay2num(dateLunar[3]);
+      result.calendarType = 'lunar';
+      t = t.replace(dateLunar[0], ' ');
+    }
   }
   // v0.23.3 农历标志识别：农历/阴历/旧历/老历（含括号写法）
   if (/农历|阴历|旧历|老历/.test(text)) result.calendarType = 'lunar';
@@ -473,6 +506,15 @@ function parseNaturalInput(text) {
       result.hour = parseInt(hourOnly[1]);
       result.min = 0;
       t = t.replace(hourOnly[0], ' ');
+    }
+  }
+  // v0.77.0 十二时辰：午时 / 子时（取时辰中点）
+  if (result.hour === null) {
+    const hourCn = t.match(/([子丑寅卯辰巳午未申酉戌亥])\s*时(?![辰刻分])/);
+    if (hourCn) {
+      result.hour = HOUR_CN[hourCn[1]];
+      result.min = 0;
+      t = t.replace(hourCn[0], ' ');
     }
   }
 
@@ -3756,7 +3798,7 @@ function captureScreenshot() {
       var lmThs = hd63 ? hd63.querySelectorAll('th.col-lm') : [];
       tests.push(eq('MLM: 流月列表头数=3', lmThs.length, 3));
       var lmHeads = Array.prototype.map.call(lmThs, function(e) { return e.textContent; }).join('|');
-      tests.push(eq('MLM: 流月表头含月序3/6/9', /3月/.test(lmHeads) && /6月/.test(lmHeads) && /9月/.test(lmHeads), true));
+      tests.push(eq('MLM: 流月表头含月名三/六/九', /三月/.test(lmHeads) && /六月/.test(lmHeads) && /九月/.test(lmHeads), true));
       var gz63 = CONST.TG[((lnA63 - 4) % 10 + 10) % 10] + CONST.DZ[((lnA63 - 4) % 12 + 12) % 12];
       tests.push(eq('MLM: 流月表头含流年归属=' + lnA63, lmHeads.indexOf(String(lnA63)) >= 0 || lmHeads.indexOf(gz63) >= 0, true));
       tests.push(eq('MLM: 流月表头两行式(dyln-yr)', Array.prototype.every.call(lmThs, function(e) { return !!e.querySelector('.dyln-yr'); }), true));
@@ -3782,6 +3824,17 @@ function captureScreenshot() {
       var ldTh = hd63 ? hd63.querySelector('th.col-ld') : null;
       tests.push(eq('MLM: 流日列表头存在含日期', ldTh ? /流日/.test(ldTh.textContent) && /\//.test(ldTh.textContent) : false, true));
       tests.push(eq('MLM: 流日列表头两行式(dyln-yr)', ldTh ? !!ldTh.querySelector('.dyln-yr') : false, true));
+      // v0.76.0 新历列头=真公历月（旧序数会把清明月写成 3 月，实为 4 月）
+      R.setFlowNewCal(true);
+      R.applyMultiDL(tst63, pd63);
+      var hdNc63 = tst63.querySelector('table.chart tr.hd');
+      var lmNc63 = hdNc63 ? Array.prototype.map.call(hdNc63.querySelectorAll('th.col-lm .dyln-yr'), function(e) { return e.textContent; }) : [];
+      var expNc63 = [2, 5, 8].map(function(m63) { var mo63 = R.flowMonths(lnA63)[m63]; return lnA63 + '年·' + (mo63.start.getUTCMonth() + 1) + '月'; }).join('|');
+      tests.push(eq('MLM76: 新历流月列头=真公历月', lmNc63.join('|'), expNc63));
+      var ldNc63 = hdNc63 ? hdNc63.querySelector('th.col-ld .dyln-yr') : null;
+      var ldExp63 = dOk63 ? (function() { var dt63 = new Date(dOk63); return lnA63 + '年·' + (dt63.getUTCMonth() + 1) + '/' + dt63.getUTCDate(); })() : '';
+      tests.push(eq('MLM76: 新历流日列头保留日期', ldNc63 ? ldNc63.textContent : '', ldExp63));
+      R.setFlowNewCal(false);
       var sep63 = tst63.querySelector('tr.sanyuan-sep td');
       tests.push(eq('MLM: 三垣分隔行 colspan=7+月3+日1', sep63 ? sep63.getAttribute('colspan') : '', '11'));
       // 约束3：取消流月联动清其流日
@@ -3953,7 +4006,7 @@ function captureScreenshot() {
       tests.push(eq('流月：默认农历按钮节气序', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '一月'));
       tests.push(eq('流月：默认农历末月节气序', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '十二月'));
       tests.push(eq('流月：默认农历面板标签干支年', flowRoot.querySelector('.luck-table-label').textContent.indexOf('丙午年') === 0, true));
-      tests.push(eq('流月：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
+      tests.push(eq('流月：默认农历列头两行式', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), RENDER.gzYearLabel(flowRoot._flowState.year) + '·' + ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'][flowRoot._flowState.month] + '月'));
       tests.push(eq('流月：沿用流年表格行', flowRoot.querySelectorAll('.flow-table .luck-row.liu-row').length, 1));
       tests.push(eq('流月：表格六栏加行标', flowRoot.querySelectorAll('.flow-table td.cell').length, 7));
       tests.push(eq('流月：只有一个选中项', flowRoot.querySelectorAll('.flow-table .li.cur[aria-pressed="true"]').length, 1));
@@ -3970,23 +4023,25 @@ function captureScreenshot() {
       flowRoot.querySelector('[data-flow-month="11"]').click();
       tests.push(eq('流月：选丑月同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-lm').textContent, '辛'));
       tests.push(eq('流月：选丑月同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-lm').textContent, '丑'));
+      tests.push(eq('流月：选丑月列头月份同步', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), RENDER.gzYearLabel(flowRoot._flowState.year) + '·十二月'));
       var dayButton = flowRoot.querySelectorAll('[data-flow-day]')[3];
       dayButton.click();
       var selectedDate = new Date(Number(dayButton.dataset.flowDay));
       var selectedPillar = ALGO.dayPillar(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, selectedDate.getUTCDate());
       tests.push(eq('流日：点击日期同步天干', flowRoot.querySelector('[data-row-type~="ln1"] .col-ld').textContent, selectedPillar.gan));
       tests.push(eq('流日：点击日期同步地支', flowRoot.querySelector('[data-row-type~="dy2"] .col-ld').textContent, selectedPillar.zhi));
+      tests.push(eq('流日：点日列头日期同步', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), RENDER.gzYearLabel(flowRoot._flowState.year) + '·' + (selectedDate.getUTCMonth() + 1) + '/' + selectedDate.getUTCDate()));
       var hdrDate = new Date(Number(dayButton.dataset.flowDay));
-      tests.push(eq('流日：默认农历列头纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-ld')), '流日|单'));
+      tests.push(eq('流日：默认农历列头两行式日期', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), RENDER.gzYearLabel(flowRoot._flowState.year) + '·' + (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       flowRoot.querySelector('[data-flow="newcal"]').click();
       tests.push(eq('新历：勾选后按钮起始新历月', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '2月'));
       tests.push(eq('新历：末月按钮跨年新历1月', flowRoot.querySelector('[data-flow-month="11"] .flow-date').textContent, '1月'));
       tests.push(eq('新历：面板标签公历年', flowRoot.querySelector('.luck-table-label').textContent.indexOf(flowRoot._flowState.year + ' 年') === 0, true));
-      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
-      tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' && el.textContent.indexOf('·') < 0 ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
+      tests.push(eq('流月：列头两行式新历月', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), flowRoot._flowState.year + '年·' + (RENDER.flowMonths(flowRoot._flowState.year)[11].start.getUTCMonth() + 1) + '月'));
+      tests.push(eq('流日：列头两行式新历日', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流日' ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-ld')), flowRoot._flowState.year + '年·' + (hdrDate.getUTCMonth() + 1) + '/' + hdrDate.getUTCDate()));
       flowRoot.querySelector('[data-flow="newcal"]').click();
       tests.push(eq('新历：取消后回农历按钮', flowRoot.querySelector('[data-flow-month="0"] .flow-date').textContent, '一月'));
-      tests.push(eq('新历：取消后列头回纯文字', (function(el) { return el.textContent + '|' + (el.querySelector('.dyln-yr') ? '两行' : '单'); })(flowRoot.querySelector('tr.hd .col-lm')), '流月|单'));
+      tests.push(eq('新历：取消后列头回农历月名', (function(el) { var yr = el.querySelector('.dyln-yr'); return yr && el.firstChild.textContent === '流月' ? yr.textContent : el.textContent; })(flowRoot.querySelector('tr.hd .col-lm')), RENDER.gzYearLabel(flowRoot._flowState.year) + '·十二月'));
       var yearCell = Array.from(flowRoot.querySelectorAll('.liu-row .li')).find(function(cell) { return RENDER.liunianYearOf(data, Number(cell.dataset.di), Number(cell.dataset.li)) === 2031; });
       yearCell.click();
       tests.push(eq('流月：随流年切换', flowRoot._flowState.year, 2031));
@@ -5280,6 +5335,88 @@ function captureScreenshot() {
       if (host.parentNode) host.parentNode.removeChild(host);
       tests.push(eq(sec + ' T17: 测试后档案现场还原', A.getArchives().length, savedArch === null ? 0 : JSON.parse(savedArch).length));
       tests.push(eq(sec + ' T18: 测试键已清理', [K1, K2, K3, KC, KN].filter(function(k) { return localStorage.getItem(k) !== null; }).length, 0));
+    }
+  })();
+
+  // ===== v0.75.0 十干/十神清空不再连带清掉宫位标签行 =====
+  (function() {
+    var sec = 'QKG';
+    var R = window.RENDER;
+    if (!R || typeof R.renderChart !== 'function' || typeof paipan !== 'function' || !window.GONGWEI || !window.GAN) {
+      tests.push(fail(sec + ' 前置: RENDER/paipan/GONGWEI/GAN 挂载', '缺失'));
+      return;
+    }
+    var GKEY = 'bz_gan_selected_v1';
+    var sGan = localStorage.getItem(GKEY);
+    var preFav = GONGWEI.loadFav();
+    var preSel = GONGWEI.loadSelected();
+    var gqId = null;
+    var host = document.createElement('div');
+    try {
+      var g = GONGWEI.addGroup('清空回归', ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛']);
+      if (g && g.ok) {
+        gqId = g.group.id;
+        var fav = preFav.slice();
+        if (fav.indexOf('清空回归') < 0) fav.push('清空回归');
+        GONGWEI.persistFav(fav);
+        GONGWEI.toggleSelect('清空回归');
+      }
+      host.id = 'qkg-out';
+      host.style.display = 'none';
+      document.body.appendChild(host);
+      R.renderChart(paipan('QKG清空回归', '男', 1984, 11, 15, 12, 0), undefined, 'qkg-out');
+      tests.push(eq(sec + ' Z01: renderChart后宫位标签行自动补挂', host.querySelectorAll('tr.gz-tags').length > 0 ? 'Y' : 'N', 'Y'));
+      localStorage.setItem(GKEY, JSON.stringify(['占位组']));
+      GAN.clearAll();
+      tests.push(eq(sec + ' Z02: 十干清空只清十干勾选', localStorage.getItem(GKEY), '[]'));
+      tests.push(eq(sec + ' Z03: 十干清空不动宫位勾选', GONGWEI.loadSelected().indexOf('清空回归') >= 0 ? 'Y' : 'N', 'Y'));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      if (sGan === null) localStorage.removeItem(GKEY); else localStorage.setItem(GKEY, sGan);
+      if (gqId) GONGWEI.deleteGroup(gqId);
+      GONGWEI.persistFav(preFav);
+      GONGWEI.clearSelection();
+      for (var pi = 0; pi < preSel.length; pi++) GONGWEI.toggleSelect(preSel[pi]);
+      if (host.parentNode) host.parentNode.removeChild(host);
+    }
+  })();
+
+  // ── v0.77.0 AI 录入：中文农历日期 + 十二时辰 ──
+  (function(){
+    var sec = 'AIP';
+    try {
+      var P = parseNaturalInput;
+      var r1 = P('张三 男 1990年农历五月初五 午时 北京市');
+      tests.push(eq(sec + ' 01: 农历年份', r1.year, 1990));
+      tests.push(eq(sec + ' 02: 五月', r1.month, 5));
+      tests.push(eq(sec + ' 03: 初五', r1.day, 5));
+      tests.push(eq(sec + ' 04: 日历类型农历', r1.calendarType, 'lunar'));
+      tests.push(eq(sec + ' 05: 午时=12点', r1.hour, 12));
+      tests.push(eq(sec + ' 06: 午时分=0', r1.min, 0));
+      tests.push(eq(sec + ' 07: 姓名仍识别', r1.name, '张三'));
+      tests.push(eq(sec + ' 08: 城市仍识别', r1.prov === '北京市' && r1.city === '北京市' ? 'Y' : 'N', 'Y'));
+      var r2 = P('李四 女 1986年腊月廿三 丑时');
+      tests.push(eq(sec + ' 09: 腊月', r2.month, 12));
+      tests.push(eq(sec + ' 10: 廿三', r2.day, 23));
+      tests.push(eq(sec + ' 11: 丑时=2点', r2.hour, 2));
+      var r3 = P('王五 男 1991年正月十五 子时');
+      tests.push(eq(sec + ' 12: 正月', r3.month, 1));
+      tests.push(eq(sec + ' 13: 十五', r3.day, 15));
+      tests.push(eq(sec + ' 14: 子时=0点', r3.hour, 0));
+      var r4 = P('赵六 男 1988年冬月三十 亥时');
+      tests.push(eq(sec + ' 15: 冬月', r4.month, 11));
+      tests.push(eq(sec + ' 16: 三十', r4.day, 30));
+      tests.push(eq(sec + ' 17: 亥时=22点', r4.hour, 22));
+      var r5 = P('孙七 男 1992-03-15 18:30');
+      tests.push(eq(sec + ' 18: 数字公历不受影响', r5.month + '/' + r5.day, '3/15'));
+      tests.push(eq(sec + ' 19: 数字时间不受影响', r5.hour + ':' + r5.min, '18:30'));
+      tests.push(eq(sec + ' 20: 数字公历类型', r5.calendarType, 'solar'));
+      var r6 = P('周八 男 1995年十月二十 巳时');
+      tests.push(eq(sec + ' 21: 十月', r6.month, 10));
+      tests.push(eq(sec + ' 22: 二十+巳时', r6.day + '/' + r6.hour, '20/10'));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
     }
   })();
 
