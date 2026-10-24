@@ -4115,15 +4115,24 @@ function captureScreenshot() {
         return rows;
       }
       var mRows74 = flowRows74(flowTables74[0], 'data-flow-month');
-      var dRows74 = flowRows74(flowTables74[1], 'data-flow-day');
       function flowLabels74(row) { return row.map(function(b) { return b.querySelector('.flow-date').textContent; }).join(' '); }
       tests.push(eq('顺排：流月共两行', mRows74.length, 2));
       tests.push(eq('顺排：流月第一行从左到右为上半年', flowLabels74(mRows74[0]), '一月 二月 三月 四月 五月 六月'));
       tests.push(eq('顺排：流月第二行从左到右为下半年', flowLabels74(mRows74[1]), '七月 八月 九月 十月 十一月 十二月'));
       tests.push(eq('顺排：流月首列竖读为隔六月', Array.from(flowTables74[0].querySelectorAll('td.cell')[1].querySelectorAll('.flow-date')).map(function(el) { return el.textContent; }).join(','), '一月,七月'));
-      tests.push(eq('顺排：流日每行六格', dRows74[0].length, 6));
-      tests.push(eq('顺排：流日第一行为连续六天', (function() { var ms = dRows74[0].map(function(b) { return Number(b.dataset.flowDay); }); return ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
-      tests.push(eq('顺排：流日整体按行连续递增', (function() { var ms = [].concat.apply([], dRows74).map(function(b) { return Number(b.dataset.flowDay); }); return ms.length > 27 && ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
+      // v0.78.0 流日改七列周历：表头周一~周日，日期按真实星期对齐
+      var dTable78 = flowRoot.querySelector('.flow-day-table');
+      var dowHeads78 = Array.from(dTable78.querySelectorAll('tr.flow-dow-row td.flow-dow')).map(function(td) { return td.textContent; });
+      tests.push(eq('周历：流日表头周一到周日', dowHeads78.join(','), '周一,周二,周三,周四,周五,周六,周日'));
+      var dBodyRows78 = Array.from(dTable78.querySelectorAll('tr.liu-row'));
+      tests.push(eq('周历：流日数据行数五六之间', dBodyRows78.length >= 5 && dBodyRows78.length <= 6, true));
+      tests.push(eq('周历：每行不超七格', dBodyRows78.every(function(tr) { return tr.querySelectorAll('[data-flow-day]').length <= 7; }), true));
+      var firstRow78 = dBodyRows78[0];
+      var lead78 = firstRow78.querySelectorAll('td.flow-day-blank').length;
+      var firstBtn78 = firstRow78.querySelector('[data-flow-day]');
+      tests.push(eq('周历：首日对齐星期列', lead78, (new Date(Number(firstBtn78.dataset.flowDay)).getUTCDay() + 6) % 7));
+      var ms78 = Array.from(dTable78.querySelectorAll('[data-flow-day]')).map(function(b) { return Number(b.dataset.flowDay); });
+      tests.push(eq('周历：日期整体连续递增', ms78.length > 27 && ms78.every(function(v, i) { return i === 0 || v - ms78[i - 1] === 86400000; }), true));
       tests.push(eq('顺排：流月日期与干支仍两行式', (function() { var b = flowTables74[0].querySelector('[data-flow-month]'); return b.querySelector('.flow-date').getBoundingClientRect().bottom <= b.querySelector('.flow-gz').getBoundingClientRect().top + 1; })(), true));
     } finally {
       RENDER.setFlowVisible('month', false);

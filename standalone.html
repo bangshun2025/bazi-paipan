@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.77.0 | 2026-10-24 -->
+<!-- 八字排盘 ·  从真版 v0.78.0 | 2026-10-24 -->
+<!-- v0.78.0: 流日表改七列周历——首行表头周一~周日，日期按真实星期对齐（首日落在对应星期列），日与干支两行式不变；流月六列不变 -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
 <!-- v0.76.0: 时柱右侧运流区的流月/流日列表头对齐大运流年 —— 始终带月/日小字：农历列头中文月名（四月）、新历列头真公历月（5月）、流日恒公历 M/D；多选列头新历月修正为真公历月（旧序数立春月误写 1 月）；新历切换时多选列头联动刷新 -->
 <!-- v0.75.0: renderChart 末尾统一补挂宫位标签行 —— 修复十神/十干面板勾选与清空后宫位标签消失（勾选数据一直未丢） -->
@@ -948,6 +949,8 @@
   .flow-table { min-width:520px; table-layout:fixed; }
   .flow-table .cell { min-width:0; }
   .flow-table .rtag { width:48px; }
+  .flow-day-table .flow-dow { color:var(--c-gray); font-size:11px; text-align:center; padding:4px 2px; white-space:nowrap; }
+  .flow-day-table .flow-day-blank { background:repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(128,128,128,.05) 5px, rgba(128,128,128,.05) 10px); }
   .flow-table .li { width:100%; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:inherit; text-align:center; }
   .flow-table .li.cur { background:rgba(200,58,58,.04); box-shadow:inset 0 0 0 1px rgba(200,58,58,.3); }
   .flow-table .li.msel { background:rgba(200,58,58,.12); box-shadow:inset 0 0 0 1.5px rgba(200,58,58,.55); font-weight:700; }
@@ -11745,6 +11748,29 @@ function _refreshFlowInner(root, data, year) {
   if (!days.some(function(day) { return day.ms === state.day; })) state.day = days.length ? days[0].ms : null;
   var selectedDay = days.find(function(day) { return day.ms === state.day; });
   function flowTable(items, kind, title) {
+    function btnHtml(kd, value, active, picked, label, item) {
+      return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kd + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="flow-gz"><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></span></button>';
+    }
+    if (kind === 'day') {
+      var dows = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      var bodyRows = [];
+      var curCells = [];
+      var lead = items.length ? (items[0].date.getUTCDay() + 6) % 7 : 0;
+      function flushDayRow() {
+        while (curCells.length > 0 && curCells.length < 7) curCells.push('<td class="cell flow-day-blank"></td>');
+        bodyRows.push('<tr class="luck-row liu-row"><td class="cell rtag">' + (bodyRows.length === 0 ? title : '') + '</td>' + curCells.join('') + '</tr>');
+        curCells = [];
+      }
+      for (var bi = 0; bi < lead; bi++) curCells.push('<td class="cell flow-day-blank"></td>');
+      for (var di = 0; di < items.length; di++) {
+        var it = items[di];
+        var lab = (it.date.getUTCMonth() + 1) + '/' + it.date.getUTCDate();
+        curCells.push('<td class="cell">' + btnHtml('day', it.ms, it.ms === state.day, _mdlHasLd(state.year, state.month, it.ms), lab, it) + '</td>');
+        if (curCells.length === 7) flushDayRow();
+      }
+      if (curCells.length) flushDayRow();
+      return '<div class="flow-table-wrap"><table class="luck-table flow-table flow-day-table"><tbody><tr class="luck-row flow-dow-row"><td class="cell rtag">' + title + '</td>' + dows.map(function(d) { return '<td class="cell flow-dow">' + d + '</td>'; }).join('') + '</tr>' + bodyRows.join('') + '</tbody></table></div>';
+    }
     var rowCount = Math.ceil(items.length / 6);
     var cells = [];
     for (var columnIndex = 0; columnIndex < 6; columnIndex++) {
@@ -11755,11 +11781,9 @@ function _refreshFlowInner(root, data, year) {
       }
       var content = entries.map(function(index) {
         var item = items[index];
-        var active = kind === 'month' ? index === state.month : item.ms === state.day;
-        var value = kind === 'month' ? index : item.ms;
-        var picked = kind === 'month' ? _mdlHasLm(state.year, index) : _mdlHasLd(state.year, state.month, item.ms);
-        var label = kind === 'month' ? (flowNewCal && item.start ? (item.start.getUTCMonth() + 1) + '月' : cnMonthLabel(index)) : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
-        return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="flow-gz"><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></span></button>';
+        var active = index === state.month;
+        var label = flowNewCal && item.start ? (item.start.getUTCMonth() + 1) + '月' : cnMonthLabel(index);
+        return btnHtml('month', index, active, _mdlHasLm(state.year, index), label, item);
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
@@ -18705,15 +18729,24 @@ function captureScreenshot() {
         return rows;
       }
       var mRows74 = flowRows74(flowTables74[0], 'data-flow-month');
-      var dRows74 = flowRows74(flowTables74[1], 'data-flow-day');
       function flowLabels74(row) { return row.map(function(b) { return b.querySelector('.flow-date').textContent; }).join(' '); }
       tests.push(eq('顺排：流月共两行', mRows74.length, 2));
       tests.push(eq('顺排：流月第一行从左到右为上半年', flowLabels74(mRows74[0]), '一月 二月 三月 四月 五月 六月'));
       tests.push(eq('顺排：流月第二行从左到右为下半年', flowLabels74(mRows74[1]), '七月 八月 九月 十月 十一月 十二月'));
       tests.push(eq('顺排：流月首列竖读为隔六月', Array.from(flowTables74[0].querySelectorAll('td.cell')[1].querySelectorAll('.flow-date')).map(function(el) { return el.textContent; }).join(','), '一月,七月'));
-      tests.push(eq('顺排：流日每行六格', dRows74[0].length, 6));
-      tests.push(eq('顺排：流日第一行为连续六天', (function() { var ms = dRows74[0].map(function(b) { return Number(b.dataset.flowDay); }); return ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
-      tests.push(eq('顺排：流日整体按行连续递增', (function() { var ms = [].concat.apply([], dRows74).map(function(b) { return Number(b.dataset.flowDay); }); return ms.length > 27 && ms.every(function(v, i) { return i === 0 || v - ms[i - 1] === 86400000; }); })(), true));
+      // v0.78.0 流日改七列周历：表头周一~周日，日期按真实星期对齐
+      var dTable78 = flowRoot.querySelector('.flow-day-table');
+      var dowHeads78 = Array.from(dTable78.querySelectorAll('tr.flow-dow-row td.flow-dow')).map(function(td) { return td.textContent; });
+      tests.push(eq('周历：流日表头周一到周日', dowHeads78.join(','), '周一,周二,周三,周四,周五,周六,周日'));
+      var dBodyRows78 = Array.from(dTable78.querySelectorAll('tr.liu-row'));
+      tests.push(eq('周历：流日数据行数五六之间', dBodyRows78.length >= 5 && dBodyRows78.length <= 6, true));
+      tests.push(eq('周历：每行不超七格', dBodyRows78.every(function(tr) { return tr.querySelectorAll('[data-flow-day]').length <= 7; }), true));
+      var firstRow78 = dBodyRows78[0];
+      var lead78 = firstRow78.querySelectorAll('td.flow-day-blank').length;
+      var firstBtn78 = firstRow78.querySelector('[data-flow-day]');
+      tests.push(eq('周历：首日对齐星期列', lead78, (new Date(Number(firstBtn78.dataset.flowDay)).getUTCDay() + 6) % 7));
+      var ms78 = Array.from(dTable78.querySelectorAll('[data-flow-day]')).map(function(b) { return Number(b.dataset.flowDay); });
+      tests.push(eq('周历：日期整体连续递增', ms78.length > 27 && ms78.every(function(v, i) { return i === 0 || v - ms78[i - 1] === 86400000; }), true));
       tests.push(eq('顺排：流月日期与干支仍两行式', (function() { var b = flowTables74[0].querySelector('[data-flow-month]'); return b.querySelector('.flow-date').getBoundingClientRect().bottom <= b.querySelector('.flow-gz').getBoundingClientRect().top + 1; })(), true));
     } finally {
       RENDER.setFlowVisible('month', false);

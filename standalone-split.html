@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.77.0 | 2026-10-24 -->
+<!-- 八字排盘 ·  从真版 v0.78.0 | 2026-10-24 -->
+<!-- v0.78.0: 流日表改七列周历——首行表头周一~周日，日期按真实星期对齐（首日落在对应星期列），日与干支两行式不变；流月六列不变 -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
 <!-- v0.76.0: 时柱右侧运流区的流月/流日列表头对齐大运流年 —— 始终带月/日小字：农历列头中文月名（四月）、新历列头真公历月（5月）、流日恒公历 M/D；多选列头新历月修正为真公历月（旧序数立春月误写 1 月）；新历切换时多选列头联动刷新 -->
 <!-- v0.75.0: renderChart 末尾统一补挂宫位标签行 —— 修复十神/十干面板勾选与清空后宫位标签消失（勾选数据一直未丢） -->
@@ -911,6 +912,8 @@
   .flow-table { min-width:520px; table-layout:fixed; }
   .flow-table .cell { min-width:0; }
   .flow-table .rtag { width:48px; }
+  .flow-day-table .flow-dow { color:var(--c-gray); font-size:11px; text-align:center; padding:4px 2px; white-space:nowrap; }
+  .flow-day-table .flow-day-blank { background:repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(128,128,128,.05) 5px, rgba(128,128,128,.05) 10px); }
   .flow-table .li { width:100%; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:inherit; text-align:center; }
   .flow-table .li.cur { background:rgba(200,58,58,.04); box-shadow:inset 0 0 0 1px rgba(200,58,58,.3); }
   .flow-table .li.msel { background:rgba(200,58,58,.12); box-shadow:inset 0 0 0 1.5px rgba(200,58,58,.55); font-weight:700; }

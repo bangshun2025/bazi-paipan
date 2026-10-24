@@ -1485,6 +1485,29 @@ function _refreshFlowInner(root, data, year) {
   if (!days.some(function(day) { return day.ms === state.day; })) state.day = days.length ? days[0].ms : null;
   var selectedDay = days.find(function(day) { return day.ms === state.day; });
   function flowTable(items, kind, title) {
+    function btnHtml(kd, value, active, picked, label, item) {
+      return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kd + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="flow-gz"><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></span></button>';
+    }
+    if (kind === 'day') {
+      var dows = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      var bodyRows = [];
+      var curCells = [];
+      var lead = items.length ? (items[0].date.getUTCDay() + 6) % 7 : 0;
+      function flushDayRow() {
+        while (curCells.length > 0 && curCells.length < 7) curCells.push('<td class="cell flow-day-blank"></td>');
+        bodyRows.push('<tr class="luck-row liu-row"><td class="cell rtag">' + (bodyRows.length === 0 ? title : '') + '</td>' + curCells.join('') + '</tr>');
+        curCells = [];
+      }
+      for (var bi = 0; bi < lead; bi++) curCells.push('<td class="cell flow-day-blank"></td>');
+      for (var di = 0; di < items.length; di++) {
+        var it = items[di];
+        var lab = (it.date.getUTCMonth() + 1) + '/' + it.date.getUTCDate();
+        curCells.push('<td class="cell">' + btnHtml('day', it.ms, it.ms === state.day, _mdlHasLd(state.year, state.month, it.ms), lab, it) + '</td>');
+        if (curCells.length === 7) flushDayRow();
+      }
+      if (curCells.length) flushDayRow();
+      return '<div class="flow-table-wrap"><table class="luck-table flow-table flow-day-table"><tbody><tr class="luck-row flow-dow-row"><td class="cell rtag">' + title + '</td>' + dows.map(function(d) { return '<td class="cell flow-dow">' + d + '</td>'; }).join('') + '</tr>' + bodyRows.join('') + '</tbody></table></div>';
+    }
     var rowCount = Math.ceil(items.length / 6);
     var cells = [];
     for (var columnIndex = 0; columnIndex < 6; columnIndex++) {
@@ -1495,11 +1518,9 @@ function _refreshFlowInner(root, data, year) {
       }
       var content = entries.map(function(index) {
         var item = items[index];
-        var active = kind === 'month' ? index === state.month : item.ms === state.day;
-        var value = kind === 'month' ? index : item.ms;
-        var picked = kind === 'month' ? _mdlHasLm(state.year, index) : _mdlHasLd(state.year, state.month, item.ms);
-        var label = kind === 'month' ? (flowNewCal && item.start ? (item.start.getUTCMonth() + 1) + '月' : cnMonthLabel(index)) : (item.date.getUTCMonth() + 1) + '/' + item.date.getUTCDate();
-        return '<button type="button" class="li' + (active ? ' cur' : '') + (picked ? ' msel' : '') + '" data-flow-' + kind + '="' + value + '" aria-pressed="' + active + '" aria-selected="' + picked + '"><span class="flow-date">' + label + '</span><span class="flow-gz"><span class="' + wxClass(item.gan) + '">' + item.gan + '</span><span class="' + wxClass(item.zhi) + '">' + item.zhi + '</span></span></button>';
+        var active = index === state.month;
+        var label = flowNewCal && item.start ? (item.start.getUTCMonth() + 1) + '月' : cnMonthLabel(index);
+        return btnHtml('month', index, active, _mdlHasLm(state.year, index), label, item);
       }).join('');
       cells.push('<td class="cell">' + content + '</td>');
     }
