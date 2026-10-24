@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.81.0 | 2026-10-24 -->
-<!-- v0.81.0: 分析记录新增录音记录 —— 面板内 MediaRecorder 麦克风录音，IndexedDB 存储（不占 localStorage），自动挂在对应档案指纹下（双胞胎带 twin| 隔离），列表可播放/下载/删除；档案改名改生日时录音随 migrateRecAudioKeys 迁移 -->
+<!-- 八字排盘 ·  从真版 v0.81.1 | 2026-10-24 -->
+<!-- v0.81.1: 分析记录新增录音记录 —— 面板内 MediaRecorder 麦克风录音，IndexedDB 存储（不占 localStorage），自动挂在对应档案指纹下（双胞胎带 twin| 隔离），列表可播放/下载/删除；档案改名改生日时录音随 migrateRecAudioKeys 迁移 -->
 <!-- v0.79.0: 记录面板补「更完整历史版本」探测——改档案时辰后旧版完整记录不再被永久隐藏，出提示条与载入按钮但不自动覆盖；新增本地文件夹即时同步（档案/盘面/分析记录自动落盘） -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
 <!-- v0.76.0: 时柱右侧运流区的流月/流日列表头对齐大运流年 —— 始终带月/日小字：农历列头中文月名（四月）、新历列头真公历月（5月）、流日恒公历 M/D；多选列头新历月修正为真公历月（旧序数立春月误写 1 月）；新历切换时多选列头联动刷新 -->
@@ -7170,7 +7170,13 @@ function syncAll() {
   try { files = syncBuildFiles(); } catch (e) { _syncRunning = false; return Promise.resolve(0); }
   var p = Promise.resolve();
   files.forEach(function(f) {
-    p = p.then(function() { return syncWriteOne(_syncDir, f[0], f[1]); });
+    p = p.then(function() {
+      var name = f[0], slash = name.indexOf('/');
+      if (slash < 0) return syncWriteOne(_syncDir, name, f[1]);
+      return _syncDir.getDirectoryHandle(name.slice(0, slash), { create: true }).then(function(d) {
+        return syncWriteOne(d, name.slice(slash + 1), f[1]);
+      });
+    });
   });
   return p.then(function() {
     _syncRunning = false;

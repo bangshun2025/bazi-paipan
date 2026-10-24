@@ -1745,7 +1745,13 @@ function syncAll() {
   try { files = syncBuildFiles(); } catch (e) { _syncRunning = false; return Promise.resolve(0); }
   var p = Promise.resolve();
   files.forEach(function(f) {
-    p = p.then(function() { return syncWriteOne(_syncDir, f[0], f[1]); });
+    p = p.then(function() {
+      var name = f[0], slash = name.indexOf('/');
+      if (slash < 0) return syncWriteOne(_syncDir, name, f[1]);
+      return _syncDir.getDirectoryHandle(name.slice(0, slash), { create: true }).then(function(d) {
+        return syncWriteOne(d, name.slice(slash + 1), f[1]);
+      });
+    });
   });
   return p.then(function() {
     _syncRunning = false;
