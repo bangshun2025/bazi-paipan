@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分析记录恢复</title>
+<style>
+body{font-family:-apple-system,"PingFang SC",sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#222;line-height:1.75;font-size:15px}
+h1{font-size:21px;margin-bottom:6px}
+h2{font-size:16px;margin:26px 0 8px;padding-bottom:5px;border-bottom:1px solid #e0e0e0}
+.sub{color:#666;font-size:13px;margin-top:0}
+.btn{display:inline-block;background:#1a73e8;color:#fff;border:none;padding:12px 26px;font-size:16px;border-radius:8px;cursor:pointer;margin:6px 8px 6px 0}
+.btn:hover{background:#1765cc}
+.btn2{background:#5f6368}
+.btn2:hover{background:#494c50}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #eee;vertical-align:top}
+th{background:#f7f7f7;font-weight:600}
+.ok{color:#0a7d33;font-weight:600}
+.warn{color:#b26a00;font-weight:600}
+.bad{color:#b3261e;font-weight:600}
+.muted{color:#999}
+code{background:#f1f3f4;padding:1px 5px;border-radius:3px;font-size:12.5px}
+pre{background:#f7f7f7;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:260px}
+.note{background:#fff8e1;border-left:3px solid #f0b400;padding:10px 14px;margin:14px 0;font-size:13.5px}
+</style>
+</head>
+<body>
+<h1>分析记录恢复</h1>
+<p class="sub">从 Chrome 历史快照里挖出的记录，写回当前浏览器。执行前会自动下载一份备份。</p>
+
+<div class="note" id="diag">正在检查当前浏览器……</div>
+
+<h2>待恢复清单</h2>
+<div id="plan"></div>
+
+<h2>执行</h2>
+<button class="btn" id="go">开始恢复</button>
+<button class="btn btn2" id="dl">只下载备份，不修改</button>
+<div id="out" style="margin-top:18px"></div>
+
+<h2>关于冯丽蓉</h2>
+<p>这台电脑的 Chrome 里，<code>冯丽蓉|女|1990|12|19|11|22</code> 这个记录键<b>从未被写入过</b>——三次历史快照、未落盘日志、磁盘字节级搜索全部零命中。也就是说她从来没有在这台机器上保存过分析记录。如果确实写过，只可能在别的设备（手机 / 另一台电脑）或另一个浏览器里。</p>
+
+<script>
+var DATA = [{"key": "bz_rec_notes_卢敏姣申|女|1983|12|3|16|30", "text": "2022 年壬寅年生二宝\n2011 年辛卯生大宝\n\n2018 年结婚，戊戌年\n", "note": "原始记录"}, {"key": "bz_rec_notes_李程|女|1992|4|10|19|34", "text": "问，现在欠债，很迷茫，是否要转行？要怎么做可以突围？\n\n1、性格：身弱，爱付出，诚信，同理心，责任心，道德感强，转化变动七杀危机问题的思维能力弱，解决固定七杀问题的能力强。\n\n2、扩大规模，变动七杀变强，转化七杀的枭神弱，自我较弱，且以自己的感觉为主。所以容易失败，一失败因为性格的原因，自己主动承担一切。\n\n3、壬申年柱的七杀，是庚金快钱带来的七杀，所以不要想着赚快钱。\n\n4、年月日时是顺生，走的是七杀-枭神-日主-食神，食神再制杀的技术线路。\n\n5、时身合，戊癸合火，戌卯合火，合的方向是丙火，通过服务与技术得到复购客户。\n\n6、命宫癸卯克日柱丙辰，是感觉决策作主，会影响理智决策，癸卯是心理细腻，别人追债很难受，情绪易滞留。可以通过转念来保护正官正印（什么才是责任心，道德感），通过动作及语言进行泄压。\n\n6、辛丑运，丙辛合水七杀，追求财会来带来七杀。辛丑运冲的是胎元乙未，伤的是家庭的根基。\n\n7、庚子运，申子辰合七杀水局，公共+政府+公司，是水七杀，就是消防没有过关，庚冲甲，冲的是公司，公司关门。\n\n8、丙午年，回到自己，同时又想合作，合作是伤官，破了自己的官，别人找你合作，让你帮人家管理，培训，上课，55 分帐，上一半再分，不给工资。\n\n什么是固定的七杀，比如上课，上课的难题是固定的，是经常反复发生的，这时就有时间给你提升技术。\n\n什么是变化的七杀，比如市场，扩大规模，转型，新业务等，难题都是新的，而且短期不会重复，没有让你形成技术来解决。\n\n重大经验：\n不要和别人合伙。按性格来说，适合做教育，不适合做商业味重的，变化大，规模大，管人多的事。\n\n解决固定的七杀问题非常擅长，口碑好，复购多，铁粉多。\n你适合长期深耕一个领域，深做技术，轻做管理。\n\n\n\n\n\n毕业之后，做老师，主管，疫情之后，才自己做家庭早教，托育，盘了别人的店，早教和托育。\n\n1600 平，两层楼，100 孩子，早教 300 多。\n\n2019 年己亥年5 月开业，7 月满员，自己做500 平小中心。只做托育，家庭式，冬天再开两家。\n\n2022 年壬寅年，七杀/枭神开始扩大，1600 平，盘别人的店，开始早教。没有盘成，亏是很利害。别人也跑路，接了对方的债务，生源。\n所有学生都知道。\n\n2023 年癸卯年，正官/正印，卫建局阿姨合作，重新找场地。场地不符合消防。\n\n2024 年年底，办不下来，关了，被阿姨告，败诉。\n现在租小场地，200 平，就为了消课，持平。\n\n\n欠债200 多万。\n\n\n托育被骗\n\n现在耗课。今年年底耗完。\n\n继续还是跳出圈。\n", "note": "原始记录"}, {"key": "bz_rec_notes_李程|女|1992|4|10|20|15", "text": "问，现在欠债，很迷茫，是否要转行？要怎么做可以突围？\n\n1、性格：身弱，爱付出，诚信，同理心，责任心，道德感强，转化变动七杀危机问题的思维能力弱，解决固定七杀问题的能力强。\n\n2、扩大规模，变动七杀变强，转化七杀的枭神弱，自我较弱，且以自己的感觉为主。所以容易失败，一失败因为性格的原因，自己主动承担一切。\n\n3、壬申年柱的七杀，是庚金快钱带来的七杀，所以不要想着赚快钱。\n\n4、年月日时是顺生，走的是七杀-枭神-日主-食神，食神再制杀的技术线路。\n\n5、时身合，戊癸合火，戌卯合火，合的方向是丙火，通过服务与技术得到复购客户。\n\n6、命宫癸卯克日柱丙辰，是感觉决策作主，会影响理智决策，癸卯是心理细腻，别人追债很难受，情绪易滞留。可以通过转念来保护正官正印（什么才是责任心，道德感），通过动作及语言进行泄压。\n\n6、辛丑运，丙辛合水七杀，追求财会来带来七杀。辛丑运冲的是胎元乙未，伤的是家庭的根基。\n\n7、庚子运，申子辰合七杀水局，公共+政府+公司，是水七杀，就是消防没有过关，庚冲甲，冲的是公司，公司关门。\n\n8、丙午年，回到自己，同时又想合作，合作是伤官，破了自己的官，别人找你合作，让你帮人家管理，培训，上课，55 分帐，上一半再分，不给工资。\n\n什么是固定的七杀，比如上课，上课的难题是固定的，是经常反复发生的，这时就有时间给你提升技术。\n\n什么是变化的七杀，比如市场，扩大规模，转型，新业务等，难题都是新的，而且短期不会重复，没有让你形成技术来解决。\n\n重大经验：\n不要和别人合伙。按性格来说，适合做教育，不适合做商业味重的，变化大，规模大，管人多的事。\n\n解决固定的七杀问题非常擅长，口碑好，复购多，铁粉多。\n你适合长期深耕一个领域，深做技术，轻做管理。\n\n\n\n\n\n毕业之后，做老师，主管，疫情之后，才自己做家庭早教，托育，盘了别人的店，早教和托育。\n\n1600 平，两层楼，100 孩子，早教 300 多。\n\n2019 年己亥年5 月开业，7 月满员，自己做500 平小中心。只做托育，家庭式，冬天再开两家。\n\n2022 年壬寅年，七杀/枭神开始扩大，1600 平，盘别人的店，开始早教。没有盘成，亏是很利害。别人也跑路，接了对方的债务，生源。\n所有学生都知道。\n\n2023 年癸卯年，正官/正印，卫建局阿姨合作，重新找场地。场地不符合消防。\n\n2024 年年底，办不下来，关了，被阿姨告，败诉。\n现在租小场地，200 平，就为了消课，持平。\n\n\n欠债200 多万。\n\n\n托育被骗\n\n现在耗课。今年年底耗完。\n\n继续还是跳出圈。\n", "note": "原始记录 + 档案改时辰后的完整版"}, {"key": "bz_rec_notes_李老师女儿|女|2010|1|3|0|27", "text": "子丑合\n\n子丑合土\n丁壬合木\n丙丁阴阳合\n\n唱歌", "note": "原始记录"}, {"key": "bz_rec_notes_李郡|女|1979|10|15|10|0", "text": "月年：\n甲己合土。\n未戌丑刑\n\n月日\n甲乙阴阳合\n戌卯合火，食伤\n\n日时\n乙辛冲。\n\n胎时\n乙辛冲。\n\n命时\n丙辛合水\n寅巳刑生\n\n年胎\n丑未冲\n\n日命\n寅卯阴阳合\n乙生丙\n\n日命身\n寅卯辰三合木\n\n日命身时\n寅卯辰巳，木火\n\n\n\n卯未，亥年合木。\n\n\n", "note": "原始记录"}, {"key": "bz_rec_notes_梁依依|女|1981|6|18|11|20", "text": "胎命身-巳酉丑合金。\n年命身-\n\n日胎-卯酉冲。\n日年-卯酉冲。\n\n丙辛合水官杀\n\n七杀无根。\n\n日命宫-丁癸冲。\n胎年宫-乙辛冲。\n身胎宫-乙辛冲。\n\n未年，巳午未火。\n子酉冲。\n\n己年，甲己合土。\n戌卯，合火。\n\n自己开美容店，团队直销。\n丁酉运，2009 年己丑，开美容店。\n\n戊戌运，丁酉年2017 年，做金融，虚拟货币，亏钱100 万，6-9 月新历。6 月丙午月\n\n戊癸合火，卯戌合火。\n\n丙辛合水，七杀，正官。\n巳午未三会火局。\n\nAI 炒股软件\n\n丙年、丁年。\n\n\n七杀：戊，戌，丁，这几个字出现的运、年，月，要重视。\n合出癸水，有力量出现。\n\n整个局，自己及合伙搞钱。\n\n自带危机意识，防火墙。自己喜好，在伙伴。七杀癸，合理，严谨。\n保护癸水。\n\n七杀有，但不强，警示。\n\n只有投资才有风险。\n\n焦点：放在后端，服务客户，复购客户，转介绍客户。\n", "note": "原始记录"}, {"key": "bz_rec_notes_梁依依|女|1981|6|18|12|0", "text": "胎命身-巳酉丑合金。\n年命身-\n\n日胎-卯酉冲。\n日年-卯酉冲。\n\n丙辛合水官杀\n\n七杀无根。\n\n日命宫-丁癸冲。\n胎年宫-乙辛冲。\n身胎宫-乙辛冲。\n\n未年，巳午未火。\n子酉冲。\n\n己年，甲己合土。\n戌卯，合火。\n\n自己开美容店，团队直销。\n丁酉运，2009 年己丑，开美容店。\n\n戊戌运，丁酉年2017 年，做金融，虚拟货币，亏钱100 万，6-9 月新历。6 月丙午月\n\n戊癸合火，卯戌合火。\n\n丙辛合水，七杀，正官。\n巳午未三会火局。\n\nAI 炒股软件\n\n丙年、丁年。\n\n\n七杀：戊，戌，丁，这几个字出现的运、年，月，要重视。\n合出癸水，有力量出现。\n\n整个局，自己及合伙搞钱。\n\n自带危机意识，防火墙。自己喜好，在伙伴。七杀癸，合理，严谨。\n保护癸水。\n\n七杀有，但不强，警示。\n\n只有投资才有风险。\n\n焦点：放在后端，服务客户，复购客户，转介绍客户。\n", "note": "原始记录 + 档案改时辰后的完整版"}, {"key": "bz_rec_notes_潘政熙|男|2011|8|2|3|10", "text": "乙辛冲，丑未冲，辛卯是上下冲\n\n未丑戌刑，酉酉自刑。\n\n年柱与命柱和身宫冲。\n卯酉冲\n\n命宫与身宫相同，丁酉\n\n年柱与胎元相合。\n丙辛合水\n卯戌合火\n\n丙丁阴阳合\n\n注意亥年：亥卯未合木。\n注意巳年：巳酉丑。\n\n己土日主，月日时强根比肩。\n精神层面，印枭，食神\n全局，印枭，比肩，食神是最强。两个七杀透出，人元司令是己土。\n1、土扛杀。\n2、七杀来自于年柱，即陌生人，场合，隔代权力人员。也就是在陌生场合中，月柱及时柱的七杀才有力量发挥作用。\n3、辛卯，是食神坐七杀。外是食神自在，内是七杀压力。\n4、食神根在命宫与身宫，很强，可以压住七杀。\n5、卯戌合火，火是印枭。丙辛合水，水是财。在陌生场合，平时卯克戌，生理上不喜欢，关往后合成火与丙火一致，也就是丙辛，卯戌都是先克后合，需要适应一段时间才行。平时合成印，冲突时合成财，生理上想合，而心理以及习惯方面又不愿意。而卯的力量弱，酉戌强，所以卯就被冲，卯戌合不成。\n\n6、卯与命酉，身酉相冲。平时陌生人，自己心不喜欢，行为也看不惯。\n7、丁酉，丁酉是自刑，酉酉就是标准的反复，丁酉就是要求高，怀疑自己。命宫与身宫一起就会触发。\n\n8、己丑，丁酉。\n\n情绪管理\n命-身，是情绪同步，丁辛，敏感，自挑。想放松自在，丁枭不允许，认为自己技术够好了，丁枭不放过自己。命身都在挑。\n\n命-时，时柱生命，是能量往回流，乙生丁，丑生酉，情绪受语言影响比较大，语言以情绪为主，表达都是要回头考虑情绪，表达不是很顺畅。\n\n时-身，时柱以身宫为主，丑生酉，乙生丁。\n\n做事，比肩-七杀。精神功能是印枭-食神\n平时，就是土金-木。大事，乙-丙丁-己-辛。\n\n正财没有，偏才中气，没有官，只有杀，只有食神无伤官。比肩多，劫财少。\n\n全局，水最弱。\n做事上，水，金，火是最弱。所以得调用精神功能才好平衡。\n\n精神功能强，硬杠力量弱，安全感足，自我要求高。\n\n朋友关系，平时同频，对方做主。\n上级关系，平时对立，对方做主。\n陌生关系，平时被控，对方为主。\n贵人关系，平时相合，对方生自，平时生自，对方阴阳合。\n\n\n\n\n\n\n\n", "note": "原始记录"}, {"key": "bz_rec_notes_苓菲|女|1992|12|31|0|12", "text": "土-金-水\n\n日柱是火克金，质是火土金的组合\n\n日柱与命宫，木火金\n\n", "note": "原始记录"}, {"key": "bz_rec_notes_谢洁|女|1984|12|20|8|20", "text": "子丑合土，子卯刑\n\n丙丁阴阳合\n\n戊己阴阳合\n\n甲己合土\n\n注意：\n寅卯辰，流年寅。\n亥子丑，流年亥\n巳酉丑，流年酉\n\n戊有时柱有强根。\n丙火没有根，在身宫有强根。\n\n水没有透。\n", "note": "原始记录"}, {"key": "bz_rec_notes_邦顺|男|1982|10|18|5|1", "text": "年月日支相同：\n\n三戌生一庚：\n\n一甲克三戌：\n\n卯戌火-戌-庚-壬-甲-丁：\n\n卯戌合：\n\n戌辰冲：\n\n寅卯辰三会：\n\n甲庚冲：\n\n丁壬合木：\n\n庚辛阴阳合：\n丑戌阴阳合：\n\n日命两甲\n\n\n\n\n", "note": "原始记录"}, {"key": "bz_rec_notes_阮宇君|女|1981|9|6|22|30", "text": "07 年丁亥年，财运很好。\n\n10 年庚寅年，买房。\n15 年乙未年，换宝马。\n25 年乙巳年，赚钱。\n\n19 年己亥年，生孩子。\n09 年己丑年，结婚，生孩子。\n11 年辛卯年 8 月 18 日新历，离婚。\n\n16 年丙申年，和何同学。\n19 年己亥年，领结婚证。\n\n08 年戊子年，股灾。\n\n申酉戌，三会火局。\n丙辛合水。\n丁壬合木\n木，火，金，水", "note": "原始记录"}, {"key": "bz_rec_notes_韦环骏|男|2020|8|31|8|0", "text": "辛巳，丙辛合水\n\n申子辰合水局，亥巳冲\n子午冲，子丑合土\n亥子丑汇水局，申巳刑\n\n注意\n未年，己午未汇火局\n酉年，巳酉丑汇金局\n寅年，寅申冲，寅亥合破\n\n甲庚冲，甲己合土，丙壬冲，乙庚合金，丙辛合水，甲乙阴阳合\n\n与平台关系\n丙申，老师生他，平时可以调用学校资源，但是申子辰合水，反过来被水克。\n申子辰合水，是输入，思考，输出合了水局，工作学习思考甲，能将水转为木，再生火。庚-水局-甲-丙火。\n\n少了土的能量，而身宫的土最强的柱，也就是行为，习惯。\n\n与贵人关系\n辛生亥，是喜欢贵人，巳亥冲，贵人说了算，乙辛冲，自己要说了算。站在了对立面。\n乙酉运，巳酉丑合金，金生亥。\n庚子年，乙庚合金，子亥为水。\n\n与朋友关系\n丙壬冲，午生辰。平时和谐，决策冲突。\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", "note": "原始记录"}, {"key": "bz_rec_notes_龚洁|女|1992|1|18|10|29", "text": "未丑冲\n月柱与身宫上下冲，乙辛冲，未丑冲。\n\n巳亥冲\n\n时胎：丁壬合木，巳生辰。\n年月辛冲身乙。\n\n年身未冲月支丑。\n日时巳冲命支亥。\n\n日胎，癸壬阴阳合，巳生辰。也就是贵人，丁壬合木，是丁的印，是壬是食伤。\n\n大运甲辰，伤官坐官，有规则的破规，就是符合规则下的创新或约束与反抗的主题。\n\n注意年份：\n卯年，亥卯未，合木局。\n午年，巳午未，会火局。\n\n月柱与身宫对冲。\n\n煤气中毒，巳火重要性提高了。\n\n", "note": "原始记录"}];
+
+function get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function put(k,v){ try { localStorage.setItem(k,v); return true; } catch(e){ return false; } }
+
+function plan(){
+  var rows = [];
+  DATA.forEach(function(op){
+    var cur = get(op.key);
+    var curLen = cur == null ? -1 : cur.length;
+    var want = op.text.length;
+    var cls, action;
+    if (cur === null) { cls = 'bad'; action = '写入（当前不存在）'; }
+    else if (cur === op.text) { cls = 'ok'; action = '已一致，跳过'; }
+    else if (curLen < want) { cls = 'warn'; action = '补齐 ' + curLen + ' → ' + want + ' 字'; }
+    else { cls = 'muted'; action = '本地更长（' + curLen + ' 字），跳过'; }
+    rows.push({op: op, cur: cur, cls: cls, action: action});
+  });
+  return rows;
+}
+
+function renderDiag(){
+  var n = 0;
+  try { for (var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k&&k.indexOf('bz_rec_notes_')===0) n++; } } catch(e){}
+  var d = document.getElementById('diag');
+  d.innerHTML = '当前浏览器共有 <b>' + n + '</b> 条分析记录（<code>bz_rec_notes_*</code>）。'
+    + (n === 0 ? ' <span class="bad">一条都没有——和诊断结论一致，需要执行下面的恢复。</span>'
+               : ' 下面把每一份和历史快照逐条比对。');
+}
+
+function renderPlan(){
+  var rows = plan();
+  var h = '<table><tr><th>命主 / 键</th><th>动作</th><th>说明</th></tr>';
+  rows.forEach(function(r){
+    var k = r.op.key.replace('bz_rec_notes_','');
+    h += '<tr><td><code>' + k + '</code></td><td class="' + r.cls + '">' + r.action + '</td><td class="muted">' + r.op.note + '</td></tr>';
+  });
+  h += '</table>';
+  document.getElementById('plan').innerHTML = h;
+}
+
+function snapshot(){
+  var out = {};
+  DATA.forEach(function(op){
+    out[op.key] = get(op.key);
+  });
+  var blob = new Blob([JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    note: '分析记录恢复前备份（值为 null 表示当时不存在）',
+    before: out
+  }, null, 2)], {type:'application/json'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var t = new Date();
+  a.href = url;
+  a.download = '分析记录备份-' + t.getFullYear() + ('0'+(t.getMonth()+1)).slice(-2) + ('0'+t.getDate()).slice(-2)
+    + '-' + ('0'+t.getHours()).slice(-2) + ('0'+t.getMinutes()).slice(-2) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+}
+
+document.getElementById('dl').onclick = function(){ snapshot(); };
+
+document.getElementById('go').onclick = function(){
+  snapshot();
+  var rows = plan();
+  var done = [], skip = [];
+  rows.forEach(function(r){
+    if (r.cls === 'ok' || r.cls === 'muted') { skip.push(r.op.key); return; }
+    if (put(r.op.key, r.op.text)) done.push(r.op.key.replace('bz_rec_notes_','') + '（' + r.op.text.length + ' 字）');
+    else skip.push(r.op.key);
+  });
+  document.getElementById('out').innerHTML =
+    '<p class="ok">完成！写入 ' + done.length + ' 条，跳过 ' + skip.length + ' 条</p>'
+    + (done.length ? '<pre>' + done.join('\n') + '</pre>' : '')
+    + '<p><b>下一步：</b>回到 <a href="index.html">排盘页</a>，打开对应档案 → 分析记录，内容就在了。</p>';
+  renderDiag(); renderPlan();
+};
+
+renderDiag();
+renderPlan();
+</script>
+</body>
+</html>
