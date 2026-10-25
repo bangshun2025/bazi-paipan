@@ -5182,6 +5182,95 @@ function captureScreenshot() {
       if (bakCfg === null) localStorage.removeItem('bz_ai_cfg'); else localStorage.setItem('bz_ai_cfg', bakCfg);
     }
   })();
+  // ===== v0.83.0 录音与 AI 交互区 =====
+  (function() {
+    var bakPd = window._paipanData;
+    var holder = null;
+    try {
+      var T1 = new Date(2026, 9, 25, 10, 0, 0).getTime();
+      var T2 = new Date(2026, 9, 25, 9, 0, 0).getTime();
+      var T3 = new Date(2026, 9, 24, 18, 0, 0).getTime();
+      var days = RENDER.recZoneGroupByDay([
+        { id: 'a', ts: T2, name: 'b2', dur: 10 },
+        { id: 'b', ts: T1, name: 'b1', dur: 20 },
+        { id: 'c', ts: T3, name: 'c1', dur: 30 }
+      ]);
+      tests.push(eq('SN13-1: 时间轴按日分组降序',
+        (days.length === 2 && days[0].label === '10月25日 周日' && days[0].clips.length === 2
+          && days[0].clips[0].id === 'b' && days[1].clips[0].id === 'c') ? 'Y' : 'N', 'Y'));
+      var mdh = RENDER.recZoneMd('## 要点\n- **标题**：内容<b>\n\n总述段落');
+      tests.push(eq('SN13-2: 纪要 md 渲染标题/粗体/列表/转义',
+        (mdh.indexOf('<h2>要点</h2>') >= 0 && mdh.indexOf('<li><b>标题</b>：内容&lt;b&gt;</li>') >= 0
+          && mdh.indexOf('<p style="margin:6px 0;">总述段落</p>') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-3: 徽标三态（有稿/无稿/转录中）',
+        (RENDER.recZoneBadgeOf({ transcript: { text: 'x' } }).indexOf('已转录') >= 0
+          && RENDER.recZoneBadgeOf({}).indexOf('未转录') >= 0
+          && RENDER.recZoneBadgeOf({ _tfBusy: true }).indexOf('转录中') >= 0) ? 'Y' : 'N', 'Y'));
+      var cardHtml = RENDER.recZoneCardHtml({ id: 'x1', ts: T1, name: '10-25 10:00', dur: 65, transcript: { text: '总述一句\n## 要点' } });
+      tests.push(eq('SN13-4: 卡片含名称/时长/播放/纪要摘要',
+        (cardHtml.indexOf('10-25 10:00') >= 0 && cardHtml.indexOf('1:05') >= 0
+          && cardHtml.indexOf('rz-play') >= 0 && cardHtml.indexOf('总述一句') >= 0
+          && cardHtml.indexOf('recZoneOpenDetail') >= 0) ? 'Y' : 'N', 'Y'));
+      holder = document.createElement('div');
+      holder.style.display = 'none';
+      document.body.appendChild(holder);
+      RENDER.recZoneRenderInto(holder, [
+        { id: 'a', ts: T1, name: 'n1', dur: 5, transcript: { text: '总述', raw: '原' } },
+        { id: 'b', ts: T2, name: 'n2', dur: 6 }
+      ]);
+      var ok1 = holder.querySelectorAll('.rz-card').length === 2
+        && holder.querySelector('.rz-count').textContent.indexOf('全部录音 2') >= 0
+        && holder.querySelectorAll('.rz-day').length === 1
+        && holder.querySelector('#bzRecZoneDetail');
+      RENDER.recZoneRenderInto(holder, []);
+      var ok2 = holder.querySelectorAll('.rz-empty').length >= 1;
+      tests.push(eq('SN13-5: 交互区渲染两卡/计数/空态',
+        (ok1 && ok2) ? 'Y' : 'N', 'Y'));
+      var clipZ = { id: 'z', ts: T1, name: 'n', dur: 5, transcript: { text: '## 要点\n- a', raw: '原文' }, notes: [{ ts: T1, text: '补一条' }], tfname: '测试-录音稿-x.md' };
+      var paneMd = RENDER.recZonePaneOf(clipZ, 'md');
+      var paneRaw = RENDER.recZonePaneOf(clipZ, 'raw');
+      var paneNote = RENDER.recZonePaneOf(clipZ, 'notes');
+      tests.push(eq('SN13-6: 三 tab 内容（纪要/原文/笔记表单）',
+        (paneMd.indexOf('<h2>要点</h2>') >= 0 && paneRaw.indexOf('原文') >= 0
+          && paneNote.indexOf('补一条') >= 0 && paneNote.indexOf('rzNoteInput') >= 0
+          && RENDER.recZonePaneOf({}, 'md').indexOf('尚未转录') >= 0
+          && RENDER.recZonePaneOf({}, 'raw').indexOf('暂无原始识别文字') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-7: 交互区挂载点与接口齐备',
+        (RENDER.renderChart.toString().indexOf('bzRecZone') >= 0
+          && RENDER.renderChart.toString().indexOf('renderRecZone()') >= 0
+          && typeof RENDER.recZoneRecord === 'function'
+          && typeof RENDER.recZonePlay === 'function' && typeof RENDER.recZoneTab === 'function'
+          && typeof RENDER.recZoneAddNote === 'function' && typeof RENDER.recZoneRenderInto === 'function'
+          && typeof RENDER.renderRecZone === 'function') ? 'Y' : 'N', 'Y'));
+      var mockDir = null, mockFname = null;
+      var realSwb = window.ARCHIVE.syncWriteBlob;
+      window.ARCHIVE.syncWriteBlob = function(dir, fname) { mockDir = dir; mockFname = fname; };
+      try { RENDER.recZoneSaveNotesMd(clipZ); } finally { window.ARCHIVE.syncWriteBlob = realSwb; }
+      tests.push(eq('SN13-8: 追加笔记同步录音稿 md（录音稿/目录）',
+        (mockDir === '录音稿' && mockFname === '测试-录音稿-x.md' && RENDER.recZoneSaveNotesMd.toString().indexOf('追加笔记') >= 0) ? 'Y' : 'N', 'Y'));
+      var clipNoTf = { id: 'nt', ts: T1, name: '10-25 08:15', dur: 5, transcript: { text: 't', raw: 'r' }, notes: [] };
+      var noDir = null, noFname = null;
+      var realSwb2 = window.ARCHIVE.syncWriteBlob;
+      window.ARCHIVE.syncWriteBlob = function(dir, fname) { noDir = dir; noFname = fname; };
+      try { RENDER.recZoneSaveNotesMd(clipNoTf); } finally { window.ARCHIVE.syncWriteBlob = realSwb2; }
+      tests.push(eq('SN13-9: 无 tfname 兜底生成不写 undefined',
+        (noDir === '录音稿' && noFname && noFname.indexOf('undefined') < 0 && noFname.indexOf('录音稿-') >= 0 && clipNoTf.tfname === noFname) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-10: 转录失败 toast 重试 + 音量归一化 + 空结果文案',
+        (typeof RENDER.recTfToast === 'function'
+          && RENDER.transcribeClip.toString().indexOf('recTfToast') >= 0
+          && RENDER.transcribeClip.toString().indexOf('未识别出语音内容') >= 0
+          && RENDER.bzWav16k.toString().indexOf('peak') >= 0) ? 'Y' : 'N', 'Y'));
+      var toastEl = RENDER.recTfToast('测试消息', null, null);
+      tests.push(eq('SN13-11: recTfToast 挂载与清理', document.getElementById('bzTfToast') ? 'Y' : 'N', 'Y'));
+      var toastNode = document.getElementById('bzTfToast');
+      if (toastNode && toastNode.parentNode) toastNode.parentNode.removeChild(toastNode);
+    } catch (e) {
+      tests.push(fail('SN13-0: 交互区测试异常', String(e)));
+    } finally {
+      window._paipanData = bakPd;
+      if (holder && holder.parentElement) holder.parentElement.removeChild(holder);
+    }
+  })();
   // ===== v0.69.0 历法切换自动换算 =====
   (function() {
     var f = function(r) { return r ? (r.y + '-' + r.m + '-' + r.d + (r.isLeap ? 'L' : '')) : 'null'; };

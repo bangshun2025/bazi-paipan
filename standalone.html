@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.82.0 | 2026-10-25 -->
+<!-- 八字排盘 ·  从真版 v0.83.0 | 2026-10-25 -->
+<!-- v0.83.0: 录音与 AI 交互区 —— 命盘下方新增时间轴式录音区（按日分组、录音卡：播放/时长/转录徽标/AI 纪要摘要），点卡展开详情三 tab：图文纪要（md 渲染）/文字记录（ASR 原文）/追加笔记（写入 IndexedDB 并同步「录音稿/」md 末尾「## 追加笔记」）；区内可直接录音并自动转录 -->
 <!-- v0.82.0: 录音自动转录 —— 录音结束自动语音转文字（SiliconFlow SenseVoice）并 AI 整理成分析录音稿（Qwen 总述+要点，参照盘面/分析记录/知识库术语），稿件自动落盘「录音稿/」目录，列表📝可查看/复制/手动转录，API Key 仅存本机浏览器 -->
 <!-- v0.79.0: 记录面板补「更完整历史版本」探测——改档案时辰后旧版完整记录不再被永久隐藏，出提示条与载入按钮但不自动覆盖；新增本地文件夹即时同步（档案/盘面/分析记录自动落盘） -->
 <!-- v0.77.0: AI 录入识别中文农历日期与十二时辰 —— 「1990年农历五月初五」按农历解析（中式月日默认农历），「午时」等十二时辰取时辰中点（午=12点、子=0点）；修复 [一-九] 区间漏掉二四五六八的 Unicode 不连续坑 -->
@@ -11774,7 +11775,8 @@ ${recOn ? luckColHtml : ''}
       </div>
 ${recOn ? '' : luckColHtml}
 ${recPanelHtml}
-    </div>`;
+    </div>
+<div id="bzRecZone" class="rec-zone" style="display:none;"></div>`;
 
   // 存储数据用于交互
   const container = typeof targetId === 'string' ? document.getElementById(targetId) : targetId;
@@ -11795,6 +11797,9 @@ ${recPanelHtml}
   container._paipanData = data;
   bindEvents(data, container);
   bindRecPanel(container);
+  if (targetId === 'output' || (typeof targetId === 'object' && targetId.id === 'output')) {
+    try { renderRecZone(); } catch (e) {}
+  }
   // v0.75.0 渲染统一补挂宫位标签行：innerHTML 重置会冲掉 .gz-tags，
   // 此前只有 doPaipan/renderCmpTrack/applyTaiji 显式补挂，十神/十干面板的 refresh() 漏挂，
   // 表现为勾选/清空十神十干后宫位标签行消失（勾选数据本身未丢）
@@ -12166,6 +12171,12 @@ function bzWav16k(blob) {
     return oc.startRendering();
   }).then(function(out) {
     var ch = out.getChannelData(0), n = ch.length;
+    var peak = 0, i;
+    for (i = 0; i < n; i++) { var a = Math.abs(ch[i]); if (a > peak) peak = a; }
+    if (peak > 0.001 && peak < 0.85) {
+      var g = Math.min(0.85 / peak, 8);
+      for (i = 0; i < n; i++) ch[i] *= g;
+    }
     var buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
     function ws(o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
     ws(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
@@ -12251,6 +12262,7 @@ function transcribeClip(clip, panel) {
   var cfg = bzAiCfg();
   if (!cfg.sfKey) {
     if (panel) recStatusShow(panel, '未配置转录 API Key，点条目📝可配置', true);
+    recTfToast('还没配置转录 API Key', clip, panel);
     return Promise.resolve(false);
   }
   if (clip._tfBusy) return Promise.resolve(false);
@@ -12259,7 +12271,7 @@ function transcribeClip(clip, panel) {
   return bzWav16k(clip.blob)
     .then(function(wav) { return bzAsr(wav, cfg.sfKey); })
     .then(function(raw) {
-      if (!raw) throw new Error('识别结果为空');
+      if (!raw || raw.replace(/\s/g, '').length < 1) throw new Error('未识别出语音内容——离麦太远或音量太小，建议靠近手机/麦克风再录一次');
       return bzLlm(bzPromptOf(clip, raw), cfg.sfKey).then(function(ans) { return { raw: raw, ans: ans }; });
     })
     .then(function(r) {
@@ -12282,9 +12294,23 @@ function transcribeClip(clip, panel) {
     .then(function(ok) { clip._tfBusy = false; return ok; })
     .catch(function(e) {
       clip._tfBusy = false;
+      var msg = '录音「' + clip.name + '」转录失败：' + (e && e.message || e);
       if (panel) recStatusShow(panel, '转录失败：' + (e && e.message || e), true);
+      recTfToast(msg, clip, panel);
       return false;
     });
+}
+function recTfToast(msg, clip, panel) {
+  var old = document.getElementById('bzTfToast');
+  if (old) old.remove();
+  var t = document.createElement('div');
+  t.id = 'bzTfToast';
+  t.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:99995;background:#2b2f36;color:#fff;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.6;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:340px;';
+  t.innerHTML = '<div style="margin-bottom:' + (clip ? '8' : '0') + 'px;">🎙 ' + msg + '</div>'
+    + (clip ? '<button id="bzTfRetry" type="button" style="padding:5px 12px;border:0;background:#2f6fed;color:#fff;border-radius:6px;cursor:pointer;">🔄 重试转录</button>' : '');
+  document.body.appendChild(t);
+  if (clip) document.getElementById('bzTfRetry').onclick = function() { t.remove(); transcribeClip(clip, panel); };
+  setTimeout(function() { if (t.parentNode) t.remove(); }, 12000);
 }
 function bzEsc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -12406,6 +12432,337 @@ function recAudioToggle(btn) {
   }).catch(function(err) {
     recStatusShow(panel, '无法访问麦克风：' + (err && (err.name || err.message) || err), true);
   });
+}
+// ===== v0.83.0 录音与 AI 交互区：命盘下方时间轴 + 录音卡 + 详情三 tab（图文纪要/文字记录/追加笔记）=====
+function recZoneCssOnce() {
+  if (document.getElementById('bzRecZoneCss')) return;
+  var st = document.createElement('style');
+  st.id = 'bzRecZoneCss';
+  st.textContent = [
+    '.rec-zone{margin:14px 4px 30px;padding:14px 16px 18px;background:var(--c-paper,#faf7f0);border:1px solid var(--c-line,#e3dccb);border-radius:8px;}',
+    '.rec-zone .rz-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap;}',
+    '.rec-zone .rz-title{font-size:15px;font-weight:700;color:var(--c-ink,#2b2620);}',
+    '.rec-zone .rz-count{font-size:12px;color:#8a7f6a;}',
+    '.rec-zone .rz-rec-btn{margin-left:auto;padding:4px 14px;border:0;border-radius:14px;background:#c0392b;color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-display);}',
+    '.rec-zone .rz-rec-btn.recording{background:#7a1f14;animation:rzPulse 1.2s infinite;}',
+    '@keyframes rzPulse{0%,100%{opacity:1}50%{opacity:.55}}',
+    '.rec-zone .rz-timer{font-size:12px;color:#c0392b;min-width:34px;}',
+    '.rec-zone .rz-timeline{position:relative;padding-left:22px;}',
+    '.rec-zone .rz-timeline:before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--c-line,#e3dccb);}',
+    '.rec-zone .rz-day{position:relative;padding-bottom:14px;}',
+    '.rec-zone .rz-day:before{content:"";position:absolute;left:-21px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--c-accent,#8a5a2b);border:2px solid var(--c-paper,#faf7f0);box-shadow:0 0 0 1px var(--c-accent,#8a5a2b);}',
+    '.rec-zone .rz-day-title{font-size:13px;font-weight:700;color:var(--c-ink,#2b2620);margin-bottom:8px;}',
+    '.rec-zone .rz-cards{display:flex;flex-direction:column;gap:10px;}',
+    '.rec-zone .rz-card{background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:10px 14px;cursor:pointer;transition:box-shadow .15s;}',
+    '.rec-zone .rz-card:hover{box-shadow:0 2px 8px rgba(60,45,20,.12);}',
+    '.rec-zone .rz-card-top{display:flex;align-items:center;gap:8px;}',
+    '.rec-zone .rz-card-name{font-size:14px;font-weight:700;color:var(--c-ink,#2b2620);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.rec-zone .rz-card-time{font-size:12px;color:#8a7f6a;white-space:nowrap;}',
+    '.rec-zone .rz-audio-line{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:#6a6154;flex-wrap:wrap;}',
+    '.rec-zone .rz-badge{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;}',
+    '.rec-zone .rz-badge.ok{background:#e6f4ea;color:#0a7d33;}',
+    '.rec-zone .rz-badge.no{background:#f1ede4;color:#8a7f6a;}',
+    '.rec-zone .rz-badge.busy{background:#fdf3e0;color:#a86400;}',
+    '.rec-zone .rz-play{width:26px;height:26px;border-radius:50%;border:1px solid var(--c-line,#e3dccb);background:#fff;cursor:pointer;font-size:11px;line-height:1;color:var(--c-ink,#2b2620);}',
+    '.rec-zone .rz-summary{margin-top:6px;font-size:13px;line-height:1.6;color:#4a4438;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
+    '.rec-zone .rz-card-foot{margin-top:6px;display:flex;gap:8px;align-items:center;font-size:11px;color:#a39880;}',
+    '.rec-zone .rz-empty{padding:26px 0;text-align:center;font-size:13px;color:#a39880;}',
+    '.rec-zone .rz-detail{margin-top:14px;background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:14px 16px;}',
+    '.rec-zone .rz-detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}',
+    '.rec-zone .rz-detail-name{font-size:15px;font-weight:700;color:var(--c-ink,#2b2620);flex:1;}',
+    '.rec-zone .rz-close{border:0;background:none;font-size:16px;cursor:pointer;color:#8a7f6a;}',
+    '.rec-zone .rz-tabs{display:flex;gap:6px;border-bottom:1px solid var(--c-line,#e3dccb);margin-bottom:10px;}',
+    '.rec-zone .rz-tab{padding:6px 14px;border:0;background:none;font-size:13px;color:#8a7f6a;cursor:pointer;border-radius:6px 6px 0 0;font-family:var(--font-display);}',
+    '.rec-zone .rz-tab.active{color:var(--c-ink,#2b2620);font-weight:700;box-shadow:inset 0 -2px 0 var(--c-accent,#8a5a2b);}',
+    '.rec-zone .rz-pane{font-size:13px;line-height:1.7;color:#3c362c;max-height:46vh;overflow:auto;}',
+    '.rec-zone .rz-pane h3{font-size:14px;margin:10px 0 4px;}',
+    '.rec-zone .rz-pane h2{font-size:14px;margin:12px 0 4px;color:var(--c-accent,#8a5a2b);}',
+    '.rec-zone .rz-pane ul{margin:4px 0;padding-left:18px;}',
+    '.rec-zone .rz-pane li{margin:2px 0;}',
+    '.rec-zone .rz-notes{margin:0 0 10px;padding:0;list-style:none;}',
+    '.rec-zone .rz-notes li{padding:6px 8px;border-bottom:1px dashed var(--c-line,#e3dccb);font-size:13px;}',
+    '.rec-zone .rz-note-ts{color:#a39880;font-size:11px;margin-right:6px;}',
+    '.rec-zone .rz-note-form{display:flex;gap:8px;}',
+    '.rec-zone .rz-note-input{flex:1;padding:7px 10px;border:1px solid var(--c-line,#e3dccb);border-radius:6px;font-size:13px;font-family:var(--font-display);}',
+    '.rec-zone .rz-note-add{padding:6px 16px;border:0;border-radius:6px;background:var(--c-accent,#8a5a2b);color:#fff;cursor:pointer;font-size:13px;}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
+function recZoneGroupByDay(list) {
+  var WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  var days = [], map = {};
+  for (var i = 0; i < list.length; i++) {
+    var dt = new Date(list[i].ts);
+    var dk = dt.getFullYear() + '-' + recPad(dt.getMonth() + 1) + '-' + recPad(dt.getDate());
+    if (!map[dk]) { map[dk] = { key: dk, label: (dt.getMonth() + 1) + '月' + dt.getDate() + '日 ' + WD[dt.getDay()], clips: [] }; days.push(map[dk]); }
+    map[dk].clips.push(list[i]);
+  }
+  days.sort(function(a, b) { return a.key < b.key ? 1 : -1; });
+  for (var j = 0; j < days.length; j++) days[j].clips.sort(function(a, b) { return b.ts - a.ts; });
+  return days;
+}
+function recZoneMd(s) {
+  var lines = String(s == null ? '' : s).split('\n'), out = [], inUl = false;
+  function inline(t) {
+    return bzEsc(t).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  }
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i];
+    if (/^#{1,6}\s/.test(t)) {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      out.push('<h2>' + inline(t.replace(/^#{1,6}\s/, '')) + '</h2>');
+    } else if (/^[-*]\s/.test(t)) {
+      if (!inUl) { out.push('<ul>'); inUl = true; }
+      out.push('<li>' + inline(t.replace(/^[-*]\s/, '')) + '</li>');
+    } else if (t.trim()) {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      out.push('<p style="margin:6px 0;">' + inline(t) + '</p>');
+    }
+  }
+  if (inUl) out.push('</ul>');
+  return out.join('\n');
+}
+function recZoneBadgeOf(c) {
+  if (c._tfBusy) return '<span class="rz-badge busy">转录中…</span>';
+  if (c.transcript) return '<span class="rz-badge ok">已转录</span>';
+  return '<span class="rz-badge no">未转录</span>';
+}
+function recZoneSummaryOf(c) {
+  if (!c.transcript || !c.transcript.text) return '';
+  var lines = c.transcript.text.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i].trim();
+    if (t && !/^#/.test(t)) return t;
+  }
+  return '';
+}
+function recZoneCardHtml(c) {
+  var dt = new Date(c.ts);
+  var hhmm = recPad(dt.getHours()) + ':' + recPad(dt.getMinutes());
+  return '<div class="rz-card" data-id="' + bzEsc(c.id) + '" onclick="RENDER.recZoneOpenDetail(this)">'
+    + '<div class="rz-card-top"><span class="rz-card-name">' + bzEsc(c.name) + '</span>'
+    + '<span class="rz-card-time">' + hhmm + ' · ' + recAudioFmt(c.dur) + '</span></div>'
+    + '<div class="rz-audio-line">'
+    + '<button type="button" class="rz-play" onclick="event.stopPropagation();RENDER.recZonePlay(this)" title="播放/暂停">▶</button>'
+    + '<span>🎙 ' + recAudioFmt(c.dur) + '</span>' + recZoneBadgeOf(c)
+    + '</div>'
+    + (recZoneSummaryOf(c) ? '<div class="rz-summary">' + bzEsc(recZoneSummaryOf(c)) + '</div>' : '')
+    + '<div class="rz-card-foot"><span class="rz-badge no">录音卡</span><span>' + hhmm + ' 创建</span></div>'
+    + '</div>';
+}
+function recZoneRenderInto(box, list) {
+  if (!box) return;
+  recZoneCssOnce();
+  var days = recZoneGroupByDay(list || []);
+  var h = '<div class="rz-head"><span class="rz-title">🎙 录音与 AI 交互区</span>'
+    + '<span class="rz-count">全部录音 ' + (list || []).length + '</span>'
+    + '<button type="button" class="rz-rec-btn" onclick="RENDER.recZoneRecord(this)">● 录音</button>'
+    + '<span class="rz-timer"></span></div>';
+  if (!days.length) {
+    h += '<div class="rz-empty">暂无录音 · 点右上「● 录音」开始语音分析，自动转录成纪要</div>';
+  } else {
+    h += '<div class="rz-timeline">';
+    for (var i = 0; i < days.length; i++) {
+      h += '<div class="rz-day"><div class="rz-day-title">' + days[i].label + '</div><div class="rz-cards">';
+      for (var j = 0; j < days[i].clips.length; j++) h += recZoneCardHtml(days[i].clips[j]);
+      h += '</div></div>';
+    }
+    h += '</div>';
+  }
+  h += '<div class="rz-detail" id="bzRecZoneDetail" style="display:none;"></div>';
+  box.innerHTML = h;
+  box._rzClips = {};
+  for (var k = 0; k < (list || []).length; k++) box._rzClips[list[k].id] = list[k];
+}
+function renderRecZone() {
+  var zone = document.getElementById('bzRecZone');
+  if (!zone || !window._paipanData) return Promise.resolve(false);
+  var k = recAudioKey('');
+  if (!k) return Promise.resolve(false);
+  return recAudioList(k).then(function(list) {
+    recZoneRenderInto(zone, list);
+    zone.style.display = '';
+    return true;
+  }).catch(function() { return false; });
+}
+var _rzRec = null, _rzT0 = 0, _rzTimer = null;
+function recZoneRecord(btn) {
+  var zone = document.getElementById('bzRecZone');
+  if (_rzRec) { try { _rzRec.stop(); } catch (e) {} return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    recStatusShow(zone, '当前环境不支持录音', true); return;
+  }
+  var k = recAudioKey('');
+  if (!k) { recStatusShow(zone, '请先排盘再录音', true); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    var mimes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    var mime = '';
+    for (var i = 0; i < mimes.length; i++) if (MediaRecorder.isTypeSupported(mimes[i])) { mime = mimes[i]; break; }
+    var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    var chunks = [];
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() {
+      try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
+      clearInterval(_rzTimer);
+      var dur = Math.max(1, Math.round((Date.now() - _rzT0) / 1000));
+      var m = mr.mimeType || mime || 'audio/webm';
+      var now = new Date();
+      var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
+      var d0 = window._paipanData;
+      var clip = {
+        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        blob: new Blob(chunks, { type: m.split(';')[0] })
+      };
+      _rzRec = null;
+      btn.textContent = '● 录音'; btn.classList.remove('recording');
+      var tEl = zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
+      recAudioPut(clip).then(function() {
+        try { if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob); } catch (e) {}
+        transcribeClip(clip, null);
+        return renderRecZone();
+      }).catch(function(e) { recStatusShow(zone, '录音保存失败：' + (e && e.message || e), true); });
+    };
+    _rzRec = mr; _rzT0 = Date.now();
+    mr.start();
+    btn.textContent = '■ 停止'; btn.classList.add('recording');
+    var timerEl = zone.querySelector('.rz-timer');
+    _rzTimer = setInterval(function() {
+      if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - _rzT0) / 1000));
+    }, 250);
+  }).catch(function(err) {
+    recStatusShow(zone, '无法访问麦克风：' + (err && (err.name || err.message) || err), true);
+  });
+}
+function recZoneClipOf(el) {
+  var zone = document.getElementById('bzRecZone');
+  if (!zone) return null;
+  var card = el.closest ? el.closest('.rz-card') : null;
+  return (card && zone._rzClips) ? zone._rzClips[card.getAttribute('data-id')] : null;
+}
+function recZonePlay(btn) {
+  var zone = document.getElementById('bzRecZone');
+  var clip = recZoneClipOf(btn);
+  if (!zone || !clip || !clip.blob) return;
+  if (zone._rzAudioId === clip.id && zone._rzAudio) {
+    if (zone._rzAudio.paused) { zone._rzAudio.play(); btn.textContent = '⏸'; }
+    else { zone._rzAudio.pause(); btn.textContent = '▶'; }
+    return;
+  }
+  if (zone._rzAudio) { try { zone._rzAudio.pause(); } catch (e) {} }
+  if (zone._rzUrl) { try { URL.revokeObjectURL(zone._rzUrl); } catch (e) {} }
+  var url = URL.createObjectURL(clip.blob);
+  var au = new Audio(url);
+  zone._rzAudio = au; zone._rzAudioId = clip.id; zone._rzUrl = url; zone._rzPlayBtn = btn;
+  au.onended = function() { if (zone._rzPlayBtn) zone._rzPlayBtn.textContent = '▶'; };
+  au.play();
+  btn.textContent = '⏸';
+}
+function recZonePaneOf(clip, tab) {
+  if (tab === 'raw') {
+    var raw = clip.transcript && clip.transcript.raw;
+    return raw ? recZoneMd(raw) : '<div class="rz-empty">暂无原始识别文字（转录后生成）</div>';
+  }
+  if (tab === 'notes') {
+    var notes = clip.notes || [];
+    var h = notes.length ? '<ul class="rz-notes">' : '<div class="rz-empty">暂无追加笔记</div>';
+    for (var i = 0; i < notes.length; i++) {
+      h += '<li><span class="rz-note-ts">' + new Date(notes[i].ts).toLocaleString() + '</span>' + bzEsc(notes[i].text) + '</li>';
+    }
+    if (notes.length) h += '</ul>';
+    h += '<div class="rz-note-form"><input class="rz-note-input" id="rzNoteInput" placeholder="追加笔记：写想法、补信息…回车保存">'
+      + '<button type="button" class="rz-note-add" onclick="RENDER.recZoneAddNote(this)">追加</button></div>';
+    return h;
+  }
+  if (clip.transcript && clip.transcript.text) return recZoneMd(clip.transcript.text);
+  return '<div class="rz-empty">尚未转录 · 点转录按钮开始，或等待自动转录完成</div>';
+}
+function recZoneRenderDetail(zone, clip) {
+  var box = zone.querySelector('#bzRecZoneDetail');
+  if (!box) return;
+  var tab = zone._rzTab || 'md';
+  var dt = new Date(clip.ts);
+  var created = dt.getFullYear() + '-' + recPad(dt.getMonth() + 1) + '-' + recPad(dt.getDate()) + ' ' + recPad(dt.getHours()) + ':' + recPad(dt.getMinutes());
+  box.style.display = '';
+  box.innerHTML = '<div class="rz-detail-head">'
+    + '<span class="rz-detail-name">' + bzEsc(clip.name) + '</span>'
+    + '<span class="rz-card-time">' + created + ' · ' + recAudioFmt(clip.dur) + '</span>'
+    + recZoneBadgeOf(clip)
+    + '<button type="button" class="rz-tab" style="border:1px solid var(--c-line,#e3dccb);" onclick="RENDER.bzZoneTranscribe(this)" title="转录">' + (clip.transcript ? '🔄 重转录' : '📝 转录') + '</button>'
+    + '<button type="button" class="rz-close" onclick="RENDER.recZoneCloseDetail(this)" title="关闭">✕</button></div>'
+    + '<div class="rz-tabs">'
+    + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'notes' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'notes\')">追加笔记' + (clip.notes && clip.notes.length ? '（' + clip.notes.length + '）' : '') + '</button>'
+    + '</div>'
+    + '<div class="rz-pane" id="rzPane">' + recZonePaneOf(clip, tab) + '</div>';
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function recZoneOpenDetail(el) {
+  var zone = document.getElementById('bzRecZone');
+  var clip = recZoneClipOf(el);
+  if (!zone || !clip) return;
+  zone._rzOpenId = clip.id;
+  recZoneRenderDetail(zone, clip);
+}
+function bzZoneTranscribe() {
+  var zone = document.getElementById('bzRecZone');
+  if (!zone) return;
+  var clip = zone._rzClips && zone._rzClips[zone._rzOpenId];
+  if (!clip) return;
+  if (!clip.transcript && !bzAiCfg().sfKey) { bzAiSettings(zone, clip); return; }
+  transcribeClip(clip, null).then(function() { return renderRecZone(); }).then(function() {
+    var z2 = document.getElementById('bzRecZone');
+    if (z2 && z2._rzClips && z2._rzClips[zone._rzOpenId]) recZoneRenderDetail(z2, z2._rzClips[zone._rzOpenId]);
+  });
+}
+function recZoneCloseDetail() {
+  var zone = document.getElementById('bzRecZone');
+  var box = zone && zone.querySelector('#bzRecZoneDetail');
+  if (box) box.style.display = 'none';
+  if (zone) zone._rzOpenId = null;
+}
+function recZoneTab(btn, tab) {
+  var zone = document.getElementById('bzRecZone');
+  if (!zone) return;
+  zone._rzTab = tab;
+  var clip = zone._rzClips && zone._rzClips[zone._rzOpenId];
+  if (!clip) return;
+  var tabs = zone.querySelectorAll('.rz-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i] === btn);
+  var pane = zone.querySelector('#rzPane');
+  if (pane) pane.innerHTML = recZonePaneOf(clip, tab);
+}
+function recZoneSaveNotesMd(clip) {
+  if (!clip.transcript || !window.ARCHIVE || !window.ARCHIVE.syncWriteBlob) return;
+  try {
+    clip.tfname = clip.tfname || bzTfName(clip);
+    var md = bzTranscriptMd(clip, clip.transcript.text, clip.transcript.raw);
+    if (clip.notes && clip.notes.length) {
+      md += '## 追加笔记\n\n';
+      for (var i = 0; i < clip.notes.length; i++) {
+        md += '- ' + new Date(clip.notes[i].ts).toLocaleString() + '　' + clip.notes[i].text + '\n';
+      }
+    }
+    window.ARCHIVE.syncWriteBlob('录音稿', clip.tfname, new Blob([md], { type: 'text/markdown' }));
+  } catch (e) {}
+}
+function recZoneAddNote(btn) {
+  var zone = document.getElementById('bzRecZone');
+  if (!zone) return;
+  var clip = zone._rzClips && zone._rzClips[zone._rzOpenId];
+  var input = zone.querySelector('#rzNoteInput');
+  var text = input ? input.value.trim() : '';
+  if (!clip || !text) return;
+  if (!clip.notes) clip.notes = [];
+  clip.notes.push({ ts: Date.now(), text: text });
+  clip.tfname = clip.tfname || bzTfName(clip);
+  recAudioPut(clip).then(function() {
+    recZoneSaveNotesMd(clip);
+    var pane = zone.querySelector('#rzPane');
+    if (pane) pane.innerHTML = recZonePaneOf(clip, 'notes');
+    recStatusShow(zone, '已追加笔记并同步档案');
+  }).catch(function(e) { recStatusShow(zone, '追加失败：' + (e && e.message || e), true); });
 }
 function toggleRecMode(force, root) {
   var on = typeof force === 'boolean' ? force : !isRecOn();
@@ -15116,11 +15473,28 @@ function cmpSetState(entries) {
     bzTfName: bzTfName,
     bzTranscriptMd: bzTranscriptMd,
     transcribeClip: transcribeClip,
+    recTfToast: recTfToast,
     bzShowTranscript: bzShowTranscript,
     bzViewTranscript: bzViewTranscript,
     bzAiSettings: bzAiSettings,
     recAudioClearKey: recAudioClearKey,
     recAudioRewriteKey: recAudioRewriteKey,
+    recZoneGroupByDay: recZoneGroupByDay,
+    recZoneMd: recZoneMd,
+    recZoneBadgeOf: recZoneBadgeOf,
+    recZoneCardHtml: recZoneCardHtml,
+    recZoneRenderInto: recZoneRenderInto,
+    recZonePaneOf: recZonePaneOf,
+    recZoneRenderDetail: recZoneRenderDetail,
+    renderRecZone: renderRecZone,
+    recZoneRecord: recZoneRecord,
+    recZonePlay: recZonePlay,
+    recZoneOpenDetail: recZoneOpenDetail,
+    bzZoneTranscribe: bzZoneTranscribe,
+    recZoneCloseDetail: recZoneCloseDetail,
+    recZoneTab: recZoneTab,
+    recZoneAddNote: recZoneAddNote,
+    recZoneSaveNotesMd: recZoneSaveNotesMd,
     hiDy: hiDy,
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,
@@ -20684,6 +21058,95 @@ function captureScreenshot() {
     } finally {
       window._paipanData = bakPd;
       if (bakCfg === null) localStorage.removeItem('bz_ai_cfg'); else localStorage.setItem('bz_ai_cfg', bakCfg);
+    }
+  })();
+  // ===== v0.83.0 录音与 AI 交互区 =====
+  (function() {
+    var bakPd = window._paipanData;
+    var holder = null;
+    try {
+      var T1 = new Date(2026, 9, 25, 10, 0, 0).getTime();
+      var T2 = new Date(2026, 9, 25, 9, 0, 0).getTime();
+      var T3 = new Date(2026, 9, 24, 18, 0, 0).getTime();
+      var days = RENDER.recZoneGroupByDay([
+        { id: 'a', ts: T2, name: 'b2', dur: 10 },
+        { id: 'b', ts: T1, name: 'b1', dur: 20 },
+        { id: 'c', ts: T3, name: 'c1', dur: 30 }
+      ]);
+      tests.push(eq('SN13-1: 时间轴按日分组降序',
+        (days.length === 2 && days[0].label === '10月25日 周日' && days[0].clips.length === 2
+          && days[0].clips[0].id === 'b' && days[1].clips[0].id === 'c') ? 'Y' : 'N', 'Y'));
+      var mdh = RENDER.recZoneMd('## 要点\n- **标题**：内容<b>\n\n总述段落');
+      tests.push(eq('SN13-2: 纪要 md 渲染标题/粗体/列表/转义',
+        (mdh.indexOf('<h2>要点</h2>') >= 0 && mdh.indexOf('<li><b>标题</b>：内容&lt;b&gt;</li>') >= 0
+          && mdh.indexOf('<p style="margin:6px 0;">总述段落</p>') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-3: 徽标三态（有稿/无稿/转录中）',
+        (RENDER.recZoneBadgeOf({ transcript: { text: 'x' } }).indexOf('已转录') >= 0
+          && RENDER.recZoneBadgeOf({}).indexOf('未转录') >= 0
+          && RENDER.recZoneBadgeOf({ _tfBusy: true }).indexOf('转录中') >= 0) ? 'Y' : 'N', 'Y'));
+      var cardHtml = RENDER.recZoneCardHtml({ id: 'x1', ts: T1, name: '10-25 10:00', dur: 65, transcript: { text: '总述一句\n## 要点' } });
+      tests.push(eq('SN13-4: 卡片含名称/时长/播放/纪要摘要',
+        (cardHtml.indexOf('10-25 10:00') >= 0 && cardHtml.indexOf('1:05') >= 0
+          && cardHtml.indexOf('rz-play') >= 0 && cardHtml.indexOf('总述一句') >= 0
+          && cardHtml.indexOf('recZoneOpenDetail') >= 0) ? 'Y' : 'N', 'Y'));
+      holder = document.createElement('div');
+      holder.style.display = 'none';
+      document.body.appendChild(holder);
+      RENDER.recZoneRenderInto(holder, [
+        { id: 'a', ts: T1, name: 'n1', dur: 5, transcript: { text: '总述', raw: '原' } },
+        { id: 'b', ts: T2, name: 'n2', dur: 6 }
+      ]);
+      var ok1 = holder.querySelectorAll('.rz-card').length === 2
+        && holder.querySelector('.rz-count').textContent.indexOf('全部录音 2') >= 0
+        && holder.querySelectorAll('.rz-day').length === 1
+        && holder.querySelector('#bzRecZoneDetail');
+      RENDER.recZoneRenderInto(holder, []);
+      var ok2 = holder.querySelectorAll('.rz-empty').length >= 1;
+      tests.push(eq('SN13-5: 交互区渲染两卡/计数/空态',
+        (ok1 && ok2) ? 'Y' : 'N', 'Y'));
+      var clipZ = { id: 'z', ts: T1, name: 'n', dur: 5, transcript: { text: '## 要点\n- a', raw: '原文' }, notes: [{ ts: T1, text: '补一条' }], tfname: '测试-录音稿-x.md' };
+      var paneMd = RENDER.recZonePaneOf(clipZ, 'md');
+      var paneRaw = RENDER.recZonePaneOf(clipZ, 'raw');
+      var paneNote = RENDER.recZonePaneOf(clipZ, 'notes');
+      tests.push(eq('SN13-6: 三 tab 内容（纪要/原文/笔记表单）',
+        (paneMd.indexOf('<h2>要点</h2>') >= 0 && paneRaw.indexOf('原文') >= 0
+          && paneNote.indexOf('补一条') >= 0 && paneNote.indexOf('rzNoteInput') >= 0
+          && RENDER.recZonePaneOf({}, 'md').indexOf('尚未转录') >= 0
+          && RENDER.recZonePaneOf({}, 'raw').indexOf('暂无原始识别文字') >= 0) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-7: 交互区挂载点与接口齐备',
+        (RENDER.renderChart.toString().indexOf('bzRecZone') >= 0
+          && RENDER.renderChart.toString().indexOf('renderRecZone()') >= 0
+          && typeof RENDER.recZoneRecord === 'function'
+          && typeof RENDER.recZonePlay === 'function' && typeof RENDER.recZoneTab === 'function'
+          && typeof RENDER.recZoneAddNote === 'function' && typeof RENDER.recZoneRenderInto === 'function'
+          && typeof RENDER.renderRecZone === 'function') ? 'Y' : 'N', 'Y'));
+      var mockDir = null, mockFname = null;
+      var realSwb = window.ARCHIVE.syncWriteBlob;
+      window.ARCHIVE.syncWriteBlob = function(dir, fname) { mockDir = dir; mockFname = fname; };
+      try { RENDER.recZoneSaveNotesMd(clipZ); } finally { window.ARCHIVE.syncWriteBlob = realSwb; }
+      tests.push(eq('SN13-8: 追加笔记同步录音稿 md（录音稿/目录）',
+        (mockDir === '录音稿' && mockFname === '测试-录音稿-x.md' && RENDER.recZoneSaveNotesMd.toString().indexOf('追加笔记') >= 0) ? 'Y' : 'N', 'Y'));
+      var clipNoTf = { id: 'nt', ts: T1, name: '10-25 08:15', dur: 5, transcript: { text: 't', raw: 'r' }, notes: [] };
+      var noDir = null, noFname = null;
+      var realSwb2 = window.ARCHIVE.syncWriteBlob;
+      window.ARCHIVE.syncWriteBlob = function(dir, fname) { noDir = dir; noFname = fname; };
+      try { RENDER.recZoneSaveNotesMd(clipNoTf); } finally { window.ARCHIVE.syncWriteBlob = realSwb2; }
+      tests.push(eq('SN13-9: 无 tfname 兜底生成不写 undefined',
+        (noDir === '录音稿' && noFname && noFname.indexOf('undefined') < 0 && noFname.indexOf('录音稿-') >= 0 && clipNoTf.tfname === noFname) ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13-10: 转录失败 toast 重试 + 音量归一化 + 空结果文案',
+        (typeof RENDER.recTfToast === 'function'
+          && RENDER.transcribeClip.toString().indexOf('recTfToast') >= 0
+          && RENDER.transcribeClip.toString().indexOf('未识别出语音内容') >= 0
+          && RENDER.bzWav16k.toString().indexOf('peak') >= 0) ? 'Y' : 'N', 'Y'));
+      var toastEl = RENDER.recTfToast('测试消息', null, null);
+      tests.push(eq('SN13-11: recTfToast 挂载与清理', document.getElementById('bzTfToast') ? 'Y' : 'N', 'Y'));
+      var toastNode = document.getElementById('bzTfToast');
+      if (toastNode && toastNode.parentNode) toastNode.parentNode.removeChild(toastNode);
+    } catch (e) {
+      tests.push(fail('SN13-0: 交互区测试异常', String(e)));
+    } finally {
+      window._paipanData = bakPd;
+      if (holder && holder.parentElement) holder.parentElement.removeChild(holder);
     }
   })();
   // ===== v0.69.0 历法切换自动换算 =====
