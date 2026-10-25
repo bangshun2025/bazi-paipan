@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.1 | 2026-10-25 -->
+<!-- 八字排盘 ·  从真版 v0.83.2 | 2026-10-25 -->
+<!-- v0.83.2: 分析记录丢字加固 —— 听写/输入法直填文字不触发 input 事件导致刷新即丢（10-25 事故），保存改四道兜底：input + compositionend + blur 失焦即存 + 每 4 秒定时巡检（值有变化才落库）；刷新/关页前有未保存内容弹确认拦截；存储写失败（空间不足）显式提示；档案指纹漂移自动拒写防串档 -->
 <!-- v0.83.1: 文字记录升级对话还原 —— VAD 分段真实时间戳 + GLM 说话人归属（参照得到大脑格式：头像+说话人+HH:MM:SS+原文，时间戳可点跳播放）；纪要新增章节时间线与金句；录音稿 md 新增「对话还原」节；旧稿重转录可升级 -->
 <!-- v0.82.0: 录音自动转录 —— 录音结束自动语音转文字（SiliconFlow SenseVoice）并 AI 整理成分析录音稿（Qwen 总述+要点，参照盘面/分析记录/知识库术语），稿件自动落盘「录音稿/」目录，列表📝可查看/复制/手动转录，API Key 仅存本机浏览器 -->
 <!-- v0.79.0: 记录面板补「更完整历史版本」探测——改档案时辰后旧版完整记录不再被永久隐藏，出提示条与载入按钮但不自动覆盖；新增本地文件夹即时同步（档案/盘面/分析记录自动落盘） -->
@@ -11955,16 +11956,51 @@ function bindRecPanel(container, suffix) {
     recRenderAlts(container, list, hint, suffix);
   }
   recAutogrow(ta);
+  ta._recSuffix = suffix || '';
+  ta._recKey0 = recNotesKey(suffix);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
-    var k = recNotesKey(suffix);
-    if (!k) return;
-    recNoteSet(k, ta.value);
-    recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
-    if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
+    recSaveNow(container, ta, suffix);
   });
+  // v0.83.2 丢字加固：听写/部分输入法直填 value 不派发 input 事件，字只存在内存、刷新即蒸发，
+  // 补 compositionend + blur + 定时巡检 + beforeunload 拦截四道兜底
+  ta.addEventListener('compositionend', function() { recSaveNow(container, ta, suffix); });
+  ta.addEventListener('blur', function() { recSaveNow(container, ta, suffix); });
+  if (ta._recWatch) clearInterval(ta._recWatch);
+  ta._recWatch = setInterval(function() {
+    if (!document.body || !document.body.contains(ta)) { clearInterval(ta._recWatch); return; }
+    recSaveNow(container, ta, suffix);
+  }, 4000);
   var rp = ta.closest ? ta.closest('.record-panel') : null;
   initRecAudioPanel(rp, suffix);
+}
+function recSaveNow(container, ta, suffix) {
+  var k = recNotesKey(suffix);
+  if (!k || k !== ta._recKey0) return false;
+  var prev = null;
+  try { prev = localStorage.getItem(k); } catch (e) {}
+  if (prev === ta.value) return true;
+  recAutogrow(ta);
+  if (!recNoteSet(k, ta.value)) {
+    recStatusShow(container, '⚠ 保存失败：浏览器存储空间不足，请先复制内容再清理', true);
+    return false;
+  }
+  recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
+  if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
+  return true;
+}
+if (typeof window !== 'undefined' && !window._recUnloadGuard) {
+  window._recUnloadGuard = true;
+  window.addEventListener('beforeunload', function(e) {
+    var tas = document.querySelectorAll('textarea.rec-text');
+    for (var i = 0; i < tas.length; i++) {
+      var t = tas[i];
+      if (!(t.value || '').trim()) continue;
+      var stored = null;
+      try { stored = localStorage.getItem(recNotesKey(t._recSuffix)); } catch (err) {}
+      if (stored !== t.value) { e.preventDefault(); e.returnValue = ''; return ''; }
+    }
+  });
 }
 
 // ===== v0.80.0 分析记录·录音：面板内 MediaRecorder 录音，IndexedDB 存 blob（不进 localStorage），随档案指纹挂载 =====
@@ -15615,6 +15651,7 @@ function cmpSetState(entries) {
     bindEvents: bindEvents,
     toggleRecMode: toggleRecMode,
     bindRecPanel: bindRecPanel,
+    recSaveNow: recSaveNow,
     recNotesKey: recNotesKey,
     recNoteCandidates: recNoteCandidates,
     loadRecAlt: loadRecAlt,
@@ -19503,6 +19540,30 @@ function captureScreenshot() {
       ta7.dispatchEvent(new Event('input', { bubbles: true }));
       var h2 = ta7.getBoundingClientRect().height;
       tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 360 && h2 <= h1 && h2 <= h0 + 1, true));
+
+      // SN14 v0.83.2 丢字加固：听写/输入法直填 value 不派发 input 事件，四道兜底保落库
+      var taS = tstR.querySelector('.rec-text');
+      tests.push(eq('SN14-1: 绑定记后缀+巡检器+卸载拦截就位', taS._recSuffix === '' && !!taS._recWatch && window._recUnloadGuard === true, true));
+      var stOrig = window.ARCHIVE && window.ARCHIVE.syncTouch, stCount = 0;
+      if (stOrig) window.ARCHIVE.syncTouch = function() { stCount++; };
+      var heard = 'SN14 听写直填：丁卯时柱定价。';
+      taS.value = heard;
+      tests.push(eq('SN14-2: 直填未派发 input，recSaveNow 落库', (R.recSaveNow(tstR, taS, ''), localStorage.getItem(keyR)), heard));
+      tests.push(eq('SN14-3: 落库触发一次同步', stCount, 1));
+      R.recSaveNow(tstR, taS, '');
+      tests.push(eq('SN14-4: 值无变化不重复触发同步', stCount, 1));
+      var heardB = 'SN14 blur兜底：失焦即存。';
+      taS.value = heardB;
+      taS.dispatchEvent(new FocusEvent('blur'));
+      tests.push(eq('SN14-6: blur 事件兜底落库', localStorage.getItem(keyR), heardB));
+      var keepPdS = window._paipanData;
+      window._paipanData = paipan('串档防护', '女', 1990, 1, 1, 12, 0);
+      taS.value = heard + '漂移';
+      var driftKey = 'bz_rec_notes_x' + [window._paipanData.name, window._paipanData.gender, window._paipanData.y, window._paipanData.m, window._paipanData.d, window._paipanData.h, window._paipanData.mi].join('|');
+      tests.push(eq('SN14-5: 档案指纹漂移拒写防串档', R.recSaveNow(tstR, taS, 'x'), false));
+      tests.push(eq('SN14-5: 漂移期间新档案键无写入', localStorage.getItem(driftKey), null));
+      window._paipanData = keepPdS;
+      if (stOrig) window.ARCHIVE.syncTouch = stOrig;
     } finally {
       try {
         if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);

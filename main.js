@@ -3451,6 +3451,30 @@ function captureScreenshot() {
       ta7.dispatchEvent(new Event('input', { bubbles: true }));
       var h2 = ta7.getBoundingClientRect().height;
       tests.push(eq('REC T07: 清空后高度回落且不塌底', h2 >= 360 && h2 <= h1 && h2 <= h0 + 1, true));
+
+      // SN14 v0.83.2 丢字加固：听写/输入法直填 value 不派发 input 事件，四道兜底保落库
+      var taS = tstR.querySelector('.rec-text');
+      tests.push(eq('SN14-1: 绑定记后缀+巡检器+卸载拦截就位', taS._recSuffix === '' && !!taS._recWatch && window._recUnloadGuard === true, true));
+      var stOrig = window.ARCHIVE && window.ARCHIVE.syncTouch, stCount = 0;
+      if (stOrig) window.ARCHIVE.syncTouch = function() { stCount++; };
+      var heard = 'SN14 听写直填：丁卯时柱定价。';
+      taS.value = heard;
+      tests.push(eq('SN14-2: 直填未派发 input，recSaveNow 落库', (R.recSaveNow(tstR, taS, ''), localStorage.getItem(keyR)), heard));
+      tests.push(eq('SN14-3: 落库触发一次同步', stCount, 1));
+      R.recSaveNow(tstR, taS, '');
+      tests.push(eq('SN14-4: 值无变化不重复触发同步', stCount, 1));
+      var heardB = 'SN14 blur兜底：失焦即存。';
+      taS.value = heardB;
+      taS.dispatchEvent(new FocusEvent('blur'));
+      tests.push(eq('SN14-6: blur 事件兜底落库', localStorage.getItem(keyR), heardB));
+      var keepPdS = window._paipanData;
+      window._paipanData = paipan('串档防护', '女', 1990, 1, 1, 12, 0);
+      taS.value = heard + '漂移';
+      var driftKey = 'bz_rec_notes_x' + [window._paipanData.name, window._paipanData.gender, window._paipanData.y, window._paipanData.m, window._paipanData.d, window._paipanData.h, window._paipanData.mi].join('|');
+      tests.push(eq('SN14-5: 档案指纹漂移拒写防串档', R.recSaveNow(tstR, taS, 'x'), false));
+      tests.push(eq('SN14-5: 漂移期间新档案键无写入', localStorage.getItem(driftKey), null));
+      window._paipanData = keepPdS;
+      if (stOrig) window.ARCHIVE.syncTouch = stOrig;
     } finally {
       try {
         if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);

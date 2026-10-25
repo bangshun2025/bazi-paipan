@@ -1318,16 +1318,51 @@ function bindRecPanel(container, suffix) {
     recRenderAlts(container, list, hint, suffix);
   }
   recAutogrow(ta);
+  ta._recSuffix = suffix || '';
+  ta._recKey0 = recNotesKey(suffix);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
-    var k = recNotesKey(suffix);
-    if (!k) return;
-    recNoteSet(k, ta.value);
-    recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
-    if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
+    recSaveNow(container, ta, suffix);
   });
+  // v0.83.2 丢字加固：听写/部分输入法直填 value 不派发 input 事件，字只存在内存、刷新即蒸发，
+  // 补 compositionend + blur + 定时巡检 + beforeunload 拦截四道兜底
+  ta.addEventListener('compositionend', function() { recSaveNow(container, ta, suffix); });
+  ta.addEventListener('blur', function() { recSaveNow(container, ta, suffix); });
+  if (ta._recWatch) clearInterval(ta._recWatch);
+  ta._recWatch = setInterval(function() {
+    if (!document.body || !document.body.contains(ta)) { clearInterval(ta._recWatch); return; }
+    recSaveNow(container, ta, suffix);
+  }, 4000);
   var rp = ta.closest ? ta.closest('.record-panel') : null;
   initRecAudioPanel(rp, suffix);
+}
+function recSaveNow(container, ta, suffix) {
+  var k = recNotesKey(suffix);
+  if (!k || k !== ta._recKey0) return false;
+  var prev = null;
+  try { prev = localStorage.getItem(k); } catch (e) {}
+  if (prev === ta.value) return true;
+  recAutogrow(ta);
+  if (!recNoteSet(k, ta.value)) {
+    recStatusShow(container, '⚠ 保存失败：浏览器存储空间不足，请先复制内容再清理', true);
+    return false;
+  }
+  recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
+  if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
+  return true;
+}
+if (typeof window !== 'undefined' && !window._recUnloadGuard) {
+  window._recUnloadGuard = true;
+  window.addEventListener('beforeunload', function(e) {
+    var tas = document.querySelectorAll('textarea.rec-text');
+    for (var i = 0; i < tas.length; i++) {
+      var t = tas[i];
+      if (!(t.value || '').trim()) continue;
+      var stored = null;
+      try { stored = localStorage.getItem(recNotesKey(t._recSuffix)); } catch (err) {}
+      if (stored !== t.value) { e.preventDefault(); e.returnValue = ''; return ''; }
+    }
+  });
 }
 
 // ===== v0.80.0 分析记录·录音：面板内 MediaRecorder 录音，IndexedDB 存 blob（不进 localStorage），随档案指纹挂载 =====
@@ -4978,6 +5013,7 @@ function cmpSetState(entries) {
     bindEvents: bindEvents,
     toggleRecMode: toggleRecMode,
     bindRecPanel: bindRecPanel,
+    recSaveNow: recSaveNow,
     recNotesKey: recNotesKey,
     recNoteCandidates: recNoteCandidates,
     loadRecAlt: loadRecAlt,
