@@ -5171,6 +5171,10 @@ function captureScreenshot() {
       tests.push(eq('SN12-7: 转录接口齐备',
         (typeof RENDER.transcribeClip === 'function' && typeof RENDER.bzViewTranscript === 'function'
           && typeof RENDER.bzAiSettings === 'function' && typeof window.ARCHIVE.syncChartMd === 'function') ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN12-8: 转录完成后自动弹出稿层',
+        (typeof RENDER.bzShowTranscript === 'function'
+          && RENDER.transcribeClip.toString().indexOf('bzShowTranscript(clip)') >= 0
+          && RENDER.transcribeClip.toString().indexOf('_tfBusy') >= 0) ? 'Y' : 'N', 'Y'));
     } catch (e) {
       tests.push(fail('SN12-0: 转录测试异常', String(e)));
     } finally {

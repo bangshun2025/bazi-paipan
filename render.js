@@ -1617,6 +1617,8 @@ function transcribeClip(clip, panel) {
     if (panel) recStatusShow(panel, '未配置转录 API Key，点条目📝可配置', true);
     return Promise.resolve(false);
   }
+  if (clip._tfBusy) return Promise.resolve(false);
+  clip._tfBusy = true;
   if (panel) recStatusShow(panel, '转录中…（' + clip.name + '）');
   return bzWav16k(clip.blob)
     .then(function(wav) { return bzAsr(wav, cfg.sfKey); })
@@ -1637,10 +1639,13 @@ function transcribeClip(clip, panel) {
     })
     .then(function() {
       if (panel) recStatusShow(panel, '转录完成：' + clip.name);
+      bzShowTranscript(clip);
       return recAudioList(clip.key);
     })
     .then(function(list) { if (panel) renderRecAudioList(panel, list); return true; })
+    .then(function(ok) { clip._tfBusy = false; return ok; })
     .catch(function(e) {
+      clip._tfBusy = false;
       if (panel) recStatusShow(panel, '转录失败：' + (e && e.message || e), true);
       return false;
     });
@@ -1675,13 +1680,7 @@ function bzAiSettings(panel, clip) {
     if (clip) transcribeClip(clip, panel);
   };
 }
-function bzViewTranscript(btn) {
-  var panel = btn.closest('.record-panel');
-  var item = btn.closest('.rec-audio-item');
-  if (!panel || !item) return;
-  var clip = panel._raClips && panel._raClips[item.getAttribute('data-id')];
-  if (!clip) return;
-  if (!clip.transcript) { transcribeClip(clip, panel); return; }
+function bzShowTranscript(clip) {
   var old = document.getElementById('bzTfOverlay');
   if (old) old.remove();
   var ov = document.createElement('div');
@@ -1701,6 +1700,15 @@ function bzViewTranscript(btn) {
     e.preventDefault();
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(clip.transcript.text);
   };
+}
+function bzViewTranscript(btn) {
+  var panel = btn.closest('.record-panel');
+  var item = btn.closest('.rec-audio-item');
+  if (!panel || !item) return;
+  var clip = panel._raClips && panel._raClips[item.getAttribute('data-id')];
+  if (!clip) return;
+  if (!clip.transcript) { transcribeClip(clip, panel); return; }
+  bzShowTranscript(clip);
 }
 function recAudioToggle(btn) {
   var panel = btn.closest('.record-panel');
@@ -4472,6 +4480,7 @@ function cmpSetState(entries) {
     bzTfName: bzTfName,
     bzTranscriptMd: bzTranscriptMd,
     transcribeClip: transcribeClip,
+    bzShowTranscript: bzShowTranscript,
     bzViewTranscript: bzViewTranscript,
     bzAiSettings: bzAiSettings,
     recAudioClearKey: recAudioClearKey,
