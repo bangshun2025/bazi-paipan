@@ -1706,17 +1706,41 @@ function bzPromptOf(clip, raw) {
     raw
   ].join('\n');
 }
+// ===== v0.83.6 咨询人物：默认「邦顺、案主」，可编辑加人，录音稿与说话人归属都按这份名单 =====
+function recPeopleDefault() { return '邦顺、案主'; }
+function recPeopleNorm(s) {
+  var arr = String(s == null ? '' : s).split(/[、,，;；\/|]+|\s{2,}/);
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var t = arr[i].replace(/^\s+|\s+$/g, '');
+    if (t && out.indexOf(t) < 0) out.push(t);
+  }
+  return out.length ? out.join('、') : recPeopleDefault();
+}
+function recPeopleOf(clip) {
+  return recPeopleNorm(clip && clip.people ? clip.people : recPeopleDefault());
+}
+function recPeopleOthers(clip) {
+  var list = recPeopleOf(clip).split('、');
+  var out = [];
+  for (var i = 0; i < list.length; i++) if (list[i] !== '邦顺') out.push(list[i]);
+  return out;
+}
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
     + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
 }
-function bzSpkPrompt(segs, pdName) {
+function bzSpkPrompt(segs, pdName, people) {
+  var others = recPeopleOthers({ people: people });
+  var otherTxt = others.length ? others.join('、') : '对方';
   var L = ['下面是同一段录音的逐段语音识别结果（[序号] [开始时间] 文字）。录音的人是邦顺（命理分析师，录音主导者）'
-    + (pdName ? '，另一位主要说话人很可能是求测者「' + pdName + '」' : '') + '。请逐段判断该段是谁说的。',
+    + (others.length ? '，本次咨询的其他人：' + otherTxt + (pdName ? '（其中「案主」即本次命盘主人「' + pdName + '」）' : '') : '') + '。请逐段判断该段是谁说的。',
     '规则：1. 独白讲解、分析、下结论的段落标「邦顺」；',
-    pdName ? '2. 明显是求测者在提问、回应、补充信息的段落标「' + pdName + '」；' : '2. 明显不是邦顺本人的插话、提问标「对方」；',
+    others.length
+      ? '2. 其他人提问、回应、补充信息的段落，标最贴合的具体人名，只能从这些名字里选：' + otherTxt + '；'
+      : '2. 明显不是邦顺本人的插话、提问标「对方」；',
     '3. 拿不准的一律标「邦顺」；',
-    '4. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (pdName || '对方') + '"}]，不要任何其他文字或代码块标记。',
+    '4. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (others[0] || '对方') + '"}]，不要任何其他文字或代码块标记。',
     '', '【逐段识别文字】'];
   var cap = Math.min(segs.length, 160);
   for (var i = 0; i < cap; i++) L.push('[' + i + '] [' + bzFmtTs(segs[i].s) + '] ' + segs[i].t);
@@ -1761,7 +1785,7 @@ function bzTranscriptMd(clip, answer, raw) {
   var L = [];
   L.push('# 录音稿 · ' + clip.name + (d.name ? '（' + d.name + '）' : ''));
   L.push('');
-  L.push('> 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
+  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
   L.push('');
   L.push(answer);
   var tr = clip.transcript;
@@ -1806,7 +1830,7 @@ function transcribeClip(clip, panel) {
       var tsTxt = segs.filter(function(x) { return x.t; }).map(function(x) { return '[' + bzFmtTs(x.s) + '] ' + x.t; }).join('\n');
       var pdName = window._paipanData && window._paipanData.name || '';
       var pSpk = segs.length > 1
-        ? bzLlm(bzSpkPrompt(segs, pdName), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
+        ? bzLlm(bzSpkPrompt(segs, pdName, clip.people), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
         : Promise.resolve(null);
       return Promise.all([bzLlm(bzPromptOf(clip, tsTxt), cfg.sfKey), pSpk]).then(function(rs) {
         return { segs: segs, raw: raw, ans: rs[0], spk: rs[1] };
@@ -1964,6 +1988,7 @@ function recAudioToggle(btn) {
       var d0 = window._paipanData;
       var clip = {
         id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
@@ -2024,9 +2049,13 @@ function recZoneCssOnce() {
     '.rec-zone .rz-cards{display:flex;flex-direction:column;gap:10px;}',
     '.rec-zone .rz-card{background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:10px 14px;cursor:pointer;transition:box-shadow .15s;}',
     '.rec-zone .rz-card:hover{box-shadow:0 2px 8px rgba(60,45,20,.12);}',
-    '.rec-zone .rz-card-top{display:flex;align-items:center;gap:8px;}',
-    '.rec-zone .rz-card-name{font-size:14px;font-weight:700;color:var(--c-ink,#2b2620);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.rec-zone .rz-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:5px;}',
+    '.rec-zone .rz-card-name{font-size:14px;font-weight:700;color:var(--c-ink,#2b2620);flex:1 1 auto;min-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '.rec-zone .rz-card-time{font-size:12px;color:#8a7f6a;white-space:nowrap;}',
+    '.rec-zone .rz-people-wrap{display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;max-width:100%;background:#fbf7ee;border:1px solid #e6dcc6;border-radius:8px;padding:2px 6px;}',
+    '.rec-zone .rz-people-label{font-size:11px;color:#a39880;white-space:nowrap;}',
+    '.rec-zone .rz-people{width:132px;min-width:64px;max-width:100%;border:0;background:transparent;font:inherit;font-size:12px;color:#7a5c1f;font-weight:600;outline:none;padding:1px 2px;border-bottom:1px dashed #d9c9a3;}',
+    '.rec-zone .rz-people:focus{border-bottom-color:#b8892b;background:#fffdf7;}',
     '.rec-zone .rz-audio-line{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:#6a6154;flex-wrap:wrap;}',
     '.rec-zone .rz-badge{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;}',
     '.rec-zone .rz-badge.ok{background:#e6f4ea;color:#0a7d33;}',
@@ -2117,7 +2146,14 @@ function recZoneCardHtml(c) {
   var hhmm = recPad(dt.getHours()) + ':' + recPad(dt.getMinutes());
   return '<div class="rz-card" data-id="' + bzEsc(c.id) + '" onclick="RENDER.recZoneOpenDetail(this)">'
     + '<div class="rz-card-top"><span class="rz-card-name">' + bzEsc(c.name) + '</span>'
-    + '<span class="rz-card-time">' + hhmm + ' · ' + recAudioFmt(c.dur) + '</span></div>'
+    + '<span class="rz-card-time">' + hhmm + ' · ' + recAudioFmt(c.dur) + '</span>'
+    + '<span class="rz-people-wrap" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
+    + '<span class="rz-people-label">咨询人物</span>'
+    + '<input class="rz-people" data-id="' + bzEsc(c.id) + '" value="' + bzEsc(recPeopleOf(c)).replace(/"/g, '&quot;') + '"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onchange="RENDER.recZonePeopleSave(this)" onblur="RENDER.recZonePeopleSave(this)"'
+    + ' title="本次咨询的参与人，顿号分隔，可加其他人；「案主」＝本次命盘主人">'
+    + '</span></div>'
     + '<div class="rz-audio-line">'
     + '<button type="button" class="rz-play" onclick="event.stopPropagation();RENDER.recZonePlay(this)" title="播放/暂停">▶</button>'
     + '<span>🎙 ' + recAudioFmt(c.dur) + '</span>' + recZoneBadgeOf(c)
@@ -2210,6 +2246,7 @@ function recZoneRecord(btn) {
       var d0 = window._paipanData;
       var clip = {
         id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
@@ -2373,6 +2410,24 @@ function recZoneSaveNotesMd(clip) {
     }
     window.ARCHIVE.syncWriteBlob('录音稿', clip.tfname, new Blob([md], { type: 'text/markdown' }));
   } catch (e) {}
+}
+function recZonePeopleSave(input) {
+  var zone = (input && input.closest) ? input.closest('.rec-zone') : null;
+  if (!zone) zone = document.getElementById('bzRecZone');
+  if (!zone || !input || !input.getAttribute) return;
+  var clip = zone._rzClips && zone._rzClips[input.getAttribute('data-id')];
+  if (!clip) return;
+  var v = recPeopleNorm(input.value);
+  if (input.value !== v) input.value = v;
+  if (clip.people === v) return;
+  clip.people = v;
+  recAudioPut(clip).then(function() {
+    try { if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch(); } catch (e) {}
+    recZoneSaveNotesMd(clip);
+    recStatusShow(zone, '咨询人物已保存：' + v + '（重转录后说话人按这份名单归属）');
+  }).catch(function(e) {
+    recStatusShow(zone, '咨询人物保存失败：' + (e && e.message || e), true);
+  });
 }
 function recZoneAddNote(btn) {
   var zone = document.getElementById('bzRecZone');
@@ -5142,6 +5197,12 @@ function cmpSetState(entries) {
     recZoneTab: recZoneTab,
     recZoneAddNote: recZoneAddNote,
     recZoneSaveNotesMd: recZoneSaveNotesMd,
+    recZonePeopleSave: recZonePeopleSave,
+    recPeopleDefault: recPeopleDefault,
+    recPeopleNorm: recPeopleNorm,
+    recPeopleOf: recPeopleOf,
+    recPeopleOthers: recPeopleOthers,
+    recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,

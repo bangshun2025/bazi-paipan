@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.5 | 2026-10-26 -->
+<!-- 八字排盘 ·  从真版 v0.83.6 | 2026-10-26 -->
+<!-- v0.83.6: 录音卡时间右侧新增「咨询人物」可编辑输入框（默认「邦顺、案主」，顿号分隔可加其他人，如「邦顺、案主、张三妈妈」）—— 改动即存库并刷新该录音稿 md 头部「咨询人物」行；说话人归属 prompt 改为按这份名单判断（案主＝本次命盘主人），转录/重转录后的对话还原会标出对应人名 -->
 <!-- v0.83.5: 「分析记录」右侧新增「📄 档案md」按钮 —— 一键打开该命盘在本地同步目录里最新的「盘面-姓名.md」（先落盘同步再读，保证内容最新；同名多份按 mtime 取最新，严格不串同前缀人名）；新窗口等宽全文展示可直接复制；未开同步/权限失效/未存档/弹窗被拦均有明确提示 -->
 <!-- v0.83.4: 转录状态机持久化修复 + 整理稿质量升级 —— ①修复转录完仍显示「转录中」：成功路径 recAudioPut 之前清 _tfBusy（此前 true 被持久化进 IndexedDB 永不回写，刷新后所有转录完的卡显示转录中）；渲染加载时剥除残留 _tfBusy，徽章判断加 transcript 兜底，存量脏数据自动净化；②整理模型 Qwen2.5-72B 升级为 Qwen3-235B-A22B-Instruct-2507；③整理 prompt 扩充：要点 5-12 条每条 1-3 句含理由依据结论，章节时间线每条 2-4 句还原该章节实际内容（宫位干支大运判断建议均写入），禁止一句话概括 -->
 <!-- v0.83.2: 分析记录丢字加固 —— 听写/输入法直填文字不触发 input 事件导致刷新即丢（10-25 事故），保存改四道兜底：input + compositionend + blur 失焦即存 + 每 4 秒定时巡检（值有变化才落库）；刷新/关页前有未保存内容弹确认拦截；存储写失败（空间不足）显式提示；档案指纹漂移自动拒写防串档 -->
@@ -12479,17 +12480,41 @@ function bzPromptOf(clip, raw) {
     raw
   ].join('\n');
 }
+// ===== v0.83.6 咨询人物：默认「邦顺、案主」，可编辑加人，录音稿与说话人归属都按这份名单 =====
+function recPeopleDefault() { return '邦顺、案主'; }
+function recPeopleNorm(s) {
+  var arr = String(s == null ? '' : s).split(/[、,，;；\/|]+|\s{2,}/);
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var t = arr[i].replace(/^\s+|\s+$/g, '');
+    if (t && out.indexOf(t) < 0) out.push(t);
+  }
+  return out.length ? out.join('、') : recPeopleDefault();
+}
+function recPeopleOf(clip) {
+  return recPeopleNorm(clip && clip.people ? clip.people : recPeopleDefault());
+}
+function recPeopleOthers(clip) {
+  var list = recPeopleOf(clip).split('、');
+  var out = [];
+  for (var i = 0; i < list.length; i++) if (list[i] !== '邦顺') out.push(list[i]);
+  return out;
+}
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
     + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
 }
-function bzSpkPrompt(segs, pdName) {
+function bzSpkPrompt(segs, pdName, people) {
+  var others = recPeopleOthers({ people: people });
+  var otherTxt = others.length ? others.join('、') : '对方';
   var L = ['下面是同一段录音的逐段语音识别结果（[序号] [开始时间] 文字）。录音的人是邦顺（命理分析师，录音主导者）'
-    + (pdName ? '，另一位主要说话人很可能是求测者「' + pdName + '」' : '') + '。请逐段判断该段是谁说的。',
+    + (others.length ? '，本次咨询的其他人：' + otherTxt + (pdName ? '（其中「案主」即本次命盘主人「' + pdName + '」）' : '') : '') + '。请逐段判断该段是谁说的。',
     '规则：1. 独白讲解、分析、下结论的段落标「邦顺」；',
-    pdName ? '2. 明显是求测者在提问、回应、补充信息的段落标「' + pdName + '」；' : '2. 明显不是邦顺本人的插话、提问标「对方」；',
+    others.length
+      ? '2. 其他人提问、回应、补充信息的段落，标最贴合的具体人名，只能从这些名字里选：' + otherTxt + '；'
+      : '2. 明显不是邦顺本人的插话、提问标「对方」；',
     '3. 拿不准的一律标「邦顺」；',
-    '4. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (pdName || '对方') + '"}]，不要任何其他文字或代码块标记。',
+    '4. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (others[0] || '对方') + '"}]，不要任何其他文字或代码块标记。',
     '', '【逐段识别文字】'];
   var cap = Math.min(segs.length, 160);
   for (var i = 0; i < cap; i++) L.push('[' + i + '] [' + bzFmtTs(segs[i].s) + '] ' + segs[i].t);
@@ -12534,7 +12559,7 @@ function bzTranscriptMd(clip, answer, raw) {
   var L = [];
   L.push('# 录音稿 · ' + clip.name + (d.name ? '（' + d.name + '）' : ''));
   L.push('');
-  L.push('> 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
+  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
   L.push('');
   L.push(answer);
   var tr = clip.transcript;
@@ -12579,7 +12604,7 @@ function transcribeClip(clip, panel) {
       var tsTxt = segs.filter(function(x) { return x.t; }).map(function(x) { return '[' + bzFmtTs(x.s) + '] ' + x.t; }).join('\n');
       var pdName = window._paipanData && window._paipanData.name || '';
       var pSpk = segs.length > 1
-        ? bzLlm(bzSpkPrompt(segs, pdName), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
+        ? bzLlm(bzSpkPrompt(segs, pdName, clip.people), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
         : Promise.resolve(null);
       return Promise.all([bzLlm(bzPromptOf(clip, tsTxt), cfg.sfKey), pSpk]).then(function(rs) {
         return { segs: segs, raw: raw, ans: rs[0], spk: rs[1] };
@@ -12737,6 +12762,7 @@ function recAudioToggle(btn) {
       var d0 = window._paipanData;
       var clip = {
         id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
@@ -12797,9 +12823,13 @@ function recZoneCssOnce() {
     '.rec-zone .rz-cards{display:flex;flex-direction:column;gap:10px;}',
     '.rec-zone .rz-card{background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:10px 14px;cursor:pointer;transition:box-shadow .15s;}',
     '.rec-zone .rz-card:hover{box-shadow:0 2px 8px rgba(60,45,20,.12);}',
-    '.rec-zone .rz-card-top{display:flex;align-items:center;gap:8px;}',
-    '.rec-zone .rz-card-name{font-size:14px;font-weight:700;color:var(--c-ink,#2b2620);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.rec-zone .rz-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:5px;}',
+    '.rec-zone .rz-card-name{font-size:14px;font-weight:700;color:var(--c-ink,#2b2620);flex:1 1 auto;min-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '.rec-zone .rz-card-time{font-size:12px;color:#8a7f6a;white-space:nowrap;}',
+    '.rec-zone .rz-people-wrap{display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;max-width:100%;background:#fbf7ee;border:1px solid #e6dcc6;border-radius:8px;padding:2px 6px;}',
+    '.rec-zone .rz-people-label{font-size:11px;color:#a39880;white-space:nowrap;}',
+    '.rec-zone .rz-people{width:132px;min-width:64px;max-width:100%;border:0;background:transparent;font:inherit;font-size:12px;color:#7a5c1f;font-weight:600;outline:none;padding:1px 2px;border-bottom:1px dashed #d9c9a3;}',
+    '.rec-zone .rz-people:focus{border-bottom-color:#b8892b;background:#fffdf7;}',
     '.rec-zone .rz-audio-line{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:#6a6154;flex-wrap:wrap;}',
     '.rec-zone .rz-badge{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;}',
     '.rec-zone .rz-badge.ok{background:#e6f4ea;color:#0a7d33;}',
@@ -12890,7 +12920,14 @@ function recZoneCardHtml(c) {
   var hhmm = recPad(dt.getHours()) + ':' + recPad(dt.getMinutes());
   return '<div class="rz-card" data-id="' + bzEsc(c.id) + '" onclick="RENDER.recZoneOpenDetail(this)">'
     + '<div class="rz-card-top"><span class="rz-card-name">' + bzEsc(c.name) + '</span>'
-    + '<span class="rz-card-time">' + hhmm + ' · ' + recAudioFmt(c.dur) + '</span></div>'
+    + '<span class="rz-card-time">' + hhmm + ' · ' + recAudioFmt(c.dur) + '</span>'
+    + '<span class="rz-people-wrap" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
+    + '<span class="rz-people-label">咨询人物</span>'
+    + '<input class="rz-people" data-id="' + bzEsc(c.id) + '" value="' + bzEsc(recPeopleOf(c)).replace(/"/g, '&quot;') + '"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onchange="RENDER.recZonePeopleSave(this)" onblur="RENDER.recZonePeopleSave(this)"'
+    + ' title="本次咨询的参与人，顿号分隔，可加其他人；「案主」＝本次命盘主人">'
+    + '</span></div>'
     + '<div class="rz-audio-line">'
     + '<button type="button" class="rz-play" onclick="event.stopPropagation();RENDER.recZonePlay(this)" title="播放/暂停">▶</button>'
     + '<span>🎙 ' + recAudioFmt(c.dur) + '</span>' + recZoneBadgeOf(c)
@@ -12983,6 +13020,7 @@ function recZoneRecord(btn) {
       var d0 = window._paipanData;
       var clip = {
         id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
@@ -13146,6 +13184,24 @@ function recZoneSaveNotesMd(clip) {
     }
     window.ARCHIVE.syncWriteBlob('录音稿', clip.tfname, new Blob([md], { type: 'text/markdown' }));
   } catch (e) {}
+}
+function recZonePeopleSave(input) {
+  var zone = (input && input.closest) ? input.closest('.rec-zone') : null;
+  if (!zone) zone = document.getElementById('bzRecZone');
+  if (!zone || !input || !input.getAttribute) return;
+  var clip = zone._rzClips && zone._rzClips[input.getAttribute('data-id')];
+  if (!clip) return;
+  var v = recPeopleNorm(input.value);
+  if (input.value !== v) input.value = v;
+  if (clip.people === v) return;
+  clip.people = v;
+  recAudioPut(clip).then(function() {
+    try { if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch(); } catch (e) {}
+    recZoneSaveNotesMd(clip);
+    recStatusShow(zone, '咨询人物已保存：' + v + '（重转录后说话人按这份名单归属）');
+  }).catch(function(e) {
+    recStatusShow(zone, '咨询人物保存失败：' + (e && e.message || e), true);
+  });
 }
 function recZoneAddNote(btn) {
   var zone = document.getElementById('bzRecZone');
@@ -15915,6 +15971,12 @@ function cmpSetState(entries) {
     recZoneTab: recZoneTab,
     recZoneAddNote: recZoneAddNote,
     recZoneSaveNotesMd: recZoneSaveNotesMd,
+    recZonePeopleSave: recZonePeopleSave,
+    recPeopleDefault: recPeopleDefault,
+    recPeopleNorm: recPeopleNorm,
+    recPeopleOf: recPeopleOf,
+    recPeopleOthers: recPeopleOthers,
+    recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,
     updateCardDyLnColumns: updateCardDyLnColumns,
@@ -19933,6 +19995,46 @@ function captureScreenshot() {
       window._paipanData = oldPd17;
       if (box17 && box17.parentNode) box17.parentNode.removeChild(box17);
     }
+  })();
+
+  // ===== v0.83.6 录音卡咨询人物（默认邦顺、案主，可加人，录音稿按名单归属）=====
+  (function() {
+    tests.push({ section:'录音卡咨询人物(v0.83.6)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recPeopleDefault !== 'function' || typeof R.recPeopleNorm !== 'function'
+        || typeof R.recPeopleOf !== 'function' || typeof R.recPeopleOthers !== 'function'
+        || typeof R.recZonePeopleSave !== 'function' || typeof R.recZoneCardHtml !== 'function') {
+      tests.push(fail('SN18 前置: RENDER 咨询人物接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN18-1: 默认名单为「邦顺、案主」', R.recPeopleDefault(), '邦顺、案主'));
+    tests.push(eq('SN18-2: 逗号/顿号/多余空白统一规范化',
+      R.recPeopleNorm(' 邦顺 ，案主,, 张三妈妈 、 邦顺 '), '邦顺、案主、张三妈妈'));
+    tests.push(eq('SN18-3: 清空后回落默认名单', R.recPeopleNorm('   '), '邦顺、案主'));
+    tests.push(eq('SN18-4: 老录音无 people 字段也按默认显示', R.recPeopleOf({ name:'10-26 15:00' }), '邦顺、案主'));
+    tests.push(eq('SN18-5: 除邦顺外的其他人取全', R.recPeopleOthers({ people:'邦顺、案主、张三妈妈' }).join('|'), '案主|张三妈妈'));
+
+    var h18 = R.recZoneCardHtml({ id:'SN18x', name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主、张三妈妈' });
+    var d18 = document.createElement('div');
+    d18.innerHTML = h18;
+    var timeEl18 = d18.querySelector('.rz-card-time');
+    var inp18 = d18.querySelector('.rz-people');
+    tests.push(eq('SN18-6: 咨询人物输入框紧贴在时间右边',
+      !!timeEl18 && !!inp18 && timeEl18.nextElementSibling === inp18.parentNode, true));
+    tests.push(eq('SN18-7: 输入框显示该录音的名单并可编辑保存',
+      !!inp18 && inp18.value === '邦顺、案主、张三妈妈'
+      && (inp18.getAttribute('onchange') || '').indexOf('recZonePeopleSave') > -1
+      && (inp18.getAttribute('onclick') || '').indexOf('stopPropagation') > -1, true));
+
+    var md18 = R.bzTranscriptMd({ name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主、张三妈妈' }, '整理稿正文', '原始文字');
+    tests.push(eq('SN18-8: 录音稿 md 头部写明咨询人物',
+      md18.indexOf('> 咨询人物：邦顺、案主、张三妈妈 ｜') > -1, true));
+
+    var sp18 = R.bzSpkPrompt([{ s:0, t:'你好' }], '龚洁', '邦顺、案主、张三妈妈');
+    tests.push(eq('SN18-9: 说话人归属只在这份名单里选',
+      sp18.indexOf('本次咨询的其他人：案主、张三妈妈') > -1
+      && sp18.indexOf('命盘主人「龚洁」') > -1
+      && sp18.indexOf('只能从这些名字里选：案主、张三妈妈') > -1, true));
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====

@@ -3637,6 +3637,46 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.83.6 录音卡咨询人物（默认邦顺、案主，可加人，录音稿按名单归属）=====
+  (function() {
+    tests.push({ section:'录音卡咨询人物(v0.83.6)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recPeopleDefault !== 'function' || typeof R.recPeopleNorm !== 'function'
+        || typeof R.recPeopleOf !== 'function' || typeof R.recPeopleOthers !== 'function'
+        || typeof R.recZonePeopleSave !== 'function' || typeof R.recZoneCardHtml !== 'function') {
+      tests.push(fail('SN18 前置: RENDER 咨询人物接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN18-1: 默认名单为「邦顺、案主」', R.recPeopleDefault(), '邦顺、案主'));
+    tests.push(eq('SN18-2: 逗号/顿号/多余空白统一规范化',
+      R.recPeopleNorm(' 邦顺 ，案主,, 张三妈妈 、 邦顺 '), '邦顺、案主、张三妈妈'));
+    tests.push(eq('SN18-3: 清空后回落默认名单', R.recPeopleNorm('   '), '邦顺、案主'));
+    tests.push(eq('SN18-4: 老录音无 people 字段也按默认显示', R.recPeopleOf({ name:'10-26 15:00' }), '邦顺、案主'));
+    tests.push(eq('SN18-5: 除邦顺外的其他人取全', R.recPeopleOthers({ people:'邦顺、案主、张三妈妈' }).join('|'), '案主|张三妈妈'));
+
+    var h18 = R.recZoneCardHtml({ id:'SN18x', name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主、张三妈妈' });
+    var d18 = document.createElement('div');
+    d18.innerHTML = h18;
+    var timeEl18 = d18.querySelector('.rz-card-time');
+    var inp18 = d18.querySelector('.rz-people');
+    tests.push(eq('SN18-6: 咨询人物输入框紧贴在时间右边',
+      !!timeEl18 && !!inp18 && timeEl18.nextElementSibling === inp18.parentNode, true));
+    tests.push(eq('SN18-7: 输入框显示该录音的名单并可编辑保存',
+      !!inp18 && inp18.value === '邦顺、案主、张三妈妈'
+      && (inp18.getAttribute('onchange') || '').indexOf('recZonePeopleSave') > -1
+      && (inp18.getAttribute('onclick') || '').indexOf('stopPropagation') > -1, true));
+
+    var md18 = R.bzTranscriptMd({ name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主、张三妈妈' }, '整理稿正文', '原始文字');
+    tests.push(eq('SN18-8: 录音稿 md 头部写明咨询人物',
+      md18.indexOf('> 咨询人物：邦顺、案主、张三妈妈 ｜') > -1, true));
+
+    var sp18 = R.bzSpkPrompt([{ s:0, t:'你好' }], '龚洁', '邦顺、案主、张三妈妈');
+    tests.push(eq('SN18-9: 说话人归属只在这份名单里选',
+      sp18.indexOf('本次咨询的其他人：案主、张三妈妈') > -1
+      && sp18.indexOf('命盘主人「龚洁」') > -1
+      && sp18.indexOf('只能从这些名字里选：案主、张三妈妈') > -1, true));
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
