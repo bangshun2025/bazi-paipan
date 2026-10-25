@@ -3582,6 +3582,61 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.83.5 右栏「档案md」：点一下打开当前命盘最新的盘面 md =====
+  (function() {
+    tests.push({ section:'档案md 一键打开(v0.83.5 SN17)' });
+    var R17 = window.RENDER, A17 = window.ARCHIVE;
+    if (!R17 || typeof R17.renderChart !== 'function' || !A17
+        || typeof A17.openChartMd !== 'function' || typeof A17.syncChartNameMatch !== 'function'
+        || typeof A17.syncNewestOf !== 'function' || typeof A17.syncEscapeHtml !== 'function') {
+      tests.push(fail('SN17 前置: RENDER/ARCHIVE 接口挂载', '缺失'));
+      return;
+    }
+    var oldPd17 = window._paipanData, box17 = null;
+    try {
+      tests.push(eq('SN17-1: ARCHIVE.openChartMd 已挂载', typeof A17.openChartMd === 'function', true));
+
+      var pd17 = paipan('档案md测试', '男', 1990, 6, 18, 9, 0);
+      oldPd17 = window._paipanData;
+      window._paipanData = pd17;
+      box17 = document.createElement('div');
+      box17.id = 'tst-chartmd';
+      document.body.appendChild(box17);
+      R17.renderChart(pd17, undefined, 'tst-chartmd');
+      var recBtn17 = box17.querySelector('.rec-trigger');
+      var mdBtn17 = box17.querySelector('.chart-md-trigger');
+      tests.push(eq('SN17-2: 档案md 按钮紧跟分析记录右侧', !!recBtn17 && !!mdBtn17 && recBtn17.nextElementSibling === mdBtn17, true));
+      tests.push(eq('SN17-3: 按钮文案标 md 且点击调 ARCHIVE.openChartMd',
+        !!mdBtn17 && mdBtn17.textContent.toLowerCase().indexOf('md') > -1
+        && (mdBtn17.getAttribute('onclick') || '').indexOf('ARCHIVE.openChartMd') > -1, true));
+
+      tests.push(eq('SN17-4: md 文本转义防注入', A17.syncEscapeHtml('<b a="1">&x'), '&lt;b a="1"&gt;&amp;x'));
+
+      var newest17 = A17.syncNewestOf([
+        { name:'盘面-张三.md', lastModified: 100 },
+        { name:'盘面-张三-12.md', lastModified: 900 },
+        null
+      ]);
+      tests.push(eq('SN17-5: 同名多份取 mtime 最新', !!newest17 && newest17.name === '盘面-张三-12.md', true));
+
+      tests.push(eq('SN17-6: 只认本人 md，不串到同前缀人名',
+        A17.syncChartNameMatch('张三', '盘面-张三.md') === true
+        && A17.syncChartNameMatch('张三', '盘面-张三-12.md') === true
+        && A17.syncChartNameMatch('张三', '盘面-张三丰.md') === false
+        && A17.syncChartNameMatch('张三', 'INDEX.md') === false, true));
+
+      var src17 = '';
+      for (var s17 = 0; s17 < document.scripts.length; s17++) src17 += document.scripts[s17].textContent;
+      tests.push(eq('SN17-7: 打开前先落盘同步，保证拿到最新内容',
+        /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src17), true));
+    } catch (e17) {
+      tests.push(fail('SN17 异常', String(e17 && e17.message || e17)));
+    } finally {
+      window._paipanData = oldPd17;
+      if (box17 && box17.parentNode) box17.parentNode.removeChild(box17);
+    }
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });

@@ -1875,6 +1875,134 @@ function syncVerDecide(a, idx, noteText, now) {
   return file;
 }
 
+// ===== v0.83.5 右栏「档案md」：打开当前命盘在本地同步目录里的最新 Markdown =====
+function syncEnsureDir() {
+  if (_syncDir) return Promise.resolve(_syncDir);
+  if (localStorage.getItem(SYNC_ON_KEY) !== '1') return Promise.resolve(null);
+  return syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
+    if (!h || !h.queryPermission) return null;
+    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+      if (perm !== 'granted') return null;
+      _syncDir = h;
+      return h;
+    });
+  }).catch(function() { return null; });
+}
+
+function syncWaitIdle(tries) {
+  tries = tries || 0;
+  if (!_syncDir) return Promise.resolve(0);
+  if ((_syncRunning || _syncPending) && tries < 60) {
+    return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
+  }
+  return syncAll().then(function(n) {
+    if (n === -1 && tries < 60) {
+      return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
+    }
+    return n;
+  }).catch(function() { return 0; });
+}
+
+function syncListDir(dir) {
+  var out = [];
+  if (!dir || typeof dir.values !== 'function') return Promise.resolve(out);
+  var it = dir.values();
+  return new Promise(function(done) {
+    (function next() {
+      it.next().then(function(r) {
+        if (r.done) return done(out);
+        out.push(r.value);
+        next();
+      }).catch(function() { done(out); });
+    })();
+  });
+}
+
+// 同名档案可能落成「盘面-姓名.md」或「盘面-姓名-<id>.md」，按 mtime 取最新那份
+function syncChartNameMatch(nm, fn) {
+  var head = '盘面-' + nm;
+  fn = String(fn || '');
+  if (fn.indexOf(head) !== 0 || !/\.md$/.test(fn)) return false;
+  var tail = fn.slice(head.length);
+  return tail === '.md' || /^-[^\/]*\.md$/.test(tail);
+}
+function syncNewestOf(list) {
+  var best = null;
+  (list || []).forEach(function(o) {
+    if (o && (!best || (o.lastModified || 0) > (best.lastModified || 0))) best = o;
+  });
+  return best;
+}
+function syncLatestChartFile(nm, dir) {
+  dir = dir || _syncDir;
+  return syncListDir(dir).then(function(items) {
+    var cands = (items || []).filter(function(h) {
+      return h && h.kind === 'file' && syncChartNameMatch(nm, h.name);
+    });
+    if (!cands.length) return null;
+    return Promise.all(cands.map(function(h) {
+      return h.getFile().then(function(f) {
+        return { h: h, name: h.name, lastModified: (f && f.lastModified) || 0, f: f };
+      }).catch(function() { return null; });
+    })).then(function(list) {
+      var best = syncNewestOf(list);
+      return best ? { h: best.h, f: best.f } : null;
+    });
+  });
+}
+
+function syncEscapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function syncPaintWindow(win, title, inner) {
+  var doc = win.document;
+  doc.open();
+  doc.write('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>'
+    + syncEscapeHtml(title) + '</title><style>'
+    + 'html,body{margin:0;background:#faf8f3;color:#1f1f1f}'
+    + 'body{padding:28px 32px 60px;font:15px/1.8 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}'
+    + 'pre{max-width:920px;margin:0 auto;white-space:pre-wrap;word-break:break-word;'
+    + 'font:13.5px/1.85 "SF Mono",Menlo,Consolas,monospace}'
+    + '.hint{max-width:920px;margin:40px auto;font-size:15px;color:#8a6a2f}'
+    + '.hint.err{color:#b3261e;white-space:pre-wrap}'
+    + '</style></head><body>' + inner + '</body></html>');
+  doc.close();
+}
+
+function openChartMd() {
+  var d = window._paipanData || {};
+  var nm = String(d.name || '').trim();
+  var ta = document.querySelector('.record-panel .rec-text');
+  if (ta) { try { ta.blur(); } catch (e) {} }
+  if (!syncSupported()) {
+    alert('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。');
+    return;
+  }
+  if (!nm) {
+    alert('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。');
+    return;
+  }
+  var win = window.open('', '_blank');
+  if (win) { try { syncPaintWindow(win, '盘面-' + nm + '.md', '<p class="hint">正在同步并读取最新 md……</p>'); } catch (e) {} }
+
+  syncEnsureDir().then(function(dir) {
+    if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
+    return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
+  }).then(function(best) {
+    if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
+    return best.f.text().then(function(text) { return { name: best.h.name, text: text }; });
+  }).then(function(o) {
+    if (!win || win.closed) { alert('新窗口被浏览器拦截了。\n\n请允许本站打开弹窗后再点。'); return; }
+    syncPaintWindow(win, o.name, '<pre>' + syncEscapeHtml(o.text) + '</pre>');
+  }).catch(function(err) {
+    var msg = (err && err.message) || '未知错误';
+    if (win && !win.closed) syncPaintWindow(win, '打开失败', '<p class="hint err">' + syncEscapeHtml(msg) + '</p>');
+    else alert(msg);
+  });
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
@@ -1894,6 +2022,11 @@ function syncVerDecide(a, idx, noteText, now) {
     syncWriteBlob: syncWriteBlob,
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
+    openChartMd: openChartMd,
+    syncLatestChartFile: syncLatestChartFile,
+    syncChartNameMatch: syncChartNameMatch,
+    syncNewestOf: syncNewestOf,
+    syncEscapeHtml: syncEscapeHtml,
     syncVerDecide: syncVerDecide,
     syncVerReset: syncVerReset,
     pickSyncFolder: pickSyncFolder,

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.4 | 2026-10-25 -->
+<!-- 八字排盘 ·  从真版 v0.83.5 | 2026-10-26 -->
+<!-- v0.83.5: 「分析记录」右侧新增「📄 档案md」按钮 —— 一键打开该命盘在本地同步目录里最新的「盘面-姓名.md」（先落盘同步再读，保证内容最新；同名多份按 mtime 取最新，严格不串同前缀人名）；新窗口等宽全文展示可直接复制；未开同步/权限失效/未存档/弹窗被拦均有明确提示 -->
 <!-- v0.83.4: 转录状态机持久化修复 + 整理稿质量升级 —— ①修复转录完仍显示「转录中」：成功路径 recAudioPut 之前清 _tfBusy（此前 true 被持久化进 IndexedDB 永不回写，刷新后所有转录完的卡显示转录中）；渲染加载时剥除残留 _tfBusy，徽章判断加 transcript 兜底，存量脏数据自动净化；②整理模型 Qwen2.5-72B 升级为 Qwen3-235B-A22B-Instruct-2507；③整理 prompt 扩充：要点 5-12 条每条 1-3 句含理由依据结论，章节时间线每条 2-4 句还原该章节实际内容（宫位干支大运判断建议均写入），禁止一句话概括 -->
 <!-- v0.83.2: 分析记录丢字加固 —— 听写/输入法直填文字不触发 input 事件导致刷新即丢（10-25 事故），保存改四道兜底：input + compositionend + blur 失焦即存 + 每 4 秒定时巡检（值有变化才落库）；刷新/关页前有未保存内容弹确认拦截；存储写失败（空间不足）显式提示；档案指纹漂移自动拒写防串档 -->
 <!-- v0.83.1: 文字记录升级对话还原 —— VAD 分段真实时间戳 + GLM 说话人归属（参照得到大脑格式：头像+说话人+HH:MM:SS+原文，时间戳可点跳播放）；纪要新增章节时间线与金句；录音稿 md 新增「对话还原」节；旧稿重转录可升级 -->
@@ -7303,6 +7304,134 @@ function syncVerDecide(a, idx, noteText, now) {
   return file;
 }
 
+// ===== v0.83.5 右栏「档案md」：打开当前命盘在本地同步目录里的最新 Markdown =====
+function syncEnsureDir() {
+  if (_syncDir) return Promise.resolve(_syncDir);
+  if (localStorage.getItem(SYNC_ON_KEY) !== '1') return Promise.resolve(null);
+  return syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
+    if (!h || !h.queryPermission) return null;
+    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+      if (perm !== 'granted') return null;
+      _syncDir = h;
+      return h;
+    });
+  }).catch(function() { return null; });
+}
+
+function syncWaitIdle(tries) {
+  tries = tries || 0;
+  if (!_syncDir) return Promise.resolve(0);
+  if ((_syncRunning || _syncPending) && tries < 60) {
+    return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
+  }
+  return syncAll().then(function(n) {
+    if (n === -1 && tries < 60) {
+      return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
+    }
+    return n;
+  }).catch(function() { return 0; });
+}
+
+function syncListDir(dir) {
+  var out = [];
+  if (!dir || typeof dir.values !== 'function') return Promise.resolve(out);
+  var it = dir.values();
+  return new Promise(function(done) {
+    (function next() {
+      it.next().then(function(r) {
+        if (r.done) return done(out);
+        out.push(r.value);
+        next();
+      }).catch(function() { done(out); });
+    })();
+  });
+}
+
+// 同名档案可能落成「盘面-姓名.md」或「盘面-姓名-<id>.md」，按 mtime 取最新那份
+function syncChartNameMatch(nm, fn) {
+  var head = '盘面-' + nm;
+  fn = String(fn || '');
+  if (fn.indexOf(head) !== 0 || !/\.md$/.test(fn)) return false;
+  var tail = fn.slice(head.length);
+  return tail === '.md' || /^-[^\/]*\.md$/.test(tail);
+}
+function syncNewestOf(list) {
+  var best = null;
+  (list || []).forEach(function(o) {
+    if (o && (!best || (o.lastModified || 0) > (best.lastModified || 0))) best = o;
+  });
+  return best;
+}
+function syncLatestChartFile(nm, dir) {
+  dir = dir || _syncDir;
+  return syncListDir(dir).then(function(items) {
+    var cands = (items || []).filter(function(h) {
+      return h && h.kind === 'file' && syncChartNameMatch(nm, h.name);
+    });
+    if (!cands.length) return null;
+    return Promise.all(cands.map(function(h) {
+      return h.getFile().then(function(f) {
+        return { h: h, name: h.name, lastModified: (f && f.lastModified) || 0, f: f };
+      }).catch(function() { return null; });
+    })).then(function(list) {
+      var best = syncNewestOf(list);
+      return best ? { h: best.h, f: best.f } : null;
+    });
+  });
+}
+
+function syncEscapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function syncPaintWindow(win, title, inner) {
+  var doc = win.document;
+  doc.open();
+  doc.write('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>'
+    + syncEscapeHtml(title) + '</title><style>'
+    + 'html,body{margin:0;background:#faf8f3;color:#1f1f1f}'
+    + 'body{padding:28px 32px 60px;font:15px/1.8 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}'
+    + 'pre{max-width:920px;margin:0 auto;white-space:pre-wrap;word-break:break-word;'
+    + 'font:13.5px/1.85 "SF Mono",Menlo,Consolas,monospace}'
+    + '.hint{max-width:920px;margin:40px auto;font-size:15px;color:#8a6a2f}'
+    + '.hint.err{color:#b3261e;white-space:pre-wrap}'
+    + '</style></head><body>' + inner + '</body></html>');
+  doc.close();
+}
+
+function openChartMd() {
+  var d = window._paipanData || {};
+  var nm = String(d.name || '').trim();
+  var ta = document.querySelector('.record-panel .rec-text');
+  if (ta) { try { ta.blur(); } catch (e) {} }
+  if (!syncSupported()) {
+    alert('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。');
+    return;
+  }
+  if (!nm) {
+    alert('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。');
+    return;
+  }
+  var win = window.open('', '_blank');
+  if (win) { try { syncPaintWindow(win, '盘面-' + nm + '.md', '<p class="hint">正在同步并读取最新 md……</p>'); } catch (e) {} }
+
+  syncEnsureDir().then(function(dir) {
+    if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
+    return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
+  }).then(function(best) {
+    if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
+    return best.f.text().then(function(text) { return { name: best.h.name, text: text }; });
+  }).then(function(o) {
+    if (!win || win.closed) { alert('新窗口被浏览器拦截了。\n\n请允许本站打开弹窗后再点。'); return; }
+    syncPaintWindow(win, o.name, '<pre>' + syncEscapeHtml(o.text) + '</pre>');
+  }).catch(function(err) {
+    var msg = (err && err.message) || '未知错误';
+    if (win && !win.closed) syncPaintWindow(win, '打开失败', '<p class="hint err">' + syncEscapeHtml(msg) + '</p>');
+    else alert(msg);
+  });
+}
+
 // ===== 挂载到全局命名空间 =====
   window.ARCHIVE = {
     PRESET_ARCHIVES: PRESET_ARCHIVES,
@@ -7322,6 +7451,11 @@ function syncVerDecide(a, idx, noteText, now) {
     syncWriteBlob: syncWriteBlob,
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
+    openChartMd: openChartMd,
+    syncLatestChartFile: syncLatestChartFile,
+    syncChartNameMatch: syncChartNameMatch,
+    syncNewestOf: syncNewestOf,
+    syncEscapeHtml: syncEscapeHtml,
     syncVerDecide: syncVerDecide,
     syncVerReset: syncVerReset,
     pickSyncFolder: pickSyncFolder,
@@ -11735,7 +11869,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button></div>
     </div>`;
   const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
@@ -19743,6 +19877,61 @@ function captureScreenshot() {
       tests.push(eq('SN16-8: 成功路径先清 _tfBusy 再存 transcript', /clip\._tfBusy = false;\s*clip\.transcript/.test(src16), true));
     } catch (e16) {
       tests.push(fail('SN16 异常', String(e16 && e16.message || e16)));
+    }
+  })();
+
+  // ===== v0.83.5 右栏「档案md」：点一下打开当前命盘最新的盘面 md =====
+  (function() {
+    tests.push({ section:'档案md 一键打开(v0.83.5 SN17)' });
+    var R17 = window.RENDER, A17 = window.ARCHIVE;
+    if (!R17 || typeof R17.renderChart !== 'function' || !A17
+        || typeof A17.openChartMd !== 'function' || typeof A17.syncChartNameMatch !== 'function'
+        || typeof A17.syncNewestOf !== 'function' || typeof A17.syncEscapeHtml !== 'function') {
+      tests.push(fail('SN17 前置: RENDER/ARCHIVE 接口挂载', '缺失'));
+      return;
+    }
+    var oldPd17 = window._paipanData, box17 = null;
+    try {
+      tests.push(eq('SN17-1: ARCHIVE.openChartMd 已挂载', typeof A17.openChartMd === 'function', true));
+
+      var pd17 = paipan('档案md测试', '男', 1990, 6, 18, 9, 0);
+      oldPd17 = window._paipanData;
+      window._paipanData = pd17;
+      box17 = document.createElement('div');
+      box17.id = 'tst-chartmd';
+      document.body.appendChild(box17);
+      R17.renderChart(pd17, undefined, 'tst-chartmd');
+      var recBtn17 = box17.querySelector('.rec-trigger');
+      var mdBtn17 = box17.querySelector('.chart-md-trigger');
+      tests.push(eq('SN17-2: 档案md 按钮紧跟分析记录右侧', !!recBtn17 && !!mdBtn17 && recBtn17.nextElementSibling === mdBtn17, true));
+      tests.push(eq('SN17-3: 按钮文案标 md 且点击调 ARCHIVE.openChartMd',
+        !!mdBtn17 && mdBtn17.textContent.toLowerCase().indexOf('md') > -1
+        && (mdBtn17.getAttribute('onclick') || '').indexOf('ARCHIVE.openChartMd') > -1, true));
+
+      tests.push(eq('SN17-4: md 文本转义防注入', A17.syncEscapeHtml('<b a="1">&x'), '&lt;b a="1"&gt;&amp;x'));
+
+      var newest17 = A17.syncNewestOf([
+        { name:'盘面-张三.md', lastModified: 100 },
+        { name:'盘面-张三-12.md', lastModified: 900 },
+        null
+      ]);
+      tests.push(eq('SN17-5: 同名多份取 mtime 最新', !!newest17 && newest17.name === '盘面-张三-12.md', true));
+
+      tests.push(eq('SN17-6: 只认本人 md，不串到同前缀人名',
+        A17.syncChartNameMatch('张三', '盘面-张三.md') === true
+        && A17.syncChartNameMatch('张三', '盘面-张三-12.md') === true
+        && A17.syncChartNameMatch('张三', '盘面-张三丰.md') === false
+        && A17.syncChartNameMatch('张三', 'INDEX.md') === false, true));
+
+      var src17 = '';
+      for (var s17 = 0; s17 < document.scripts.length; s17++) src17 += document.scripts[s17].textContent;
+      tests.push(eq('SN17-7: 打开前先落盘同步，保证拿到最新内容',
+        /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src17), true));
+    } catch (e17) {
+      tests.push(fail('SN17 异常', String(e17 && e17.message || e17)));
+    } finally {
+      window._paipanData = oldPd17;
+      if (box17 && box17.parentNode) box17.parentNode.removeChild(box17);
     }
   })();
 
