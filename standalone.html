@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.2 | 2026-10-25 -->
+<!-- 八字排盘 ·  从真版 v0.83.3 | 2026-10-25 -->
+<!-- v0.83.3: 录音状态机加固 —— 录音中断静默假死修复：此前麦克风被抢/设备切换/录音器出错后按钮仍显示「停止」计时照走（假象在录），再点无反应永久卡死；改为点击按录音器真实 state 分派（幽灵状态自动清理重录）+ onerror 与麦克风轨道 ended 监听 + 250ms 计时巡检真实状态三道兜底，中断时已录内容照常保存（文件名标「中断」）并红字提示 -->
 <!-- v0.83.2: 分析记录丢字加固 —— 听写/输入法直填文字不触发 input 事件导致刷新即丢（10-25 事故），保存改四道兜底：input + compositionend + blur 失焦即存 + 每 4 秒定时巡检（值有变化才落库）；刷新/关页前有未保存内容弹确认拦截；存储写失败（空间不足）显式提示；档案指纹漂移自动拒写防串档 -->
 <!-- v0.83.1: 文字记录升级对话还原 —— VAD 分段真实时间戳 + GLM 说话人归属（参照得到大脑格式：头像+说话人+HH:MM:SS+原文，时间戳可点跳播放）；纪要新增章节时间线与金句；录音稿 md 新增「对话还原」节；旧稿重转录可升级 -->
 <!-- v0.82.0: 录音自动转录 —— 录音结束自动语音转文字（SiliconFlow SenseVoice）并 AI 整理成分析录音稿（Qwen 总述+要点，参照盘面/分析记录/知识库术语），稿件自动落盘「录音稿/」目录，列表📝可查看/复制/手动转录，API Key 仅存本机浏览器 -->
@@ -12548,10 +12549,22 @@ function bzViewTranscript(btn) {
   if (!clip.transcript) { transcribeClip(clip, panel); return; }
   bzShowTranscript(clip);
 }
+function recAudioResetBtn(panel) {
+  panel._raRec = null; panel._raExpectStop = false;
+  clearInterval(panel._raTimer);
+  var btn = panel.querySelector('.rec-audio-btn');
+  if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
+  var tEl = panel.querySelector('.rec-audio-timer');
+  if (tEl) tEl.textContent = '';
+}
 function recAudioToggle(btn) {
   var panel = btn.closest('.record-panel');
   if (!panel) return;
-  if (panel._raRec) { try { panel._raRec.stop(); } catch (e) {} return; }
+  if (panel._raRec) {
+    if (panel._raRec.state === 'recording') { panel._raExpectStop = true; try { panel._raRec.stop(); } catch (e) {} return; }
+    recAudioResetBtn(panel);
+    recStatusShow(panel, '检测到上次录音已中断，重新开始', true);
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     recStatusShow(panel, '当前环境不支持录音', true); return;
   }
@@ -12567,42 +12580,60 @@ function recAudioToggle(btn) {
     }
     var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     var chunks = [];
-    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
-    mr.onstop = function() {
+    var done = false;
+    function finalize(interrupted) {
+      if (done) return;
+      done = true;
+      panel._raExpectStop = false;
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
       clearInterval(panel._raTimer);
-      var dur = Math.max(1, Math.round((Date.now() - panel._raT0) / 1000));
-      var m = mr.mimeType || mime || 'audio/webm';
-      var blob = new Blob(chunks, { type: m.split(';')[0] });
       panel._raRec = null;
       btn.textContent = '● 录音'; btn.classList.remove('recording');
       var tEl = panel.querySelector('.rec-audio-timer');
       if (tEl) tEl.textContent = '';
+      if (!chunks.length) {
+        if (interrupted) recStatusShow(panel, '⚠ 录音中断：未录到内容', true);
+        return;
+      }
+      var dur = Math.max(1, Math.round((Date.now() - panel._raT0) / 1000));
+      var m = mr.mimeType || mime || 'audio/webm';
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
-        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
-        blob: blob
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        blob: new Blob(chunks, { type: m.split(';')[0] })
       };
       recAudioPut(clip).then(function() {
-        recStatusShow(panel, '已保存录音 ' + recAudioFmt(dur));
         try {
           if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob);
         } catch (e) {}
         transcribeClip(clip, panel);
-        return recAudioList(k);
-      }).then(function(list) { renderRecAudioList(panel, list); }).catch(function(e) {
+        return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
+      }).then(function() {
+        recStatusShow(panel, interrupted ? '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整' : '已保存录音 ' + recAudioFmt(dur), interrupted);
+      }).catch(function(e) {
         recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
       });
-    };
+    }
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() { finalize(!panel._raExpectStop); };
+    mr.onerror = function() { finalize(true); };
+    stream.getTracks().forEach(function(t) {
+      t.addEventListener('ended', function() {
+        if (panel._raRec !== mr || done) return;
+        if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
+        else finalize(true);
+      });
+    });
     panel._raRec = mr;
     panel._raT0 = Date.now();
     mr.start();
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = panel.querySelector('.rec-audio-timer');
     panel._raTimer = setInterval(function() {
+      if (!panel._raRec || panel._raRec.state !== 'recording') { if (!panel._raExpectStop) finalize(true); return; }
       if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - panel._raT0) / 1000));
     }, 250);
   }).catch(function(err) {
@@ -12740,7 +12771,7 @@ function recZoneRenderInto(box, list) {
   var h = '<div class="rz-head"><span class="rz-title">🎙 录音与 AI 交互区</span>'
     + '<span class="rz-count">全部录音 ' + (list || []).length + '</span>'
     + '<button type="button" class="rz-rec-btn" onclick="RENDER.recZoneRecord(this)">● 录音</button>'
-    + '<span class="rz-timer"></span></div>';
+    + '<span class="rz-timer"></span><span class="rec-status"></span></div>';
   if (!days.length) {
     h += '<div class="rz-empty">暂无录音 · 点右上「● 录音」开始语音分析，自动转录成纪要</div>';
   } else {
@@ -12768,10 +12799,22 @@ function renderRecZone() {
     return true;
   }).catch(function() { return false; });
 }
-var _rzRec = null, _rzT0 = 0, _rzTimer = null;
+var _rzRec = null, _rzT0 = 0, _rzTimer = null, _rzExpectStop = false;
+function recZoneResetBtn() {
+  var zone = document.getElementById('bzRecZone');
+  _rzRec = null; _rzExpectStop = false;
+  clearInterval(_rzTimer); _rzTimer = null;
+  var btn = zone && zone.querySelector('.rz-rec-btn');
+  if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
+  var tEl = zone && zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
+}
 function recZoneRecord(btn) {
   var zone = document.getElementById('bzRecZone');
-  if (_rzRec) { try { _rzRec.stop(); } catch (e) {} return; }
+  if (_rzRec) {
+    if (_rzRec.state === 'recording') { _rzExpectStop = true; try { _rzRec.stop(); } catch (e) {} return; }
+    recZoneResetBtn();
+    recStatusShow(zone, '检测到上次录音已中断，重新开始', true);
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     recStatusShow(zone, '当前环境不支持录音', true); return;
   }
@@ -12783,34 +12826,54 @@ function recZoneRecord(btn) {
     for (var i = 0; i < mimes.length; i++) if (MediaRecorder.isTypeSupported(mimes[i])) { mime = mimes[i]; break; }
     var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     var chunks = [];
-    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
-    mr.onstop = function() {
+    var done = false;
+    function finalize(interrupted) {
+      if (done) return;
+      done = true;
+      _rzExpectStop = false;
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
-      clearInterval(_rzTimer);
+      clearInterval(_rzTimer); _rzTimer = null;
+      _rzRec = null;
+      btn.textContent = '● 录音'; btn.classList.remove('recording');
+      var tEl = zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
+      if (!chunks.length) {
+        if (interrupted) recStatusShow(zone, '⚠ 录音中断：未录到内容', true);
+        return;
+      }
       var dur = Math.max(1, Math.round((Date.now() - _rzT0) / 1000));
       var m = mr.mimeType || mime || 'audio/webm';
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
-        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
-      _rzRec = null;
-      btn.textContent = '● 录音'; btn.classList.remove('recording');
-      var tEl = zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
       recAudioPut(clip).then(function() {
         try { if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob); } catch (e) {}
         transcribeClip(clip, null);
         return renderRecZone();
+      }).then(function() {
+        if (interrupted) recStatusShow(zone, '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整', true);
       }).catch(function(e) { recStatusShow(zone, '录音保存失败：' + (e && e.message || e), true); });
-    };
+    }
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() { finalize(!_rzExpectStop); };
+    mr.onerror = function() { finalize(true); };
+    stream.getTracks().forEach(function(t) {
+      t.addEventListener('ended', function() {
+        if (_rzRec !== mr || done) return;
+        if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
+        else finalize(true);
+      });
+    });
     _rzRec = mr; _rzT0 = Date.now();
     mr.start();
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = zone.querySelector('.rz-timer');
     _rzTimer = setInterval(function() {
+      if (!_rzRec || _rzRec.state !== 'recording') { if (!_rzExpectStop) finalize(true); return; }
       if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - _rzT0) / 1000));
     }, 250);
   }).catch(function(err) {
@@ -15698,6 +15761,14 @@ function cmpSetState(entries) {
     recZoneRenderDetail: recZoneRenderDetail,
     renderRecZone: renderRecZone,
     recZoneRecord: recZoneRecord,
+    recZoneResetBtn: recZoneResetBtn,
+    recAudioResetBtn: recAudioResetBtn,
+    _rzDebug: function(op, v) {
+      if (op === 'get') return { rec: _rzRec, expect: _rzExpectStop };
+      if (op === 'set') _rzRec = v;
+      if (op === 'reset') recZoneResetBtn();
+      return null;
+    },
     recZonePlay: recZonePlay,
     recZoneSeekTs: recZoneSeekTs,
     recZoneOpenDetail: recZoneOpenDetail,
@@ -19572,6 +19643,67 @@ function captureScreenshot() {
         var tR = document.getElementById('tst-rec'); if (tR && tR.parentNode) tR.parentNode.removeChild(tR);
       } catch (e) {}
       tests.push(eq('REC 现场还原: bz_rec_mode/草稿清空', (function() { var m = localStorage.getItem('bz_rec_mode'); return m === savedMode && (keyR === null || localStorage.getItem(keyR) === savedNotes); })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  // ===== SN15 v0.83.3 录音状态机加固：真实 state 分派+幽灵清理+预期结束标记（onerror/track ended/巡检兜底走 E2E）=====
+  (function() {
+    tests.push({ section: '录音状态机加固(SN15)' });
+    var R15 = window.RENDER;
+    if (!R15 || typeof R15.recZoneRecord !== 'function' || typeof R15.recAudioToggle !== 'function' || !R15._rzDebug) {
+      tests.push(fail('SN15 前置: 录音接口挂载', '缺失'));
+      return;
+    }
+    var oldPd15 = window._paipanData;
+    try {
+      window._paipanData = paipan('录音状态机', '男', 1982, 10, 18, 5, 1);
+      tests.push(eq('SN15-1: resetBtn/状态探针导出就位', typeof R15.recZoneResetBtn === 'function' && typeof R15.recAudioResetBtn === 'function' && typeof R15._rzDebug === 'function', true));
+      var zone15 = document.getElementById('bzRecZone');
+      var zBtn = document.createElement('button');
+      zBtn.className = 'rz-rec-btn recording'; zBtn.textContent = '■ 停止';
+      var zTimer = document.createElement('span'); zTimer.className = 'rz-timer'; zTimer.textContent = '00:12';
+      var zStatus = document.createElement('span'); zStatus.className = 'rec-status';
+      if (zone15) { zone15.appendChild(zBtn); zone15.appendChild(zTimer); zone15.appendChild(zStatus); }
+      var gumOrig = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
+      if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = function() { return new Promise(function() {}); };
+      R15._rzDebug('set', { state: 'inactive' });
+      R15.recZoneRecord(zBtn);
+      tests.push(eq('SN15-2: 幽灵 recorder 点击即清理', R15._rzDebug('get').rec, null));
+      tests.push(eq('SN15-2: 幽灵清理后按钮计时器归位', zBtn.textContent + '/' + zBtn.classList.contains('recording') + '/' + zTimer.textContent, '● 录音/false/'));
+      tests.push(eq('SN15-2: 提示上次已中断', (zone15 ? zone15.textContent : '').indexOf('已中断') >= 0, true));
+      var p15 = document.createElement('div');
+      p15.className = 'record-panel';
+      p15.innerHTML = '<button type="button" class="rec-audio-btn recording">■ 停止</button><span class="rec-audio-timer">00:09</span><span class="rec-status"></span>';
+      document.body.appendChild(p15);
+      var pBtn = p15.querySelector('.rec-audio-btn'), pTimer = p15.querySelector('.rec-audio-timer');
+      p15._raRec = { state: 'inactive' };
+      R15.recAudioToggle(pBtn);
+      tests.push(eq('SN15-3: panel 幽灵 recorder 点击即清理', p15._raRec, null));
+      tests.push(eq('SN15-3: panel 按钮计时器归位', pBtn.textContent + '/' + pBtn.classList.contains('recording') + '/' + pTimer.textContent, '● 录音/false/'));
+      var fakeRec = { state: 'recording', _stops: 0, stop: function() { this._stops++; } };
+      R15._rzDebug('set', fakeRec);
+      R15.recZoneRecord(zBtn);
+      tests.push(eq('SN15-4: 录音中点击走 stop 分派', fakeRec._stops, 1));
+      tests.push(eq('SN15-4: stop 分派设预期结束标记', R15._rzDebug('get').expect === true && R15._rzDebug('get').rec === fakeRec, true));
+      R15.recZoneResetBtn();
+      tests.push(eq('SN15-4: zone resetBtn 清录音态', R15._rzDebug('get').rec === null && R15._rzDebug('get').expect === false && zBtn.textContent === '● 录音', true));
+      var fakeRecP = { state: 'recording', _stops: 0, stop: function() { this._stops++; } };
+      p15._raRec = fakeRecP;
+      R15.recAudioToggle(pBtn);
+      tests.push(eq('SN15-5: panel 录音中点击走 stop 分派', fakeRecP._stops, 1));
+      tests.push(eq('SN15-5: panel 预期结束标记就位', p15._raExpectStop === true && p15._raRec === fakeRecP, true));
+      R15.recAudioResetBtn(p15);
+      tests.push(eq('SN15-5: panel resetBtn 清录音态', p15._raRec === null && p15._raExpectStop === false && pBtn.textContent === '● 录音', true));
+    } finally {
+      try {
+        if (navigator.mediaDevices && gumOrig) navigator.mediaDevices.getUserMedia = gumOrig;
+        if (R15._rzDebug) R15._rzDebug('reset');
+        if (p15.parentNode) p15.parentNode.removeChild(p15);
+        var zoneC = document.getElementById('bzRecZone');
+        if (zoneC) { ['.rz-rec-btn', '.rz-timer', '.rec-status'].forEach(function(sel) { var n = zoneC.querySelector(sel); if (n) n.parentNode.removeChild(n); }); }
+        window._paipanData = oldPd15;
+      } catch (e) {}
+      tests.push(eq('SN15 现场还原: 录音状态清空', R15._rzDebug('get').rec === null && R15._rzDebug('get').expect === false && !p15.parentNode && !(zone15 && zone15.querySelector('.rz-rec-btn')), true));
     }
   })();
 

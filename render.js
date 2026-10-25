@@ -1910,10 +1910,22 @@ function bzViewTranscript(btn) {
   if (!clip.transcript) { transcribeClip(clip, panel); return; }
   bzShowTranscript(clip);
 }
+function recAudioResetBtn(panel) {
+  panel._raRec = null; panel._raExpectStop = false;
+  clearInterval(panel._raTimer);
+  var btn = panel.querySelector('.rec-audio-btn');
+  if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
+  var tEl = panel.querySelector('.rec-audio-timer');
+  if (tEl) tEl.textContent = '';
+}
 function recAudioToggle(btn) {
   var panel = btn.closest('.record-panel');
   if (!panel) return;
-  if (panel._raRec) { try { panel._raRec.stop(); } catch (e) {} return; }
+  if (panel._raRec) {
+    if (panel._raRec.state === 'recording') { panel._raExpectStop = true; try { panel._raRec.stop(); } catch (e) {} return; }
+    recAudioResetBtn(panel);
+    recStatusShow(panel, '检测到上次录音已中断，重新开始', true);
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     recStatusShow(panel, '当前环境不支持录音', true); return;
   }
@@ -1929,42 +1941,60 @@ function recAudioToggle(btn) {
     }
     var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     var chunks = [];
-    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
-    mr.onstop = function() {
+    var done = false;
+    function finalize(interrupted) {
+      if (done) return;
+      done = true;
+      panel._raExpectStop = false;
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
       clearInterval(panel._raTimer);
-      var dur = Math.max(1, Math.round((Date.now() - panel._raT0) / 1000));
-      var m = mr.mimeType || mime || 'audio/webm';
-      var blob = new Blob(chunks, { type: m.split(';')[0] });
       panel._raRec = null;
       btn.textContent = '● 录音'; btn.classList.remove('recording');
       var tEl = panel.querySelector('.rec-audio-timer');
       if (tEl) tEl.textContent = '';
+      if (!chunks.length) {
+        if (interrupted) recStatusShow(panel, '⚠ 录音中断：未录到内容', true);
+        return;
+      }
+      var dur = Math.max(1, Math.round((Date.now() - panel._raT0) / 1000));
+      var m = mr.mimeType || mime || 'audio/webm';
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
-        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
-        blob: blob
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        blob: new Blob(chunks, { type: m.split(';')[0] })
       };
       recAudioPut(clip).then(function() {
-        recStatusShow(panel, '已保存录音 ' + recAudioFmt(dur));
         try {
           if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob);
         } catch (e) {}
         transcribeClip(clip, panel);
-        return recAudioList(k);
-      }).then(function(list) { renderRecAudioList(panel, list); }).catch(function(e) {
+        return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
+      }).then(function() {
+        recStatusShow(panel, interrupted ? '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整' : '已保存录音 ' + recAudioFmt(dur), interrupted);
+      }).catch(function(e) {
         recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
       });
-    };
+    }
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() { finalize(!panel._raExpectStop); };
+    mr.onerror = function() { finalize(true); };
+    stream.getTracks().forEach(function(t) {
+      t.addEventListener('ended', function() {
+        if (panel._raRec !== mr || done) return;
+        if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
+        else finalize(true);
+      });
+    });
     panel._raRec = mr;
     panel._raT0 = Date.now();
     mr.start();
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = panel.querySelector('.rec-audio-timer');
     panel._raTimer = setInterval(function() {
+      if (!panel._raRec || panel._raRec.state !== 'recording') { if (!panel._raExpectStop) finalize(true); return; }
       if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - panel._raT0) / 1000));
     }, 250);
   }).catch(function(err) {
@@ -2102,7 +2132,7 @@ function recZoneRenderInto(box, list) {
   var h = '<div class="rz-head"><span class="rz-title">🎙 录音与 AI 交互区</span>'
     + '<span class="rz-count">全部录音 ' + (list || []).length + '</span>'
     + '<button type="button" class="rz-rec-btn" onclick="RENDER.recZoneRecord(this)">● 录音</button>'
-    + '<span class="rz-timer"></span></div>';
+    + '<span class="rz-timer"></span><span class="rec-status"></span></div>';
   if (!days.length) {
     h += '<div class="rz-empty">暂无录音 · 点右上「● 录音」开始语音分析，自动转录成纪要</div>';
   } else {
@@ -2130,10 +2160,22 @@ function renderRecZone() {
     return true;
   }).catch(function() { return false; });
 }
-var _rzRec = null, _rzT0 = 0, _rzTimer = null;
+var _rzRec = null, _rzT0 = 0, _rzTimer = null, _rzExpectStop = false;
+function recZoneResetBtn() {
+  var zone = document.getElementById('bzRecZone');
+  _rzRec = null; _rzExpectStop = false;
+  clearInterval(_rzTimer); _rzTimer = null;
+  var btn = zone && zone.querySelector('.rz-rec-btn');
+  if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
+  var tEl = zone && zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
+}
 function recZoneRecord(btn) {
   var zone = document.getElementById('bzRecZone');
-  if (_rzRec) { try { _rzRec.stop(); } catch (e) {} return; }
+  if (_rzRec) {
+    if (_rzRec.state === 'recording') { _rzExpectStop = true; try { _rzRec.stop(); } catch (e) {} return; }
+    recZoneResetBtn();
+    recStatusShow(zone, '检测到上次录音已中断，重新开始', true);
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     recStatusShow(zone, '当前环境不支持录音', true); return;
   }
@@ -2145,34 +2187,54 @@ function recZoneRecord(btn) {
     for (var i = 0; i < mimes.length; i++) if (MediaRecorder.isTypeSupported(mimes[i])) { mime = mimes[i]; break; }
     var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     var chunks = [];
-    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
-    mr.onstop = function() {
+    var done = false;
+    function finalize(interrupted) {
+      if (done) return;
+      done = true;
+      _rzExpectStop = false;
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
-      clearInterval(_rzTimer);
+      clearInterval(_rzTimer); _rzTimer = null;
+      _rzRec = null;
+      btn.textContent = '● 录音'; btn.classList.remove('recording');
+      var tEl = zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
+      if (!chunks.length) {
+        if (interrupted) recStatusShow(zone, '⚠ 录音中断：未录到内容', true);
+        return;
+      }
       var dur = Math.max(1, Math.round((Date.now() - _rzT0) / 1000));
       var m = mr.mimeType || mime || 'audio/webm';
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm, ts: now.getTime(), dur: dur, mime: m,
-        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
       };
-      _rzRec = null;
-      btn.textContent = '● 录音'; btn.classList.remove('recording');
-      var tEl = zone.querySelector('.rz-timer'); if (tEl) tEl.textContent = '';
       recAudioPut(clip).then(function() {
         try { if (window.ARCHIVE && window.ARCHIVE.syncWriteBlob) window.ARCHIVE.syncWriteBlob('录音', clip.fname, clip.blob); } catch (e) {}
         transcribeClip(clip, null);
         return renderRecZone();
+      }).then(function() {
+        if (interrupted) recStatusShow(zone, '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整', true);
       }).catch(function(e) { recStatusShow(zone, '录音保存失败：' + (e && e.message || e), true); });
-    };
+    }
+    mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function() { finalize(!_rzExpectStop); };
+    mr.onerror = function() { finalize(true); };
+    stream.getTracks().forEach(function(t) {
+      t.addEventListener('ended', function() {
+        if (_rzRec !== mr || done) return;
+        if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
+        else finalize(true);
+      });
+    });
     _rzRec = mr; _rzT0 = Date.now();
     mr.start();
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = zone.querySelector('.rz-timer');
     _rzTimer = setInterval(function() {
+      if (!_rzRec || _rzRec.state !== 'recording') { if (!_rzExpectStop) finalize(true); return; }
       if (timerEl) timerEl.textContent = recAudioFmt(Math.floor((Date.now() - _rzT0) / 1000));
     }, 250);
   }).catch(function(err) {
@@ -5060,6 +5122,14 @@ function cmpSetState(entries) {
     recZoneRenderDetail: recZoneRenderDetail,
     renderRecZone: renderRecZone,
     recZoneRecord: recZoneRecord,
+    recZoneResetBtn: recZoneResetBtn,
+    recAudioResetBtn: recAudioResetBtn,
+    _rzDebug: function(op, v) {
+      if (op === 'get') return { rec: _rzRec, expect: _rzExpectStop };
+      if (op === 'set') _rzRec = v;
+      if (op === 'reset') recZoneResetBtn();
+      return null;
+    },
     recZonePlay: recZonePlay,
     recZoneSeekTs: recZoneSeekTs,
     recZoneOpenDetail: recZoneOpenDetail,

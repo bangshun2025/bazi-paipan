@@ -3486,6 +3486,67 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== SN15 v0.83.3 录音状态机加固：真实 state 分派+幽灵清理+预期结束标记（onerror/track ended/巡检兜底走 E2E）=====
+  (function() {
+    tests.push({ section: '录音状态机加固(SN15)' });
+    var R15 = window.RENDER;
+    if (!R15 || typeof R15.recZoneRecord !== 'function' || typeof R15.recAudioToggle !== 'function' || !R15._rzDebug) {
+      tests.push(fail('SN15 前置: 录音接口挂载', '缺失'));
+      return;
+    }
+    var oldPd15 = window._paipanData;
+    try {
+      window._paipanData = paipan('录音状态机', '男', 1982, 10, 18, 5, 1);
+      tests.push(eq('SN15-1: resetBtn/状态探针导出就位', typeof R15.recZoneResetBtn === 'function' && typeof R15.recAudioResetBtn === 'function' && typeof R15._rzDebug === 'function', true));
+      var zone15 = document.getElementById('bzRecZone');
+      var zBtn = document.createElement('button');
+      zBtn.className = 'rz-rec-btn recording'; zBtn.textContent = '■ 停止';
+      var zTimer = document.createElement('span'); zTimer.className = 'rz-timer'; zTimer.textContent = '00:12';
+      var zStatus = document.createElement('span'); zStatus.className = 'rec-status';
+      if (zone15) { zone15.appendChild(zBtn); zone15.appendChild(zTimer); zone15.appendChild(zStatus); }
+      var gumOrig = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
+      if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = function() { return new Promise(function() {}); };
+      R15._rzDebug('set', { state: 'inactive' });
+      R15.recZoneRecord(zBtn);
+      tests.push(eq('SN15-2: 幽灵 recorder 点击即清理', R15._rzDebug('get').rec, null));
+      tests.push(eq('SN15-2: 幽灵清理后按钮计时器归位', zBtn.textContent + '/' + zBtn.classList.contains('recording') + '/' + zTimer.textContent, '● 录音/false/'));
+      tests.push(eq('SN15-2: 提示上次已中断', (zone15 ? zone15.textContent : '').indexOf('已中断') >= 0, true));
+      var p15 = document.createElement('div');
+      p15.className = 'record-panel';
+      p15.innerHTML = '<button type="button" class="rec-audio-btn recording">■ 停止</button><span class="rec-audio-timer">00:09</span><span class="rec-status"></span>';
+      document.body.appendChild(p15);
+      var pBtn = p15.querySelector('.rec-audio-btn'), pTimer = p15.querySelector('.rec-audio-timer');
+      p15._raRec = { state: 'inactive' };
+      R15.recAudioToggle(pBtn);
+      tests.push(eq('SN15-3: panel 幽灵 recorder 点击即清理', p15._raRec, null));
+      tests.push(eq('SN15-3: panel 按钮计时器归位', pBtn.textContent + '/' + pBtn.classList.contains('recording') + '/' + pTimer.textContent, '● 录音/false/'));
+      var fakeRec = { state: 'recording', _stops: 0, stop: function() { this._stops++; } };
+      R15._rzDebug('set', fakeRec);
+      R15.recZoneRecord(zBtn);
+      tests.push(eq('SN15-4: 录音中点击走 stop 分派', fakeRec._stops, 1));
+      tests.push(eq('SN15-4: stop 分派设预期结束标记', R15._rzDebug('get').expect === true && R15._rzDebug('get').rec === fakeRec, true));
+      R15.recZoneResetBtn();
+      tests.push(eq('SN15-4: zone resetBtn 清录音态', R15._rzDebug('get').rec === null && R15._rzDebug('get').expect === false && zBtn.textContent === '● 录音', true));
+      var fakeRecP = { state: 'recording', _stops: 0, stop: function() { this._stops++; } };
+      p15._raRec = fakeRecP;
+      R15.recAudioToggle(pBtn);
+      tests.push(eq('SN15-5: panel 录音中点击走 stop 分派', fakeRecP._stops, 1));
+      tests.push(eq('SN15-5: panel 预期结束标记就位', p15._raExpectStop === true && p15._raRec === fakeRecP, true));
+      R15.recAudioResetBtn(p15);
+      tests.push(eq('SN15-5: panel resetBtn 清录音态', p15._raRec === null && p15._raExpectStop === false && pBtn.textContent === '● 录音', true));
+    } finally {
+      try {
+        if (navigator.mediaDevices && gumOrig) navigator.mediaDevices.getUserMedia = gumOrig;
+        if (R15._rzDebug) R15._rzDebug('reset');
+        if (p15.parentNode) p15.parentNode.removeChild(p15);
+        var zoneC = document.getElementById('bzRecZone');
+        if (zoneC) { ['.rz-rec-btn', '.rz-timer', '.rec-status'].forEach(function(sel) { var n = zoneC.querySelector(sel); if (n) n.parentNode.removeChild(n); }); }
+        window._paipanData = oldPd15;
+      } catch (e) {}
+      tests.push(eq('SN15 现场还原: 录音状态清空', R15._rzDebug('get').rec === null && R15._rzDebug('get').expect === false && !p15.parentNode && !(zone15 && zone15.querySelector('.rz-rec-btn')), true));
+    }
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
