@@ -1547,7 +1547,7 @@ function recAudioDelete(btn) {
 // ===== v0.82.0 录音自动转录（v0.83.1 升级：VAD 分段带真实时间戳 + GLM 说话人归属→文字记录「对话还原」），key 存 localStorage 不进仓库 =====
 var BZ_AI_LS = 'bz_ai_cfg';
 var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
-var BZ_LLM_MODEL = 'Qwen/Qwen2.5-72B-Instruct';
+var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
 var BZ_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall';
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
@@ -1695,7 +1695,7 @@ function bzPromptOf(clip, raw) {
     '你是八字命理分析师的录音稿编辑。下面是同一段录音的「盘面资料」和「语音识别逐段文字」（每行 [时:分:秒] 是该句在录音中的开始时间）。请整理成高质量分析录音稿：',
     '1. 只修正语音识别的错别字与断句（尤其命理术语：十神、食伤、官杀、印星、比劫、财星、宫位、大运、流年、天干地支名），不改原意，不增删观点，不添加录音里没有的内容；',
     '2. 口语顺成可读书面语，保留讲解的条理；',
-    '3. 输出 markdown，格式固定：先一段 2-3 句「总述」概括这段录音讲了什么；空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 3-8 条；空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：一句话概括」（3-10 条，时间用该章节第一句的时间戳；整段录音不足 1 分钟时可省略此节）；空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
+    '3. 输出 markdown，格式固定：先一段 3-5 句「总述」概括这段录音讲了什么（包含核心结论与整体脉络）；空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 5-12 条，每条细节写足 1-3 句——把分析的理由、盘面对照依据、得出的结论完整写出来，不得只写半句概括；空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：具体内容」（3-10 条，时间用该章节第一句的时间戳），每条具体内容用 2-4 句还原该章节实际讲了什么——提到的具体宫位、干支、大运流年、判断与依据、给对方的建议都要写进去，不许只写一句话概括（整段录音不足 1 分钟时可省略此节）；空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
     '4. 不要输出任何额外说明、前后缀或代码块标记。',
     '知识库术语参考：' + BZ_KB_LINES,
     '',
@@ -1813,6 +1813,7 @@ function transcribeClip(clip, panel) {
       });
     })
     .then(function(r) {
+      clip._tfBusy = false;
       clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now() };
       clip.tfname = clip.tfname || bzTfName(clip);
       var md = bzTranscriptMd(clip, r.ans, r.raw);
@@ -2098,7 +2099,7 @@ function recZoneMd(s) {
   return out.join('\n');
 }
 function recZoneBadgeOf(c) {
-  if (c._tfBusy) return '<span class="rz-badge busy">转录中…</span>';
+  if (c._tfBusy && !c.transcript) return '<span class="rz-badge busy">转录中…</span>';
   if (c.transcript) return '<span class="rz-badge ok">已转录</span>';
   return '<span class="rz-badge no">未转录</span>';
 }
@@ -2129,6 +2130,7 @@ function recZoneRenderInto(box, list) {
   if (!box) return;
   recZoneCssOnce();
   var days = recZoneGroupByDay(list || []);
+  for (var d = 0; d < (list || []).length; d++) delete list[d]._tfBusy;
   var h = '<div class="rz-head"><span class="rz-title">🎙 录音与 AI 交互区</span>'
     + '<span class="rz-count">全部录音 ' + (list || []).length + '</span>'
     + '<button type="button" class="rz-rec-btn" onclick="RENDER.recZoneRecord(this)">● 录音</button>'
@@ -5106,6 +5108,8 @@ function cmpSetState(entries) {
     bzPromptOf: bzPromptOf,
     bzTfName: bzTfName,
     bzTranscriptMd: bzTranscriptMd,
+    recZoneBadgeOf: recZoneBadgeOf,
+    recZoneRenderInto: recZoneRenderInto,
     transcribeClip: transcribeClip,
     recTfToast: recTfToast,
     bzShowTranscript: bzShowTranscript,

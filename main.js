@@ -3547,6 +3547,41 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.83.4 转录状态机持久化修复 + 整理 prompt 扩充 + 模型升级 =====
+  (function() {
+    tests.push({ section:'转录状态与整理稿质量(v0.83.4 SN16)' });
+    var R16 = window.RENDER;
+    if (!R16 || typeof R16.bzTranscriptMd !== 'function' || typeof R16.bzPromptOf !== 'function' || typeof R16.recZoneBadgeOf !== 'function' || typeof R16.recZoneRenderInto !== 'function') {
+      tests.push(fail('SN16 前置: RENDER 接口挂载', '缺失'));
+      return;
+    }
+    try {
+      var md16 = R16.bzTranscriptMd({ name:'SN16', dur:60, notes:[] }, '总述', '原文');
+      tests.push(eq('SN16-1: 整理模型升级 Qwen3-235B', md16.indexOf('Qwen3-235B-A22B-Instruct-2507') > -1, true));
+
+      var clip16 = { name:'SN16', dur:60, ts:Date.now(), notes:[] };
+      var p16 = R16.bzPromptOf(clip16, '[00:00:01] 测试内容');
+      tests.push(eq('SN16-2: prompt 要点扩至 5-12 条', p16.indexOf('5-12 条') > -1, true));
+      tests.push(eq('SN16-3: prompt 章节要求 2-4 句具体内容', p16.indexOf('2-4 句') > -1, true));
+      tests.push(eq('SN16-4: prompt 禁止一句话概括', p16.indexOf('不许只写一句话概括') > -1, true));
+
+      var dirty16 = R16.recZoneBadgeOf({ _tfBusy:true, transcript:{ text:'x' } });
+      tests.push(eq('SN16-5: 脏数据 _tfBusy+transcript 显示已转录', dirty16.indexOf('已转录') > -1 && dirty16.indexOf('转录中') === -1, true));
+      tests.push(eq('SN16-6: 转录中/未转录徽章正常', R16.recZoneBadgeOf({ _tfBusy:true }).indexOf('转录中') > -1 && R16.recZoneBadgeOf({}).indexOf('未转录') > -1, true));
+
+      var box16 = document.createElement('div');
+      R16.recZoneRenderInto(box16, [{ id:'t16', name:'脏数据卡', ts:Date.now(), dur:60, _tfBusy:true, transcript:{ text:'y' } }]);
+      tests.push(eq('SN16-7: 渲染加载剥除 _tfBusy', box16._rzClips && box16._rzClips.t16 && box16._rzClips.t16._tfBusy === undefined && box16.innerHTML.indexOf('已转录') > -1, true));
+      box16.parentNode && box16.parentNode.removeChild(box16);
+
+      var src16 = '';
+      for (var s16 = 0; s16 < document.scripts.length; s16++) src16 += document.scripts[s16].textContent;
+      tests.push(eq('SN16-8: 成功路径先清 _tfBusy 再存 transcript', /clip\._tfBusy = false;\s*clip\.transcript/.test(src16), true));
+    } catch (e16) {
+      tests.push(fail('SN16 异常', String(e16 && e16.message || e16)));
+    }
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
