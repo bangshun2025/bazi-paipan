@@ -5150,9 +5150,9 @@ function captureScreenshot() {
       tests.push(eq('SN12-2: 转录设置读写往返',
         cfg.sfKey === 'sk-test' ? 'Y' : 'N', 'Y'));
       var prompt = RENDER.bzPromptOf(clipT, '原始识别内容一段');
-      tests.push(eq('SN12-3: prompt 含盘面/知识库/原始识别',
+      tests.push(eq('SN12-3: prompt 含盘面/知识库/逐段识别',
         (prompt.indexOf('【盘面资料】') >= 0 && prompt.indexOf('十神做功') >= 0
-          && prompt.indexOf('【原始识别文字】') >= 0 && prompt.indexOf('原始识别内容一段') >= 0) ? 'Y' : 'N', 'Y'));
+          && prompt.indexOf('【语音识别逐段文字】') >= 0 && prompt.indexOf('原始识别内容一段') >= 0) ? 'Y' : 'N', 'Y'));
       var md = RENDER.bzTranscriptMd(clipT, '总述与要点', '原始识别内容一段');
       tests.push(eq('SN12-4: 录音稿 md 含标题/来源/原始识别',
         (md.indexOf('# 录音稿 · 10-24 12:05（转录测试）') === 0 && md.indexOf('时长：1:05') >= 0
@@ -5259,11 +5259,42 @@ function captureScreenshot() {
         (typeof RENDER.recTfToast === 'function'
           && RENDER.transcribeClip.toString().indexOf('recTfToast') >= 0
           && RENDER.transcribeClip.toString().indexOf('未识别出语音内容') >= 0
-          && RENDER.bzWav16k.toString().indexOf('peak') >= 0) ? 'Y' : 'N', 'Y'));
+          && RENDER.transcribeClip.toString().indexOf('bzVadSegs') >= 0
+          && RENDER.bzMono16kNorm.toString().indexOf('peak') >= 0) ? 'Y' : 'N', 'Y'));
       var toastEl = RENDER.recTfToast('测试消息', null, null);
       tests.push(eq('SN13-11: recTfToast 挂载与清理', document.getElementById('bzTfToast') ? 'Y' : 'N', 'Y'));
       var toastNode = document.getElementById('bzTfToast');
       if (toastNode && toastNode.parentNode) toastNode.parentNode.removeChild(toastNode);
+      var vd = (function() {
+        var rate = 16000, len = rate * 3, ch = new Float32Array(len), i;
+        for (i = 0; i < len; i++) ch[i] = Math.sin(i / 8) * 0.5;
+        var q = Math.round(rate * 0.016);
+        for (i = Math.round(rate * 0.9); i < len; i++) ch[i] = 0;
+        for (i = Math.round(rate * 1.7); i < Math.round(rate * 2.0); i++) ch[i] = Math.sin(i / 8) * 0.5;
+        for (i = Math.round(rate * 2.3); i < len; i++) ch[i] = 0;
+        return RENDER.bzVadSegs(ch, rate);
+      })();
+      tests.push(eq('SN13-12: VAD 两段语音→两个时间戳分段',
+        (vd.length === 2 && vd[0].s < 1 && vd[0].e > vd[0].s && vd[1].s >= 1.5 && vd[1].s < 2.1) ? 'Y' : 'N', 'Y'));
+      var dlg = RENDER.bzDialogHtml([{ s: 81, e: 83, t: '你好呀' }, { s: 95, e: 98, t: '我们聊聊盘' }], ['邦顺', '黄慧']);
+      tests.push(eq('SN13-13: 对话还原（头像+说话人+HH:MM:SS+跳播）',
+        (dlg.indexOf('00:01:21') >= 0 && dlg.indexOf('邦顺') >= 0 && dlg.indexOf('黄慧') >= 0
+          && dlg.indexOf('你好呀') >= 0 && dlg.indexOf('data-s="81"') >= 0
+          && dlg.indexOf('recZoneSeekTs') >= 0 && dlg.indexOf('rz-seg-avatar') >= 0) ? 'Y' : 'N', 'Y'));
+      var clipOld = { id: 'o', ts: T1, name: 'n', dur: 5, transcript: { text: '纪要', raw: '旧版原文' } };
+      var clipNew = { id: 'w', ts: T1, name: 'n', dur: 5, transcript: { text: '纪要', raw: '全文', segs: [{ s: 3, e: 5, t: '段落一' }], spk: ['邦顺'] } };
+      tests.push(eq('SN13-14: 文字记录页签（新稿对话还原/旧稿提示升级）',
+        (RENDER.recZonePaneOf(clipOld, 'raw').indexOf('旧版原文') >= 0
+          && RENDER.recZonePaneOf(clipOld, 'raw').indexOf('重转录') >= 0
+          && RENDER.recZonePaneOf(clipNew, 'raw').indexOf('rz-seg') >= 0
+          && RENDER.recZonePaneOf(clipNew, 'raw').indexOf('段落一') >= 0) ? 'Y' : 'N', 'Y'));
+      var spk1 = RENDER.bzParseSpk('垃圾前缀 ```json\n[{"i":0,"s":"邦顺"},{"i":1,"s":"黄慧"}]\n```', 3);
+      var spk2 = RENDER.bzParseSpk('完全不是json', 1);
+      var tsFmt = RENDER.bzFmtTs(3672);
+      tests.push(eq('SN13-15: 说话人解析容错 + 时间戳格式',
+        (spk1[0] === '邦顺' && spk1[1] === '黄慧' && spk1[2] === '邦顺'
+          && spk2[0] === '邦顺' && tsFmt === '01:01:12'
+          && RENDER.bzFmtTs(81) === '00:01:21') ? 'Y' : 'N', 'Y'));
     } catch (e) {
       tests.push(fail('SN13-0: 交互区测试异常', String(e)));
     } finally {
