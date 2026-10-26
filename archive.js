@@ -1193,15 +1193,108 @@ function archiveSortKey(a) {
   return getDisplayName(a);
 }
 
-// 按名字拼音升序（中文按拼音，localeCompare 'zh'）；同名再按正名、更新时间兜底
+// 按名字拼音升序（中文按拼音，localeCompare 'zh'）；同名再按正名、更新时间兜底。
+// v0.86.0 起也是三键排序的公共兜底比较器
+function archiveCmpByName(a, b) {
+  var c = archiveSortKey(a).localeCompare(archiveSortKey(b), 'zh');
+  if (c !== 0) return c;
+  c = String((a && a.name) || '').localeCompare(String((b && b.name) || ''), 'zh');
+  if (c !== 0) return c;
+  return String((b && b.updatedAt) || '').localeCompare(String((a && a.updatedAt) || ''));
+}
+
 function sortArchivesByName(archives) {
-  archives.sort(function(a, b) {
-    var c = archiveSortKey(a).localeCompare(archiveSortKey(b), 'zh');
-    if (c !== 0) return c;
-    c = String((a && a.name) || '').localeCompare(String((b && b.name) || ''), 'zh');
-    if (c !== 0) return c;
-    return String((b && b.updatedAt) || '').localeCompare(String((a && a.updatedAt) || ''));
-  });
+  archives.sort(archiveCmpByName);
+  return archives;
+}
+
+// ===== v0.86.0 档案排序三键：创建日期 / 使用频次 / 最近使用 =====
+// 频次与最近使用是本机行为数据，单独存 bz_arch_usage，不并入档案对象——
+// 排个盘不该 bump updatedAt，避免触发云同步的读改写合并
+var USAGE_KEY = 'bz_arch_usage';
+var _sortMode = 'created';  // created | freq | recent
+var _sortDir = 'desc';      // 仅 created 用：desc=最新在前（默认），asc=最旧在前
+
+function getUsageMap() {
+  try {
+    var o = JSON.parse(localStorage.getItem(USAGE_KEY));
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (e) { return {}; }
+}
+
+function recordUsage(id) {
+  if (id === undefined || id === null || id === '') return;
+  var m = getUsageMap();
+  var it = m[String(id)] || { n: 0, t: 0 };
+  it.n = (Number(it.n) || 0) + 1;
+  it.t = Date.now();
+  m[String(id)] = it;
+  try { localStorage.setItem(USAGE_KEY, JSON.stringify(m)); } catch (e) {}
+}
+
+function usageOf(id) {
+  var it = (id === undefined || id === null) ? null : getUsageMap()[String(id)];
+  return it ? { n: Number(it.n) || 0, t: Number(it.t) || 0 } : { n: 0, t: 0 };
+}
+
+function createdTs(a) {
+  var t = Date.parse((a && a.createdAt) || '');
+  return isNaN(t) ? 0 : t;
+}
+
+function setSort(mode) {
+  if (mode === 'created') {
+    // 已在创建键上 → 翻转最新/最旧；从别的键切过来 → 回默认最新
+    if (_sortMode === 'created') _sortDir = (_sortDir === 'desc') ? 'asc' : 'desc';
+    else { _sortMode = 'created'; _sortDir = 'desc'; }
+  } else if (mode === 'freq' || mode === 'recent') {
+    _sortMode = mode;
+  }
+  renderArchiveModal();
+}
+
+function getSortState() {
+  return { mode: _sortMode, dir: _sortDir };
+}
+
+function renderSortBar() {
+  var bar = document.getElementById('archive-modal-sortbar');
+  if (!bar) return;
+  var opts = [
+    { k: 'created', label: '创建日期', title: (_sortMode === 'created' && _sortDir === 'desc') ? '当前：最新创建在前，再点一次改最旧在前' : '按创建日期排（默认最新在前）' },
+    { k: 'freq', label: '使用频次', title: '按使用次数从多到少' },
+    { k: 'recent', label: '最近使用', title: '按最后一次使用时间，最近在前；没用过的沉底' }
+  ];
+  var html = '<span class="archive-sort-label">排序</span>';
+  for (var i = 0; i < opts.length; i++) {
+    var on = _sortMode === opts[i].k;
+    var arrow = on ? (opts[i].k === 'created' && _sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    html += '<button class="archive-sort-btn' + (on ? ' active' : '') + '" title="' + opts[i].title
+      + '" onclick="ARCHIVE.setSort(\'' + opts[i].k + '\')">' + opts[i].label + arrow + '</button>';
+  }
+  bar.innerHTML = html;
+}
+
+// 按当前排序键排（点击排序按钮 → setSort → renderArchiveModal → 这里）。
+// 所有键同值时都回落到名字拼音序，保证顺序稳定可复现
+function sortArchives(archives) {
+  if (_sortMode === 'freq') {
+    archives.sort(function(a, b) {
+      var d = usageOf(b && b.id).n - usageOf(a && a.id).n;
+      return d !== 0 ? d : archiveCmpByName(a, b);
+    });
+  } else if (_sortMode === 'recent') {
+    archives.sort(function(a, b) {
+      var d = usageOf(b && b.id).t - usageOf(a && a.id).t;
+      return d !== 0 ? d : archiveCmpByName(a, b);
+    });
+  } else {
+    archives.sort(function(a, b) {
+      var d = createdTs(b) - createdTs(a);
+      if (d !== 0) return _sortDir === 'asc' ? -d : d;
+      return archiveCmpByName(a, b);
+    });
+  }
   return archives;
 }
 
@@ -1251,10 +1344,11 @@ function renderArchiveModal() {
   var archives = getArchives();
 
   // 落盘顺序 = 显示顺序：行内 ✏️修改/🗑️删除/排盘 都按数组索引定位，两者必须一致
-  sortArchivesByName(archives);
+  sortArchives(archives);
   saveArchives(archives);
 
   renderTagBar();
+  renderSortBar();
   renderArchiveBackupWarn();
 
   var k = _searchKeyword.trim().toLowerCase();
@@ -1328,6 +1422,7 @@ function filterArchives(keyword) {
 function loadFromArchive(idx) {
   var archives = getArchives();
   if (!archives[idx]) return;
+  recordUsage(archives[idx].id);
   setFormData(archives[idx]);
   closeArchivePanel();
   APP.doPaipan();
@@ -2113,6 +2208,15 @@ function openChartMd() {
     // v0.33.0 按名字拼音排序
     archiveSortKey: archiveSortKey,
     sortArchivesByName: sortArchivesByName,
+    // v0.86.0 排序三键
+    archiveCmpByName: archiveCmpByName,
+    sortArchives: sortArchives,
+    setSort: setSort,
+    getSortState: getSortState,
+    renderSortBar: renderSortBar,
+    recordUsage: recordUsage,
+    usageOf: usageOf,
+    USAGE_KEY: USAGE_KEY,
     getActiveTagFilter: function() { return _activeTag; },
     getPrivacyMode: getPrivacyMode,
     setPrivacyMode: setPrivacyMode,
@@ -2328,6 +2432,7 @@ function openChartMd() {
     };
     var val = function(id) { var el = document.getElementById(id); return el ? el.value : null; };
     var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakUsage = localStorage.getItem(USAGE_KEY);
     var bakForm = getFormData();
     try {
       // T01 回填含出生地的档案不得抛错（旧版裸调 onProvChange/onCityChange → ReferenceError，中断排盘）
@@ -2387,6 +2492,7 @@ function openChartMd() {
       t('v0.34 T00:测试异常', false, String(e));
     } finally {
       if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      if (bakUsage === null) localStorage.removeItem(USAGE_KEY); else localStorage.setItem(USAGE_KEY, bakUsage);
       setFormData(bakForm);
       APP.doPaipan();
       renderArchiveModal();
@@ -2468,8 +2574,96 @@ function openChartMd() {
       renderArchiveModal();
     }
   }
+  // ===== v0.86.0 回归测试段（?test=1，经 __testAppend 追加到统一统计）：档案排序三键 =====
+  function runV086Tests() {
+    var t = function(label, ok, detail) {
+      var item = { label: label, ok: !!ok, detail: detail };
+      if (window.__testAppend) window.__testAppend(item);
+      else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
+    };
+    var shownIds = function() {
+      return [].map.call(document.querySelectorAll('#archive-modal-list .archive-row-cmp'), function(el) { return el.getAttribute('data-id'); }).join(',');
+    };
+    var sortBtn = function(k) { return document.querySelector('#archive-modal-sortbar .archive-sort-btn[onclick*="\'' + k + '\'"]'); };
+    var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakUsage = localStorage.getItem(USAGE_KEY);
+    var bakForm = getFormData();
+    try {
+      // T01 默认 = 创建日期·最新在前，排序栏三键齐、当前键高亮带 ↓
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'k1', name: '创建最早', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'k2', name: '创建最晚', gender: '男', year: 2000, month: 1, day: 2, hour: 0, min: 0, createdAt: '2026-03-01T00:00:00.000Z' },
+        { id: 'k3', name: '创建居中', gender: '男', year: 2000, month: 1, day: 3, hour: 0, min: 0, createdAt: '2026-02-01T00:00:00.000Z' }
+      ]));
+      setSort('freq'); setSort('created'); // 归位默认态（created+desc）
+      _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var st = getSortState();
+      t('v0.86 T01:默认 created+desc', st.mode === 'created' && st.dir === 'desc', JSON.stringify(st));
+      t('v0.86 T01:默认最新在前', shownIds() === 'k2,k3,k1', shownIds());
+      t('v0.86 T01:排序栏三键齐', document.querySelectorAll('#archive-modal-sortbar .archive-sort-btn').length === 3, document.querySelectorAll('#archive-modal-sortbar .archive-sort-btn').length);
+      t('v0.86 T01:当前键高亮', sortBtn('created').className.indexOf('active') >= 0 && sortBtn('created').textContent.indexOf('↓') >= 0, sortBtn('created').textContent);
+
+      // T02 再点一次创建日期 → 最旧在前（↑）
+      sortBtn('created').click();
+      t('v0.86 T02:再点改最旧在前', shownIds() === 'k1,k3,k2', shownIds());
+      t('v0.86 T02:箭头翻 ↑', getSortState().dir === 'asc' && sortBtn('created').textContent.indexOf('↑') >= 0, sortBtn('created').textContent);
+
+      // T03 第三次点 → 回最新在前
+      sortBtn('created').click();
+      t('v0.86 T03:三击回最新在前', shownIds() === 'k2,k3,k1' && getSortState().dir === 'desc', shownIds());
+
+      // T04 频次键：多到少；并列回落拼音名序
+      localStorage.setItem(USAGE_KEY, JSON.stringify({ k1: { n: 5, t: 1000 }, k2: { n: 1, t: 3000 }, k3: { n: 3, t: 2000 } }));
+      sortBtn('freq').click();
+      t('v0.86 T04:频次多到少', shownIds() === 'k1,k3,k2', shownIds());
+      localStorage.setItem(USAGE_KEY, '{}');
+      renderArchiveModal();
+      t('v0.86 T04:零频次回落名序(居中最晚最早)', shownIds() === 'k3,k2,k1', shownIds());
+
+      // T05 最近使用键：最后一次使用时间近在前，没用过的沉底
+      var now = Date.now();
+      localStorage.setItem(USAGE_KEY, JSON.stringify({ k1: { n: 2, t: now - 60000 }, k2: { n: 9, t: now } }));
+      sortBtn('recent').click();
+      t('v0.86 T05:最近在前没用过沉底', shownIds() === 'k2,k1,k3', shownIds());
+      t('v0.86 T05:最近键高亮带 ↓', sortBtn('recent').className.indexOf('active') >= 0 && sortBtn('recent').textContent.indexOf('↓') >= 0, sortBtn('recent').textContent);
+
+      // T06 切回创建键 → 回默认最新（不残留 ↑）
+      sortBtn('created').click();
+      t('v0.86 T06:切回创建键回默认最新', shownIds() === 'k2,k3,k1' && getSortState().dir === 'desc', JSON.stringify(getSortState()));
+
+      // T07 端到端：点行内「排盘」→ 使用频次 +1、最近使用时间落盘
+      var before = usageOf('k2');
+      document.querySelector('#archive-modal-list .archive-row-btn').click();
+      var after = usageOf('k2');
+      t('v0.86 T07:点排盘频次+1', after.n === before.n + 1, before.n + '→' + after.n);
+      t('v0.86 T07:最近使用时间刷新', after.t >= now && after.t > before.t, String(after.t));
+
+      // T08 落盘顺序 = 显示顺序（行内索引定位的前提）
+      t('v0.86 T08:落盘顺序=显示顺序', shownIds() === [].map.call(getArchives(), function(a) { return String(a.id); }).join(','), shownIds());
+
+      // T09 脏数据兜底：缺 createdAt / 坏 usage 不抛错
+      var okDirty = true;
+      try {
+        localStorage.setItem(ARCH_KEY, JSON.stringify([{ id: 'd1', name: '甲' }, { id: 'd2', name: '乙' }]));
+        localStorage.setItem(USAGE_KEY, 'not-json');
+        ['created', 'freq', 'recent'].forEach(function(k) { setSort(k); });
+      } catch (e) { okDirty = false; }
+      t('v0.86 T09:脏数据不抛错', okDirty);
+      t('v0.86 T09:坏 usage 视为空表', usageOf('d1').n === 0 && usageOf('d1').t === 0, JSON.stringify(usageOf('d1')));
+    } catch (e) {
+      t('v0.86 T00:测试异常', false, String(e));
+    } finally {
+      if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      if (bakUsage === null) localStorage.removeItem(USAGE_KEY); else localStorage.setItem(USAGE_KEY, bakUsage);
+      setSort('freq'); setSort('created'); // 归位默认态
+      _activeTag = ''; _searchKeyword = '';
+      setFormData(bakForm);
+      renderArchiveModal();
+    }
+  }
   if (/[\?&]test=1(&|$)/.test(location.search)) {
-    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); runV043Tests(); };
+    var runAllTests = function() { runV032Tests(); runV033Tests(); runV034Tests(); runV043Tests(); runV086Tests(); };
     if (document.readyState === 'complete') runAllTests();
     else window.addEventListener('load', runAllTests);
   }
