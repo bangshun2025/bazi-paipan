@@ -1550,6 +1550,8 @@ var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
 var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
 var BZ_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
+var BZ_LLM_SWITCH_TS = 1792971835000;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
 function bzAiCfg() {
   try { return JSON.parse(localStorage.getItem(BZ_AI_LS) || '{}') || {}; } catch (e) { return {}; }
@@ -1731,17 +1733,47 @@ function recModelShort(m) {
   return s.replace(/-Instruct-.*$/, '');
 }
 function recModelsOf(clip) {
-  var mm = (clip && clip.transcript && clip.transcript.models) || {};
-  return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm || BZ_LLM_MODEL };
+  var t = clip && clip.transcript;
+  var mm = (t && t.models) || {};
+  if (mm.llm) return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm, src: mm.src || 'snap' };
+  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_MODEL, llm: BZ_LLM_PREV, src: 'guess' };
+  return { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL, src: 'cur' };
+}
+function recModelSrcNote(m) {
+  if (m.src === 'guess') return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  if (m.src === 'md') return '（从归档录音稿 md 头部读回的真实记录）';
+  if (m.src === 'cur') return '（未留模型名，按当前模型显示）';
+  return '';
 }
 function recModelTitleOf(clip) {
   var m = recModelsOf(clip);
-  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm;
+  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm + recModelSrcNote(m);
 }
 function recModelLineHtml(clip) {
   if (!clip || !clip.transcript) return '';
   var m = recModelsOf(clip);
-  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + '</span>';
+  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + (m.src === 'guess' ? '（推定）' : '') + '</span>';
+}
+function recParseMdModels(txt) {
+  var s = String(txt || '');
+  var m2 = s.match(/识别：(\S+)\s*｜\s*整理\/归属：(\S+)/);
+  if (m2) return { asr: m2[1], llm: m2[2], src: 'md' };
+  var m1 = s.match(/整理：(\S+)/);
+  if (m1) return { asr: BZ_ASR_MODEL, llm: m1[1], src: 'md' };
+  return null;
+}
+function recModelBackfill(clip) {
+  var t = clip && clip.transcript;
+  if (!t || (t.models && t.models.llm) || clip._mdChecked) return Promise.resolve(false);
+  clip._mdChecked = true;
+  if (!window.ARCHIVE || !window.ARCHIVE.syncReadText) return Promise.resolve(false);
+  var nm = clip.tfname || bzTfName(clip);
+  return window.ARCHIVE.syncReadText('录音稿', nm).then(function(txt) {
+    var got = recParseMdModels(txt);
+    if (!got) return false;
+    t.models = got;
+    return recAudioPut(clip).then(function() { return true; }).catch(function() { return true; });
+  }).catch(function() { return false; });
 }
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
@@ -2206,6 +2238,14 @@ function recZoneRenderInto(box, list) {
   box.innerHTML = h;
   box._rzClips = {};
   for (var k = 0; k < (list || []).length; k++) box._rzClips[list[k].id] = list[k];
+  var pend = (list || []).filter(function(c) {
+    return c && c.transcript && !(c.transcript.models && c.transcript.models.llm) && !c._mdChecked;
+  });
+  if (pend.length && window.ARCHIVE && window.ARCHIVE.syncReadText) {
+    Promise.all(pend.map(function(c) { return recModelBackfill(c); })).then(function(rs) {
+      if (rs.filter(function(x) { return x; }).length) recZoneRenderInto(box, list);
+    });
+  }
 }
 function renderRecZone() {
   var zone = document.getElementById('bzRecZone');
@@ -2374,7 +2414,7 @@ function recZoneRenderDetail(zone, clip) {
     + recZoneBadgeOf(clip)
     + '<button type="button" class="rz-tab" style="border:1px solid var(--c-line,#e3dccb);" onclick="RENDER.bzZoneTranscribe(this)" title="转录">' + (clip.transcript ? '🔄 重转录' : '📝 转录') + '</button>'
     + '<button type="button" class="rz-close" onclick="RENDER.recZoneCloseDetail(this)" title="关闭">✕</button></div>'
-    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
+    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + (recModelsOf(clip).src === 'guess' ? '（推定）' : '') + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
@@ -5227,6 +5267,9 @@ function cmpSetState(entries) {
     recModelsOf: recModelsOf,
     recModelTitleOf: recModelTitleOf,
     recModelLineHtml: recModelLineHtml,
+    recModelSrcNote: recModelSrcNote,
+    recParseMdModels: recParseMdModels,
+    recModelBackfill: recModelBackfill,
     recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,

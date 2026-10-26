@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.7 | 2026-10-26 -->
+<!-- 八字排盘 ·  从真版 v0.83.8 | 2026-10-26 -->
+<!-- v0.83.8: 老录音也能找回当时的模型名 —— 打开录音区时自动从归档磁盘读回「录音稿/*.md」头部记录的模型；读不到则按模型升级时间点（2026-10-26 07:43 之前 = Qwen2.5-72B-Instruct）推定，并在徽章、悬停说明、详情面板处统一标注「（推定）」；有快照的老录音仍以快照为准 -->
 <!-- v0.83.7: 每一次转录都标明所用大模型 —— 录音卡底部徽章「🧠 SenseVoiceSmall · Qwen3-235B-A22B」、详情面板一行「识别 … ｜ 整理/归属 … ｜ 转录于 …」、录音稿 md 头部「识别：… ｜ 整理/归属：…」，转录完成状态栏提示同时带模型名；模型名随每份转录存快照，日后换模型也不会改写老录音的标注 -->
 <!-- v0.83.6: 录音卡时间右侧新增「咨询人物」可编辑输入框（默认「邦顺、案主」，顿号分隔可加其他人，如「邦顺、案主、张三妈妈」）—— 改动即存库并刷新该录音稿 md 头部「咨询人物」行；说话人归属 prompt 改为按这份名单判断（案主＝本次命盘主人），转录/重转录后的对话还原会标出对应人名 -->
 <!-- v0.83.5: 「分析记录」右侧新增「📄 档案md」按钮 —— 一键打开该命盘在本地同步目录里最新的「盘面-姓名.md」（先落盘同步再读，保证内容最新；同名多份按 mtime 取最新，严格不串同前缀人名）；新窗口等宽全文展示可直接复制；未开同步/权限失效/未存档/弹窗被拦均有明确提示 -->
@@ -7262,6 +7263,14 @@ function syncSubDir(sub) {
   if (!_syncDir) return Promise.resolve(null);
   return _syncDir.getDirectoryHandle(sub, { create: true }).catch(function() { return null; });
 }
+function syncReadText(sub, name) {
+  if (!_syncDir || !name) return Promise.resolve(null);
+  return syncSubDir(sub).then(function(d) {
+    if (!d) return null;
+    return d.getFileHandle(name).then(function(fh) { return fh.getFile(); })
+      .then(function(f) { return f.text(); });
+  }).catch(function() { return null; });
+}
 function syncWriteBlob(sub, name, blob) {
   if (!_syncDir || !name || !blob) return Promise.resolve(false);
   return syncSubDir(sub).then(function(d) {
@@ -7451,6 +7460,7 @@ function openChartMd() {
     syncResume: syncResume,
     syncBuildFiles: syncBuildFiles,
     syncWriteBlob: syncWriteBlob,
+    syncReadText: syncReadText,
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
     openChartMd: openChartMd,
@@ -12325,6 +12335,8 @@ var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
 var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
 var BZ_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
+var BZ_LLM_SWITCH_TS = 1792971835000;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
 function bzAiCfg() {
   try { return JSON.parse(localStorage.getItem(BZ_AI_LS) || '{}') || {}; } catch (e) { return {}; }
@@ -12506,17 +12518,47 @@ function recModelShort(m) {
   return s.replace(/-Instruct-.*$/, '');
 }
 function recModelsOf(clip) {
-  var mm = (clip && clip.transcript && clip.transcript.models) || {};
-  return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm || BZ_LLM_MODEL };
+  var t = clip && clip.transcript;
+  var mm = (t && t.models) || {};
+  if (mm.llm) return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm, src: mm.src || 'snap' };
+  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_MODEL, llm: BZ_LLM_PREV, src: 'guess' };
+  return { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL, src: 'cur' };
+}
+function recModelSrcNote(m) {
+  if (m.src === 'guess') return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  if (m.src === 'md') return '（从归档录音稿 md 头部读回的真实记录）';
+  if (m.src === 'cur') return '（未留模型名，按当前模型显示）';
+  return '';
 }
 function recModelTitleOf(clip) {
   var m = recModelsOf(clip);
-  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm;
+  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm + recModelSrcNote(m);
 }
 function recModelLineHtml(clip) {
   if (!clip || !clip.transcript) return '';
   var m = recModelsOf(clip);
-  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + '</span>';
+  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + (m.src === 'guess' ? '（推定）' : '') + '</span>';
+}
+function recParseMdModels(txt) {
+  var s = String(txt || '');
+  var m2 = s.match(/识别：(\S+)\s*｜\s*整理\/归属：(\S+)/);
+  if (m2) return { asr: m2[1], llm: m2[2], src: 'md' };
+  var m1 = s.match(/整理：(\S+)/);
+  if (m1) return { asr: BZ_ASR_MODEL, llm: m1[1], src: 'md' };
+  return null;
+}
+function recModelBackfill(clip) {
+  var t = clip && clip.transcript;
+  if (!t || (t.models && t.models.llm) || clip._mdChecked) return Promise.resolve(false);
+  clip._mdChecked = true;
+  if (!window.ARCHIVE || !window.ARCHIVE.syncReadText) return Promise.resolve(false);
+  var nm = clip.tfname || bzTfName(clip);
+  return window.ARCHIVE.syncReadText('录音稿', nm).then(function(txt) {
+    var got = recParseMdModels(txt);
+    if (!got) return false;
+    t.models = got;
+    return recAudioPut(clip).then(function() { return true; }).catch(function() { return true; });
+  }).catch(function() { return false; });
 }
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
@@ -12981,6 +13023,14 @@ function recZoneRenderInto(box, list) {
   box.innerHTML = h;
   box._rzClips = {};
   for (var k = 0; k < (list || []).length; k++) box._rzClips[list[k].id] = list[k];
+  var pend = (list || []).filter(function(c) {
+    return c && c.transcript && !(c.transcript.models && c.transcript.models.llm) && !c._mdChecked;
+  });
+  if (pend.length && window.ARCHIVE && window.ARCHIVE.syncReadText) {
+    Promise.all(pend.map(function(c) { return recModelBackfill(c); })).then(function(rs) {
+      if (rs.filter(function(x) { return x; }).length) recZoneRenderInto(box, list);
+    });
+  }
 }
 function renderRecZone() {
   var zone = document.getElementById('bzRecZone');
@@ -13149,7 +13199,7 @@ function recZoneRenderDetail(zone, clip) {
     + recZoneBadgeOf(clip)
     + '<button type="button" class="rz-tab" style="border:1px solid var(--c-line,#e3dccb);" onclick="RENDER.bzZoneTranscribe(this)" title="转录">' + (clip.transcript ? '🔄 重转录' : '📝 转录') + '</button>'
     + '<button type="button" class="rz-close" onclick="RENDER.recZoneCloseDetail(this)" title="关闭">✕</button></div>'
-    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
+    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + (recModelsOf(clip).src === 'guess' ? '（推定）' : '') + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
@@ -16002,6 +16052,9 @@ function cmpSetState(entries) {
     recModelsOf: recModelsOf,
     recModelTitleOf: recModelTitleOf,
     recModelLineHtml: recModelLineHtml,
+    recModelSrcNote: recModelSrcNote,
+    recParseMdModels: recParseMdModels,
+    recModelBackfill: recModelBackfill,
     recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,
@@ -20111,6 +20164,54 @@ function captureScreenshot() {
     tests.push(eq('SN19-9: 录音稿 md 头部逐项标注识别与整理模型',
       md19.indexOf('识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct') > -1, true));
     zone19.remove();
+  })();
+
+  // ===== v0.83.8 老转录找回所用模型 =====
+  (function() {
+    tests.push({ section:'老转录模型找回(v0.83.8)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recParseMdModels !== 'function' || typeof R.recModelBackfill !== 'function') {
+      tests.push(fail('SN20 前置: RENDER 找回接口挂载', '缺失'));
+      return;
+    }
+    var old20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: 1792900000000 } });
+    tests.push(eq('SN20-1: 模型升级前的老转录推定当年模型',
+      old20.llm + '|' + old20.src, 'Qwen/Qwen2.5-72B-Instruct|guess'));
+    var new20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: Date.now() } });
+    tests.push(eq('SN20-2: 近期无快照转录按当前模型标记',
+      new20.llm + '|' + new20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|cur'));
+    tests.push(eq('SN20-3: 有快照时来源为 snap',
+      R.recModelsOf({ transcript: { text:'x', models:{ asr:'A', llm:'B' } } }).src, 'snap'));
+    var p20a = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
+    tests.push(eq('SN20-4: 从 md 新格式读回识别+整理模型',
+      p20a ? p20a.asr + '|' + p20a.llm + '|' + p20a.src : 'null',
+      'FunAudioLLM/SenseVoiceSmall|Qwen/Qwen2.5-72B-Instruct|md'));
+    var p20b = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 来源：排盘录音自动转录 ｜ 时长：10:00 ｜ 整理：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
+    tests.push(eq('SN20-5: 从 md 旧格式（只有整理行）读回',
+      p20b ? p20b.llm + '|' + p20b.asr : 'null',
+      'Qwen/Qwen2.5-72B-Instruct|FunAudioLLM/SenseVoiceSmall'));
+    tests.push(eq('SN20-6: 无模型行返回 null', R.recParseMdModels('> 无信息'), null));
+
+    var c20 = { id:'SN20x', name:'10-25 09:00', ts: Date.now(), dur: 60,
+      transcript: { text:'# 纪要', raw:'原始', ts: 1792900000000 } };
+    var d20 = document.createElement('div');
+    d20.innerHTML = R.recZoneCardHtml(c20);
+    var m20 = d20.querySelector('.rz-model');
+    tests.push(eq('SN20-7: 老转录卡片徽章标「推定」',
+      !!m20 && m20.textContent.indexOf('Qwen2.5-72B') > -1
+      && m20.textContent.indexOf('（推定）') > -1, true));
+    tests.push(eq('SN20-8: 悬停说明推定依据',
+      !!m20 && (m20.getAttribute('title') || '').indexOf('推定') > -1, true));
+
+    var z20 = document.createElement('div');
+    z20.className = 'rec-zone';
+    z20.innerHTML = '<div id="bzRecZoneDetail"></div>';
+    try { R.recZoneRenderDetail(z20, c20); } catch (e) {}
+    var ml20 = z20.querySelector('.rz-model-line');
+    tests.push(eq('SN20-9: 详情面板同时标出推定模型',
+      !!ml20 && ml20.textContent.indexOf('Qwen/Qwen2.5-72B-Instruct') > -1
+      && ml20.textContent.indexOf('（推定）') > -1, true));
+    z20.remove();
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====

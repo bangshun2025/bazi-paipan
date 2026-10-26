@@ -1831,6 +1831,14 @@ function syncSubDir(sub) {
   if (!_syncDir) return Promise.resolve(null);
   return _syncDir.getDirectoryHandle(sub, { create: true }).catch(function() { return null; });
 }
+function syncReadText(sub, name) {
+  if (!_syncDir || !name) return Promise.resolve(null);
+  return syncSubDir(sub).then(function(d) {
+    if (!d) return null;
+    return d.getFileHandle(name).then(function(fh) { return fh.getFile(); })
+      .then(function(f) { return f.text(); });
+  }).catch(function() { return null; });
+}
 function syncWriteBlob(sub, name, blob) {
   if (!_syncDir || !name || !blob) return Promise.resolve(false);
   return syncSubDir(sub).then(function(d) {
@@ -2020,6 +2028,7 @@ function openChartMd() {
     syncResume: syncResume,
     syncBuildFiles: syncBuildFiles,
     syncWriteBlob: syncWriteBlob,
+    syncReadText: syncReadText,
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
     openChartMd: openChartMd,

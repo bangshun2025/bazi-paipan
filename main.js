@@ -3727,6 +3727,54 @@ function captureScreenshot() {
     zone19.remove();
   })();
 
+  // ===== v0.83.8 老转录找回所用模型 =====
+  (function() {
+    tests.push({ section:'老转录模型找回(v0.83.8)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recParseMdModels !== 'function' || typeof R.recModelBackfill !== 'function') {
+      tests.push(fail('SN20 前置: RENDER 找回接口挂载', '缺失'));
+      return;
+    }
+    var old20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: 1792900000000 } });
+    tests.push(eq('SN20-1: 模型升级前的老转录推定当年模型',
+      old20.llm + '|' + old20.src, 'Qwen/Qwen2.5-72B-Instruct|guess'));
+    var new20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: Date.now() } });
+    tests.push(eq('SN20-2: 近期无快照转录按当前模型标记',
+      new20.llm + '|' + new20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|cur'));
+    tests.push(eq('SN20-3: 有快照时来源为 snap',
+      R.recModelsOf({ transcript: { text:'x', models:{ asr:'A', llm:'B' } } }).src, 'snap'));
+    var p20a = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
+    tests.push(eq('SN20-4: 从 md 新格式读回识别+整理模型',
+      p20a ? p20a.asr + '|' + p20a.llm + '|' + p20a.src : 'null',
+      'FunAudioLLM/SenseVoiceSmall|Qwen/Qwen2.5-72B-Instruct|md'));
+    var p20b = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 来源：排盘录音自动转录 ｜ 时长：10:00 ｜ 整理：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
+    tests.push(eq('SN20-5: 从 md 旧格式（只有整理行）读回',
+      p20b ? p20b.llm + '|' + p20b.asr : 'null',
+      'Qwen/Qwen2.5-72B-Instruct|FunAudioLLM/SenseVoiceSmall'));
+    tests.push(eq('SN20-6: 无模型行返回 null', R.recParseMdModels('> 无信息'), null));
+
+    var c20 = { id:'SN20x', name:'10-25 09:00', ts: Date.now(), dur: 60,
+      transcript: { text:'# 纪要', raw:'原始', ts: 1792900000000 } };
+    var d20 = document.createElement('div');
+    d20.innerHTML = R.recZoneCardHtml(c20);
+    var m20 = d20.querySelector('.rz-model');
+    tests.push(eq('SN20-7: 老转录卡片徽章标「推定」',
+      !!m20 && m20.textContent.indexOf('Qwen2.5-72B') > -1
+      && m20.textContent.indexOf('（推定）') > -1, true));
+    tests.push(eq('SN20-8: 悬停说明推定依据',
+      !!m20 && (m20.getAttribute('title') || '').indexOf('推定') > -1, true));
+
+    var z20 = document.createElement('div');
+    z20.className = 'rec-zone';
+    z20.innerHTML = '<div id="bzRecZoneDetail"></div>';
+    try { R.recZoneRenderDetail(z20, c20); } catch (e) {}
+    var ml20 = z20.querySelector('.rz-model-line');
+    tests.push(eq('SN20-9: 详情面板同时标出推定模型',
+      !!ml20 && ml20.textContent.indexOf('Qwen/Qwen2.5-72B-Instruct') > -1
+      && ml20.textContent.indexOf('（推定）') > -1, true));
+    z20.remove();
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
