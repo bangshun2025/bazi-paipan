@@ -1248,6 +1248,8 @@ function recNoteCandidates(suffix) {
 function recStatusShow(container, text, sticky) {
   var st = container.querySelector('.rec-status');
   if (!st) return;
+  st.style.color = '';
+  st.style.fontWeight = '';
   st.textContent = text;
   st.classList.add('show');
   clearTimeout(st._t);
@@ -1970,6 +1972,78 @@ function bzVoiceClus(feats, segs) {
   }
   return { lab: out, groups: groups, n: use.length };
 }
+function bzF0OfSeg(ch, rate, s0, e0) {
+  var ds = 2, sr = Math.round(rate / ds);
+  var a = Math.round(s0 * rate), b = Math.min(ch.length, Math.round(e0 * rate));
+  b = Math.min(b, a + Math.round(sr * 1.5) * ds);
+  var n = Math.floor((b - a) / ds), i;
+  if (n < 600) return null;
+  var x = new Float32Array(n);
+  for (i = 0; i < n; i++) x[i] = (ch[a + i * ds] + ch[a + i * ds + 1]) / 2;
+  var win = 512, hop = 256, minLag = Math.floor(sr / 400), maxLag = Math.floor(sr / 70);
+  if (n < win + maxLag) return null;
+  var vals = [], rs = new Float32Array(maxLag + 2);
+  for (var t = 0; t + win + maxLag < n; t += hop) {
+    var en = 0;
+    for (i = 0; i < win; i++) en += x[t + i] * x[t + i];
+    if (en < 0.04) continue;
+    var best = 0;
+    for (var lag = minLag; lag <= maxLag; lag++) {
+      var sxy = 0, sxx = 0, syy = 0, vx, vy;
+      for (i = 0; i < win; i++) { vx = x[t + i]; vy = x[t + i + lag]; sxy += vx * vy; sxx += vx * vx; syy += vy * vy; }
+      var r = sxy / (Math.sqrt(sxx * syy) || 1);
+      rs[lag] = r;
+      if (r > best) best = r;
+    }
+    if (best < 0.5) continue;
+    var pick = 0;
+    for (lag = minLag + 1; lag < maxLag; lag++) {
+      if (rs[lag] >= best * 0.9 && rs[lag] >= rs[lag - 1] && rs[lag] >= rs[lag + 1]) { pick = lag; break; }
+    }
+    if (pick) vals.push(sr / pick);
+  }
+  if (vals.length < 4) return null;
+  vals.sort(function(p, q) { return p - q; });
+  var med = vals[Math.floor(vals.length / 2)], sdv = 0;
+  for (i = 0; i < vals.length; i++) sdv += Math.pow(vals[i] - med, 2);
+  return { f0: med, sd: Math.sqrt(sdv / vals.length), n: vals.length };
+}
+function bzSpkSplit(ch, rate, segs) {
+  var fs = [], i, k;
+  for (i = 0; i < segs.length; i++) {
+    var v = null;
+    try { v = bzF0OfSeg(ch, rate, segs[i].s, segs[i].e); } catch (e) { v = null; }
+    fs.push(v);
+  }
+  var use = [];
+  for (i = 0; i < fs.length; i++) if (fs[i]) use.push(i);
+  if (use.length < 6) return null;
+  var th = 165, g = [[], []], vv = [[], []];
+  for (i = 0; i < use.length; i++) {
+    var l = fs[use[i]].f0 < th ? 0 : 1;
+    g[l].push(use[i]); vv[l].push(fs[use[i]].f0);
+  }
+  if (g[0].length < 3 || g[1].length < 3) return null;
+  var med = [];
+  for (k = 0; k < 2; k++) {
+    vv[k].sort(function(p, q) { return p - q; });
+    med.push(vv[k][Math.floor(vv[k].length / 2)]);
+  }
+  if (!(med[0] <= 150 && med[1] >= 170 && med[1] - med[0] >= 40)) return null;
+  var out = new Array(segs.length).fill(-1);
+  for (i = 0; i < use.length; i++) out[use[i]] = fs[use[i]].f0 < th ? 0 : 1;
+  for (i = 0; i < out.length; i++) {
+    if (out[i] >= 0) continue;
+    var pv = -1, pd = 1e9, dd;
+    for (k = 0; k < out.length; k++) {
+      if (out[k] < 0) continue;
+      dd = Math.min(Math.abs(segs[k].s - segs[i].s), Math.abs(segs[k].e - segs[i].e));
+      if (dd < pd) { pd = dd; pv = k; }
+    }
+    out[i] = pv < 0 ? 0 : out[pv];
+  }
+  return { lab: out, groups: g, n: use.length, th: th, d: med[1] - med[0], mode: 'f0' };
+}
 function bzSpkPrompt(segs, pdName, people, vc) {
   var others = recPeopleOthers({ people: people });
   var otherTxt = others.length ? others.join('、') : '对方';
@@ -1981,7 +2055,7 @@ function bzSpkPrompt(segs, pdName, people, vc) {
       ? '2. 其他人提问、回应、补充信息的段落，标最贴合的具体人名，只能从这些名字里选：' + otherTxt + '；'
       : '2. 明显不是邦顺本人的插话、提问标「对方」；',
     '3. 拿不准的一律标「邦顺」；',
-    hasVc ? '4. 末尾【声学分组】是纯声纹分析结果（只听声音、不看内容）：A 组与 B 组的声音特征不同，通常就是两个不同的人。同一组内的段落大概率同一个人说；但若与文字内容明显矛盾（如某组全是大段专业分析），以内容为准，不要机械照抄分组。' : '',
+    hasVc ? '4. 末尾【声学分组】是按嗓音高低（基频）分的：A 组嗓音低（男声，通常就是邦顺本人），B 组嗓音高（女性说话人）。同一组里可能有不止一个人——现场若有两位女性，它们都会落在 B 组，请按内容分辨；分不清就统一标同一个名字，不要臆造第三人。' : '',
     (hasVc ? '5' : '4') + '. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (others[0] || '对方') + '"}]，不要任何其他文字或代码块标记。',
     '', '【逐段识别文字】'];
   var cap = Math.min(segs.length, 160);
@@ -2105,7 +2179,7 @@ function transcribeClip(clip, panel) {
       asrFixN = fixN;
       var pdName = window._paipanData && window._paipanData.name || '';
       var vc = null;
-      try { if (audio) vc = bzVoiceClus(bzVoiceFeat(audio.ch, audio.rate, segs), segs); } catch (e) { vc = null; }
+      try { if (audio) vc = bzSpkSplit(audio.ch, audio.rate, segs); } catch (e) { vc = null; }
       var pSpk = segs.length > 1
         ? bzLlm(bzSpkPrompt(segs, pdName, clip.people, vc), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
         : Promise.resolve(null);
@@ -2214,12 +2288,118 @@ function bzViewTranscript(btn) {
 }
 function recAudioResetBtn(panel) {
   panel._raRec = null; panel._raExpectStop = false;
+  if (panel._raG) { panel._raG.stop(); panel._raG = null; }
   clearInterval(panel._raTimer);
   var btn = panel.querySelector('.rec-audio-btn');
   if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
   var tEl = panel.querySelector('.rec-audio-timer');
   if (tEl) tEl.textContent = '';
 }
+// ===== v0.85.1 录音锁定内置麦克风 + 静音守卫 =====
+var REC_MIC_BLOCK = /blackhole|virtual|虚拟|aggregate|soundflower|loopback|doubao|豆包|oray|ishot|miaowa|iphone|ipad|airpods|bluetooth|蓝牙|display/i;
+var REC_MIC_BUILTIN = /built-?in|内置|macbook.*(麦克风|microphone)|imac.*(麦克风|microphone)/i;
+function recMicIsMine(label) {
+  var lb = String(label || '');
+  if (!lb || REC_MIC_BLOCK.test(lb)) return false;
+  return REC_MIC_BUILTIN.test(lb);
+}
+function recMicOpen() {
+  var md = navigator.mediaDevices;
+  return md.getUserMedia({ audio: true }).then(function(probe) {
+    return md.enumerateDevices().then(function(list) {
+      var mics = (list || []).filter(function(d) { return d.kind === 'audioinput'; });
+      var chosen = null;
+      for (var i = 0; i < mics.length; i++) if (recMicIsMine(mics[i].label)) { chosen = mics[i]; break; }
+      var tr = probe.getAudioTracks()[0];
+      var curLabel = tr ? (tr.label || '') : '';
+      if (!chosen || recMicIsMine(curLabel)) {
+        return { stream: probe, label: curLabel || (chosen && chosen.label) || '默认麦克风', locked: !!recMicIsMine(curLabel) };
+      }
+      try { probe.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
+      return md.getUserMedia({ audio: { deviceId: { exact: chosen.deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        .then(function(s) {
+          var t2 = s.getAudioTracks()[0];
+          return { stream: s, label: (t2 && t2.label) || chosen.label || '内置麦克风', locked: true };
+        }).catch(function() {
+          return md.getUserMedia({ audio: true }).then(function(s) {
+            var t3 = s.getAudioTracks()[0];
+            return { stream: s, label: (t3 && t3.label) || '默认麦克风', locked: false };
+          });
+        });
+    });
+  });
+}
+function recAlarmBeep(ctx) {
+  if (!ctx) return;
+  try {
+    for (var i = 0; i < 3; i++) {
+      var t0 = ctx.currentTime + i * 0.32;
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + 0.2);
+    }
+  } catch (e) {}
+}
+function recMicGuard(stream, onSilent) {
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  var ctx, an;
+  try {
+    ctx = new AC();
+    if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (e) {} }
+    an = ctx.createAnalyser();
+    an.fftSize = 1024;
+    var src = ctx.createMediaStreamSource(stream);
+    var sink = ctx.createGain();
+    sink.gain.value = 0;
+    src.connect(an); an.connect(sink); sink.connect(ctx.destination);
+  } catch (e) {
+    try { ctx && ctx.close(); } catch (e2) {}
+    return null;
+  }
+  var buf = new Uint8Array(an.fftSize);
+  var total = 0, silent = 0, streak = 0, fired = 0;
+  var timer = setInterval(function() {
+    var rms = 0;
+    try {
+      an.getByteTimeDomainData(buf);
+      var sum = 0;
+      for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; sum += v * v; }
+      rms = Math.sqrt(sum / buf.length);
+    } catch (e) { return; }
+    total += 3;
+    if (rms < 0.004) { silent += 3; streak += 3; } else { streak = 0; }
+    if (streak >= 18 && (fired === 0 || streak - fired >= 60)) { fired = streak; onSilent(streak, ctx); }
+  }, 3000);
+  return {
+    stop: function() { clearInterval(timer); try { ctx.close(); } catch (e) {} },
+    stat: function() { return { total: total, silent: silent }; }
+  };
+}
+function recWatchAlert(panel, text, ctx) {
+  if (!panel) return;
+  var st = panel.querySelector('.rec-status');
+  if (st) {
+    st.textContent = text;
+    st.classList.add('show');
+    st.style.color = '#c0392b';
+    st.style.fontWeight = '700';
+    clearTimeout(st._t);
+  }
+  var now = Date.now();
+  if (panel._raAlertAt && now - panel._raAlertAt < 20000) return;
+  panel._raAlertAt = now;
+  recAlarmBeep(ctx);
+}
+function recSilentVerdict(gstat) {
+  if (!gstat || gstat.total < 30) return false;
+  return gstat.silent >= gstat.total * 0.7;
+}
+
 function recAudioToggle(btn) {
   var panel = btn.closest('.record-panel');
   if (!panel) return;
@@ -2235,7 +2415,8 @@ function recAudioToggle(btn) {
   var suffix = au ? (au.getAttribute('data-suffix') || '') : '';
   var k = recAudioKey(suffix);
   if (!k) { recStatusShow(panel, '请先排盘再录音', true); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+  recMicOpen().then(function(mic) {
+    var stream = mic.stream;
     var mimes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
     var mime = '';
     for (var i = 0; i < mimes.length; i++) {
@@ -2248,6 +2429,8 @@ function recAudioToggle(btn) {
       if (done) return;
       done = true;
       panel._raExpectStop = false;
+      var gstat = null;
+      if (panel._raG) { gstat = panel._raG.stat(); panel._raG.stop(); panel._raG = null; }
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
       clearInterval(panel._raTimer);
       panel._raRec = null;
@@ -2263,8 +2446,9 @@ function recAudioToggle(btn) {
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
+      var allSilent = recSilentVerdict(gstat);
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : '') + (allSilent ? ' ⚠静音' : ''), ts: now.getTime(), dur: dur, mime: m,
         people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
@@ -2276,7 +2460,8 @@ function recAudioToggle(btn) {
         transcribeClip(clip, panel);
         return recAudioList(k).then(function(list) { renderRecAudioList(panel, list); });
       }).then(function() {
-        recStatusShow(panel, interrupted ? '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整' : '已保存录音 ' + recAudioFmt(dur), interrupted);
+        if (allSilent) recStatusShow(panel, '⚠ 本段 ' + recAudioFmt(dur) + ' 几乎全是静音，麦克风当时已断开', true);
+        else recStatusShow(panel, interrupted ? '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整' : '已保存录音 ' + recAudioFmt(dur), interrupted);
       }).catch(function(e) {
         recStatusShow(panel, '录音保存失败：' + (e && e.message || e), true);
       });
@@ -2290,10 +2475,21 @@ function recAudioToggle(btn) {
         if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
         else finalize(true);
       });
+      t.addEventListener('mute', function() {
+        if (panel._raRec !== mr || done) return;
+        recWatchAlert(panel, '⚠ 麦克风被系统断开（可能切换到了别的设备）', null);
+      });
     });
     panel._raRec = mr;
     panel._raT0 = Date.now();
     mr.start();
+    panel._raG = recMicGuard(stream, function(silentSec, actx) {
+      if (panel._raRec !== mr || done) return;
+      recWatchAlert(panel, silentSec >= 60
+        ? '⚠ 已连续 ' + silentSec + ' 秒没有声音输入，这段录音可能是空的'
+        : '⚠ 麦克风没有声音输入（' + silentSec + ' 秒），请检查设备', actx);
+    });
+    recStatusShow(panel, '🎙 录音设备：' + mic.label + (mic.locked ? '（已锁定内置）' : '（⚠ 未锁定内置麦克风）'), !mic.locked);
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = panel.querySelector('.rec-audio-timer');
     panel._raTimer = setInterval(function() {
@@ -2485,10 +2681,11 @@ function renderRecZone() {
     return true;
   }).catch(function() { return false; });
 }
-var _rzRec = null, _rzT0 = 0, _rzTimer = null, _rzExpectStop = false;
+var _rzRec = null, _rzT0 = 0, _rzTimer = null, _rzExpectStop = false, _rzGuard = null;
 function recZoneResetBtn() {
   var zone = document.getElementById('bzRecZone');
   _rzRec = null; _rzExpectStop = false;
+  if (_rzGuard) { _rzGuard.stop(); _rzGuard = null; }
   clearInterval(_rzTimer); _rzTimer = null;
   var btn = zone && zone.querySelector('.rz-rec-btn');
   if (btn) { btn.textContent = '● 录音'; btn.classList.remove('recording'); }
@@ -2506,7 +2703,8 @@ function recZoneRecord(btn) {
   }
   var k = recAudioKey('');
   if (!k) { recStatusShow(zone, '请先排盘再录音', true); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+  recMicOpen().then(function(mic) {
+    var stream = mic.stream;
     var mimes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
     var mime = '';
     for (var i = 0; i < mimes.length; i++) if (MediaRecorder.isTypeSupported(mimes[i])) { mime = mimes[i]; break; }
@@ -2517,6 +2715,8 @@ function recZoneRecord(btn) {
       if (done) return;
       done = true;
       _rzExpectStop = false;
+      var gstat = null;
+      if (_rzGuard) { gstat = _rzGuard.stat(); _rzGuard.stop(); _rzGuard = null; }
       try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
       clearInterval(_rzTimer); _rzTimer = null;
       _rzRec = null;
@@ -2531,8 +2731,9 @@ function recZoneRecord(btn) {
       var now = new Date();
       var nm = recPad(now.getMonth() + 1) + '-' + recPad(now.getDate()) + ' ' + recPad(now.getHours()) + ':' + recPad(now.getMinutes());
       var d0 = window._paipanData;
+      var allSilent = recSilentVerdict(gstat);
       var clip = {
-        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : ''), ts: now.getTime(), dur: dur, mime: m,
+        id: k + '|' + now.getTime(), key: k, name: nm + (interrupted ? ' ⚠中断' : '') + (allSilent ? ' ⚠静音' : ''), ts: now.getTime(), dur: dur, mime: m,
         people: recPeopleDefault(),
         fname: (d0 && d0.name ? d0.name + '-' : '') + '录音' + (interrupted ? '-中断' : '') + '-' + nm.replace(' ', '_').replace(':', '-') + '.' + recAudioExt(m),
         blob: new Blob(chunks, { type: m.split(';')[0] })
@@ -2542,7 +2743,8 @@ function recZoneRecord(btn) {
         transcribeClip(clip, null);
         return renderRecZone();
       }).then(function() {
-        if (interrupted) recStatusShow(zone, '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整', true);
+        if (allSilent) recStatusShow(zone, '⚠ 本段 ' + recAudioFmt(dur) + ' 几乎全是静音，麦克风当时已断开', true);
+        else if (interrupted) recStatusShow(zone, '⚠ 录音中断：已保留 ' + recAudioFmt(dur) + '，内容可能不完整', true);
       }).catch(function(e) { recStatusShow(zone, '录音保存失败：' + (e && e.message || e), true); });
     }
     mr.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
@@ -2554,9 +2756,20 @@ function recZoneRecord(btn) {
         if (mr.state === 'recording') { try { mr.stop(); } catch (e) {} }
         else finalize(true);
       });
+      t.addEventListener('mute', function() {
+        if (_rzRec !== mr || done) return;
+        recWatchAlert(zone, '⚠ 麦克风被系统断开（可能切换到了别的设备）', null);
+      });
     });
     _rzRec = mr; _rzT0 = Date.now();
     mr.start();
+    _rzGuard = recMicGuard(stream, function(silentSec, actx) {
+      if (_rzRec !== mr || done) return;
+      recWatchAlert(zone, silentSec >= 60
+        ? '⚠ 已连续 ' + silentSec + ' 秒没有声音输入，这段录音可能是空的'
+        : '⚠ 麦克风没有声音输入（' + silentSec + ' 秒），请检查设备', actx);
+    });
+    recStatusShow(zone, '🎙 录音设备：' + mic.label + (mic.locked ? '（已锁定内置）' : '（⚠ 未锁定内置麦克风）'), !mic.locked);
     btn.textContent = '■ 停止'; btn.classList.add('recording');
     var timerEl = zone.querySelector('.rz-timer');
     _rzTimer = setInterval(function() {
@@ -5434,11 +5647,18 @@ function cmpSetState(entries) {
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     recAudioToggle: recAudioToggle,
+    recMicIsMine: recMicIsMine,
+    recMicOpen: recMicOpen,
+    recMicGuard: recMicGuard,
+    recSilentVerdict: recSilentVerdict,
+    recWatchAlert: recWatchAlert,
     recAudioPlay: recAudioPlay,
     recAudioDelete: recAudioDelete,
     recRetf: recRetf,
     bzAsrFix: bzAsrFix,
     bzVoiceClus: bzVoiceClus,
+    bzSpkSplit: bzSpkSplit,
+    bzF0OfSeg: bzF0OfSeg,
     bzVoiceFeat: bzVoiceFeat,
     recAudioDownload: recAudioDownload,
     recAudioKey: recAudioKey,

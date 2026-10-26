@@ -3832,6 +3832,62 @@ function captureScreenshot() {
     tests.push(eq('SN22-12: md 记录术语纠错条数', mdFix.indexOf('术语纠错：3 处') > -1, true));
   })();
 
+  // ===== v0.85.1 录音锁定内置麦克风 + 静音守卫 =====
+  (function() {
+    tests.push({ section:'录音设备锁定与静音守卫(v0.85.1)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recMicIsMine !== 'function' || typeof R.recSilentVerdict !== 'function') {
+      tests.push(fail('SN23 前置: RENDER.recMicIsMine/recSilentVerdict 已挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN23-1: MacBook 内置麦识别为本机麦克风', R.recMicIsMine('MacBook Pro麦克风'), true));
+    tests.push(eq('SN23-2: iPhone 连续互通麦被拒', R.recMicIsMine('iPhone 14-bangshun的麦克风'), false));
+    tests.push(eq('SN23-3: BlackHole 虚拟设备被拒', R.recMicIsMine('BlackHole 2ch'), false));
+    tests.push(eq('SN23-4: 豆包会议记录虚拟设备被拒', R.recMicIsMine('豆包会议记录虚拟设备'), false));
+    tests.push(eq('SN23-5: 空标签不被误认', R.recMicIsMine(''), false));
+    tests.push(eq('SN23-6: 全静音录音判定为静音', R.recSilentVerdict({ total:120, silent:118 }), true));
+    tests.push(eq('SN23-7: 正常录音不误判', R.recSilentVerdict({ total:120, silent:10 }), false));
+    tests.push(eq('SN23-8: 时长过短不判定', R.recSilentVerdict({ total:12, silent:12 }), false));
+    tests.push(eq('SN23-9: 无统计不判定', R.recSilentVerdict(null), false));
+    tests.push(eq('SN23-10: recMicOpen 已挂载', typeof R.recMicOpen === 'function', true));
+    tests.push(eq('SN23-11: recMicGuard 已挂载', typeof R.recMicGuard === 'function', true));
+    tests.push(eq('SN23-12: recWatchAlert 已挂载', typeof R.recWatchAlert === 'function', true));
+  })();
+
+  // ===== v0.85.2 说话人分离改基频男/女二分 =====
+  (function() {
+    tests.push({ section:'说话人基频二分(v0.85.2)' });
+    var R = window.RENDER;
+    if (!R || typeof R.bzSpkSplit !== 'function' || typeof R.bzF0OfSeg !== 'function') {
+      tests.push(fail('SN24 前置: RENDER.bzSpkSplit/bzF0OfSeg 已挂载', '缺失'));
+      return;
+    }
+    var rate = 16000;
+    function tone(freq, sec) {
+      var n = Math.round(rate * sec), a = new Float32Array(n), i;
+      for (i = 0; i < n; i++) a[i] = 0.5 * Math.sin(2 * Math.PI * freq * i / rate);
+      return a;
+    }
+    var male = tone(115, 1), female = tone(210, 1);
+    var v1 = R.bzF0OfSeg(male, rate, 0, 1);
+    var v2 = R.bzF0OfSeg(female, rate, 0, 1);
+    tests.push(eq('SN24-1: 115Hz 音高测在 105-125', !!v1 && Math.abs(v1.f0 - 115) <= 10, true));
+    tests.push(eq('SN24-2: 210Hz 音高测在 200-220', !!v2 && Math.abs(v2.f0 - 210) <= 10, true));
+    var ch = new Float32Array(rate * 8), segs = [], i;
+    for (i = 0; i < 4; i++) { ch.set(male, rate * i); segs.push({ s: i, e: i + 1 }); }
+    for (i = 4; i < 8; i++) { ch.set(female, rate * i); segs.push({ s: i, e: i + 1 }); }
+    var sp = R.bzSpkSplit(ch, rate, segs);
+    tests.push(eq('SN24-3: 男女交替 8 段能分组', !!sp, true));
+    tests.push(eq('SN24-4: 低音组识别为 4 段', sp ? sp.groups[0].length : -1, 4));
+    tests.push(eq('SN24-5: 高音组识别为 4 段', sp ? sp.groups[1].length : -1, 4));
+    tests.push(eq('SN24-6: 分割阈值锚定 165Hz', sp ? sp.th : 0, 165));
+    tests.push(eq('SN24-7: 前 4 段全归低音组', sp ? sp.groups[0].join(',') : '', '0,1,2,3'));
+    var one = new Float32Array(rate * 8), segsOne = [];
+    for (i = 0; i < 8; i++) { one.set(male, rate * i); segsOne.push({ s: i, e: i + 1 }); }
+    tests.push(eq('SN24-8: 纯单一声线不强行二分', R.bzSpkSplit(one, rate, segsOne), null));
+    tests.push(eq('SN24-9: 段数过少不分组', R.bzSpkSplit(ch, rate, [{ s:0, e:1 }, { s:4, e:5 }]), null));
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });
