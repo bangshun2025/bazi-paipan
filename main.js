@@ -3795,6 +3795,43 @@ function captureScreenshot() {
     tests.push(eq('SN21-6: 短名不截断版本号', R.recModelShort('Qwen/Qwen3-ASR-1.7B'), 'Qwen3-ASR-1.7B'));
   })();
 
+  // ===== v0.85.0 术语表纠错 + 声纹分离 + 老录音重转 =====
+  (function() {
+    tests.push({ section:'术语纠错与声纹分离(v0.85.0)' });
+    var R = window.RENDER;
+    var f1 = R.bzAsrFix('日主戊土生于未月，行冲和害落在夫妻宫');
+    tests.push(eq('SN22-1: 命理术语同音错被纠正', f1.text.indexOf('刑冲合害') > -1 && f1.text.indexOf('行冲和害') < 0, true));
+    tests.push(eq('SN22-2: 纠错计数正确', f1.n >= 1, true));
+    var f2 = R.bzAsrFix('今天天气很好，我们去看电影吧');
+    tests.push(eq('SN22-3: 非命理内容不动', f2.text, '今天天气很好，我们去看电影吧'));
+    tests.push(eq('SN22-4: 非命理内容计数为 0', f2.n, 0));
+    var f3 = R.bzAsrFix('日主戊土，刑冲合害，七杀有制');
+    tests.push(eq('SN22-5: 已正确的术语不被改坏', f3.text, '日主戊土，刑冲合害，七杀有制'));
+    var feats = [], segs = [];
+    for (var i = 0; i < 6; i++) {
+      var v = new Float64Array(12);
+      for (var j = 0; j < 12; j++) v[j] = (i % 2 ? 18 : 0) + (j % 3) * 0.5;
+      feats.push(v);
+      segs.push({ s: i * 2, e: i * 2 + 1.5 });
+    }
+    var vc = R.bzVoiceClus(feats, segs);
+    tests.push(eq('SN22-6: 声纹聚类分出两组各三', !!vc && vc.groups[0].length === 3 && vc.groups[1].length === 3, true));
+    tests.push(eq('SN22-7: 同组段号一致', !!vc && vc.lab[0] === vc.lab[2] && vc.lab[2] === vc.lab[4], true));
+    tests.push(eq('SN22-8: 两组标签不同', !!vc && vc.lab[0] !== vc.lab[1], true));
+    feats[2] = null;
+    var vc2 = R.bzVoiceClus(feats, segs);
+    tests.push(eq('SN22-9: 无特征短段继承相邻标签', !!vc2 && (vc2.lab[2] === vc2.lab[1] || vc2.lab[2] === vc2.lab[3]), true));
+    var c22 = { id:'SN22x', key:'k', name:'10-26 10:00', ts: Date.now(), dur: 60,
+      transcript:{ text:'# 整理稿', raw:'原始', ts: Date.now(), models:{ asr:'Qwen/Qwen3-ASR-1.7B', llm:'L' } },
+      prev:[{ text:'# 旧稿', raw:'旧原始', ts: Date.now() - 86400000, models:{ asr:'FunAudioLLM/SenseVoiceSmall', llm:'L' } }] };
+    var md22 = R.bzTranscriptMd(c22, '# 整理稿', '原始');
+    tests.push(eq('SN22-10: 重转后 md 保留历史转录', md22.indexOf('## 历史转录') > -1 && md22.indexOf('SenseVoiceSmall') > -1, true));
+    tests.push(eq('SN22-11: 重转入口存在', typeof R.bzZoneTranscribe === 'function' && typeof R.recRetf === 'function', true));
+    var tr22 = { transcript:{ text:'x', raw:'y', ts: Date.now(), fix:{ n: 3, pairs:['行冲和害→刑冲合害'] } } };
+    var mdFix = R.bzTranscriptMd(tr22, '# a', 'b');
+    tests.push(eq('SN22-12: md 记录术语纠错条数', mdFix.indexOf('术语纠错：3 处') > -1, true));
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });

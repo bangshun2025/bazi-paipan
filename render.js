@@ -1481,6 +1481,8 @@ function renderRecAudioList(panel, list) {
       + '<a class="ra-dl" href="#" onclick="return RENDER.recAudioDownload(this)" title="下载">下载</a>'
       + '<button type="button" class="ra-tf" onclick="RENDER.bzViewTranscript(this)" title="' + (c.transcript ? '查看转录稿' : '转录') + '"'
       + ' style="color:' + (c.transcript ? '#0a7d33' : '#bbb') + ';border:0;background:none;cursor:pointer;">📝</button>'
+      + '<button type="button" class="ra-retf" onclick="RENDER.recRetf(this)" title="用最新模型重新转录（旧稿保留）" '
+      + 'style="border:0;background:none;cursor:pointer;font-size:13px;">🔄</button>'
       + '<button type="button" class="ra-del" onclick="RENDER.recAudioDelete(this)" title="删除">✕</button>'
       + '</div>';
   }
@@ -1521,6 +1523,31 @@ function recAudioDownload(a) {
   a.download = clip.fname || '录音.' + recAudioExt(clip.mime);
   return true;
 }
+function recRetf(btn) {
+  var panel = btn.closest('.record-panel');
+  var item = btn.closest('.rec-audio-item');
+  if (!panel || !item) return;
+  var id = item.getAttribute('data-id');
+  var clip = panel._raClips && panel._raClips[id];
+  if (!clip) return;
+  if (!clip.blob) { recStatusShow(panel, '这条录音没有保留音频，无法重转', true); return; }
+  if (!confirm('用最新模型重新转录「' + clip.name + '」？\n\n原稿不会丢，会保留在录音稿的「历史转录」里。')) return;
+  if (clip.transcript) {
+    clip.prev = (clip.prev || []).concat([{
+      text: clip.transcript.text, raw: clip.transcript.raw, ts: clip.transcript.ts, models: clip.transcript.models
+    }]).slice(-3);
+  }
+  clip.transcript = null;
+  recStatusShow(panel, '重新转录中…（' + clip.name + '）');
+  recAudioPut(clip).then(function() {
+    return transcribeClip(clip, panel);
+  }).then(function() {
+    return recAudioList(clip.key);
+  }).then(function(list) {
+    renderRecAudioList(panel, list);
+    renderRecZone();
+  }).catch(function(e) { recStatusShow(panel, '重转失败：' + (e && e.message || e), true); });
+}
 function recAudioDelete(btn) {
   var panel = btn.closest('.record-panel');
   var item = btn.closest('.rec-audio-item');
@@ -1556,6 +1583,40 @@ var BZ_ASR_SWITCH_TS = 1792974900000;
 var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
 var BZ_LLM_SWITCH_TS = 1792971835000;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
+// v0.85.0 术语表纠错：只纠正实测反复出现的同音错，整段须先命中 BZ_CTX 关键词才启用，避免误伤日常用语
+var BZ_CTX = /八字|命盘|命理|日主|日干|月令|月支|年干|时柱|十神|食神|伤官|七杀|正官|正印|偏印|比肩|劫财|偏财|正财|大运|流年|格局|天干|地支|旺衰|喜忌|宫位|刑冲|合害|扶抑|用神/;
+var BZ_ASR_FIX = [
+  ['行冲合害', '刑冲合害'], ['行冲和害', '刑冲合害'], ['行冲和亥', '刑冲合害'], ['刑冲和害', '刑冲合害'],
+  ['欺杀', '七杀'], ['七沙', '七杀'], ['正官杀', '正官七杀'],
+  ['得令而亡', '得令而旺'], ['得令而妄', '得令而旺'],
+  ['年甘', '年干'], ['月之', '月支'], ['石柱', '时柱'], ['曰主', '日主'], ['日住', '日主'],
+  ['月另', '月令'], ['旺哀', '旺衰'], ['喜寄', '喜忌'],
+  ['恭位', '宫位'], ['工位', '宫位'],
+  ['伏益', '扶抑'], ['负益', '扶抑'], ['扶益', '扶抑'],
+  ['食伸', '食神'], ['食晨', '食神'], ['十审', '十神'], ['十伸', '十神'],
+  ['伤关', '伤官'], ['观星', '官星'], ['印心', '印星'], ['比洁', '比劫'], ['比接', '比劫'],
+  ['才星', '财星'], ['材星', '财星'], ['大云', '大运'], ['流连', '流年'], ['流粘', '流年'],
+  ['天干地支', '天干地支'], ['干之', '干支'],
+  ['人子', '壬子'], ['人午', '壬午'], ['丙武', '丙午'], ['戊土', '戊土'],
+  ['甲新', '甲申'], ['甲深', '甲申'], ['乙酉', '乙酉'],
+  ['夫妻供', '夫妻宫'], ['夫妻公', '夫妻宫'], ['夫妻功', '夫妻宫'], ['夫妻宫冯聪', '夫妻宫逢冲'],
+  ['夫妻宫逢聪', '夫妻宫逢冲'], ['逢冲', '逢冲'],
+  ['事业供', '事业宫'], ['命供', '命宫']
+];
+function bzAsrFix(txt) {
+  var s = String(txt == null ? '' : txt);
+  if (!BZ_CTX.test(s)) return { text: s, n: 0, pairs: [] };
+  var n = 0, pairs = [];
+  for (var i = 0; i < BZ_ASR_FIX.length; i++) {
+    var a = BZ_ASR_FIX[i][0], b = BZ_ASR_FIX[i][1];
+    if (a === b || s.indexOf(a) < 0) continue;
+    var c = s.split(a).length - 1;
+    s = s.split(a).join(b);
+    n += c;
+    if (pairs.length < 8) pairs.push(a + '→' + b);
+  }
+  return { text: s, n: n, pairs: pairs };
+}
 function bzAiCfg() {
   try { return JSON.parse(localStorage.getItem(BZ_AI_LS) || '{}') || {}; } catch (e) { return {}; }
 }
@@ -1789,9 +1850,130 @@ function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
     + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
 }
-function bzSpkPrompt(segs, pdName, people) {
+var BZ_NFFT = 512, BZ_MEL = 26, BZ_MELBANK = null;
+function bzFft(re, im) {
+  var n = re.length, i, j = 0, bit, t, len, half, ang, wr, wi, cr, ci, ur, ui, vr, vi, ncr, k;
+  for (i = 1; i < n; i++) {
+    bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (len = 2; len <= n; len <<= 1) {
+    half = len >> 1; ang = -2 * Math.PI / len; wr = Math.cos(ang); wi = Math.sin(ang);
+    for (i = 0; i < n; i += len) {
+      cr = 1; ci = 0;
+      for (k = 0; k < half; k++) {
+        ur = re[i + k]; ui = im[i + k];
+        vr = re[i + k + half] * cr - im[i + k + half] * ci;
+        vi = re[i + k + half] * ci + im[i + k + half] * cr;
+        re[i + k] = ur + vr; im[i + k] = ui + vi;
+        re[i + k + half] = ur - vr; im[i + k + half] = ui - vi;
+        ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+      }
+    }
+  }
+}
+function bzMelBank() {
+  if (BZ_MELBANK) return BZ_MELBANK;
+  var sr = 16000, nfft = BZ_NFFT, bank = [], pts = [], i, k, m, a, b, c, v;
+  function toMel(f) { return 2595 * Math.log(1 + f / 700) / Math.LN10; }
+  function toHz(x) { return 700 * (Math.pow(10, x / 2595) - 1); }
+  var lo = toMel(80), hi = toMel(sr / 2);
+  for (i = 0; i < BZ_MEL + 2; i++) pts.push(toHz(lo + (hi - lo) * i / (BZ_MEL + 1)) * nfft / sr);
+  for (m = 1; m <= BZ_MEL; m++) {
+    a = pts[m - 1]; b = pts[m]; c = pts[m + 1];
+    var f = [];
+    for (k = 0; k <= nfft / 2; k++) {
+      v = 0;
+      if (k >= a && k <= b) v = (k - a) / Math.max(1e-9, b - a);
+      else if (k > b && k <= c) v = (c - k) / Math.max(1e-9, c - b);
+      f.push(v);
+    }
+    bank.push(f);
+  }
+  BZ_MELBANK = bank;
+  return bank;
+}
+function bzVoiceFeat(ch, rate, segs) {
+  var bank = bzMelBank(), nfft = BZ_NFFT, hop = Math.round(rate * 0.02), dim = 12;
+  var dct = [], c, m, i, j;
+  for (c = 1; c <= dim; c++) { var row = []; for (m = 0; m < BZ_MEL; m++) row.push(Math.cos(Math.PI * c * (m + 0.5) / BZ_MEL)); dct.push(row); }
+  var feats = [];
+  for (i = 0; i < segs.length; i++) {
+    var a = Math.round(segs[i].s * rate), b = Math.min(ch.length, Math.round(segs[i].e * rate));
+    var nf = Math.floor((b - a - nfft) / hop);
+    if (nf < 8) { feats.push(null); continue; }
+    var step = Math.max(1, Math.floor(nf / 120)), acc = new Float64Array(dim), cnt = 0;
+    for (var t = a; t + nfft < b; t += hop * step) {
+      var re = new Float64Array(nfft), im = new Float64Array(nfft), en = 0, v2;
+      for (j = 0; j < nfft; j++) { v2 = ch[t + j] * (0.54 - 0.46 * Math.cos(2 * Math.PI * j / (nfft - 1))); re[j] = v2; en += v2 * v2; }
+      if (en / nfft < 1e-6) continue;
+      bzFft(re, im);
+      var pw = [], logs = [], k2;
+      for (k2 = 0; k2 <= nfft / 2; k2++) pw.push(re[k2] * re[k2] + im[k2] * im[k2]);
+      for (m = 0; m < BZ_MEL; m++) { var s2 = 0; for (k2 = 0; k2 <= nfft / 2; k2++) s2 += pw[k2] * bank[m][k2]; logs.push(Math.log(Math.max(s2, 1e-10))); }
+      for (c = 0; c < dim; c++) { var s3 = 0; for (m = 0; m < BZ_MEL; m++) s3 += logs[m] * dct[c][m]; acc[c] += s3; }
+      cnt++;
+    }
+    if (cnt < 10) { feats.push(null); continue; }
+    for (c = 0; c < dim; c++) acc[c] /= cnt;
+    feats.push(acc);
+  }
+  return feats;
+}
+function bzVoiceClus(feats, segs) {
+  var dim = 12, use = [], i, j, q;
+  for (i = 0; i < feats.length; i++) if (feats[i]) use.push(i);
+  if (use.length < 4) return null;
+  var mu = new Float64Array(dim), sd = new Float64Array(dim);
+  for (i = 0; i < use.length; i++) for (j = 0; j < dim; j++) mu[j] += feats[use[i]][j] / use.length;
+  for (i = 0; i < use.length; i++) for (j = 0; j < dim; j++) sd[j] += Math.pow(feats[use[i]][j] - mu[j], 2) / use.length;
+  var Z = use.map(function(ix) {
+    var f = feats[ix], z = new Float64Array(dim);
+    for (var t = 0; t < dim; t++) z[t] = (f[t] - mu[t]) / (Math.sqrt(sd[t]) || 1);
+    return z;
+  });
+  var best = null;
+  for (var tr = 0; tr < 6; tr++) {
+    var cts = [Z[tr % Z.length].slice(0), Z[(tr * 7 + 1) % Z.length].slice(0)], lab = new Array(Z.length).fill(0), it;
+    for (it = 0; it < 25; it++) {
+      for (i = 0; i < Z.length; i++) {
+        var d0 = 0, d1 = 0;
+        for (j = 0; j < dim; j++) { d0 += Math.pow(Z[i][j] - cts[0][j], 2); d1 += Math.pow(Z[i][j] - cts[1][j], 2); }
+        lab[i] = d0 <= d1 ? 0 : 1;
+      }
+      for (q = 0; q < 2; q++) {
+        var mem = [], s4;
+        for (i = 0; i < Z.length; i++) if (lab[i] === q) mem.push(Z[i]);
+        if (!mem.length) continue;
+        for (j = 0; j < dim; j++) { s4 = 0; for (i = 0; i < mem.length; i++) s4 += mem[i][j]; cts[q][j] = s4 / mem.length; }
+      }
+    }
+    var inert = 0;
+    for (i = 0; i < Z.length; i++) for (j = 0; j < dim; j++) inert += Math.pow(Z[i][j] - cts[lab[i]][j], 2);
+    var n0 = lab.filter(function(v) { return v === 0; }).length;
+    if (n0 && n0 < Z.length && (!best || inert < best.inert)) best = { lab: lab, inert: inert, cts: cts };
+  }
+  if (!best) return null;
+  var out = new Array(segs.length).fill(-1), groups = [[], []];
+  for (i = 0; i < use.length; i++) { out[use[i]] = best.lab[i]; groups[best.lab[i]].push(use[i]); }
+  for (i = 0; i < out.length; i++) {
+    if (out[i] >= 0) continue;
+    var pivot = -1, pd = 1e9;
+    for (j = 0; j < out.length; j++) {
+      if (out[j] < 0) continue;
+      var dd = Math.min(Math.abs(segs[j].s - segs[i].s), Math.abs(segs[j].e - segs[i].e));
+      if (dd < pd) { pd = dd; pivot = j; }
+    }
+    out[i] = pivot < 0 ? 0 : out[pivot];
+  }
+  return { lab: out, groups: groups, n: use.length };
+}
+function bzSpkPrompt(segs, pdName, people, vc) {
   var others = recPeopleOthers({ people: people });
   var otherTxt = others.length ? others.join('、') : '对方';
+  var hasVc = !!(vc && vc.groups && vc.groups[0].length && vc.groups[1].length);
   var L = ['下面是同一段录音的逐段语音识别结果（[序号] [开始时间] 文字）。录音的人是邦顺（命理分析师，录音主导者）'
     + (others.length ? '，本次咨询的其他人：' + otherTxt + (pdName ? '（其中「案主」即本次命盘主人「' + pdName + '」）' : '') : '') + '。请逐段判断该段是谁说的。',
     '规则：1. 独白讲解、分析、下结论的段落标「邦顺」；',
@@ -1799,10 +1981,16 @@ function bzSpkPrompt(segs, pdName, people) {
       ? '2. 其他人提问、回应、补充信息的段落，标最贴合的具体人名，只能从这些名字里选：' + otherTxt + '；'
       : '2. 明显不是邦顺本人的插话、提问标「对方」；',
     '3. 拿不准的一律标「邦顺」；',
-    '4. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (others[0] || '对方') + '"}]，不要任何其他文字或代码块标记。',
+    hasVc ? '4. 末尾【声学分组】是纯声纹分析结果（只听声音、不看内容）：A 组与 B 组的声音特征不同，通常就是两个不同的人。同一组内的段落大概率同一个人说；但若与文字内容明显矛盾（如某组全是大段专业分析），以内容为准，不要机械照抄分组。' : '',
+    (hasVc ? '5' : '4') + '. 只输出 JSON 数组，格式 [{"i":0,"s":"邦顺"},{"i":1,"s":"' + (others[0] || '对方') + '"}]，不要任何其他文字或代码块标记。',
     '', '【逐段识别文字】'];
   var cap = Math.min(segs.length, 160);
   for (var i = 0; i < cap; i++) L.push('[' + i + '] [' + bzFmtTs(segs[i].s) + '] ' + segs[i].t);
+  if (hasVc) {
+    var ga = [], gb = [];
+    for (var t2 = 0; t2 < vc.lab.length && t2 < cap; t2++) (vc.lab[t2] === 0 ? ga : gb).push(t2);
+    L.push('', '【声学分组】A 组段号：' + (ga.join(',') || '无'), 'B 组段号：' + (gb.join(',') || '无'));
+  }
   return L.join('\n');
 }
 function bzParseSpk(txt, n) {
@@ -1849,6 +2037,10 @@ function bzTranscriptMd(clip, answer, raw) {
   L.push('');
   L.push(answer);
   var tr = clip.transcript;
+  if (tr && tr.fix && tr.fix.n) {
+    L.push('');
+    L.push('> 术语纠错：' + tr.fix.n + ' 处' + (tr.fix.pairs && tr.fix.pairs.length ? '（' + tr.fix.pairs.join('、') + '）' : '') + '，原始识别原文见文末「原始识别」');
+  }
   if (tr && tr.segs && tr.segs.length) {
     L.push('');
     L.push('## 对话还原');
@@ -1864,6 +2056,18 @@ function bzTranscriptMd(clip, answer, raw) {
   L.push('');
   L.push(raw);
   L.push('');
+  if (clip.prev && clip.prev.length) {
+    L.push('## 历史转录（旧模型，重转前的版本）');
+    L.push('');
+    for (var pi = clip.prev.length - 1; pi >= 0; pi--) {
+      var pv = clip.prev[pi];
+      var pmm = pv.models || {};
+      L.push('### ' + new Date(pv.ts || 0).toLocaleString() + ' ｜ 识别：' + (pmm.asr || '未知') + ' ｜ 整理：' + (pmm.llm || '未知'));
+      L.push('');
+      L.push(String(pv.text || ''));
+      L.push('');
+    }
+  }
   return L.join('\n');
 }
 function transcribeClip(clip, panel) {
@@ -1877,9 +2081,10 @@ function transcribeClip(clip, panel) {
   clip._tfBusy = true;
   if (panel) recStatusShow(panel, '转录中…（' + clip.name + '）');
   var EMPTY_MSG = '未识别出语音内容——离麦太远或音量太小，建议靠近手机/麦克风再录一次';
-  var asrUsed = BZ_ASR_MODEL;
+  var asrUsed = BZ_ASR_MODEL, asrFixN = 0, audio = null;
   return bzMono16kNorm(clip.blob)
     .then(function(o) {
+      audio = o;
       var segs0 = bzVadSegs(o.ch, o.rate);
       if (!segs0.length) throw new Error(EMPTY_MSG);
       if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段 · ' + recModelShort(BZ_ASR_MODEL) + '）');
@@ -1890,18 +2095,27 @@ function transcribeClip(clip, panel) {
       asrUsed = ar.model || BZ_ASR_MODEL;
       if (!segs.filter(function(x) { return x.t; }).length) throw new Error(EMPTY_MSG);
       var raw = segs.filter(function(x) { return x.t; }).map(function(x) { return x.t; }).join('');
-      var tsTxt = segs.filter(function(x) { return x.t; }).map(function(x) { return '[' + bzFmtTs(x.s) + '] ' + x.t; }).join('\n');
+      var fixN = 0, fixPairs = [];
+      var tsTxt = segs.filter(function(x) { return x.t; }).map(function(x) {
+        var f = bzAsrFix(x.t);
+        fixN += f.n;
+        for (var k = 0; k < f.pairs.length && fixPairs.length < 8; k++) if (fixPairs.indexOf(f.pairs[k]) < 0) fixPairs.push(f.pairs[k]);
+        return '[' + bzFmtTs(x.s) + '] ' + f.text;
+      }).join('\n');
+      asrFixN = fixN;
       var pdName = window._paipanData && window._paipanData.name || '';
+      var vc = null;
+      try { if (audio) vc = bzVoiceClus(bzVoiceFeat(audio.ch, audio.rate, segs), segs); } catch (e) { vc = null; }
       var pSpk = segs.length > 1
-        ? bzLlm(bzSpkPrompt(segs, pdName, clip.people), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
+        ? bzLlm(bzSpkPrompt(segs, pdName, clip.people, vc), cfg.sfKey).then(function(a) { return bzParseSpk(a, segs.length); }).catch(function() { return null; })
         : Promise.resolve(null);
       return Promise.all([bzLlm(bzPromptOf(clip, tsTxt), cfg.sfKey), pSpk]).then(function(rs) {
-        return { segs: segs, raw: raw, ans: rs[0], spk: rs[1] };
+        return { segs: segs, raw: raw, ans: rs[0], spk: rs[1], fix: { n: fixN, pairs: fixPairs } };
       });
     })
     .then(function(r) {
       clip._tfBusy = false;
-      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now(), models: { asr: asrUsed, llm: BZ_LLM_MODEL } };
+      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, fix: r.fix, ts: Date.now(), models: { asr: asrUsed, llm: BZ_LLM_MODEL } };
       clip.tfname = clip.tfname || bzTfName(clip);
       var md = bzTranscriptMd(clip, r.ans, r.raw);
       try {
@@ -1912,7 +2126,7 @@ function transcribeClip(clip, panel) {
       return recAudioPut(clip);
     })
     .then(function() {
-      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(asrUsed) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）');
+      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(asrUsed) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）' + (asrFixN ? ' · 术语纠错 ' + asrFixN + ' 处' : ''));
       bzShowTranscript(clip);
       return recAudioList(clip.key);
     })
@@ -2449,6 +2663,13 @@ function bzZoneTranscribe() {
   var clip = zone._rzClips && zone._rzClips[zone._rzOpenId];
   if (!clip) return;
   if (!clip.transcript && !bzAiCfg().sfKey) { bzAiSettings(zone, clip); return; }
+  if (clip.transcript) {
+    if (!confirm('用最新模型重新转录这条录音？\n\n原稿不会丢，会保留在录音稿的「历史转录」里。')) return;
+    clip.prev = (clip.prev || []).concat([{
+      text: clip.transcript.text, raw: clip.transcript.raw, ts: clip.transcript.ts, models: clip.transcript.models
+    }]).slice(-3);
+    clip.transcript = null;
+  }
   transcribeClip(clip, null).then(function() { return renderRecZone(); }).then(function() {
     var z2 = document.getElementById('bzRecZone');
     if (z2 && z2._rzClips && z2._rzClips[zone._rzOpenId]) recZoneRenderDetail(z2, z2._rzClips[zone._rzOpenId]);
@@ -5215,6 +5436,10 @@ function cmpSetState(entries) {
     recAudioToggle: recAudioToggle,
     recAudioPlay: recAudioPlay,
     recAudioDelete: recAudioDelete,
+    recRetf: recRetf,
+    bzAsrFix: bzAsrFix,
+    bzVoiceClus: bzVoiceClus,
+    bzVoiceFeat: bzVoiceFeat,
     recAudioDownload: recAudioDownload,
     recAudioKey: recAudioKey,
     recAudioList: recAudioList,
