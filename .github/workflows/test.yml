@@ -35,7 +35,7 @@ jobs:
           node -e "
           const puppeteer = require('puppeteer');
           (async () => {
-            const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+            const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'], defaultViewport: { width: 1600, height: 1000 } });
             const page = await browser.newPage();
             await page.goto('http://localhost:8765/standalone.html?test=1', { waitUntil: 'networkidle0' });
 

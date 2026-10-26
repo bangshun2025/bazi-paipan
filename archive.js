@@ -2506,10 +2506,12 @@ function openChartMd() {
       else if (window.console) console.log((ok ? '✅ ' : '❌ ') + label, detail || '');
     };
     var bakArch = localStorage.getItem(ARCH_KEY);
+    var bakPrivacy = getPrivacyMode();
     var ov = document.getElementById('noteOverlay');
     var ta = document.getElementById('noteText');
     if (!ov || !ta) { t('v0.43 T00:记录抽屉 DOM 缺失', false, 'noteOverlay/noteText'); return; }
     try {
+      setPrivacyMode(false);
       // T01 行内按钮：存在、索引正确、位于标签框与修改键之间
       localStorage.setItem(ARCH_KEY, JSON.stringify([
         { id: 't43note', name: '记录测试', gender: '男', year: 2000, month: 1, day: 1, hour: 0, min: 0, updatedAt: '2026-09-28T00:00:00.000Z' }
@@ -2570,6 +2572,7 @@ function openChartMd() {
       localStorage.removeItem(noteKey('t43note'));
       localStorage.removeItem(noteKey('t43blank'));
       if (bakArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, bakArch);
+      setPrivacyMode(bakPrivacy);
       _activeTag = ''; _searchKeyword = '';
       renderArchiveModal();
     }
@@ -2633,6 +2636,8 @@ function openChartMd() {
       t('v0.86 T06:切回创建键回默认最新', shownIds() === 'k2,k3,k1' && getSortState().dir === 'desc', JSON.stringify(getSortState()));
 
       // T07 端到端：点行内「排盘」→ 使用频次 +1、最近使用时间落盘
+      var u2 = usageOf('k2'); u2.t = now - 5000;
+      localStorage.setItem(USAGE_KEY, JSON.stringify((function(){ var m = JSON.parse(localStorage.getItem(USAGE_KEY)); m.k2 = u2; return m; })()));
       var before = usageOf('k2');
       document.querySelector('#archive-modal-list .archive-row-btn').click();
       var after = usageOf('k2');

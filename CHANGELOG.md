@@ -1,3 +1,12 @@
+## v0.86.1（2026-10-27）CI 回归测试修复（视口 + 隐私 + 竞态）
+
+- 背景：CI「回归测试」workflow 连续 10+ 次全红（v0.85.x 起每次 push 都挂），但线上一直正常——本地真实浏览器 ?test=1 也全绿，属于 **CI 环境敏感型假失败**，v0.86.0 发布时按「线上部署成功 + 本地全绿」放行，本次挖根根治
+- 根因一（主因）：puppeteer/headless Chrome 默认视口 **800×600**，LKM/FLK/GA 段 5 条布局断言（并排、两列、像素对齐）在窄视口下响应式收起是正确行为，断言却按宽视口期望 → 必挂。修复：test.yml launch 加 `defaultViewport: { width: 1600, height: 1000 }`，7 败 → 2 败
+- 根因二：v0.43 T02/T05「标题带档案名/随改名」依赖**隐私模式关闭**（getDisplayName 隐私下回 yiming/nickname/匿名，seed 无此字段回「匿名」是产品正确行为）；headless 新 profile 隐私默认开 → 假失败。修复：runV043Tests 段级 `setPrivacyMode(false)` + finally 还原备份值
+- 根因三：v0.86 T07「最近使用时间刷新」断言 `after.t > before.t`，seed 的 k2.t = now，headless 机器快、seed 与点击**同毫秒**完成时必假（真实 Chrome 跑得慢所以绿）。修复：T07 前把 k2.t 挪到 now-5000 再点击，区分度强且无竞态
+- 验证：headless Chrome + 1600×1000 + 空 localStorage（CI 同款环境）跑 standalone.html?test=1 **1797 条全绿**；check-release.sh 六门禁全过；真实浏览器 file:// 全量另行复核
+- 改动：archive.js（仅测试段）、.github/workflows/test.yml（defaultViewport）、三文件版本头 0.86.1、ext.yml
+
 ## v0.86.0（2026-10-27）档案排序三键
 
 - 需求：邦顺「档案界面中加上三个排序小功能，一个是按创建日期排序，点击一次是最新，再点一次是最旧，默认是最新。一个是按使用频次排序，由多到少排序。一个是按最近使用排序，以最后一次使用的时间来排序」
