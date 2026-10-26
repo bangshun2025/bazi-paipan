@@ -468,8 +468,11 @@ function autoSaveArchive() {
   var existIdx = archives.findIndex(function(a) { return a.name === d.name && a.gender === d.gender; });
   if (existIdx >= 0) {
     archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
+    recordUsage(archives[existIdx].id);
   } else {
-    archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
+    var nid = Date.now();
+    archives.push(Object.assign({}, d, {id: nid, createdAt: ts, updatedAt: ts, isPreset: false}));
+    recordUsage(nid);
   }
   saveArchives(archives);
   refreshArchiveModalIfOpen();
@@ -492,8 +495,11 @@ function saveArchive() {
   if (existIdx >= 0) {
     if (!confirm('「' + getDisplayName(d) + '」已存在，覆盖更新？')) return;
     archives[existIdx] = Object.assign({}, archives[existIdx], d, {updatedAt: ts});
+    recordUsage(archives[existIdx].id);
   } else {
-    archives.push(Object.assign({}, d, {id: Date.now(), createdAt: ts, updatedAt: ts, isPreset: false}));
+    var nid2 = Date.now();
+    archives.push(Object.assign({}, d, {id: nid2, createdAt: ts, updatedAt: ts, isPreset: false}));
+    recordUsage(nid2);
   }
   saveArchives(archives);
   refreshArchiveModalIfOpen();
@@ -1213,7 +1219,7 @@ function sortArchivesByName(archives) {
 // 排个盘不该 bump updatedAt，避免触发云同步的读改写合并
 var USAGE_KEY = 'bz_arch_usage';
 var _sortMode = 'created';  // created | freq | recent
-var _sortDir = 'desc';      // 仅 created 用：desc=最新在前（默认），asc=最旧在前
+var _sortDir = 'desc';      // created/freq 共用：desc=默认（最新创建/使用最多在前），asc=翻转
 
 function getUsageMap() {
   try {
@@ -1243,11 +1249,11 @@ function createdTs(a) {
 }
 
 function setSort(mode) {
-  if (mode === 'created') {
-    // 已在创建键上 → 翻转最新/最旧；从别的键切过来 → 回默认最新
-    if (_sortMode === 'created') _sortDir = (_sortDir === 'desc') ? 'asc' : 'desc';
-    else { _sortMode = 'created'; _sortDir = 'desc'; }
-  } else if (mode === 'freq' || mode === 'recent') {
+  if (mode === 'created' || mode === 'freq') {
+    // 已在该键上 → 翻转方向；从别的键切过来 → 回默认方向
+    if (_sortMode === mode) _sortDir = (_sortDir === 'desc') ? 'asc' : 'desc';
+    else { _sortMode = mode; _sortDir = 'desc'; }
+  } else if (mode === 'recent') {
     _sortMode = mode;
   }
   renderArchiveModal();
@@ -1262,13 +1268,13 @@ function renderSortBar() {
   if (!bar) return;
   var opts = [
     { k: 'created', label: '创建日期', title: (_sortMode === 'created' && _sortDir === 'desc') ? '当前：最新创建在前，再点一次改最旧在前' : '按创建日期排（默认最新在前）' },
-    { k: 'freq', label: '使用频次', title: '按使用次数从多到少' },
+    { k: 'freq', label: '使用频次', title: (_sortMode === 'freq' && _sortDir === 'desc') ? '当前：使用多在前，再点一次改少在前' : '按使用次数排（默认多在前）' },
     { k: 'recent', label: '最近使用', title: '按最后一次使用时间，最近在前；没用过的沉底' }
   ];
   var html = '<span class="archive-sort-label">排序</span>';
   for (var i = 0; i < opts.length; i++) {
     var on = _sortMode === opts[i].k;
-    var arrow = on ? (opts[i].k === 'created' && _sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    var arrow = on ? (opts[i].k !== 'recent' && _sortDir === 'asc' ? ' ↑' : ' ↓') : '';
     html += '<button class="archive-sort-btn' + (on ? ' active' : '') + '" title="' + opts[i].title
       + '" onclick="ARCHIVE.setSort(\'' + opts[i].k + '\')">' + opts[i].label + arrow + '</button>';
   }
@@ -1281,7 +1287,8 @@ function sortArchives(archives) {
   if (_sortMode === 'freq') {
     archives.sort(function(a, b) {
       var d = usageOf(b && b.id).n - usageOf(a && a.id).n;
-      return d !== 0 ? d : archiveCmpByName(a, b);
+      if (d !== 0) return _sortDir === 'asc' ? -d : d;
+      return archiveCmpByName(a, b);
     });
   } else if (_sortMode === 'recent') {
     archives.sort(function(a, b) {
@@ -1422,7 +1429,6 @@ function filterArchives(keyword) {
 function loadFromArchive(idx) {
   var archives = getArchives();
   if (!archives[idx]) return;
-  recordUsage(archives[idx].id);
   setFormData(archives[idx]);
   closeArchivePanel();
   APP.doPaipan();
@@ -2623,6 +2629,15 @@ function openChartMd() {
       localStorage.setItem(USAGE_KEY, '{}');
       renderArchiveModal();
       t('v0.86 T04:零频次回落名序(居中最晚最早)', shownIds() === 'k3,k2,k1', shownIds());
+
+      // T04b 频次键双向翻转（v0.86.2）：再点少到多 ↑、三击回多到少
+      localStorage.setItem(USAGE_KEY, JSON.stringify({ k1: { n: 5, t: 1000 }, k2: { n: 1, t: 3000 }, k3: { n: 3, t: 2000 } }));
+      renderArchiveModal();
+      sortBtn('freq').click();
+      t('v0.86 T04b:频次再点少到多', shownIds() === 'k2,k3,k1', shownIds());
+      t('v0.86 T04b:箭头翻 ↑', getSortState().dir === 'asc' && sortBtn('freq').textContent.indexOf('↑') >= 0, sortBtn('freq').textContent);
+      sortBtn('freq').click();
+      t('v0.86 T04b:三击回多到少', shownIds() === 'k1,k3,k2' && getSortState().dir === 'desc', shownIds());
 
       // T05 最近使用键：最后一次使用时间近在前，没用过的沉底
       var now = Date.now();

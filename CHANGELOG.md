@@ -1,3 +1,13 @@
+## v0.86.2（2026-10-27）使用频次双向翻转 + 「最近」排序修复
+
+- 需求：邦顺「使用频次也加上，点一次是按使用频次高到低排，再点一次按低到高排，默认从高到低排；最近这个功能是失效的，最近排序应该是按最后打开盘面的时间排」
+- **使用频次双向翻转**：与创建日期同款交互——默认高到低（↓），已在该键上再点一次翻低到高（↑），再点翻回；从别的键切过来永远回默认 ↓（setSort 翻转逻辑 created/freq 共用 `_sortDir`，箭头显示与 title 提示同步）
+- **「最近使用」失效确诊**：代码链路本身在 v0.86.0 就是通的，失效根因是**线上页签跑的还是 v0.86.0 之前的旧 JS**（页签 `hasSortBar:false`、`hasRecordUsage:false`），且期间 `bz_arch_usage` 从未被写入（usageCount 全 0）——**刷新页面即恢复**
+- **「打开盘面」计数接线收口到保存链路**：`autoSaveArchive()`（排盘成功必经）与 `saveArchive()`（手动保存）两处接 `recordUsage()`；撤掉 v0.86.0 在 `loadFromArchive` 里的直调——它与 doPaipan→autoSaveArchive 链路重复导致双重计数（回归 T07 9→11 抓到），单点收口后 9→10 ✓
+- 回归测试：main.js 新增 SU 段 14 条（recordUsage 语义、freq 默认/翻转/三连点回位/切走切回回默认、recent 用过在前没用过沉底、无记录兜底名字序、autoSaveArchive/saveArchive 接线断言）；archive.js runV086Tests 补 T04b 3 条（真实 DOM 频次再点翻 ↑、三击回 ↓）；v0.86 T07 最近使用时间断言已具竞态免疫
+- 验证：?test=1 **1813 条全绿**；check-release 六门禁全过（index ≡ standalone md5 `7a41e45a9b7b5a70c2b563753beab4c4`）；headless Chrome 真实 DOM 全链路实测全对——点排盘后 usage n=1、盘面正确渲染该档案盘、最近使用该档案置顶、频次 desc [5,3,1] → 再点 asc [1,3,5] → 切走切回回 desc ↓
+- **排查中实锤的非 bug**：headless 未登录点排盘无反应是 auth.js 登录守卫（P3-04）拦截 `APP/RENDER.doPaipan` 的既有设计，?test=1 放行即登录用户同路径；真实用户（登录态）链路完整
+
 ## v0.86.1（2026-10-27）CI 回归测试修复（视口 + 隐私 + 竞态）
 
 - 背景：CI「回归测试」workflow 连续 10+ 次全红（v0.85.x 起每次 push 都挂），但线上一直正常——本地真实浏览器 ?test=1 也全绿，属于 **CI 环境敏感型假失败**，v0.86.0 发布时按「线上部署成功 + 本地全绿」放行，本次挖根根治

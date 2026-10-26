@@ -3357,6 +3357,91 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.86.2 档案排序：频次双向翻转 / 使用记录三入口接线 / 最近排序 =====
+  (function() {
+    tests.push({ section:'档案排序(v0.86.2)' });
+    var A = window.ARCHIVE;
+    if (!A || typeof A.setSort !== 'function' || typeof A.recordUsage !== 'function' || typeof A.getSortState !== 'function' || typeof A.sortArchives !== 'function') {
+      tests.push(fail('SU 前置: ARCHIVE.setSort/recordUsage/getSortState/sortArchives 已挂载', '缺失'));
+      return;
+    }
+    var bakArcs = localStorage.getItem('bz_archives_v2');
+    var bakUsage = localStorage.getItem('bz_arch_usage');
+    var st0 = A.getSortState();
+    var ids = ['su-t1', 'su-t2', 'su-t3'];
+    try {
+      // 两连跳归位：mode=freq → created，走「从别的键切来」确定分支 → created + desc
+      A.setSort('freq');
+      A.setSort('created');
+      var mk = function(id, name, nick, daysAgo) {
+        return { id: id, name: name, nickname: nick, gender: '男', year: 1990, month: 5, day: 15, hour: 12, minute: 0,
+          createdAt: new Date(Date.now() - daysAgo * 864e5).toISOString(), updatedAt: new Date(Date.now() - daysAgo * 864e5).toISOString(),
+          isPreset: false, tags: [] };
+      };
+      var arcs = [];
+      try { arcs = JSON.parse(bakArcs) || []; } catch(e) { arcs = []; }
+      arcs = arcs.filter(function(a) { return ids.indexOf(String(a.id)) < 0 && String(a.nickname || '').indexOf('__suT') !== 0; });
+      arcs.push(mk('su-t1', '排序测甲', '__suT1', 30));
+      arcs.push(mk('su-t2', '排序测乙', '__suT2', 20));
+      arcs.push(mk('su-t3', '排序测丙', '__suT3', 10));
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arcs));
+      localStorage.removeItem('bz_arch_usage');
+
+      // SU1 recordUsage 语义：n 累加、t 刷新、落 bz_arch_usage
+      A.recordUsage('su-t1');
+      tests.push(eq('SU1: recordUsage 首次 n=1', A.usageOf('su-t1').n, 1));
+      tests.push(eq('SU1: recordUsage 首次 t>0', A.usageOf('su-t1').t > 0, true));
+      A.recordUsage('su-t1');
+      tests.push(eq('SU1: recordUsage 再次 n=2', A.usageOf('su-t1').n, 2));
+      A.recordUsage('su-t2'); A.recordUsage('su-t2'); A.recordUsage('su-t2');
+      A.recordUsage('su-t3');
+      var suMap = JSON.parse(localStorage.getItem('bz_arch_usage'));
+      tests.push(eq('SU1: 落库 bz_arch_usage', typeof suMap['su-t2'], 'object'));
+
+      // SU2/SU3/SU4 freq 双向翻转状态机（n: 乙3 甲2 丙1）
+      var pick = function(list) {
+        var out = [];
+        list.forEach(function(a) { if (ids.indexOf(String(a.id)) >= 0) out.push(a.nickname); });
+        return out.join(',');
+      };
+      var live = function() { return A.sortArchives(JSON.parse(localStorage.getItem('bz_archives_v2'))); };
+      A.setSort('freq');
+      tests.push(eq('SU2: freq 默认高到低', pick(live()), '__suT2,__suT1,__suT3'));
+      tests.push(eq('SU2: 状态 dir=desc', A.getSortState().dir, 'desc'));
+      A.setSort('freq');
+      tests.push(eq('SU3: 再点低到高', pick(live()), '__suT3,__suT1,__suT2'));
+      tests.push(eq('SU3: 状态 dir=asc', A.getSortState().dir, 'asc'));
+      A.setSort('freq');
+      tests.push(eq('SU4: 三连点回高到低', pick(live()), '__suT2,__suT1,__suT3'));
+      A.setSort('created'); A.setSort('freq');
+      tests.push(eq('SU4: 切走再切回回默认 desc', A.getSortState().dir, 'desc'));
+
+      // SU5 recent：按最后使用时间，没用过的沉底，兜底名字序
+      localStorage.removeItem('bz_arch_usage');
+      A.recordUsage('su-t1');
+      var suM = JSON.parse(localStorage.getItem('bz_arch_usage'));
+      suM['su-t1'].t = Date.now() - 50000;
+      suM['su-t2'] = { n: 1, t: Date.now() - 1000 };
+      localStorage.setItem('bz_arch_usage', JSON.stringify(suM));
+      A.setSort('recent');
+      tests.push(eq('SU5: recent 最近在前没用的沉底', pick(live()), '__suT2,__suT1,__suT3'));
+      localStorage.removeItem('bz_arch_usage');
+      tests.push(eq('SU5: 全无记录兜底名字序', pick(live()), '__suT1,__suT2,__suT3'));
+
+      // SU6 入口接线 recordUsage（「最近失效」回归保护：使用记录单点在保存链路——
+      // 排盘成功必经 autoSaveArchive，双接线会双重计数）
+      tests.push(eq('SU6: autoSaveArchive 接线 recordUsage', A.autoSaveArchive.toString().indexOf('recordUsage') >= 0, true));
+      tests.push(eq('SU6: saveArchive 接线 recordUsage', A.saveArchive.toString().indexOf('recordUsage') >= 0, true));
+    } finally {
+      if (bakArcs != null) localStorage.setItem('bz_archives_v2', bakArcs); else localStorage.removeItem('bz_archives_v2');
+      if (bakUsage != null) localStorage.setItem('bz_arch_usage', bakUsage); else localStorage.removeItem('bz_arch_usage');
+      if (st0 && st0.mode) {
+        A.setSort(st0.mode);
+        if (st0.mode !== 'recent' && A.getSortState().dir !== st0.dir) A.setSort(st0.mode);
+      }
+    }
+  })();
+
   // ===== v0.43.6 分析记录区（记录区占运流原位/运流移左下/写入即存）=====
   (function() {
     tests.push({ section:'分析记录区(v0.43.6)' });
