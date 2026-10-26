@@ -1549,7 +1549,10 @@ var BZ_AI_LS = 'bz_ai_cfg';
 var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
 var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
-var BZ_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_ASR_MODEL = 'Qwen/Qwen3-ASR-1.7B';
+var BZ_ASR_PREV = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_ASR_FALLBACK = 'FunAudioLLM/SenseVoiceSmall';
+var BZ_ASR_SWITCH_TS = 1792974900000;
 var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
 var BZ_LLM_SWITCH_TS = 1792971835000;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
@@ -1640,13 +1643,19 @@ function bzVadSegs(ch, rate) {
   return segs;
 }
 function bzAsrSegs(segs, ch, rate, key) {
-  var out = new Array(segs.length), idx = 0;
+  var out = new Array(segs.length), idx = 0, used = BZ_ASR_MODEL;
   function worker() {
     if (idx >= segs.length) return Promise.resolve();
     var i = idx++, sg = segs[i];
     var a = Math.max(0, Math.round(sg.s * rate)), b = Math.min(ch.length, Math.round(sg.e * rate));
-    var p = b > a ? bzAsr(bzEncWav(ch.subarray(a, b), rate), key) : Promise.reject(new Error('空分段'));
-    return p.then(function(t) {
+    function run(md) {
+      return b > a ? bzAsr(bzEncWav(ch.subarray(a, b), rate), key, md) : Promise.reject(new Error('空分段'));
+    }
+    return run(used).catch(function() {
+      if (used === BZ_ASR_FALLBACK) return Promise.reject(new Error('fallback fail'));
+      used = BZ_ASR_FALLBACK;
+      return run(used);
+    }).then(function(t) {
       out[i] = { s: sg.s, e: sg.e, t: String(t || '').trim() };
     }).catch(function() {
       out[i] = { s: sg.s, e: sg.e, t: '' };
@@ -1654,12 +1663,12 @@ function bzAsrSegs(segs, ch, rate, key) {
   }
   var WN = Math.min(3, segs.length) || 1, ps = [], w;
   for (w = 0; w < WN; w++) ps.push(worker());
-  return Promise.all(ps).then(function() { return out; });
+  return Promise.all(ps).then(function() { return { segs: out, model: used }; });
 }
-function bzAsr(wavBlob, key) {
+function bzAsr(wavBlob, key, model) {
   var fd = new FormData();
   fd.append('file', wavBlob, 'audio.wav');
-  fd.append('model', BZ_ASR_MODEL);
+  fd.append('model', model || BZ_ASR_MODEL);
   return fetch(BZ_ASR_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd })
     .then(function(r) {
       return r.json().then(function(j) {
@@ -1736,8 +1745,9 @@ function recModelsOf(clip) {
   var t = clip && clip.transcript;
   var mm = (t && t.models) || {};
   if (mm.llm) return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm, src: mm.src || 'snap' };
-  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_MODEL, llm: BZ_LLM_PREV, src: 'guess' };
-  return { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL, src: 'cur' };
+  var oldAsr = (t && t.ts && t.ts < BZ_ASR_SWITCH_TS) ? BZ_ASR_PREV : BZ_ASR_MODEL;
+  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_PREV, llm: BZ_LLM_PREV, src: 'guess' };
+  return { asr: oldAsr, llm: BZ_LLM_MODEL, src: 'cur' };
 }
 function recModelSrcNote(m) {
   if (m.src === 'guess') return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
@@ -1759,7 +1769,7 @@ function recParseMdModels(txt) {
   var m2 = s.match(/识别：(\S+)\s*｜\s*整理\/归属：(\S+)/);
   if (m2) return { asr: m2[1], llm: m2[2], src: 'md' };
   var m1 = s.match(/整理：(\S+)/);
-  if (m1) return { asr: BZ_ASR_MODEL, llm: m1[1], src: 'md' };
+  if (m1) return { asr: BZ_ASR_PREV, llm: m1[1], src: 'md' };
   return null;
 }
 function recModelBackfill(clip) {
@@ -1867,6 +1877,7 @@ function transcribeClip(clip, panel) {
   clip._tfBusy = true;
   if (panel) recStatusShow(panel, '转录中…（' + clip.name + '）');
   var EMPTY_MSG = '未识别出语音内容——离麦太远或音量太小，建议靠近手机/麦克风再录一次';
+  var asrUsed = BZ_ASR_MODEL;
   return bzMono16kNorm(clip.blob)
     .then(function(o) {
       var segs0 = bzVadSegs(o.ch, o.rate);
@@ -1874,7 +1885,9 @@ function transcribeClip(clip, panel) {
       if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段 · ' + recModelShort(BZ_ASR_MODEL) + '）');
       return bzAsrSegs(segs0, o.ch, o.rate, cfg.sfKey);
     })
-    .then(function(segs) {
+    .then(function(ar) {
+      var segs = ar.segs;
+      asrUsed = ar.model || BZ_ASR_MODEL;
       if (!segs.filter(function(x) { return x.t; }).length) throw new Error(EMPTY_MSG);
       var raw = segs.filter(function(x) { return x.t; }).map(function(x) { return x.t; }).join('');
       var tsTxt = segs.filter(function(x) { return x.t; }).map(function(x) { return '[' + bzFmtTs(x.s) + '] ' + x.t; }).join('\n');
@@ -1888,7 +1901,7 @@ function transcribeClip(clip, panel) {
     })
     .then(function(r) {
       clip._tfBusy = false;
-      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now(), models: { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL } };
+      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now(), models: { asr: asrUsed, llm: BZ_LLM_MODEL } };
       clip.tfname = clip.tfname || bzTfName(clip);
       var md = bzTranscriptMd(clip, r.ans, r.raw);
       try {
@@ -1899,7 +1912,7 @@ function transcribeClip(clip, panel) {
       return recAudioPut(clip);
     })
     .then(function() {
-      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(BZ_ASR_MODEL) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）');
+      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(asrUsed) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）');
       bzShowTranscript(clip);
       return recAudioList(clip.key);
     })

@@ -3690,7 +3690,7 @@ function captureScreenshot() {
     tests.push(eq('SN19-2: 识别模型短名保持', R.recModelShort('FunAudioLLM/SenseVoiceSmall'), 'SenseVoiceSmall'));
     var cur19 = R.recModelsOf({ transcript: { text:'x' } });
     tests.push(eq('SN19-3: 老录音无模型快照回落当前默认',
-      (cur19.asr === 'FunAudioLLM/SenseVoiceSmall'
+      (cur19.asr === 'Qwen/Qwen3-ASR-1.7B'
         && cur19.llm === 'Qwen/Qwen3-235B-A22B-Instruct-2507'), true));
     var snap19 = R.recModelsOf({ transcript: { text:'x', models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } });
     tests.push(eq('SN19-4: 有快照时沿用转录当时的模型名', snap19.llm, 'Qwen/Qwen2.5-72B-Instruct'));
@@ -3773,6 +3773,26 @@ function captureScreenshot() {
       !!ml20 && ml20.textContent.indexOf('Qwen/Qwen2.5-72B-Instruct') > -1
       && ml20.textContent.indexOf('（推定）') > -1, true));
     z20.remove();
+  })();
+
+  // ===== v0.84.0 识别模型换代：Qwen3-ASR-1.7B =====
+  (function() {
+    tests.push({ section:'转录模型升级(v0.84.0)' });
+    var R = window.RENDER;
+    var oldA = R.recModelsOf({ transcript: { text:'x', ts: 1792900000000 } });
+    tests.push(eq('SN21-1: 老录音识别模型仍记为 SenseVoiceSmall', oldA.asr, 'FunAudioLLM/SenseVoiceSmall'));
+    var newA = R.recModelsOf({ transcript: { text:'x', ts: Date.now() } });
+    tests.push(eq('SN21-2: 新录音识别模型为 Qwen3-ASR-1.7B', newA.asr, 'Qwen/Qwen3-ASR-1.7B'));
+    var snapA = R.recModelsOf({ transcript: { text:'x', ts: 1792900000000, models:{ asr:'X/Y', llm:'A/B' } } });
+    tests.push(eq('SN21-3: 有快照以快照为准', snapA.asr, 'X/Y'));
+    var cA = { id:'SN21x', name:'10-26 09:00', ts: Date.now(), dur: 60,
+      transcript:{ text:'# a', raw:'b', ts: Date.now() } };
+    var dA = document.createElement('div');
+    dA.innerHTML = R.recZoneCardHtml(cA);
+    var mA = dA.querySelector('.rz-model');
+    tests.push(eq('SN21-4: 新录音卡片徽章显示 Qwen3-ASR', !!mA && mA.textContent.indexOf('Qwen3-ASR') > -1, true));
+    tests.push(eq('SN21-5: 新录音徽章不再显示 SenseVoice', !!mA && mA.textContent.indexOf('SenseVoice') === -1, true));
+    tests.push(eq('SN21-6: 短名不截断版本号', R.recModelShort('Qwen/Qwen3-ASR-1.7B'), 'Qwen3-ASR-1.7B'));
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
