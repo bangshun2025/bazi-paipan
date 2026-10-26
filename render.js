@@ -1726,6 +1726,23 @@ function recPeopleOthers(clip) {
   for (var i = 0; i < list.length; i++) if (list[i] !== '邦顺') out.push(list[i]);
   return out;
 }
+function recModelShort(m) {
+  var s = String(m || '').split('/').pop();
+  return s.replace(/-Instruct-.*$/, '');
+}
+function recModelsOf(clip) {
+  var mm = (clip && clip.transcript && clip.transcript.models) || {};
+  return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm || BZ_LLM_MODEL };
+}
+function recModelTitleOf(clip) {
+  var m = recModelsOf(clip);
+  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm;
+}
+function recModelLineHtml(clip) {
+  if (!clip || !clip.transcript) return '';
+  var m = recModelsOf(clip);
+  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + '</span>';
+}
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
     + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
@@ -1785,7 +1802,8 @@ function bzTranscriptMd(clip, answer, raw) {
   var L = [];
   L.push('# 录音稿 · ' + clip.name + (d.name ? '（' + d.name + '）' : ''));
   L.push('');
-  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
+  var mm = recModelsOf(clip);
+  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 识别：' + mm.asr + ' ｜ 整理/归属：' + mm.llm + ' ｜ ' + new Date(clip.ts).toLocaleString());
   L.push('');
   L.push(answer);
   var tr = clip.transcript;
@@ -1821,7 +1839,7 @@ function transcribeClip(clip, panel) {
     .then(function(o) {
       var segs0 = bzVadSegs(o.ch, o.rate);
       if (!segs0.length) throw new Error(EMPTY_MSG);
-      if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段）');
+      if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段 · ' + recModelShort(BZ_ASR_MODEL) + '）');
       return bzAsrSegs(segs0, o.ch, o.rate, cfg.sfKey);
     })
     .then(function(segs) {
@@ -1838,7 +1856,7 @@ function transcribeClip(clip, panel) {
     })
     .then(function(r) {
       clip._tfBusy = false;
-      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now() };
+      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now(), models: { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL } };
       clip.tfname = clip.tfname || bzTfName(clip);
       var md = bzTranscriptMd(clip, r.ans, r.raw);
       try {
@@ -1849,7 +1867,7 @@ function transcribeClip(clip, panel) {
       return recAudioPut(clip);
     })
     .then(function() {
-      if (panel) recStatusShow(panel, '转录完成：' + clip.name);
+      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(BZ_ASR_MODEL) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）');
       bzShowTranscript(clip);
       return recAudioList(clip.key);
     })
@@ -2063,7 +2081,9 @@ function recZoneCssOnce() {
     '.rec-zone .rz-badge.busy{background:#fdf3e0;color:#a86400;}',
     '.rec-zone .rz-play{width:26px;height:26px;border-radius:50%;border:1px solid var(--c-line,#e3dccb);background:#fff;cursor:pointer;font-size:11px;line-height:1;color:var(--c-ink,#2b2620);}',
     '.rec-zone .rz-summary{margin-top:6px;font-size:13px;line-height:1.6;color:#4a4438;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
-    '.rec-zone .rz-card-foot{margin-top:6px;display:flex;gap:8px;align-items:center;font-size:11px;color:#a39880;}',
+    '.rec-zone .rz-card-foot{margin-top:6px;display:flex;flex-wrap:wrap;row-gap:4px;gap:8px;align-items:center;font-size:11px;color:#a39880;}',
+    '.rec-zone .rz-model{font-size:11px;color:#8a7f6a;background:#f6f1e4;border:1px solid #ece2cb;border-radius:9px;padding:1px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}',
+    '.rec-zone .rz-model-line{margin:-2px 0 8px;font-size:11px;color:#a39880;line-height:1.6;word-break:break-all;}',
     '.rec-zone .rz-empty{padding:26px 0;text-align:center;font-size:13px;color:#a39880;}',
     '.rec-zone .rz-detail{margin-top:14px;background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:14px 16px;}',
     '.rec-zone .rz-detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}',
@@ -2159,7 +2179,7 @@ function recZoneCardHtml(c) {
     + '<span>🎙 ' + recAudioFmt(c.dur) + '</span>' + recZoneBadgeOf(c)
     + '</div>'
     + (recZoneSummaryOf(c) ? '<div class="rz-summary">' + bzEsc(recZoneSummaryOf(c)) + '</div>' : '')
-    + '<div class="rz-card-foot"><span class="rz-badge no">录音卡</span><span>' + hhmm + ' 创建</span></div>'
+    + '<div class="rz-card-foot"><span class="rz-badge no">录音卡</span>' + recModelLineHtml(c) + '<span>' + hhmm + ' 创建</span></div>'
     + '</div>';
 }
 function recZoneRenderInto(box, list) {
@@ -2354,6 +2374,7 @@ function recZoneRenderDetail(zone, clip) {
     + recZoneBadgeOf(clip)
     + '<button type="button" class="rz-tab" style="border:1px solid var(--c-line,#e3dccb);" onclick="RENDER.bzZoneTranscribe(this)" title="转录">' + (clip.transcript ? '🔄 重转录' : '📝 转录') + '</button>'
     + '<button type="button" class="rz-close" onclick="RENDER.recZoneCloseDetail(this)" title="关闭">✕</button></div>'
+    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
@@ -5202,6 +5223,10 @@ function cmpSetState(entries) {
     recPeopleNorm: recPeopleNorm,
     recPeopleOf: recPeopleOf,
     recPeopleOthers: recPeopleOthers,
+    recModelShort: recModelShort,
+    recModelsOf: recModelsOf,
+    recModelTitleOf: recModelTitleOf,
+    recModelLineHtml: recModelLineHtml,
     recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,

@@ -3677,6 +3677,56 @@ function captureScreenshot() {
       && sp18.indexOf('只能从这些名字里选：案主、张三妈妈') > -1, true));
   })();
 
+  // ===== v0.83.7 每次转录都标明所用大模型 =====
+  (function() {
+    tests.push({ section:'转录模型标注(v0.83.7)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recModelsOf !== 'function' || typeof R.recModelShort !== 'function') {
+      tests.push(fail('SN19 前置: RENDER 模型接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN19-1: 模型名取短名（去厂商前缀与指令后缀）',
+      R.recModelShort('Qwen/Qwen3-235B-A22B-Instruct-2507'), 'Qwen3-235B-A22B'));
+    tests.push(eq('SN19-2: 识别模型短名保持', R.recModelShort('FunAudioLLM/SenseVoiceSmall'), 'SenseVoiceSmall'));
+    var cur19 = R.recModelsOf({ transcript: { text:'x' } });
+    tests.push(eq('SN19-3: 老录音无模型快照回落当前默认',
+      (cur19.asr === 'FunAudioLLM/SenseVoiceSmall'
+        && cur19.llm === 'Qwen/Qwen3-235B-A22B-Instruct-2507'), true));
+    var snap19 = R.recModelsOf({ transcript: { text:'x', models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } });
+    tests.push(eq('SN19-4: 有快照时沿用转录当时的模型名', snap19.llm, 'Qwen/Qwen2.5-72B-Instruct'));
+
+    var c19 = { id:'SN19x', name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主',
+      transcript: { text:'# 纪要\n正文', raw:'原始文字', ts: Date.now(),
+        models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } };
+    var d19 = document.createElement('div');
+    d19.innerHTML = R.recZoneCardHtml(c19);
+    var m19 = d19.querySelector('.rz-model');
+    tests.push(eq('SN19-5: 录音卡标明识别与整理模型',
+      !!m19 && m19.textContent.indexOf('SenseVoiceSmall') > -1
+      && m19.textContent.indexOf('Qwen2.5-72B') > -1, true));
+    tests.push(eq('SN19-6: 卡片模型悬停显示完整模型名',
+      !!m19 && (m19.getAttribute('title') || '').indexOf('Qwen/Qwen2.5-72B-Instruct') > -1, true));
+
+    var d19b = document.createElement('div');
+    d19b.innerHTML = R.recZoneCardHtml({ id:'SN19y', name:'10-26 16:00', ts: Date.now(), dur: 60 });
+    tests.push(eq('SN19-7: 未转录的卡片不标模型', d19b.querySelector('.rz-model'), null));
+
+    var zone19 = document.createElement('div');
+    zone19.className = 'rec-zone';
+    zone19.innerHTML = '<div id="bzRecZoneDetail"></div>';
+    try { R.recZoneRenderDetail(zone19, c19); } catch (e) {}
+    var ml19 = zone19.querySelector('.rz-model-line');
+    tests.push(eq('SN19-8: 详情面板写明识别/整理模型与转录时间',
+      !!ml19 && ml19.textContent.indexOf('SenseVoiceSmall') > -1
+      && ml19.textContent.indexOf('Qwen/Qwen2.5-72B-Instruct') > -1
+      && ml19.textContent.indexOf('转录于') > -1, true));
+
+    var md19 = R.bzTranscriptMd(c19, '纪要正文', '原始文字');
+    tests.push(eq('SN19-9: 录音稿 md 头部逐项标注识别与整理模型',
+      md19.indexOf('识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct') > -1, true));
+    zone19.remove();
+  })();
+
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
   (function() {
     tests.push({ section:'分析记录×流月流日版面(v0.47.1)' });

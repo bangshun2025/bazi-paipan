@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.83.6 | 2026-10-26 -->
+<!-- 八字排盘 ·  从真版 v0.83.7 | 2026-10-26 -->
+<!-- v0.83.7: 每一次转录都标明所用大模型 —— 录音卡底部徽章「🧠 SenseVoiceSmall · Qwen3-235B-A22B」、详情面板一行「识别 … ｜ 整理/归属 … ｜ 转录于 …」、录音稿 md 头部「识别：… ｜ 整理/归属：…」，转录完成状态栏提示同时带模型名；模型名随每份转录存快照，日后换模型也不会改写老录音的标注 -->
 <!-- v0.83.6: 录音卡时间右侧新增「咨询人物」可编辑输入框（默认「邦顺、案主」，顿号分隔可加其他人，如「邦顺、案主、张三妈妈」）—— 改动即存库并刷新该录音稿 md 头部「咨询人物」行；说话人归属 prompt 改为按这份名单判断（案主＝本次命盘主人），转录/重转录后的对话还原会标出对应人名 -->
 <!-- v0.83.5: 「分析记录」右侧新增「📄 档案md」按钮 —— 一键打开该命盘在本地同步目录里最新的「盘面-姓名.md」（先落盘同步再读，保证内容最新；同名多份按 mtime 取最新，严格不串同前缀人名）；新窗口等宽全文展示可直接复制；未开同步/权限失效/未存档/弹窗被拦均有明确提示 -->
 <!-- v0.83.4: 转录状态机持久化修复 + 整理稿质量升级 —— ①修复转录完仍显示「转录中」：成功路径 recAudioPut 之前清 _tfBusy（此前 true 被持久化进 IndexedDB 永不回写，刷新后所有转录完的卡显示转录中）；渲染加载时剥除残留 _tfBusy，徽章判断加 transcript 兜底，存量脏数据自动净化；②整理模型 Qwen2.5-72B 升级为 Qwen3-235B-A22B-Instruct-2507；③整理 prompt 扩充：要点 5-12 条每条 1-3 句含理由依据结论，章节时间线每条 2-4 句还原该章节实际内容（宫位干支大运判断建议均写入），禁止一句话概括 -->
@@ -12500,6 +12501,23 @@ function recPeopleOthers(clip) {
   for (var i = 0; i < list.length; i++) if (list[i] !== '邦顺') out.push(list[i]);
   return out;
 }
+function recModelShort(m) {
+  var s = String(m || '').split('/').pop();
+  return s.replace(/-Instruct-.*$/, '');
+}
+function recModelsOf(clip) {
+  var mm = (clip && clip.transcript && clip.transcript.models) || {};
+  return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm || BZ_LLM_MODEL };
+}
+function recModelTitleOf(clip) {
+  var m = recModelsOf(clip);
+  return '识别：' + m.asr + '｜整理与说话人归属：' + m.llm;
+}
+function recModelLineHtml(clip) {
+  if (!clip || !clip.transcript) return '';
+  var m = recModelsOf(clip);
+  return '<span class="rz-model" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 ' + bzEsc(recModelShort(m.asr)) + ' · ' + bzEsc(recModelShort(m.llm)) + '</span>';
+}
 function bzTfName(clip) {
   return (window._paipanData && window._paipanData.name ? window._paipanData.name + '-' : '')
     + '录音稿-' + clip.name.replace(' ', '_').replace(':', '-') + '.md';
@@ -12559,7 +12577,8 @@ function bzTranscriptMd(clip, answer, raw) {
   var L = [];
   L.push('# 录音稿 · ' + clip.name + (d.name ? '（' + d.name + '）' : ''));
   L.push('');
-  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 整理：' + BZ_LLM_MODEL + ' ｜ ' + new Date(clip.ts).toLocaleString());
+  var mm = recModelsOf(clip);
+  L.push('> 咨询人物：' + recPeopleOf(clip) + ' ｜ 来源：排盘录音自动转录 ｜ 时长：' + recAudioFmt(clip.dur) + ' ｜ 识别：' + mm.asr + ' ｜ 整理/归属：' + mm.llm + ' ｜ ' + new Date(clip.ts).toLocaleString());
   L.push('');
   L.push(answer);
   var tr = clip.transcript;
@@ -12595,7 +12614,7 @@ function transcribeClip(clip, panel) {
     .then(function(o) {
       var segs0 = bzVadSegs(o.ch, o.rate);
       if (!segs0.length) throw new Error(EMPTY_MSG);
-      if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段）');
+      if (panel) recStatusShow(panel, '分段识别中…（' + segs0.length + ' 段 · ' + recModelShort(BZ_ASR_MODEL) + '）');
       return bzAsrSegs(segs0, o.ch, o.rate, cfg.sfKey);
     })
     .then(function(segs) {
@@ -12612,7 +12631,7 @@ function transcribeClip(clip, panel) {
     })
     .then(function(r) {
       clip._tfBusy = false;
-      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now() };
+      clip.transcript = { text: r.ans, raw: r.raw, segs: r.segs, spk: r.spk, ts: Date.now(), models: { asr: BZ_ASR_MODEL, llm: BZ_LLM_MODEL } };
       clip.tfname = clip.tfname || bzTfName(clip);
       var md = bzTranscriptMd(clip, r.ans, r.raw);
       try {
@@ -12623,7 +12642,7 @@ function transcribeClip(clip, panel) {
       return recAudioPut(clip);
     })
     .then(function() {
-      if (panel) recStatusShow(panel, '转录完成：' + clip.name);
+      if (panel) recStatusShow(panel, '转录完成：' + clip.name + '（' + recModelShort(BZ_ASR_MODEL) + ' + ' + recModelShort(BZ_LLM_MODEL) + '）');
       bzShowTranscript(clip);
       return recAudioList(clip.key);
     })
@@ -12837,7 +12856,9 @@ function recZoneCssOnce() {
     '.rec-zone .rz-badge.busy{background:#fdf3e0;color:#a86400;}',
     '.rec-zone .rz-play{width:26px;height:26px;border-radius:50%;border:1px solid var(--c-line,#e3dccb);background:#fff;cursor:pointer;font-size:11px;line-height:1;color:var(--c-ink,#2b2620);}',
     '.rec-zone .rz-summary{margin-top:6px;font-size:13px;line-height:1.6;color:#4a4438;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
-    '.rec-zone .rz-card-foot{margin-top:6px;display:flex;gap:8px;align-items:center;font-size:11px;color:#a39880;}',
+    '.rec-zone .rz-card-foot{margin-top:6px;display:flex;flex-wrap:wrap;row-gap:4px;gap:8px;align-items:center;font-size:11px;color:#a39880;}',
+    '.rec-zone .rz-model{font-size:11px;color:#8a7f6a;background:#f6f1e4;border:1px solid #ece2cb;border-radius:9px;padding:1px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}',
+    '.rec-zone .rz-model-line{margin:-2px 0 8px;font-size:11px;color:#a39880;line-height:1.6;word-break:break-all;}',
     '.rec-zone .rz-empty{padding:26px 0;text-align:center;font-size:13px;color:#a39880;}',
     '.rec-zone .rz-detail{margin-top:14px;background:#fff;border:1px solid var(--c-line,#e3dccb);border-radius:8px;padding:14px 16px;}',
     '.rec-zone .rz-detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}',
@@ -12933,7 +12954,7 @@ function recZoneCardHtml(c) {
     + '<span>🎙 ' + recAudioFmt(c.dur) + '</span>' + recZoneBadgeOf(c)
     + '</div>'
     + (recZoneSummaryOf(c) ? '<div class="rz-summary">' + bzEsc(recZoneSummaryOf(c)) + '</div>' : '')
-    + '<div class="rz-card-foot"><span class="rz-badge no">录音卡</span><span>' + hhmm + ' 创建</span></div>'
+    + '<div class="rz-card-foot"><span class="rz-badge no">录音卡</span>' + recModelLineHtml(c) + '<span>' + hhmm + ' 创建</span></div>'
     + '</div>';
 }
 function recZoneRenderInto(box, list) {
@@ -13128,6 +13149,7 @@ function recZoneRenderDetail(zone, clip) {
     + recZoneBadgeOf(clip)
     + '<button type="button" class="rz-tab" style="border:1px solid var(--c-line,#e3dccb);" onclick="RENDER.bzZoneTranscribe(this)" title="转录">' + (clip.transcript ? '🔄 重转录' : '📝 转录') + '</button>'
     + '<button type="button" class="rz-close" onclick="RENDER.recZoneCloseDetail(this)" title="关闭">✕</button></div>'
+    + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
@@ -15976,6 +15998,10 @@ function cmpSetState(entries) {
     recPeopleNorm: recPeopleNorm,
     recPeopleOf: recPeopleOf,
     recPeopleOthers: recPeopleOthers,
+    recModelShort: recModelShort,
+    recModelsOf: recModelsOf,
+    recModelTitleOf: recModelTitleOf,
+    recModelLineHtml: recModelLineHtml,
     recZoneCardHtml: recZoneCardHtml,
     hiDy: hiDy,
     hiLn: hiLn,
@@ -20035,6 +20061,56 @@ function captureScreenshot() {
       sp18.indexOf('本次咨询的其他人：案主、张三妈妈') > -1
       && sp18.indexOf('命盘主人「龚洁」') > -1
       && sp18.indexOf('只能从这些名字里选：案主、张三妈妈') > -1, true));
+  })();
+
+  // ===== v0.83.7 每次转录都标明所用大模型 =====
+  (function() {
+    tests.push({ section:'转录模型标注(v0.83.7)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recModelsOf !== 'function' || typeof R.recModelShort !== 'function') {
+      tests.push(fail('SN19 前置: RENDER 模型接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN19-1: 模型名取短名（去厂商前缀与指令后缀）',
+      R.recModelShort('Qwen/Qwen3-235B-A22B-Instruct-2507'), 'Qwen3-235B-A22B'));
+    tests.push(eq('SN19-2: 识别模型短名保持', R.recModelShort('FunAudioLLM/SenseVoiceSmall'), 'SenseVoiceSmall'));
+    var cur19 = R.recModelsOf({ transcript: { text:'x' } });
+    tests.push(eq('SN19-3: 老录音无模型快照回落当前默认',
+      (cur19.asr === 'FunAudioLLM/SenseVoiceSmall'
+        && cur19.llm === 'Qwen/Qwen3-235B-A22B-Instruct-2507'), true));
+    var snap19 = R.recModelsOf({ transcript: { text:'x', models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } });
+    tests.push(eq('SN19-4: 有快照时沿用转录当时的模型名', snap19.llm, 'Qwen/Qwen2.5-72B-Instruct'));
+
+    var c19 = { id:'SN19x', name:'10-26 15:00', ts: Date.now(), dur: 60, people:'邦顺、案主',
+      transcript: { text:'# 纪要\n正文', raw:'原始文字', ts: Date.now(),
+        models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } };
+    var d19 = document.createElement('div');
+    d19.innerHTML = R.recZoneCardHtml(c19);
+    var m19 = d19.querySelector('.rz-model');
+    tests.push(eq('SN19-5: 录音卡标明识别与整理模型',
+      !!m19 && m19.textContent.indexOf('SenseVoiceSmall') > -1
+      && m19.textContent.indexOf('Qwen2.5-72B') > -1, true));
+    tests.push(eq('SN19-6: 卡片模型悬停显示完整模型名',
+      !!m19 && (m19.getAttribute('title') || '').indexOf('Qwen/Qwen2.5-72B-Instruct') > -1, true));
+
+    var d19b = document.createElement('div');
+    d19b.innerHTML = R.recZoneCardHtml({ id:'SN19y', name:'10-26 16:00', ts: Date.now(), dur: 60 });
+    tests.push(eq('SN19-7: 未转录的卡片不标模型', d19b.querySelector('.rz-model'), null));
+
+    var zone19 = document.createElement('div');
+    zone19.className = 'rec-zone';
+    zone19.innerHTML = '<div id="bzRecZoneDetail"></div>';
+    try { R.recZoneRenderDetail(zone19, c19); } catch (e) {}
+    var ml19 = zone19.querySelector('.rz-model-line');
+    tests.push(eq('SN19-8: 详情面板写明识别/整理模型与转录时间',
+      !!ml19 && ml19.textContent.indexOf('SenseVoiceSmall') > -1
+      && ml19.textContent.indexOf('Qwen/Qwen2.5-72B-Instruct') > -1
+      && ml19.textContent.indexOf('转录于') > -1, true));
+
+    var md19 = R.bzTranscriptMd(c19, '纪要正文', '原始文字');
+    tests.push(eq('SN19-9: 录音稿 md 头部逐项标注识别与整理模型',
+      md19.indexOf('识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct') > -1, true));
+    zone19.remove();
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====
