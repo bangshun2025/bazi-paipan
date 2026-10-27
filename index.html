@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.2 | 2026-10-27 -->
+<!-- 八字排盘 ·  从真版 v0.86.3 | 2026-10-27 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -564,7 +564,8 @@
   .archive-modal-list { flex:1; overflow-y:auto; min-height:0; padding:4px 0; }
   .archive-modal-row { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; border-bottom:1px solid rgba(128,128,128,.1); cursor:default; }
   .archive-modal-row:hover { background:rgba(0,0,0,.02); }
-  .archive-row-info { display:flex; align-items:center; gap:6px; flex:1; min-width:0; }
+  .archive-row-info { display:flex; align-items:center; gap:6px; flex:1; min-width:0; cursor:pointer; }
+  .archive-row-info:hover .archive-row-name { text-decoration:underline; }
   .archive-row-name { font-size:14px; color:var(--c-ink); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .archive-row-gender { font-size:13px; font-weight:600; }
   .archive-row-gender.male { color:var(--c-water); }
@@ -6038,24 +6039,24 @@ function openEditPanel(idx) {
 
 function closeEditPanel() {
   var edited = getEditFormData();
-  var changed = _editOriginal && (
-    edited.name !== _editOriginal.name ||
-    edited.nickname !== _editOriginal.nickname ||
-    edited.yiming !== _editOriginal.yiming ||
-    edited.gender !== _editOriginal.gender ||
-    edited.year !== _editOriginal.year ||
-    edited.month !== _editOriginal.month ||
-    edited.day !== _editOriginal.day ||
-    edited.hour !== _editOriginal.hour ||
-    edited.min !== _editOriginal.min ||
-    edited.useSolar !== _editOriginal.useSolar ||
-    edited.calendarType !== _editOriginal.calendarType ||
-    edited.isLeap !== _editOriginal.isLeap ||
-    edited.lunarMonth !== _editOriginal.lunarMonth ||
-    edited.prov !== _editOriginal.prov ||
-    edited.city !== _editOriginal.city ||
-    edited.dist !== _editOriginal.dist
-  );
+  var o = _editOriginal || {};
+  // 旧档案缺 useSolar/calendarType/min/lunarMonth 等字段（undefined），与表单读出的
+  // false/0/null 严格不等会误判「有未保存修改」而弹确认——行点击打开编辑器是主路径，必须归一化
+  var nz = function(v, dft) { return (v === undefined || v === null) ? dft : v; };
+  var changed = edited.name !== nz(o.name, '')
+    || edited.nickname !== nz(o.nickname, '')
+    || edited.yiming !== nz(o.yiming, '')
+    || edited.gender !== o.gender
+    || edited.year !== o.year
+    || edited.month !== o.month
+    || edited.day !== o.day
+    || edited.hour !== o.hour
+    || edited.min !== nz(o.min, 0)
+    || edited.useSolar !== !!o.useSolar
+    || edited.calendarType !== nz(o.calendarType, 'solar')
+    || edited.isLeap !== !!o.isLeap
+    || edited.lunarMonth !== nz(o.lunarMonth, null)
+    || (edited.useSolar && (edited.prov !== nz(o.prov, '') || edited.city !== nz(o.city, '') || edited.dist !== nz(o.dist, '')));
   if (changed && !confirm('有未保存的修改，确定关闭？')) return;
   document.getElementById('editOverlay').classList.remove('show');
   _editOriginal = null;
@@ -6835,7 +6836,7 @@ function archiveRowHtml(a, idx) {
     + '<input type="checkbox" class="archive-row-cmp" data-id="' + String(a.id).replace(/"/g, '') + '" title="勾选加入盘面对比"'
     + (picked ? ' checked' : '')
     + ' onchange="ARCHIVE.cmpPick(\'' + String(a.id).replace(/'/g, '') + '\', this.checked)">'
-    + '<div class="archive-row-info">'
+    + '<div class="archive-row-info" title="点击编辑档案" onclick="ARCHIVE.openEditPanel(' + idx + ')">'
     + '<span class="archive-row-name">' + escHtml(getDisplayName(a)) + '</span>'
     + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
     + '<span class="archive-row-date">' + escHtml(a.year + '年') + '</span>'
@@ -8114,6 +8115,22 @@ function openChartMd() {
       } catch (e) { okDirty = false; }
       t('v0.86 T09:脏数据不抛错', okDirty);
       t('v0.86 T09:坏 usage 视为空表', usageOf('d1').n === 0 && usageOf('d1').t === 0, JSON.stringify(usageOf('d1')));
+
+      // T10 点档案行默认打开编辑器（v0.86.3）；旧档案缺字段直关不误弹确认
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'e1', name: '点开测甲', gender: '男', year: 2000, month: 1, day: 1, hour: 0, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'e2', name: '点开测乙', gender: '女', year: 2000, month: 1, day: 2, hour: 0, createdAt: '2026-02-01T00:00:00.000Z' }
+      ]));
+      setSort('freq'); setSort('created'); _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var infos = document.querySelectorAll('#archive-modal-list .archive-row-info');
+      t('v0.86 T10:行点击接 openEditPanel', infos.length === 2 && String(infos[1].getAttribute('onclick')).indexOf('openEditPanel(1)') >= 0, infos[1] && infos[1].getAttribute('onclick'));
+      t('v0.86 T10:行指针手型', getComputedStyle(infos[0]).cursor === 'pointer', getComputedStyle(infos[0]).cursor);
+      infos[1].click();
+      var ov = document.getElementById('editOverlay');
+      t('v0.86 T10:点行打开编辑器', !!ov && ov.classList.contains('show'), ov && ov.className);
+      closeEditPanel();
+      t('v0.86 T10:无修改直关不误弹', !!ov && !ov.classList.contains('show'), ov && ov.className);
     } catch (e) {
       t('v0.86 T00:测试异常', false, String(e));
     } finally {

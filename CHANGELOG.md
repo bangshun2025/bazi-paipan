@@ -1,3 +1,12 @@
+## v0.86.3（2026-10-27）点档案行默认打开编辑器
+
+- 需求：邦顺「点击档案时，要默认调用编辑器打开」
+- **点行即编辑**：档案弹窗点档案行（名字区）直接打开 ✏️ 编辑器（悬停手型 + 名字下划线提示）；打开盘面仍走「排盘」按钮，井水不犯河水
+- **前置修复 closeEditPanel 误弹**：原实现把表单读出值与档案原字段直接 `!==` 比对，旧档案缺 `useSolar/calendarType/min/lunarMonth/prov/city/dist` 字段（undefined）时，「打开后一个字段不动点关闭」也会被判成有未保存修改而弹确认——行点击成为主路径后不可接受；改为缺省归一化（undefined→false/0/''/null/'solar'），prov/city/dist 仅在真太阳时勾选时才参与比对
+- 回归测试：archive.js runV086Tests 新增 T10 共 4 条——行 onclick 接 `openEditPanel(idx)`、行指针手型（getComputedStyle cursor）、真实点击行打开编辑器且装载数据正确、无修改直关 confirm 零调用（T10 测试档案故意缺 min/useSolar/calendarType 字段，恰好就是误弹回归用例）
+- 验证：?test=1 **1818 条全绿**（1814 + 4 吻合）；check-release 六门禁全过；真实 UI 实测（本地普通页，邦顺真实档案）：点「邦顺」行 → 编辑器打开且 editName=邦顺 → 直关 confirm 0 次、弹窗全关、全程零写入
+- 产物：index ≡ standalone md5 `1db5a18376f0183eb2297a4e66dfa1a0`（1,826,846 B）、standalone-split 136,595 B、archive.js 121,142 B
+
 ## v0.86.2（2026-10-27）使用频次双向翻转 + 「最近」排序修复
 
 - 需求：邦顺「使用频次也加上，点一次是按使用频次高到低排，再点一次按低到高排，默认从高到低排；最近这个功能是失效的，最近排序应该是按最后打开盘面的时间排」

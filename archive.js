@@ -595,24 +595,24 @@ function openEditPanel(idx) {
 
 function closeEditPanel() {
   var edited = getEditFormData();
-  var changed = _editOriginal && (
-    edited.name !== _editOriginal.name ||
-    edited.nickname !== _editOriginal.nickname ||
-    edited.yiming !== _editOriginal.yiming ||
-    edited.gender !== _editOriginal.gender ||
-    edited.year !== _editOriginal.year ||
-    edited.month !== _editOriginal.month ||
-    edited.day !== _editOriginal.day ||
-    edited.hour !== _editOriginal.hour ||
-    edited.min !== _editOriginal.min ||
-    edited.useSolar !== _editOriginal.useSolar ||
-    edited.calendarType !== _editOriginal.calendarType ||
-    edited.isLeap !== _editOriginal.isLeap ||
-    edited.lunarMonth !== _editOriginal.lunarMonth ||
-    edited.prov !== _editOriginal.prov ||
-    edited.city !== _editOriginal.city ||
-    edited.dist !== _editOriginal.dist
-  );
+  var o = _editOriginal || {};
+  // 旧档案缺 useSolar/calendarType/min/lunarMonth 等字段（undefined），与表单读出的
+  // false/0/null 严格不等会误判「有未保存修改」而弹确认——行点击打开编辑器是主路径，必须归一化
+  var nz = function(v, dft) { return (v === undefined || v === null) ? dft : v; };
+  var changed = edited.name !== nz(o.name, '')
+    || edited.nickname !== nz(o.nickname, '')
+    || edited.yiming !== nz(o.yiming, '')
+    || edited.gender !== o.gender
+    || edited.year !== o.year
+    || edited.month !== o.month
+    || edited.day !== o.day
+    || edited.hour !== o.hour
+    || edited.min !== nz(o.min, 0)
+    || edited.useSolar !== !!o.useSolar
+    || edited.calendarType !== nz(o.calendarType, 'solar')
+    || edited.isLeap !== !!o.isLeap
+    || edited.lunarMonth !== nz(o.lunarMonth, null)
+    || (edited.useSolar && (edited.prov !== nz(o.prov, '') || edited.city !== nz(o.city, '') || edited.dist !== nz(o.dist, '')));
   if (changed && !confirm('有未保存的修改，确定关闭？')) return;
   document.getElementById('editOverlay').classList.remove('show');
   _editOriginal = null;
@@ -1392,7 +1392,7 @@ function archiveRowHtml(a, idx) {
     + '<input type="checkbox" class="archive-row-cmp" data-id="' + String(a.id).replace(/"/g, '') + '" title="勾选加入盘面对比"'
     + (picked ? ' checked' : '')
     + ' onchange="ARCHIVE.cmpPick(\'' + String(a.id).replace(/'/g, '') + '\', this.checked)">'
-    + '<div class="archive-row-info">'
+    + '<div class="archive-row-info" title="点击编辑档案" onclick="ARCHIVE.openEditPanel(' + idx + ')">'
     + '<span class="archive-row-name">' + escHtml(getDisplayName(a)) + '</span>'
     + '<span class="archive-row-gender ' + genderCls + '">' + genderIcon + '</span>'
     + '<span class="archive-row-date">' + escHtml(a.year + '年') + '</span>'
@@ -2671,6 +2671,22 @@ function openChartMd() {
       } catch (e) { okDirty = false; }
       t('v0.86 T09:脏数据不抛错', okDirty);
       t('v0.86 T09:坏 usage 视为空表', usageOf('d1').n === 0 && usageOf('d1').t === 0, JSON.stringify(usageOf('d1')));
+
+      // T10 点档案行默认打开编辑器（v0.86.3）；旧档案缺字段直关不误弹确认
+      localStorage.setItem(ARCH_KEY, JSON.stringify([
+        { id: 'e1', name: '点开测甲', gender: '男', year: 2000, month: 1, day: 1, hour: 0, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'e2', name: '点开测乙', gender: '女', year: 2000, month: 1, day: 2, hour: 0, createdAt: '2026-02-01T00:00:00.000Z' }
+      ]));
+      setSort('freq'); setSort('created'); _activeTag = ''; _searchKeyword = '';
+      renderArchiveModal();
+      var infos = document.querySelectorAll('#archive-modal-list .archive-row-info');
+      t('v0.86 T10:行点击接 openEditPanel', infos.length === 2 && String(infos[1].getAttribute('onclick')).indexOf('openEditPanel(1)') >= 0, infos[1] && infos[1].getAttribute('onclick'));
+      t('v0.86 T10:行指针手型', getComputedStyle(infos[0]).cursor === 'pointer', getComputedStyle(infos[0]).cursor);
+      infos[1].click();
+      var ov = document.getElementById('editOverlay');
+      t('v0.86 T10:点行打开编辑器', !!ov && ov.classList.contains('show'), ov && ov.className);
+      closeEditPanel();
+      t('v0.86 T10:无修改直关不误弹', !!ov && !ov.classList.contains('show'), ov && ov.className);
     } catch (e) {
       t('v0.86 T00:测试异常', false, String(e));
     } finally {
