@@ -1723,16 +1723,21 @@ function syncGz(o) { return o && o.gan ? (o.gan + o.zhi) : '—'; }
 function syncChartMd(a, noteText) {
   var L = [];
   var nm = a.name || '未命名';
+  var isLunar = a.calendarType === 'lunar';
+  var sol = isLunar ? archiveSolarYmd(a) : null;
+  var birth = '出生：' + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day)
+    + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0);
+  if (sol) birth += '（农历，公历 ' + sol.y + '-' + syncPad2(sol.m) + '-' + syncPad2(sol.d) + '）';
+  else if (isLunar) birth += '（农历）';
   L.push('# ' + nm + '　' + (a.gender || ''));
   L.push('');
-  L.push('出生：' + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day)
-    + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0));
+  L.push(birth);
   if (a.updatedAt) L.push('');
   if (a.updatedAt) L.push('档案更新：' + a.updatedAt);
   L.push('');
   var al = null;
   try {
-    al = window.ALGO.paipan(nm, a.gender || '男', a.year, a.month, a.day, a.hour, a.min || 0);
+    al = window.ALGO.paipan(nm, a.gender || '男', sol ? sol.y : a.year, sol ? sol.m : a.month, sol ? sol.d : a.day, a.hour, a.min || 0);
   } catch (e) {}
   if (!al) {
     L.push('（排盘失败：生日字段不完整）');
@@ -1789,10 +1794,12 @@ function syncChartMd(a, noteText) {
 }
 
 function syncNoteOf(a, notes) {
+  // 记录键存的是公历（排盘数据），农历档案必须转公历再拼键，否则永远匹配不上
+  var sd = archiveSolarYmd(a) || { y: a.year, m: a.month, d: a.day };
   var base = REC_NOTES_PREFIX + (a.name || '') + '|' + (a.gender || '') + '|'
-    + a.year + '|' + a.month + '|' + a.day + '|' + a.hour + '|' + (a.min || 0);
+    + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
   if (notes[base]) return notes[base];
-  var pfx = (a.name || '') + '|' + (a.gender || '') + '|' + a.year + '|' + a.month + '|' + a.day + '|';
+  var pfx = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|';
   var best = '';
   for (var k in notes) {
     if (k.indexOf(REC_NOTES_PREFIX + pfx) !== 0) continue;

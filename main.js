@@ -5604,6 +5604,31 @@ function captureScreenshot() {
         && document.getElementById('btnSyncOff') && document.getElementById('syncHint')) ? 'Y' : 'N', 'Y'));
     tests.push(eq('SN11: 录音 blob 写/删接口齐备',
       (typeof window.ARCHIVE.syncWriteBlob === 'function' && typeof window.ARCHIVE.syncDeleteFile === 'function') ? 'Y' : 'N', 'Y'));
+    var bakArchV2 = null;
+    try { bakArchV2 = localStorage.getItem('bz_archives_v2'); } catch (e) {}
+    try {
+      var arr = [];
+      try { arr = JSON.parse(bakArchV2 || '[]'); } catch (e) {}
+      arr.push({ id: 'snlunar', name: '农历同步测试', gender: '女', year: 1983, month: 8, day: 28, hour: 7, min: 15, calendarType: 'lunar', lunarMonth: 8, isLeap: false });
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arr));
+      localStorage.setItem('bz_rec_notes_农历同步测试|女|1983|10|4|7|15', '农历档案公历键记录内容');
+      var bf2 = window.ARCHIVE.syncBuildFiles();
+      var lunarMd = '';
+      for (var n = 0; n < bf2.length; n++) {
+        if (bf2[n][0] === '盘面-农历同步测试.md') { lunarMd = bf2[n][1]; break; }
+      }
+      tests.push(eq('SN12: 农历档案盘面 md 按公历排盘（八月廿八=公历10-04 日柱乙丑）',
+        lunarMd.indexOf('| 乙 |') >= 0 && lunarMd.indexOf('戊子') < 0 ? 'Y' : 'N', 'Y'));
+      tests.push(eq('SN13: 农历档案盘面 md 读到公历键分析记录',
+        lunarMd.indexOf('农历档案公历键记录内容') >= 0 ? 'Y' : 'N', 'Y'));
+    } catch (e) {
+      tests.push(fail('SN12: 农历档案同步测试异常', String(e)));
+    } finally {
+      var arr2 = [];
+      try { arr2 = JSON.parse(bakArchV2 || '[]'); } catch (e) {}
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arr2));
+      localStorage.removeItem('bz_rec_notes_农历同步测试|女|1983|10|4|7|15');
+    }
   } catch (e) {
     tests.push(fail('SN10: 本地同步测试异常', String(e)));
   }
