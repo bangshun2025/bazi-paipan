@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.4 | 2026-10-27 -->
+<!-- 八字排盘 ·  从真版 v0.86.5 | 2026-10-27 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -545,6 +545,14 @@
   /* ===== v0.9.0 档案弹窗 ===== */
   .archive-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1001;justify-content:center;align-items:center; }
   .archive-overlay.show { display:flex; }
+  .chartmd-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);z-index:1003;justify-content:center;align-items:center; }
+  .chartmd-overlay.show { display:flex; }
+  .chartmd-modal { background:var(--c-paper); border:1px solid var(--c-line); border-radius:6px; width:94%; max-width:920px; height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,.15); }
+  .chartmd-bar { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--c-line); font-size:14px; }
+  .chartmd-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chartmd-pre { flex:1; overflow:auto; margin:0; padding:16px 20px; white-space:pre-wrap; word-break:break-word; font:13.5px/1.85 "SF Mono",Menlo,Consolas,monospace; color:var(--c-ink); }
+  .chartmd-pre.hint { color:#8a6a2f; }
+  .chartmd-pre.err { color:#b3261e; }
   .archive-modal { background:var(--c-paper); border:1px solid var(--c-line); border-radius:6px; width:94%;max-width:880px; height:560px; max-height:84vh; min-height:360px; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,.15); }
   .archive-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 12px; border-bottom:1px solid var(--c-line); }
   .archive-modal-title { font-family:var(--font-display); font-size:18px; color:var(--c-ink); }
@@ -1220,6 +1228,17 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
   </div>
 
   <!-- ===== v0.9.0 档案弹窗 ===== -->
+  <div class="chartmd-overlay" id="chartmdOverlay" onclick="ARCHIVE.syncCloseChartMd()">
+    <div class="chartmd-modal" onclick="event.stopPropagation()">
+      <div class="chartmd-bar">
+        <span class="chartmd-title" id="chartmdTitle">档案 md</span>
+        <span style="flex:1"></span>
+        <button class="btn-simple" id="chartmdCopy" type="button" onclick="ARCHIVE.syncCopyChartMd()">复制全文</button>
+        <button class="btn-simple" id="chartmdClose" type="button" onclick="ARCHIVE.syncCloseChartMd()">关闭</button>
+      </div>
+      <pre class="chartmd-pre" id="chartmdPre"></pre>
+    </div>
+  </div>
   <div class="archive-overlay" id="archiveOverlay" onclick="ARCHIVE.closeArchivePanel()">
     <div class="archive-modal" onclick="event.stopPropagation()">
       <div class="archive-modal-header">
@@ -7516,19 +7535,38 @@ function syncEscapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function syncPaintWindow(win, title, inner) {
-  var doc = win.document;
-  doc.open();
-  doc.write('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>'
-    + syncEscapeHtml(title) + '</title><style>'
-    + 'html,body{margin:0;background:#faf8f3;color:#1f1f1f}'
-    + 'body{padding:28px 32px 60px;font:15px/1.8 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}'
-    + 'pre{max-width:920px;margin:0 auto;white-space:pre-wrap;word-break:break-word;'
-    + 'font:13.5px/1.85 "SF Mono",Menlo,Consolas,monospace}'
-    + '.hint{max-width:920px;margin:40px auto;font-size:15px;color:#8a6a2f}'
-    + '.hint.err{color:#b3261e;white-space:pre-wrap}'
-    + '</style></head><body>' + inner + '</body></html>');
-  doc.close();
+function syncChartMdState(msg, cls) {
+  var pre = document.getElementById('chartmdPre');
+  if (!pre) return;
+  pre.textContent = msg;
+  pre.className = 'chartmd-pre' + (cls ? ' ' + cls : '');
+}
+
+function syncCloseChartMd() {
+  var ov = document.getElementById('chartmdOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
+function syncCopyChartMd() {
+  var pre = document.getElementById('chartmdPre');
+  if (!pre || !pre.textContent) return;
+  var btn = document.getElementById('chartmdCopy');
+  var done = function() {
+    if (!btn) return;
+    var t = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(function() { btn.textContent = t; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(pre.textContent).then(done, function() {});
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = pre.textContent;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
 }
 
 function openChartMd() {
@@ -7536,17 +7574,21 @@ function openChartMd() {
   var nm = String(d.name || '').trim();
   var ta = document.querySelector('.record-panel .rec-text');
   if (ta) { try { ta.blur(); } catch (e) {} }
-  if (!syncSupported()) {
-    alert('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。');
-    return;
-  }
+  var ov = document.getElementById('chartmdOverlay');
+  var title = document.getElementById('chartmdTitle');
   if (!nm) {
-    alert('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。');
+    syncChartMdState('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。', 'err');
+    if (ov) ov.classList.add('show');
     return;
   }
-  var win = window.open('', '_blank');
-  if (win) { try { syncPaintWindow(win, '盘面-' + nm + '.md', '<p class="hint">正在同步并读取最新 md……</p>'); } catch (e) {} }
-
+  if (!syncSupported()) {
+    syncChartMdState('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。', 'err');
+    if (ov) ov.classList.add('show');
+    return;
+  }
+  if (title) title.textContent = '盘面-' + nm + '.md';
+  syncChartMdState('正在同步并读取最新 md……', 'hint');
+  if (ov) ov.classList.add('show');
   syncEnsureDir().then(function(dir) {
     if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
     return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
@@ -7554,12 +7596,12 @@ function openChartMd() {
     if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
     return best.f.text().then(function(text) { return { name: best.h.name, text: text }; });
   }).then(function(o) {
-    if (!win || win.closed) { alert('新窗口被浏览器拦截了。\n\n请允许本站打开弹窗后再点。'); return; }
-    syncPaintWindow(win, o.name, '<pre>' + syncEscapeHtml(o.text) + '</pre>');
+    if (!ov || !ov.classList.contains('show')) return;
+    if (title) title.textContent = o.name;
+    syncChartMdState(o.text, '');
   }).catch(function(err) {
-    var msg = (err && err.message) || '未知错误';
-    if (win && !win.closed) syncPaintWindow(win, '打开失败', '<p class="hint err">' + syncEscapeHtml(msg) + '</p>');
-    else alert(msg);
+    if (!ov || !ov.classList.contains('show')) return;
+    syncChartMdState((err && err.message) || '未知错误', 'err');
   });
 }
 
@@ -7584,6 +7626,8 @@ function openChartMd() {
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
     openChartMd: openChartMd,
+    syncCloseChartMd: syncCloseChartMd,
+    syncCopyChartMd: syncCopyChartMd,
     syncLatestChartFile: syncLatestChartFile,
     syncChartNameMatch: syncChartNameMatch,
     syncNewestOf: syncNewestOf,
@@ -20865,6 +20909,52 @@ function captureScreenshot() {
     } finally {
       window._paipanData = oldPd17;
       if (box17 && box17.parentNode) box17.parentNode.removeChild(box17);
+    }
+  })();
+
+  // ===== v0.86.5 档案md 页内弹层：不再 window.open，无姓名不再 alert =====
+  (function() {
+    tests.push({ section:'档案md 页内弹层(v0.86.5 SN20)' });
+    var A20 = window.ARCHIVE;
+    if (!A20 || typeof A20.openChartMd !== 'function' || typeof A20.syncCloseChartMd !== 'function'
+        || typeof A20.syncCopyChartMd !== 'function') {
+      tests.push(fail('SN20 前置: ARCHIVE 弹层接口挂载', '缺失'));
+      return;
+    }
+    var ov20 = document.getElementById('chartmdOverlay');
+    var pre20 = document.getElementById('chartmdPre');
+    tests.push(eq('SN20-1: 弹层 DOM 存在(overlay/pre/title)',
+      !!ov20 && !!pre20 && !!document.getElementById('chartmdTitle'), true));
+
+    var oldPd20 = window._paipanData, alertCnt20 = 0, origAlert20 = window.alert;
+    try {
+      window.alert = function() { alertCnt20++; };
+      window._paipanData = { name: '' };
+      A20.openChartMd();
+      tests.push(eq('SN20-2: 无姓名走弹层提示且零 alert',
+        alertCnt20 === 0 && ov20.classList.contains('show')
+        && pre20.textContent.indexOf('没有姓名') > -1, true));
+
+      A20.syncCloseChartMd();
+      tests.push(eq('SN20-3: 关闭后弹层隐藏', !ov20.classList.contains('show'), true));
+
+      window._paipanData = { name: 'SN20测试' };
+      A20.openChartMd();
+      tests.push(eq('SN20-4: 有姓名弹层打开且首帧提示写入',
+        ov20.classList.contains('show') && pre20.textContent.length > 0, true));
+
+      var src20 = '';
+      for (var s20 = 0; s20 < document.scripts.length; s20++) src20 += document.scripts[s20].textContent;
+      tests.push(eq('SN20-5: 不再 window.open 弹新页签且保留同步链',
+        src20.indexOf("window.open(" + "'', " + "'_blank')") === -1
+        && src20.indexOf('正在同步并读取最新 md') > -1
+        && /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src20), true));
+    } catch (e20) {
+      tests.push(fail('SN20 异常', String(e20 && e20.message || e20)));
+    } finally {
+      window.alert = origAlert20;
+      window._paipanData = oldPd20;
+      A20.syncCloseChartMd();
     }
   })();
 

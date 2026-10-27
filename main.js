@@ -3722,6 +3722,52 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.86.5 档案md 页内弹层：不再 window.open，无姓名不再 alert =====
+  (function() {
+    tests.push({ section:'档案md 页内弹层(v0.86.5 SN20)' });
+    var A20 = window.ARCHIVE;
+    if (!A20 || typeof A20.openChartMd !== 'function' || typeof A20.syncCloseChartMd !== 'function'
+        || typeof A20.syncCopyChartMd !== 'function') {
+      tests.push(fail('SN20 前置: ARCHIVE 弹层接口挂载', '缺失'));
+      return;
+    }
+    var ov20 = document.getElementById('chartmdOverlay');
+    var pre20 = document.getElementById('chartmdPre');
+    tests.push(eq('SN20-1: 弹层 DOM 存在(overlay/pre/title)',
+      !!ov20 && !!pre20 && !!document.getElementById('chartmdTitle'), true));
+
+    var oldPd20 = window._paipanData, alertCnt20 = 0, origAlert20 = window.alert;
+    try {
+      window.alert = function() { alertCnt20++; };
+      window._paipanData = { name: '' };
+      A20.openChartMd();
+      tests.push(eq('SN20-2: 无姓名走弹层提示且零 alert',
+        alertCnt20 === 0 && ov20.classList.contains('show')
+        && pre20.textContent.indexOf('没有姓名') > -1, true));
+
+      A20.syncCloseChartMd();
+      tests.push(eq('SN20-3: 关闭后弹层隐藏', !ov20.classList.contains('show'), true));
+
+      window._paipanData = { name: 'SN20测试' };
+      A20.openChartMd();
+      tests.push(eq('SN20-4: 有姓名弹层打开且首帧提示写入',
+        ov20.classList.contains('show') && pre20.textContent.length > 0, true));
+
+      var src20 = '';
+      for (var s20 = 0; s20 < document.scripts.length; s20++) src20 += document.scripts[s20].textContent;
+      tests.push(eq('SN20-5: 不再 window.open 弹新页签且保留同步链',
+        src20.indexOf("window.open(" + "'', " + "'_blank')") === -1
+        && src20.indexOf('正在同步并读取最新 md') > -1
+        && /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src20), true));
+    } catch (e20) {
+      tests.push(fail('SN20 异常', String(e20 && e20.message || e20)));
+    } finally {
+      window.alert = origAlert20;
+      window._paipanData = oldPd20;
+      A20.syncCloseChartMd();
+    }
+  })();
+
   // ===== v0.83.6 录音卡咨询人物（默认邦顺、案主，可加人，录音稿按名单归属）=====
   (function() {
     tests.push({ section:'录音卡咨询人物(v0.83.6)' });

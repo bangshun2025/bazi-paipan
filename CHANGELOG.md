@@ -1,4 +1,14 @@
-## v0.86.4（2026-10-27）本地同步·农历档案修复（分析记录「暂无」+ 盘面排错）
+## v0.86.5（2026-10-27）「档案md」改页内弹层预览（不再开新页签）
+
+- 需求：邦顺「点击分析记录右边的档案 md，打开的是编辑器，不是预览。是欢喜 agent写作大师的编辑器」
+- **排查定论：按钮代码从未有能力调起外部应用**——`openChartMd()` 唯一入口是 `window.open('')+页签内写入`，真实 Chrome 复现行为正确（新页签标题「盘面-梁依依.md」全文预览）；「写作大师编辑器」实为 `127.0.0.1:9876`（joy-write editor-server 常驻）+ Dock「编辑器.app」，最可能现场是 PWA 窗口里 window.open 新页签不显眼/被拦，转手开了编辑器造成归因错位
+- **根治**：预览改为页内全屏弹层（`chartmd-overlay`，复用档案弹窗同款遮罩模式）：标题=文件名、等宽全文、复制全文按钮（clipboard API+execCommand 兜底）、点遮罩/关闭按钮关闭；不再依赖 window.open——弹窗拦截、PWA 焦点混乱、页签跑偏全部根除
+- **顺手修掉 v0.86.4 遗留待修**：盘面无姓名不再 `alert`（此前周期性自动同步+此入口会反复弹窗轰炸），改为弹层内红字提示
+- 三文件各加 CSS+静态 DOM（`chartmdOverlay/chartmdTitle/chartmdPre/chartmdCopy/chartmdClose`）；archive.js 删 `syncPaintWindow`，新增 `syncChartMdState/syncCloseChartMd/syncCopyChartMd`，`syncEnsureDir→syncWaitIdle→syncLatestChartFile` 同步链原样保留
+- 回归测试：main.js 新增 SN20 五条——弹层 DOM 存在、无姓名弹层提示且 alert 计数 0、关闭隐藏、有姓名首帧提示、源码无 `window.open('', '_blank')` 且同步链保留（断言字面量拆串防自匹配污染）
+- 验证：?test=1 全绿 **1825**（1820+5）；真实 Chrome file:// 实测无姓名/关闭/有姓名首帧/无目录授权错误提示四态截图确认
+- 教训：对「源码包含 X」的断言，其检查字符串本身也会进 `document.scripts` 被收集——检查串必须拆开拼
+
 
 - 需求：邦顺「为什么分析记录又不保存了？你查一下梁晶晶的」
 - **排查定论：记录没丢**。梁晶晶两条分析记录（297/296 字）一直在 localStorage，排盘页记录区读写全链正常（真实页签实测 textarea ≡ storage）；坏的是本地文件夹同步（盘面-姓名.md）整条读链

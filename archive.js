@@ -2072,19 +2072,38 @@ function syncEscapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function syncPaintWindow(win, title, inner) {
-  var doc = win.document;
-  doc.open();
-  doc.write('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>'
-    + syncEscapeHtml(title) + '</title><style>'
-    + 'html,body{margin:0;background:#faf8f3;color:#1f1f1f}'
-    + 'body{padding:28px 32px 60px;font:15px/1.8 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}'
-    + 'pre{max-width:920px;margin:0 auto;white-space:pre-wrap;word-break:break-word;'
-    + 'font:13.5px/1.85 "SF Mono",Menlo,Consolas,monospace}'
-    + '.hint{max-width:920px;margin:40px auto;font-size:15px;color:#8a6a2f}'
-    + '.hint.err{color:#b3261e;white-space:pre-wrap}'
-    + '</style></head><body>' + inner + '</body></html>');
-  doc.close();
+function syncChartMdState(msg, cls) {
+  var pre = document.getElementById('chartmdPre');
+  if (!pre) return;
+  pre.textContent = msg;
+  pre.className = 'chartmd-pre' + (cls ? ' ' + cls : '');
+}
+
+function syncCloseChartMd() {
+  var ov = document.getElementById('chartmdOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
+function syncCopyChartMd() {
+  var pre = document.getElementById('chartmdPre');
+  if (!pre || !pre.textContent) return;
+  var btn = document.getElementById('chartmdCopy');
+  var done = function() {
+    if (!btn) return;
+    var t = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(function() { btn.textContent = t; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(pre.textContent).then(done, function() {});
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = pre.textContent;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
 }
 
 function openChartMd() {
@@ -2092,17 +2111,21 @@ function openChartMd() {
   var nm = String(d.name || '').trim();
   var ta = document.querySelector('.record-panel .rec-text');
   if (ta) { try { ta.blur(); } catch (e) {} }
-  if (!syncSupported()) {
-    alert('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。');
-    return;
-  }
+  var ov = document.getElementById('chartmdOverlay');
+  var title = document.getElementById('chartmdTitle');
   if (!nm) {
-    alert('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。');
+    syncChartMdState('当前盘面没有姓名，定位不到档案 md。\n\n请先把这份盘「存为档案」，或从档案里打开命盘。', 'err');
+    if (ov) ov.classList.add('show');
     return;
   }
-  var win = window.open('', '_blank');
-  if (win) { try { syncPaintWindow(win, '盘面-' + nm + '.md', '<p class="hint">正在同步并读取最新 md……</p>'); } catch (e) {} }
-
+  if (!syncSupported()) {
+    syncChartMdState('当前浏览器不支持读取本地文件夹。\n\n请用 Chrome 或 Edge 打开 https:// 或 localhost 版本。', 'err');
+    if (ov) ov.classList.add('show');
+    return;
+  }
+  if (title) title.textContent = '盘面-' + nm + '.md';
+  syncChartMdState('正在同步并读取最新 md……', 'hint');
+  if (ov) ov.classList.add('show');
   syncEnsureDir().then(function(dir) {
     if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
     return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
@@ -2110,12 +2133,12 @@ function openChartMd() {
     if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
     return best.f.text().then(function(text) { return { name: best.h.name, text: text }; });
   }).then(function(o) {
-    if (!win || win.closed) { alert('新窗口被浏览器拦截了。\n\n请允许本站打开弹窗后再点。'); return; }
-    syncPaintWindow(win, o.name, '<pre>' + syncEscapeHtml(o.text) + '</pre>');
+    if (!ov || !ov.classList.contains('show')) return;
+    if (title) title.textContent = o.name;
+    syncChartMdState(o.text, '');
   }).catch(function(err) {
-    var msg = (err && err.message) || '未知错误';
-    if (win && !win.closed) syncPaintWindow(win, '打开失败', '<p class="hint err">' + syncEscapeHtml(msg) + '</p>');
-    else alert(msg);
+    if (!ov || !ov.classList.contains('show')) return;
+    syncChartMdState((err && err.message) || '未知错误', 'err');
   });
 }
 
@@ -2140,6 +2163,8 @@ function openChartMd() {
     syncDeleteFile: syncDeleteFile,
     syncChartMd: syncChartMd,
     openChartMd: openChartMd,
+    syncCloseChartMd: syncCloseChartMd,
+    syncCopyChartMd: syncCopyChartMd,
     syncLatestChartFile: syncLatestChartFile,
     syncChartNameMatch: syncChartNameMatch,
     syncNewestOf: syncNewestOf,
