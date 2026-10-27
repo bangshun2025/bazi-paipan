@@ -7576,7 +7576,8 @@ function syncJoyDirOf() {
 }
 
 function openChartMd() {
-  var d = window._paipanData || {};
+  var out = document.getElementById('output');
+  var d = window._paipanData || (out && out._paipanData) || {};
   var nm = String(d.name || '').trim();
   var ta = document.querySelector('.record-panel .rec-text');
   if (ta) { try { ta.blur(); } catch (e) {} }
@@ -20963,9 +20964,11 @@ function captureScreenshot() {
     tests.push(eq('SN20-1: 弹层 DOM 存在(overlay/pre/title)',
       !!ov20 && !!pre20 && !!document.getElementById('chartmdTitle'), true));
 
-    var oldPd20 = window._paipanData, alertCnt20 = 0, origAlert20 = window.alert;
+    var oldPd20 = window._paipanData, oldOutPd20 = null, alertCnt20 = 0, origAlert20 = window.alert;
+    var out20 = document.getElementById('output');
     try {
       window.alert = function() { alertCnt20++; };
+      if (out20) { oldOutPd20 = out20._paipanData; out20._paipanData = null; }
       window._paipanData = { name: '' };
       A20.openChartMd();
       tests.push(eq('SN20-2: 无姓名走弹层提示且零 alert',
@@ -20991,6 +20994,7 @@ function captureScreenshot() {
     } finally {
       window.alert = origAlert20;
       window._paipanData = oldPd20;
+      if (out20 && oldOutPd20 !== null) out20._paipanData = oldOutPd20;
       A20.syncCloseChartMd();
     }
   })();
@@ -21029,6 +21033,17 @@ function captureScreenshot() {
       tests.push(eq('SN21-4: 逃逸键清除后入口不变(编辑器主路径可达)',
         ov21.classList.contains('show')
         && document.getElementById('chartmdPre').textContent.indexOf('正在同步并读取最新 md') > -1, true));
+      A21.syncCloseChartMd();
+      var out21 = document.getElementById('output');
+      var oldOutPd21 = out21 ? out21._paipanData : undefined;
+      window._paipanData = null;
+      if (out21) out21._paipanData = { name: 'SN21容器' };
+      A21.openChartMd();
+      tests.push(eq('SN21-5: window 无数据时兜底读 output 容器姓名',
+        ov21.classList.contains('show')
+        && document.getElementById('chartmdPre').textContent.indexOf('正在同步并读取最新 md') > -1
+        && document.getElementById('chartmdTitle').textContent.indexOf('SN21容器') > -1, true));
+      if (out21) out21._paipanData = oldOutPd21;
     } catch (e21) {
       tests.push(fail('SN21 异常', String(e21 && e21.message || e21)));
     } finally {

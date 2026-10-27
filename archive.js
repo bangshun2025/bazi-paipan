@@ -2113,7 +2113,8 @@ function syncJoyDirOf() {
 }
 
 function openChartMd() {
-  var d = window._paipanData || {};
+  var out = document.getElementById('output');
+  var d = window._paipanData || (out && out._paipanData) || {};
   var nm = String(d.name || '').trim();
   var ta = document.querySelector('.record-panel .rec-text');
   if (ta) { try { ta.blur(); } catch (e) {} }
