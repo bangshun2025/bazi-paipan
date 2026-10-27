@@ -3755,7 +3755,7 @@ function captureScreenshot() {
 
       var src20 = '';
       for (var s20 = 0; s20 < document.scripts.length; s20++) src20 += document.scripts[s20].textContent;
-      tests.push(eq('SN20-5: 不再 window.open 弹新页签且保留同步链',
+      tests.push(eq('SN20-5: 不再写空页签预览(window.open(\'\'))且保留同步链',
         src20.indexOf("window.open(" + "'', " + "'_blank')") === -1
         && src20.indexOf('正在同步并读取最新 md') > -1
         && /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src20), true));
@@ -3765,6 +3765,50 @@ function captureScreenshot() {
       window.alert = origAlert20;
       window._paipanData = oldPd20;
       A20.syncCloseChartMd();
+    }
+  })();
+
+  // ===== v0.86.5 档案md 主路径=写作大师编辑器(/open-file 软链原件)，弹层为兜底 =====
+  (function() {
+    tests.push({ section:'档案md 直达写作大师编辑器(v0.86.5 SN21)' });
+    var A21 = window.ARCHIVE;
+    if (!A21 || typeof A21.openChartMd !== 'function' || typeof A21.syncJoyDirOf !== 'function') {
+      tests.push(fail('SN21 前置: ARCHIVE 编辑器接口挂载', '缺失'));
+      return;
+    }
+    var src21 = '';
+    for (var s21 = 0; s21 < document.scripts.length; s21++) src21 += document.scripts[s21].textContent;
+    tests.push(eq('SN21-1: 源码含 /open-file 端点与路径编码拼接',
+      src21.indexOf('/open-file?path=') > -1
+      && src21.indexOf('encodeURIComponent(fp)') > -1
+      && src21.indexOf('CHARTMD_EDITOR_SRV') > -1, true));
+    tests.push(eq('SN21-2: 源码含逃逸键/目录键/ext.yml 默认值解析',
+      src21.indexOf('bz_chartmd_noeditor') > -1
+      && src21.indexOf('bz_joywrite_dir') > -1
+      && /joy_write_sync_dir/.test(src21), true));
+
+    var ov21 = document.getElementById('chartmdOverlay');
+    var oldPd21 = window._paipanData, oldNo21 = localStorage.getItem('bz_chartmd_noeditor'), oldDir21 = localStorage.getItem('bz_joywrite_dir');
+    try {
+      window._paipanData = { name: 'SN21测试' };
+      localStorage.setItem('bz_chartmd_noeditor', '1');
+      A21.openChartMd();
+      tests.push(eq('SN21-3: noeditor=1 时仍走弹层入口(首帧同步提示)',
+        ov21.classList.contains('show')
+        && document.getElementById('chartmdPre').textContent.indexOf('正在同步并读取最新 md') > -1, true));
+      localStorage.removeItem('bz_chartmd_noeditor');
+      A21.syncCloseChartMd();
+      A21.openChartMd();
+      tests.push(eq('SN21-4: 逃逸键清除后入口不变(编辑器主路径可达)',
+        ov21.classList.contains('show')
+        && document.getElementById('chartmdPre').textContent.indexOf('正在同步并读取最新 md') > -1, true));
+    } catch (e21) {
+      tests.push(fail('SN21 异常', String(e21 && e21.message || e21)));
+    } finally {
+      window._paipanData = oldPd21;
+      if (oldNo21 === null) localStorage.removeItem('bz_chartmd_noeditor'); else localStorage.setItem('bz_chartmd_noeditor', oldNo21);
+      if (oldDir21 === null) localStorage.removeItem('bz_joywrite_dir'); else localStorage.setItem('bz_joywrite_dir', oldDir21);
+      A21.syncCloseChartMd();
     }
   })();
 

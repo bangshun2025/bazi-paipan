@@ -2106,6 +2106,12 @@ function syncCopyChartMd() {
   }
 }
 
+var CHARTMD_EDITOR_SRV = 'http://127.0.0.1:9876';
+
+function syncJoyDirOf() {
+  return String(localStorage.getItem('bz_joywrite_dir') || '').replace(/\/+$/, '');
+}
+
 function openChartMd() {
   var d = window._paipanData || {};
   var nm = String(d.name || '').trim();
@@ -2131,8 +2137,38 @@ function openChartMd() {
     return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
   }).then(function(best) {
     if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
+    var editorOn = localStorage.getItem('bz_chartmd_noeditor') !== '1';
+    var dir = syncJoyDirOf();
+    var dirReady = dir ? Promise.resolve(dir) : fetch('./ext.yml').then(function(r) { return r.text(); }).then(function(t) {
+      var m = t.match(/^joy_write_sync_dir:\s*"?([^"\n]+)"?\s*$/m);
+      if (m) { dir = m[1].trim(); try { localStorage.setItem('bz_joywrite_dir', dir); } catch (e) {} }
+      return dir;
+    }).catch(function() { return ''; });
+    if (editorOn) return dirReady.then(function(dd) {
+      if (!dd) return best.f.text().then(function(text) {
+        if (!ov || !ov.classList.contains('show')) return;
+        if (title) title.textContent = best.h.name;
+        syncChartMdState('⚠ 未配置档案目录（bz_joywrite_dir），暂以本地预览打开。\n\n────────────\n\n' + text, 'err');
+      });
+      var fp = dd + '/' + best.h.name;
+      return fetch(CHARTMD_EDITOR_SRV + '/open-file?path=' + encodeURIComponent(fp))
+        .then(function(r) {
+          if (!r.ok) throw new Error('编辑器服务返回 ' + r.status);
+          return r.text();
+        }).then(function(url) {
+          window.open(url, '_blank');
+          if (ov) ov.classList.remove('show');
+        }).catch(function(err) {
+          return best.f.text().then(function(text) {
+            if (!ov || !ov.classList.contains('show')) return;
+            if (title) title.textContent = best.h.name;
+            syncChartMdState('⚠ 写作大师编辑器打开失败（' + ((err && err.message) || '未知') + '）。\n可尝试点 Dock 上的「编辑器」启动后再试。以下为本地预览：\n\n────────────\n\n' + text, 'err');
+          });
+        });
+    });
     return best.f.text().then(function(text) { return { name: best.h.name, text: text }; });
   }).then(function(o) {
+    if (!o) return;
     if (!ov || !ov.classList.contains('show')) return;
     if (title) title.textContent = o.name;
     syncChartMdState(o.text, '');
@@ -2165,6 +2201,7 @@ function openChartMd() {
     openChartMd: openChartMd,
     syncCloseChartMd: syncCloseChartMd,
     syncCopyChartMd: syncCopyChartMd,
+    syncJoyDirOf: syncJoyDirOf,
     syncLatestChartFile: syncLatestChartFile,
     syncChartNameMatch: syncChartNameMatch,
     syncNewestOf: syncNewestOf,

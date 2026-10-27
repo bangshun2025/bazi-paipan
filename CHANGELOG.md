@@ -1,13 +1,14 @@
-## v0.86.5（2026-10-27）「档案md」改页内弹层预览（不再开新页签）
+## v0.86.5（2026-10-27）「档案md」一键直达写作大师编辑器（弹层兜底）
 
-- 需求：邦顺「点击分析记录右边的档案 md，打开的是编辑器，不是预览。是欢喜 agent写作大师的编辑器」
-- **排查定论：按钮代码从未有能力调起外部应用**——`openChartMd()` 唯一入口是 `window.open('')+页签内写入`，真实 Chrome 复现行为正确（新页签标题「盘面-梁依依.md」全文预览）；「写作大师编辑器」实为 `127.0.0.1:9876`（joy-write editor-server 常驻）+ Dock「编辑器.app」，最可能现场是 PWA 窗口里 window.open 新页签不显眼/被拦，转手开了编辑器造成归因错位
-- **根治**：预览改为页内全屏弹层（`chartmd-overlay`，复用档案弹窗同款遮罩模式）：标题=文件名、等宽全文、复制全文按钮（clipboard API+execCommand 兜底）、点遮罩/关闭按钮关闭；不再依赖 window.open——弹窗拦截、PWA 焦点混乱、页签跑偏全部根除
-- **顺手修掉 v0.86.4 遗留待修**：盘面无姓名不再 `alert`（此前周期性自动同步+此入口会反复弹窗轰炸），改为弹层内红字提示
-- 三文件各加 CSS+静态 DOM（`chartmdOverlay/chartmdTitle/chartmdPre/chartmdCopy/chartmdClose`）；archive.js 删 `syncPaintWindow`，新增 `syncChartMdState/syncCloseChartMd/syncCopyChartMd`，`syncEnsureDir→syncWaitIdle→syncLatestChartFile` 同步链原样保留
-- 回归测试：main.js 新增 SN20 五条——弹层 DOM 存在、无姓名弹层提示且 alert 计数 0、关闭隐藏、有姓名首帧提示、源码无 `window.open('', '_blank')` 且同步链保留（断言字面量拆串防自匹配污染）
-- 验证：?test=1 全绿 **1825**（1820+5）；真实 Chrome file:// 实测无姓名/关闭/有姓名首帧/无目录授权错误提示四态截图确认
-- 教训：对「源码包含 X」的断言，其检查字符串本身也会进 `document.scripts` 被收集——检查串必须拆开拼
+- 需求两轮反转定案：邦顺「点档案md打开的应是写作大师的编辑器」——**编辑器就是终态**，不是要页内预览
+- **主路径**：点「📄 档案md」→ 同步链定位最新 md → fetch `127.0.0.1:9876/open-file?path=<绝对路径>`（editor-server 已 CORS `*`）→ `window.open` 编辑器 URL；server 端按路径生成稳定 slug（`md-<md5前10>`），workspace 里 `article.md` **软链到档案原件——编辑器里改的就是档案本身**
+- **兜底**：server 未启动 / fetch 失败 → 页内弹层红字给失败原因 + 全文预览 + 「点 Dock 上的编辑器」提示；不再静默或开空白页签
+- 配置：`bz_joywrite_dir`（localStorage，优先）→ `ext.yml joy_write_sync_dir` 兜底；server URL 常量 `CHARTMD_EDITOR_SRV`（与 Dock 编辑器.app 同源约定）
+- 顺手修掉 v0.86.4 遗留待修：盘面无姓名不再 `alert` 轰炸，改弹层内红字提示
+- 逃逸键 `bz_chartmd_noeditor=1`：强制走纯预览弹层（回归测试防真开编辑器页签+写真软链）
+- 回归：main.js SN20-5 改写（不再断言空页签）+ SN21 四条——源码含 open-file 调用链、LS/ext.yml 两级配置键、noeditor 逃逸时首帧提示、逃逸键清理后入口不变
+- 验证：?test=1 全绿 **1829**（1825+4）；check-release 六门禁全过；线上域 evaluate 复刻全链端到端实测——CORS fetch→open-file 200→编辑器 URL→workspace 软链指向 `96-八字档案/盘面-邦顺.md`→编辑器页签打开并正确加载档案内容
+- file:// 域真实点击受阻于 Chrome 权限横幅（合成事件免疫，安全边界，不硬刚）；线上域已是邦顺日常授权域，发布后点真按钮即达
 
 
 - 需求：邦顺「为什么分析记录又不保存了？你查一下梁晶晶的」
