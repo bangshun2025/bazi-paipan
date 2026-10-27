@@ -6,8 +6,9 @@
 - 配置：`bz_joywrite_dir`（localStorage，优先）→ `ext.yml joy_write_sync_dir` 兜底；server URL 常量 `CHARTMD_EDITOR_SRV`（与 Dock 编辑器.app 同源约定）
 - 顺手修掉 v0.86.4 遗留待修：盘面无姓名不再 `alert` 轰炸，改弹层内红字提示
 - 逃逸键 `bz_chartmd_noeditor=1`：强制走纯预览弹层（回归测试防真开编辑器页签+写真软链）
-- 回归：main.js SN20-5 改写（不再断言空页签）+ SN21 四条——源码含 open-file 调用链、LS/ext.yml 两级配置键、noeditor 逃逸时首帧提示、逃逸键清理后入口不变
-- 验证：?test=1 全绿 **1829**（1825+4）；check-release 六门禁全过；线上域 evaluate 复刻全链端到端实测——CORS fetch→open-file 200→编辑器 URL→workspace 软链指向 `96-八字档案/盘面-邦顺.md`→编辑器页签打开并正确加载档案内容
+- 回归：main.js SN20-5 改写（不再断言空页签）+ SN21 五条——源码含 open-file 调用链、LS/ext.yml 两级配置键、noeditor 逃逸时首帧提示、逃逸键清理后入口不变、**window 无数据时兜底读 output 容器姓名（SN21-5，发布当日热修）**
+- **热修（7948922）**：从档案/云端恢复路径打开的盘只挂在 `output._paipanData`、`window._paipanData` 未挂载，「档案md」误报无姓名——`openChartMd` 改双源取数（window 优先、output 容器兜底）；SN20-2 同步改双源清理防真实页面跑测试时误红
+- 验证：?test=1 全绿 **1830**（1829+1）；check-release 六门禁全过；线上域 evaluate 复刻全链端到端实测——CORS fetch→open-file 200→编辑器 URL→workspace 软链指向 `96-八字档案/盘面-邦顺.md`→编辑器页签打开并正确加载档案内容；线上真实点击（hook window.open 取证）确认主路径完整执行到 window.open（CDP 注入点击缺 transient activation 被弹窗拦截属测试环境限制，真人手点不受影响）
 - file:// 域真实点击受阻于 Chrome 权限横幅（合成事件免疫，安全边界，不硬刚）；线上域已是邦顺日常授权域，发布后点真按钮即达
 
 
