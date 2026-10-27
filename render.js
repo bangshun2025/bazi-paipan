@@ -1769,8 +1769,13 @@ function bzPromptOf(clip, raw) {
     '你是八字命理分析师的录音稿编辑。下面是同一段录音的「盘面资料」和「语音识别逐段文字」（每行 [时:分:秒] 是该句在录音中的开始时间）。请整理成高质量分析录音稿：',
     '1. 只修正语音识别的错别字与断句（尤其命理术语：十神、食伤、官杀、印星、比劫、财星、宫位、大运、流年、天干地支名），不改原意，不增删观点，不添加录音里没有的内容；',
     '2. 口语顺成可读书面语，保留讲解的条理；',
-    '3. 输出 markdown，格式固定：先一段 3-5 句「总述」概括这段录音讲了什么（包含核心结论与整体脉络）；空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 5-12 条，每条细节写足 1-3 句——把分析的理由、盘面对照依据、得出的结论完整写出来，不得只写半句概括；空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：具体内容」（3-10 条，时间用该章节第一句的时间戳），每条具体内容用 2-4 句还原该章节实际讲了什么——提到的具体宫位、干支、大运流年、判断与依据、给对方的建议都要写进去，不许只写一句话概括（整段录音不足 1 分钟时可省略此节）；空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
-    '4. 不要输出任何额外说明、前后缀或代码块标记。',
+    '3. 输出 markdown，格式固定，依次为：先一段 3-5 句「总述」概括这段录音讲了什么（包含核心结论与整体脉络）；',
+    '3a. 空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 12-25 条，必须覆盖录音中全部实质性内容、不漏任何一个话题——每条写足 3-6 句，把分析的理由、盘面对照依据（哪个宫位、哪柱何字、何十神、大运流年如何作用）、推出的结论、给案主举的例子与关键原话都完整写出来，具像到具体的人、事、物、数字与日期，宁多勿漏，不得只写半句概括；',
+    '3b. 空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：具体内容」（3-10 条，时间用该章节第一句的时间戳），每条具体内容用 2-4 句还原该章节实际讲了什么——提到的具体宫位、干支、大运流年、判断与依据、给对方的建议都要写进去，不许只写一句话概括（整段录音不足 1 分钟时可省略此节）；',
+    '3c. 空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
+    '3d. 空一行；「## 解读的思路与步骤」，按录音时序逐步还原整个解读过程，从开场第一个动作到收尾：每一步单独一行「- **第N步·小标题**：…」，写清先看盘面的什么→为什么看它→从哪个宫位/干支/十神推出什么→当时是怎么向案主表达的（尽量引原话）→案主有什么反应或追问；解读细节全部写出来，让没听过录音的人照着文字就能复盘整个思路、学会这套解法；',
+    '3e. 空一行；「## 规划的结果以及原理」，把录音中给出的全部规划、建议、判断结论逐条列出，每行一条「- **结论/建议**：内容写具像可执行＋命理原理写由盘面哪个结构怎么推出来的＋预期与时间线写何时应验、多大程度、前提条件」，录音里没有给出规划的写「本次录音未给出具体规划」；',
+    '4. 两个章节「解读的思路与步骤」与「规划的结果以及原理」是重点输出，篇幅不设上限，宁可长不可略。除此之外不要输出任何额外说明、前后缀或代码块标记。',
     '知识库术语参考：' + BZ_KB_LINES,
     '',
     '【盘面资料】',
@@ -2819,7 +2824,30 @@ function recZoneSeekTs(btn) {
   }
   try { au.currentTime = sec; au.play(); } catch (e) {}
 }
+// ===== v0.86.7 录音稿：要点全面具像化 + 新章节「解读的思路与步骤」「规划的结果以及原理」页签 =====
+function bzMdSectionOf(text, title) {
+  var lines = String(text == null ? '' : text).split('\n');
+  var out = [], on = false;
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i];
+    if (/^#{1,6}\s/.test(t)) {
+      if (on) break;
+      on = t.replace(/^#{1,6}\s/, '').trim().indexOf(title) === 0;
+      continue;
+    }
+    if (on) out.push(t);
+  }
+  while (out.length && !out[0].trim()) out.shift();
+  while (out.length && !out[out.length - 1].trim()) out.pop();
+  return out.join('\n');
+}
 function recZonePaneOf(clip, tab) {
+  if (tab === 'steps' || tab === 'plan') {
+    var title = tab === 'steps' ? '解读的思路与步骤' : '规划的结果以及原理';
+    var sec = bzMdSectionOf(clip.transcript && clip.transcript.text, title);
+    if (sec) return recZoneMd('## ' + title + '\n\n' + sec);
+    return '<div class="rz-empty">本稿为旧版整理，暂无「' + title + '」章节 · 点上方「🔄 重转录」用新版整理升级</div>';
+  }
   if (tab === 'raw') {
     var tr = clip.transcript;
     if (tr && tr.segs && tr.segs.length) return '<div class="rz-segs">' + bzDialogHtml(tr.segs, tr.spk) + '</div>';
@@ -2857,6 +2885,8 @@ function recZoneRenderDetail(zone, clip) {
     + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + (recModelsOf(clip).src === 'guess' ? '（推定）' : '') + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'steps' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'steps\')">解读的思路与步骤</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'plan' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'plan\')">规划的结果以及原理</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
     + '<button type="button" class="rz-tab' + (tab === 'notes' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'notes\')">追加笔记' + (clip.notes && clip.notes.length ? '（' + clip.notes.length + '）' : '') + '</button>'
     + '</div>'
@@ -5697,6 +5727,7 @@ function cmpSetState(entries) {
     recZoneCardHtml: recZoneCardHtml,
     recZoneRenderInto: recZoneRenderInto,
     recZonePaneOf: recZonePaneOf,
+    bzMdSectionOf: bzMdSectionOf,
     recZoneRenderDetail: recZoneRenderDetail,
     renderRecZone: renderRecZone,
     recZoneRecord: recZoneRecord,

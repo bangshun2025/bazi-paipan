@@ -3646,7 +3646,8 @@ function captureScreenshot() {
 
       var clip16 = { name:'SN16', dur:60, ts:Date.now(), notes:[] };
       var p16 = R16.bzPromptOf(clip16, '[00:00:01] 测试内容');
-      tests.push(eq('SN16-2: prompt 要点扩至 5-12 条', p16.indexOf('5-12 条') > -1, true));
+      tests.push(eq('SN16-2: prompt 要点扩至 12-25 条', p16.indexOf('12-25 条') > -1, true));
+      tests.push(eq('SN16-2b: prompt 新增思路步骤与规划原理章节', p16.indexOf('## 解读的思路与步骤') > -1 && p16.indexOf('## 规划的结果以及原理') > -1, true));
       tests.push(eq('SN16-3: prompt 章节要求 2-4 句具体内容', p16.indexOf('2-4 句') > -1, true));
       tests.push(eq('SN16-4: prompt 禁止一句话概括', p16.indexOf('不许只写一句话概括') > -1, true));
 
@@ -5940,6 +5941,23 @@ function captureScreenshot() {
         (spk1[0] === '邦顺' && spk1[1] === '黄慧' && spk1[2] === '邦顺'
           && spk2[0] === '邦顺' && tsFmt === '01:01:12'
           && RENDER.bzFmtTs(81) === '00:01:21') ? 'Y' : 'N', 'Y'));
+      var secTxt = '总述\n\n## 要点\n- a\n\n## 解读的思路与步骤\n- **第1步·开场**：先看月令\n- **第2步·定格**：伤官格\n\n## 规划的结果以及原理\n- **结论**：明年转弯\n\n## 金句\n- 好';
+      var secSteps = RENDER.bzMdSectionOf(secTxt, '解读的思路与步骤');
+      var secPlan = RENDER.bzMdSectionOf(secTxt, '规划的结果以及原理');
+      tests.push(eq('SN13-16: 章节切分（取正文/到下个标题止/找不到返回空）',
+        (secSteps.indexOf('先看月令') >= 0 && secSteps.indexOf('伤官格') >= 0
+          && secSteps.indexOf('明年转弯') < 0 && secPlan.indexOf('明年转弯') >= 0
+          && RENDER.bzMdSectionOf('无章节', '解读的思路与步骤') === '') ? 'Y' : 'N', 'Y'));
+      var clipSteps = { id: 'sp', ts: T1, name: 'n', dur: 5, transcript: { text: secTxt } };
+      var clipOldTf = { id: 'so', ts: T1, name: 'n', dur: 5, transcript: { text: '旧稿只有要点' } };
+      var rdSrc = RENDER.recZoneRenderDetail.toString();
+      tests.push(eq('SN13-17: 思路步骤/规划原理页签（新稿取章节/旧稿提示重转录）',
+        (RENDER.recZonePaneOf(clipSteps, 'steps').indexOf('先看月令') >= 0
+          && RENDER.recZonePaneOf(clipSteps, 'plan').indexOf('明年转弯') >= 0
+          && RENDER.recZonePaneOf(clipOldTf, 'steps').indexOf('旧版整理') >= 0
+          && RENDER.recZonePaneOf(clipOldTf, 'plan').indexOf('重转录') >= 0
+          && rdSrc.indexOf("'steps'") >= 0 && rdSrc.indexOf("'plan'") >= 0
+          && rdSrc.indexOf('解读的思路与步骤') >= 0 && rdSrc.indexOf('规划的结果以及原理') >= 0) ? 'Y' : 'N', 'Y'));
     } catch (e) {
       tests.push(fail('SN13-0: 交互区测试异常', String(e)));
     } finally {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.6 | 2026-10-27 -->
+<!-- 八字排盘 ·  从真版 v0.86.7 | 2026-10-28 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -12898,8 +12898,13 @@ function bzPromptOf(clip, raw) {
     '你是八字命理分析师的录音稿编辑。下面是同一段录音的「盘面资料」和「语音识别逐段文字」（每行 [时:分:秒] 是该句在录音中的开始时间）。请整理成高质量分析录音稿：',
     '1. 只修正语音识别的错别字与断句（尤其命理术语：十神、食伤、官杀、印星、比劫、财星、宫位、大运、流年、天干地支名），不改原意，不增删观点，不添加录音里没有的内容；',
     '2. 口语顺成可读书面语，保留讲解的条理；',
-    '3. 输出 markdown，格式固定：先一段 3-5 句「总述」概括这段录音讲了什么（包含核心结论与整体脉络）；空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 5-12 条，每条细节写足 1-3 句——把分析的理由、盘面对照依据、得出的结论完整写出来，不得只写半句概括；空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：具体内容」（3-10 条，时间用该章节第一句的时间戳），每条具体内容用 2-4 句还原该章节实际讲了什么——提到的具体宫位、干支、大运流年、判断与依据、给对方的建议都要写进去，不许只写一句话概括（整段录音不足 1 分钟时可省略此节）；空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
-    '4. 不要输出任何额外说明、前后缀或代码块标记。',
+    '3. 输出 markdown，格式固定，依次为：先一段 3-5 句「总述」概括这段录音讲了什么（包含核心结论与整体脉络）；',
+    '3a. 空一行；「## 要点」，每行一条「- **要点标题**：细节」，共 12-25 条，必须覆盖录音中全部实质性内容、不漏任何一个话题——每条写足 3-6 句，把分析的理由、盘面对照依据（哪个宫位、哪柱何字、何十神、大运流年如何作用）、推出的结论、给案主举的例子与关键原话都完整写出来，具像到具体的人、事、物、数字与日期，宁多勿漏，不得只写半句概括；',
+    '3b. 空一行；「## 章节时间线」，每行一条「- [时:分:秒] 小标题：具体内容」（3-10 条，时间用该章节第一句的时间戳），每条具体内容用 2-4 句还原该章节实际讲了什么——提到的具体宫位、干支、大运流年、判断与依据、给对方的建议都要写进去，不许只写一句话概括（整段录音不足 1 分钟时可省略此节）；',
+    '3c. 空一行；「## 金句」，0-3 条录音里的原话（每行「- 」+ 原句，长句可截核心）；',
+    '3d. 空一行；「## 解读的思路与步骤」，按录音时序逐步还原整个解读过程，从开场第一个动作到收尾：每一步单独一行「- **第N步·小标题**：…」，写清先看盘面的什么→为什么看它→从哪个宫位/干支/十神推出什么→当时是怎么向案主表达的（尽量引原话）→案主有什么反应或追问；解读细节全部写出来，让没听过录音的人照着文字就能复盘整个思路、学会这套解法；',
+    '3e. 空一行；「## 规划的结果以及原理」，把录音中给出的全部规划、建议、判断结论逐条列出，每行一条「- **结论/建议**：内容写具像可执行＋命理原理写由盘面哪个结构怎么推出来的＋预期与时间线写何时应验、多大程度、前提条件」，录音里没有给出规划的写「本次录音未给出具体规划」；',
+    '4. 两个章节「解读的思路与步骤」与「规划的结果以及原理」是重点输出，篇幅不设上限，宁可长不可略。除此之外不要输出任何额外说明、前后缀或代码块标记。',
     '知识库术语参考：' + BZ_KB_LINES,
     '',
     '【盘面资料】',
@@ -13948,7 +13953,30 @@ function recZoneSeekTs(btn) {
   }
   try { au.currentTime = sec; au.play(); } catch (e) {}
 }
+// ===== v0.86.7 录音稿：要点全面具像化 + 新章节「解读的思路与步骤」「规划的结果以及原理」页签 =====
+function bzMdSectionOf(text, title) {
+  var lines = String(text == null ? '' : text).split('\n');
+  var out = [], on = false;
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i];
+    if (/^#{1,6}\s/.test(t)) {
+      if (on) break;
+      on = t.replace(/^#{1,6}\s/, '').trim().indexOf(title) === 0;
+      continue;
+    }
+    if (on) out.push(t);
+  }
+  while (out.length && !out[0].trim()) out.shift();
+  while (out.length && !out[out.length - 1].trim()) out.pop();
+  return out.join('\n');
+}
 function recZonePaneOf(clip, tab) {
+  if (tab === 'steps' || tab === 'plan') {
+    var title = tab === 'steps' ? '解读的思路与步骤' : '规划的结果以及原理';
+    var sec = bzMdSectionOf(clip.transcript && clip.transcript.text, title);
+    if (sec) return recZoneMd('## ' + title + '\n\n' + sec);
+    return '<div class="rz-empty">本稿为旧版整理，暂无「' + title + '」章节 · 点上方「🔄 重转录」用新版整理升级</div>';
+  }
   if (tab === 'raw') {
     var tr = clip.transcript;
     if (tr && tr.segs && tr.segs.length) return '<div class="rz-segs">' + bzDialogHtml(tr.segs, tr.spk) + '</div>';
@@ -13986,6 +14014,8 @@ function recZoneRenderDetail(zone, clip) {
     + (clip.transcript ? '<div class="rz-model-line" title="' + bzEsc(recModelTitleOf(clip)) + '">🧠 识别 ' + bzEsc(recModelsOf(clip).asr) + ' ｜ 整理/归属 ' + bzEsc(recModelsOf(clip).llm) + (recModelsOf(clip).src === 'guess' ? '（推定）' : '') + ' ｜ 转录于 ' + new Date(clip.transcript.ts).toLocaleString() + '</div>' : '')
     + '<div class="rz-tabs">'
     + '<button type="button" class="rz-tab' + (tab === 'md' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'md\')">图文纪要</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'steps' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'steps\')">解读的思路与步骤</button>'
+    + '<button type="button" class="rz-tab' + (tab === 'plan' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'plan\')">规划的结果以及原理</button>'
     + '<button type="button" class="rz-tab' + (tab === 'raw' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'raw\')">文字记录</button>'
     + '<button type="button" class="rz-tab' + (tab === 'notes' ? ' active' : '') + '" onclick="RENDER.recZoneTab(this,\'notes\')">追加笔记' + (clip.notes && clip.notes.length ? '（' + clip.notes.length + '）' : '') + '</button>'
     + '</div>'
@@ -16826,6 +16856,7 @@ function cmpSetState(entries) {
     recZoneCardHtml: recZoneCardHtml,
     recZoneRenderInto: recZoneRenderInto,
     recZonePaneOf: recZonePaneOf,
+    bzMdSectionOf: bzMdSectionOf,
     recZoneRenderDetail: recZoneRenderDetail,
     renderRecZone: renderRecZone,
     recZoneRecord: recZoneRecord,
@@ -20887,7 +20918,8 @@ function captureScreenshot() {
 
       var clip16 = { name:'SN16', dur:60, ts:Date.now(), notes:[] };
       var p16 = R16.bzPromptOf(clip16, '[00:00:01] 测试内容');
-      tests.push(eq('SN16-2: prompt 要点扩至 5-12 条', p16.indexOf('5-12 条') > -1, true));
+      tests.push(eq('SN16-2: prompt 要点扩至 12-25 条', p16.indexOf('12-25 条') > -1, true));
+      tests.push(eq('SN16-2b: prompt 新增思路步骤与规划原理章节', p16.indexOf('## 解读的思路与步骤') > -1 && p16.indexOf('## 规划的结果以及原理') > -1, true));
       tests.push(eq('SN16-3: prompt 章节要求 2-4 句具体内容', p16.indexOf('2-4 句') > -1, true));
       tests.push(eq('SN16-4: prompt 禁止一句话概括', p16.indexOf('不许只写一句话概括') > -1, true));
 
@@ -23181,6 +23213,23 @@ function captureScreenshot() {
         (spk1[0] === '邦顺' && spk1[1] === '黄慧' && spk1[2] === '邦顺'
           && spk2[0] === '邦顺' && tsFmt === '01:01:12'
           && RENDER.bzFmtTs(81) === '00:01:21') ? 'Y' : 'N', 'Y'));
+      var secTxt = '总述\n\n## 要点\n- a\n\n## 解读的思路与步骤\n- **第1步·开场**：先看月令\n- **第2步·定格**：伤官格\n\n## 规划的结果以及原理\n- **结论**：明年转弯\n\n## 金句\n- 好';
+      var secSteps = RENDER.bzMdSectionOf(secTxt, '解读的思路与步骤');
+      var secPlan = RENDER.bzMdSectionOf(secTxt, '规划的结果以及原理');
+      tests.push(eq('SN13-16: 章节切分（取正文/到下个标题止/找不到返回空）',
+        (secSteps.indexOf('先看月令') >= 0 && secSteps.indexOf('伤官格') >= 0
+          && secSteps.indexOf('明年转弯') < 0 && secPlan.indexOf('明年转弯') >= 0
+          && RENDER.bzMdSectionOf('无章节', '解读的思路与步骤') === '') ? 'Y' : 'N', 'Y'));
+      var clipSteps = { id: 'sp', ts: T1, name: 'n', dur: 5, transcript: { text: secTxt } };
+      var clipOldTf = { id: 'so', ts: T1, name: 'n', dur: 5, transcript: { text: '旧稿只有要点' } };
+      var rdSrc = RENDER.recZoneRenderDetail.toString();
+      tests.push(eq('SN13-17: 思路步骤/规划原理页签（新稿取章节/旧稿提示重转录）',
+        (RENDER.recZonePaneOf(clipSteps, 'steps').indexOf('先看月令') >= 0
+          && RENDER.recZonePaneOf(clipSteps, 'plan').indexOf('明年转弯') >= 0
+          && RENDER.recZonePaneOf(clipOldTf, 'steps').indexOf('旧版整理') >= 0
+          && RENDER.recZonePaneOf(clipOldTf, 'plan').indexOf('重转录') >= 0
+          && rdSrc.indexOf("'steps'") >= 0 && rdSrc.indexOf("'plan'") >= 0
+          && rdSrc.indexOf('解读的思路与步骤') >= 0 && rdSrc.indexOf('规划的结果以及原理') >= 0) ? 'Y' : 'N', 'Y'));
     } catch (e) {
       tests.push(fail('SN13-0: 交互区测试异常', String(e)));
     } finally {
