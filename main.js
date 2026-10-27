@@ -3712,8 +3712,9 @@ function captureScreenshot() {
 
       var src17 = '';
       for (var s17 = 0; s17 < document.scripts.length; s17++) src17 += document.scripts[s17].textContent;
-      tests.push(eq('SN17-7: 打开前先落盘同步，保证拿到最新内容',
-        /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src17), true));
+      tests.push(eq('SN17-7: 打开前按需同步(脏检查)+快路径定位档案md',
+        new RegExp('syncWaitIdle\\(0\\)\\.then\\(function\\(\\) \\{ return sync' + 'ChartFileQuick\\(nm\\); \\}\\)').test(src17)
+        && src17.indexOf('function sync' + 'ChartFileQuick') > -1, true));
     } catch (e17) {
       tests.push(fail('SN17 异常', String(e17 && e17.message || e17)));
     } finally {
@@ -3757,10 +3758,14 @@ function captureScreenshot() {
 
       var src20 = '';
       for (var s20 = 0; s20 < document.scripts.length; s20++) src20 += document.scripts[s20].textContent;
-      tests.push(eq('SN20-5: 不再写空页签预览(window.open(\'\'))且保留同步链',
+      tests.push(eq('SN20-5: 不再写空页签预览(window.open(\'\'))且走按需同步+快路径',
         src20.indexOf("window.open(" + "'', " + "'_blank')") === -1
         && src20.indexOf('正在同步并读取最新 md') > -1
-        && /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src20), true));
+        && new RegExp('syncWaitIdle\\(0\\)\\.then\\(function\\(\\) \\{ return sync' + 'ChartFileQuick\\(nm\\); \\}\\)').test(src20), true));
+
+      tests.push(eq('SN20-6: 热路径跳过全量同步(syncTouch标脏,无脏不syncAll)',
+        src20.indexOf('_sync' + 'Dirty = true;') > -1
+        && src20.indexOf('if (!_sync' + 'Dirty) return Promise.resolve(0);') > -1, true));
     } catch (e20) {
       tests.push(fail('SN20 异常', String(e20 && e20.message || e20)));
     } finally {

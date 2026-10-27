@@ -1665,7 +1665,7 @@ function onImportFile(input) {
 // ============================================================
 var SYNC_DB = 'bz_sync_db', SYNC_STORE = 'handles', SYNC_ID = 'dir';
 var SYNC_ON_KEY = 'bz_sync_on', SYNC_NAME_KEY = 'bz_sync_name', SYNC_AT_KEY = 'bz_sync_at';
-var _syncDir = null, _syncTimer = 0, _syncRunning = false, _syncPending = false;
+var _syncDir = null, _syncTimer = 0, _syncRunning = false, _syncPending = false, _syncDirty = false;
 
 function syncSupported() {
   return typeof window.showDirectoryPicker === 'function';
@@ -1863,6 +1863,7 @@ function syncAll() {
   });
   return p.then(function() {
     _syncRunning = false;
+    _syncDirty = false;
     writeNum(SYNC_AT_KEY, Date.now());
     syncStatus();
     if (_syncPending) { _syncPending = false; return syncAll(); }
@@ -1877,6 +1878,7 @@ function syncAll() {
 function syncTouch() {
   if (!_syncDir) return;
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') return;
+  _syncDirty = true;
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(function() { syncAll(); }, 1200);
 }
@@ -2011,6 +2013,8 @@ function syncWaitIdle(tries) {
   if ((_syncRunning || _syncPending) && tries < 60) {
     return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
   }
+  if (!_syncDirty) return Promise.resolve(0);
+  clearTimeout(_syncTimer);
   return syncAll().then(function(n) {
     if (n === -1 && tries < 60) {
       return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
@@ -2065,6 +2069,15 @@ function syncLatestChartFile(nm, dir) {
       return best ? { h: best.h, f: best.f } : null;
     });
   });
+}
+
+// 每人主档名固定为「盘面-姓名.md」，直接一次定位；重名落带 id 后缀的才回退全目录扫描
+function syncChartFileQuick(nm, dir) {
+  dir = dir || _syncDir;
+  if (!dir) return Promise.resolve(null);
+  return dir.getFileHandle('盘面-' + nm + '.md').then(function(h) {
+    return h.getFile().then(function(f) { return { h: h, f: f }; });
+  }).catch(function() { return syncLatestChartFile(nm, dir); });
 }
 
 function syncEscapeHtml(s) {
@@ -2135,7 +2148,7 @@ function openChartMd() {
   if (ov) ov.classList.add('show');
   syncEnsureDir().then(function(dir) {
     if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
-    return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
+    return syncWaitIdle(0).then(function() { return syncChartFileQuick(nm); });
   }).then(function(best) {
     if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
     var editorOn = localStorage.getItem('bz_chartmd_noeditor') !== '1';

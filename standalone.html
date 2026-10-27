@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.5 | 2026-10-27 -->
+<!-- 八字排盘 ·  从真版 v0.86.6 | 2026-10-27 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -7128,7 +7128,7 @@ function onImportFile(input) {
 // ============================================================
 var SYNC_DB = 'bz_sync_db', SYNC_STORE = 'handles', SYNC_ID = 'dir';
 var SYNC_ON_KEY = 'bz_sync_on', SYNC_NAME_KEY = 'bz_sync_name', SYNC_AT_KEY = 'bz_sync_at';
-var _syncDir = null, _syncTimer = 0, _syncRunning = false, _syncPending = false;
+var _syncDir = null, _syncTimer = 0, _syncRunning = false, _syncPending = false, _syncDirty = false;
 
 function syncSupported() {
   return typeof window.showDirectoryPicker === 'function';
@@ -7326,6 +7326,7 @@ function syncAll() {
   });
   return p.then(function() {
     _syncRunning = false;
+    _syncDirty = false;
     writeNum(SYNC_AT_KEY, Date.now());
     syncStatus();
     if (_syncPending) { _syncPending = false; return syncAll(); }
@@ -7340,6 +7341,7 @@ function syncAll() {
 function syncTouch() {
   if (!_syncDir) return;
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') return;
+  _syncDirty = true;
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(function() { syncAll(); }, 1200);
 }
@@ -7474,6 +7476,8 @@ function syncWaitIdle(tries) {
   if ((_syncRunning || _syncPending) && tries < 60) {
     return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
   }
+  if (!_syncDirty) return Promise.resolve(0);
+  clearTimeout(_syncTimer);
   return syncAll().then(function(n) {
     if (n === -1 && tries < 60) {
       return new Promise(function(r) { setTimeout(r, 120); }).then(function() { return syncWaitIdle(tries + 1); });
@@ -7528,6 +7532,15 @@ function syncLatestChartFile(nm, dir) {
       return best ? { h: best.h, f: best.f } : null;
     });
   });
+}
+
+// 每人主档名固定为「盘面-姓名.md」，直接一次定位；重名落带 id 后缀的才回退全目录扫描
+function syncChartFileQuick(nm, dir) {
+  dir = dir || _syncDir;
+  if (!dir) return Promise.resolve(null);
+  return dir.getFileHandle('盘面-' + nm + '.md').then(function(h) {
+    return h.getFile().then(function(f) { return { h: h, f: f }; });
+  }).catch(function() { return syncLatestChartFile(nm, dir); });
 }
 
 function syncEscapeHtml(s) {
@@ -7598,7 +7611,7 @@ function openChartMd() {
   if (ov) ov.classList.add('show');
   syncEnsureDir().then(function(dir) {
     if (!dir) throw new Error('没有可用的本地同步目录（未开启，或目录权限已失效）。\n\n请在档案面板里点一次本地同步按钮，重选目录授权。');
-    return syncWaitIdle(0).then(function() { return syncLatestChartFile(nm); });
+    return syncWaitIdle(0).then(function() { return syncChartFileQuick(nm); });
   }).then(function(best) {
     if (!best) throw new Error('同步目录里没找到「盘面-' + nm + '.md」。\n\n这份盘可能还没存成档案，或存在别的目录里。');
     var editorOn = localStorage.getItem('bz_chartmd_noeditor') !== '1';
@@ -20940,8 +20953,9 @@ function captureScreenshot() {
 
       var src17 = '';
       for (var s17 = 0; s17 < document.scripts.length; s17++) src17 += document.scripts[s17].textContent;
-      tests.push(eq('SN17-7: 打开前先落盘同步，保证拿到最新内容',
-        /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src17), true));
+      tests.push(eq('SN17-7: 打开前按需同步(脏检查)+快路径定位档案md',
+        new RegExp('syncWaitIdle\\(0\\)\\.then\\(function\\(\\) \\{ return sync' + 'ChartFileQuick\\(nm\\); \\}\\)').test(src17)
+        && src17.indexOf('function sync' + 'ChartFileQuick') > -1, true));
     } catch (e17) {
       tests.push(fail('SN17 异常', String(e17 && e17.message || e17)));
     } finally {
@@ -20985,10 +20999,14 @@ function captureScreenshot() {
 
       var src20 = '';
       for (var s20 = 0; s20 < document.scripts.length; s20++) src20 += document.scripts[s20].textContent;
-      tests.push(eq('SN20-5: 不再写空页签预览(window.open(\'\'))且保留同步链',
+      tests.push(eq('SN20-5: 不再写空页签预览(window.open(\'\'))且走按需同步+快路径',
         src20.indexOf("window.open(" + "'', " + "'_blank')") === -1
         && src20.indexOf('正在同步并读取最新 md') > -1
-        && /syncWaitIdle\(0\)\.then\(function\(\) \{ return syncLatestChartFile\(nm\); \}\)/.test(src20), true));
+        && new RegExp('syncWaitIdle\\(0\\)\\.then\\(function\\(\\) \\{ return sync' + 'ChartFileQuick\\(nm\\); \\}\\)').test(src20), true));
+
+      tests.push(eq('SN20-6: 热路径跳过全量同步(syncTouch标脏,无脏不syncAll)',
+        src20.indexOf('_sync' + 'Dirty = true;') > -1
+        && src20.indexOf('if (!_sync' + 'Dirty) return Promise.resolve(0);') > -1, true));
     } catch (e20) {
       tests.push(fail('SN20 异常', String(e20 && e20.message || e20)));
     } finally {
