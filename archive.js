@@ -1892,13 +1892,13 @@ function syncBirthGuardDecide(oldText, newText, name, now) {
 }
 function syncBirthGuardWrite(dir, name, newText) {
   return dir.getFileHandle(name).then(function(fh) {
-    return fh.getFile().then(function(f) { return f.slice(0, 600).text(); }).then(function(old) {
-      var hn = syncBirthGuardDecide(old, newText, name, Date.now());
-      if (!hn) return false;
-      return dir.getDirectoryHandle('历史', { create: true }).then(function(hd) {
-        return syncWriteOne(hd, hn, '<!-- 出生数据变更，覆盖前旧盘面自动备份 -->\n' + old).then(function() { return true; });
-      });
-    }).catch(function() { return false; });
+    return fh.getFile().then(function(f) { return f.slice(0, 600).text(); });
+  }).catch(function() { return ''; }).then(function(old) {
+    var hn = syncBirthGuardDecide(old, newText, name, Date.now());
+    if (!hn) return false;
+    return dir.getDirectoryHandle('历史', { create: true }).then(function(hd) {
+      return syncWriteOne(hd, hn, '<!-- 出生数据变更，覆盖前旧盘面自动备份 -->\n' + old).then(function() { return true; });
+    });
   }).then(function(saved) {
     return syncWriteOne(dir, name, newText).then(function() { return saved; });
   });
