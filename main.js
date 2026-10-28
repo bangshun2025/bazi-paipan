@@ -4119,9 +4119,9 @@ function captureScreenshot() {
     }
   })();
 
-  // ===== v0.86.11 出生数据护栏：出生行变更先备份「历史/」再覆盖 =====
+  // ===== v0.86.12 出生数据护栏：出生行变更先备份「历史/」再覆盖 =====
   (function() {
-    tests.push({ section:'出生数据护栏(v0.86.11 SN26)' });
+    tests.push({ section:'出生数据护栏(v0.86.12 SN26)' });
     var A26 = window.ARCHIVE;
     if (!A26 || typeof A26.syncBirthGuardDecide !== 'function' || typeof A26.syncBirthGuardWrite !== 'function') {
       tests.push(fail('SN26 前置: 护栏接口挂载', '缺失'));

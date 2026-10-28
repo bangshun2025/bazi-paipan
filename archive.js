@@ -2001,6 +2001,7 @@ function syncResume() {
 
 function syncSubDir(sub) {
   if (!_syncDir) return Promise.resolve(null);
+  if (!sub) return Promise.resolve(_syncDir);
   return _syncDir.getDirectoryHandle(sub, { create: true }).catch(function() { return null; });
 }
 function syncReadText(sub, name) {
