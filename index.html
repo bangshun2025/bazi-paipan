@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.7 | 2026-10-28 -->
+<!-- 八字排盘 ·  从真版 v0.86.10 | 2026-10-28 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -5908,6 +5908,40 @@ function setFormData(d) {
   }
 }
 
+// ============================================================
+// v0.86.8 记住最后查看的盘 — 刷新后恢复，不再跳回默认盘
+// ============================================================
+var LAST_CHART_KEY = 'bz_last_chart';
+
+function isTestMode() {
+  return /[\?&]test=1(&|$)/.test(location.search);
+}
+
+function saveLastChart() {
+  if (isTestMode()) return;
+  try { localStorage.setItem(LAST_CHART_KEY, JSON.stringify(getFormData())); } catch (e) {}
+}
+
+function parseLastChart(raw) {
+  if (!raw) return null;
+  var d = null;
+  try { d = JSON.parse(raw); } catch (e) { return null; }
+  // hour=0（子时）合法，四个时间字段只拒绝 null/undefined/NaN
+  if (!d || isNaN(d.year) || isNaN(d.month) || isNaN(d.day) ||
+      d.hour === null || d.hour === undefined || isNaN(d.hour)) return null;
+  return d;
+}
+
+function restoreLastChart() {
+  if (isTestMode()) return false;
+  var raw = null;
+  try { raw = localStorage.getItem(LAST_CHART_KEY); } catch (e) {}
+  var d = parseLastChart(raw);
+  if (!d) return false;
+  try { setFormData(d); } catch (e) { return false; }
+  return true;
+}
+
 // 下拉框里没有该选项时保持原值，避免回填出列表里不存在的地址
 function hasOption(sel, val) {
   if (!sel) return false;
@@ -7308,6 +7342,31 @@ function syncWriteOne(dir, name, text) {
   });
 }
 
+// 出生数据护栏：写「盘面-*.md」前比对旧文件出生行，不一致先把旧盘面备份进「历史/」再覆盖
+function birthLineOf(md) {
+  var m = /^出生：.*$/m.exec(md || '');
+  return m ? m[0] : '';
+}
+function syncBirthGuardDecide(oldText, newText, name, now) {
+  if (!oldText || birthLineOf(oldText) === birthLineOf(newText)) return null;
+  var d = new Date(now);
+  return name.replace(/\.md$/, '') + '-' + syncPad2(d.getMonth() + 1) + '-' + syncPad2(d.getDate())
+    + '_' + syncPad2(d.getHours()) + '-' + syncPad2(d.getMinutes()) + '-' + syncPad2(d.getSeconds()) + '-出生变更.md';
+}
+function syncBirthGuardWrite(dir, name, newText) {
+  return dir.getFileHandle(name).then(function(fh) {
+    return fh.getFile().then(function(f) { return f.slice(0, 600).text(); }).then(function(old) {
+      var hn = syncBirthGuardDecide(old, newText, name, Date.now());
+      if (!hn) return false;
+      return dir.getDirectoryHandle('历史', { create: true }).then(function(hd) {
+        return syncWriteOne(hd, hn, '<!-- 出生数据变更，覆盖前旧盘面自动备份 -->\n' + old).then(function() { return true; });
+      });
+    }).catch(function() { return false; });
+  }).then(function(saved) {
+    return syncWriteOne(dir, name, newText).then(function() { return saved; });
+  });
+}
+
 function syncAll() {
   if (!_syncDir) return Promise.resolve(0);
   if (_syncRunning) { _syncPending = true; return Promise.resolve(-1); }
@@ -7318,7 +7377,10 @@ function syncAll() {
   files.forEach(function(f) {
     p = p.then(function() {
       var name = f[0], slash = name.indexOf('/');
-      if (slash < 0) return syncWriteOne(_syncDir, name, f[1]);
+      if (slash < 0) {
+        if (/^盘面-.+\.md$/.test(name)) return syncBirthGuardWrite(_syncDir, name, f[1]);
+        return syncWriteOne(_syncDir, name, f[1]);
+      }
       return _syncDir.getDirectoryHandle(name.slice(0, slash), { create: true }).then(function(d) {
         return syncWriteOne(d, name.slice(slash + 1), f[1]);
       });
@@ -7667,6 +7729,8 @@ function openChartMd() {
     syncSupported: syncSupported,
     syncStatus: syncStatus,
     syncAll: syncAll,
+    syncBirthGuardDecide: syncBirthGuardDecide,
+    syncBirthGuardWrite: syncBirthGuardWrite,
     syncAllNow: syncAllNow,
     syncTouch: syncTouch,
     syncResume: syncResume,
@@ -7705,6 +7769,13 @@ function openChartMd() {
     refreshArchiveModalIfOpen: refreshArchiveModalIfOpen,
     getFormData: getFormData,
     setFormData: setFormData,
+    saveLastChart: saveLastChart,
+    restoreLastChart: restoreLastChart,
+    parseLastChart: parseLastChart,
+    LAST_CHART_KEY: LAST_CHART_KEY,
+    saveLastChart: saveLastChart,
+    restoreLastChart: restoreLastChart,
+    LAST_CHART_KEY: LAST_CHART_KEY,
     autoSaveArchive: autoSaveArchive,
     saveArchive: saveArchive,
     loadArchive: loadArchive,
@@ -11325,8 +11396,10 @@ function handleImportFile(event) {
   var getFormData = ARCHIVE.getFormData;
   var setFormData = ARCHIVE.setFormData;
   var autoSaveArchive = ARCHIVE.autoSaveArchive;
-  var saveArchive = ARCHIVE.saveArchive;
-  var loadArchive = ARCHIVE.loadArchive;
+    var saveArchive = ARCHIVE.saveArchive;
+    var saveLastChart = ARCHIVE.saveLastChart;
+    var restoreLastChart = ARCHIVE.restoreLastChart;
+    var parseLastChart = ARCHIVE.parseLastChart;  var loadArchive = ARCHIVE.loadArchive;
   var delArchive = ARCHIVE.delArchive;
   var moveToTrash = ARCHIVE.moveToTrash;
   var openEditPanel = ARCHIVE.openEditPanel;
@@ -12705,7 +12778,7 @@ function recAudioDelete(btn) {
 // ===== v0.82.0 录音自动转录（v0.83.1 升级：VAD 分段带真实时间戳 + GLM 说话人归属→文字记录「对话还原」），key 存 localStorage 不进仓库 =====
 var BZ_AI_LS = 'bz_ai_cfg';
 var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
-var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
+var BZ_LLM_MODEL = 'deepseek-ai/DeepSeek-V4-Flash';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
 var BZ_ASR_MODEL = 'Qwen/Qwen3-ASR-1.7B';
 var BZ_ASR_PREV = 'FunAudioLLM/SenseVoiceSmall';
@@ -12713,6 +12786,8 @@ var BZ_ASR_FALLBACK = 'FunAudioLLM/SenseVoiceSmall';
 var BZ_ASR_SWITCH_TS = 1792974900000;
 var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
 var BZ_LLM_SWITCH_TS = 1792971835000;
+var BZ_LLM_PREV2 = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
+var BZ_LLM_SWITCH_TS2 = 1793165414037;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
 // v0.85.0 术语表纠错：只纠正实测反复出现的同音错，整段须先命中 BZ_CTX 关键词才启用，避免误伤日常用语
 var BZ_CTX = /八字|命盘|命理|日主|日干|月令|月支|年干|时柱|十神|食神|伤官|七杀|正官|正印|偏印|比肩|劫财|偏财|正财|大运|流年|格局|天干|地支|旺衰|喜忌|宫位|刑冲|合害|扶抑|用神/;
@@ -12870,20 +12945,49 @@ function bzAsr(wavBlob, key, model) {
     })
     .then(function(j) { return (j.text || '').trim(); });
 }
+var BZ_LLM_STALL_MS = 60000;
 function bzLlm(prompt, key) {
-  return fetch(BZ_LLM_BASE + '/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-    body: JSON.stringify({ model: BZ_LLM_MODEL, messages: [{ role: 'user', content: prompt }], max_tokens: 8192, temperature: 0.3 })
-  }).then(function(r) {
-    return r.json().then(function(j) {
-      if (!r.ok) throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status));
-      return j;
+  var tries = 0;
+  function once() {
+    var ac = new AbortController();
+    return fetch(BZ_LLM_BASE + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: BZ_LLM_MODEL, messages: [{ role: 'user', content: prompt }], max_tokens: 32768, temperature: 0.3, stream: true }),
+      signal: ac.signal
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(j) { throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status)); });
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', out = '', last = Date.now();
+      var wd = setInterval(function() { if (Date.now() - last > BZ_LLM_STALL_MS) { try { ac.abort(); } catch (e) {} } }, Math.max(2000, BZ_LLM_STALL_MS / 4));
+      function pump() {
+        return reader.read().then(function(res) {
+          last = Date.now();
+          if (res.done) { clearInterval(wd); return out; }
+          buf += dec.decode(res.value, { stream: true });
+          var ls = buf.split('\n'); buf = ls.pop();
+          for (var i = 0; i < ls.length; i++) {
+            var ln = ls[i].trim();
+            if (ln.slice(0, 5) !== 'data:') continue;
+            var dt = ln.slice(5).trim();
+            if (dt === '[DONE]') continue;
+            try {
+              var j = JSON.parse(dt);
+              var d = j.choices && j.choices[0] && (j.choices[0].delta || j.choices[0].message);
+              if (d && d.content) out += d.content;
+            } catch (e) {}
+          }
+          return pump();
+        }, function(e) { clearInterval(wd); throw e; });
+      }
+      return pump();
+    }).catch(function(e) {
+      var stalled = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
+      if (stalled && tries < 2) { tries++; return once(); }
+      if (stalled) throw new Error('整理模型流式停滞，已自动重试 3 次仍无输出（多为高峰期排队），请稍后重试');
+      throw e;
     });
-  }).then(function(j) {
-    var m = j.choices && j.choices[0] && j.choices[0].message;
-    return ((m && m.content) || '').trim();
-  });
+  }
+  return once().then(function(out) { return String(out).trim(); });
 }
 function bzPromptOf(clip, raw) {
   var d = window._paipanData || {};
@@ -12944,10 +13048,14 @@ function recModelsOf(clip) {
   if (mm.llm) return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm, src: mm.src || 'snap' };
   var oldAsr = (t && t.ts && t.ts < BZ_ASR_SWITCH_TS) ? BZ_ASR_PREV : BZ_ASR_MODEL;
   if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_PREV, llm: BZ_LLM_PREV, src: 'guess' };
+  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS2) return { asr: oldAsr, llm: BZ_LLM_PREV2, src: 'guess' };
   return { asr: oldAsr, llm: BZ_LLM_MODEL, src: 'cur' };
 }
 function recModelSrcNote(m) {
-  if (m.src === 'guess') return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  if (m.src === 'guess') {
+    if (m.llm === BZ_LLM_PREV2) return '（推定：这次转录早于 2026-10-28 切换 DeepSeek-V4-Flash，当时整理用 Qwen3-235B）';
+    return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  }
   if (m.src === 'md') return '（从归档录音稿 md 头部读回的真实记录）';
   if (m.src === 'cur') return '（未留模型名，按当前模型显示）';
   return '';
@@ -15892,6 +16000,7 @@ function doPaipan() {
     GONGWEI.selectedGongWei = savedGongWei;
     updateGongWeiTags();
     autoSaveArchive();
+    saveLastChart();
   } catch(e) {
     document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">排盘出错：' + e.message + '</div>';
     console.error(e);
@@ -15927,13 +16036,16 @@ function scrollToNow(scope) {
   }
 }
 
-// 页面加载时用邦顺默认数据排盘
+// 页面加载时优先恢复上次查看的盘（v0.86.8），无记录/解析失败才回落邦顺默认数据
 window.addEventListener('DOMContentLoaded', function() {
   migrateFromV1();
   initPresetArchives();
   refreshArchiveModalIfOpen();
   APP.setupTwinTypeChange();
+  var restoredLast = false;
+  try { restoredLast = restoreLastChart(); } catch (e) { restoredLast = false; }
   doPaipan();
+  if (restoredLast) console.log('[bz] 已恢复上次查看的盘');
   if (window.ARCHIVE && window.ARCHIVE.syncResume) window.ARCHIVE.syncResume();
 });
 
@@ -20914,7 +21026,7 @@ function captureScreenshot() {
     }
     try {
       var md16 = R16.bzTranscriptMd({ name:'SN16', dur:60, notes:[] }, '总述', '原文');
-      tests.push(eq('SN16-1: 整理模型升级 Qwen3-235B', md16.indexOf('Qwen3-235B-A22B-Instruct-2507') > -1, true));
+      tests.push(eq('SN16-1: 整理模型切换 DeepSeek-V4-Flash', md16.indexOf('deepseek-ai/DeepSeek-V4-Flash') > -1, true));
 
       var clip16 = { name:'SN16', dur:60, ts:Date.now(), notes:[] };
       var p16 = R16.bzPromptOf(clip16, '[00:00:01] 测试内容');
@@ -21154,11 +21266,12 @@ function captureScreenshot() {
     }
     tests.push(eq('SN19-1: 模型名取短名（去厂商前缀与指令后缀）',
       R.recModelShort('Qwen/Qwen3-235B-A22B-Instruct-2507'), 'Qwen3-235B-A22B'));
+    tests.push(eq('SN19-1b: DeepSeek-V4-Flash 取短名', R.recModelShort('deepseek-ai/DeepSeek-V4-Flash'), 'DeepSeek-V4-Flash'));
     tests.push(eq('SN19-2: 识别模型短名保持', R.recModelShort('FunAudioLLM/SenseVoiceSmall'), 'SenseVoiceSmall'));
     var cur19 = R.recModelsOf({ transcript: { text:'x' } });
     tests.push(eq('SN19-3: 老录音无模型快照回落当前默认',
       (cur19.asr === 'Qwen/Qwen3-ASR-1.7B'
-        && cur19.llm === 'Qwen/Qwen3-235B-A22B-Instruct-2507'), true));
+        && cur19.llm === 'deepseek-ai/DeepSeek-V4-Flash'), true));
     var snap19 = R.recModelsOf({ transcript: { text:'x', models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } });
     tests.push(eq('SN19-4: 有快照时沿用转录当时的模型名', snap19.llm, 'Qwen/Qwen2.5-72B-Instruct'));
 
@@ -21207,7 +21320,10 @@ function captureScreenshot() {
       old20.llm + '|' + old20.src, 'Qwen/Qwen2.5-72B-Instruct|guess'));
     var new20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: Date.now() } });
     tests.push(eq('SN20-2: 近期无快照转录按当前模型标记',
-      new20.llm + '|' + new20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|cur'));
+      new20.llm + '|' + new20.src, 'deepseek-ai/DeepSeek-V4-Flash|cur'));
+    var era20 = R.recModelsOf({ transcript: { text:'x', ts: 1793100000000 } });
+    tests.push(eq('SN20-2b: v0.86.9 前两周的无快照转录推定 Qwen3-235B',
+      era20.llm + '|' + era20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|guess'));
     tests.push(eq('SN20-3: 有快照时来源为 snap',
       R.recModelsOf({ transcript: { text:'x', models:{ asr:'A', llm:'B' } } }).src, 'snap'));
     var p20a = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
@@ -21353,6 +21469,74 @@ function captureScreenshot() {
     for (i = 0; i < 8; i++) { one.set(male, rate * i); segsOne.push({ s: i, e: i + 1 }); }
     tests.push(eq('SN24-8: 纯单一声线不强行二分', R.bzSpkSplit(one, rate, segsOne), null));
     tests.push(eq('SN24-9: 段数过少不分组', R.bzSpkSplit(ch, rate, [{ s:0, e:1 }, { s:4, e:5 }]), null));
+  })();
+
+  // ===== v0.86.8 记住最后查看的盘：刷新后不再跳回邦顺默认 =====
+  (function() {
+    tests.push({ section:'记住最后查看的盘(v0.86.8 SN25)' });
+    var A = window.ARCHIVE;
+    if (!A || typeof A.saveLastChart !== 'function' || typeof A.restoreLastChart !== 'function' || typeof A.parseLastChart !== 'function') {
+      tests.push(fail('SN25 前置: ARCHIVE 最后盘接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN25-1: saveLastChart/restoreLastChart/parseLastChart/LAST_CHART_KEY 挂载',
+      typeof A.saveLastChart === 'function' && typeof A.restoreLastChart === 'function'
+      && typeof A.parseLastChart === 'function' && A.LAST_CHART_KEY === 'bz_last_chart', true));
+    var ok25 = A.parseLastChart(JSON.stringify({ name:'测试乙', year:1978, month:5, day:12, hour:10, min:0 }));
+    tests.push(eq('SN25-2: parseLastChart 合法数据返回对象字段对',
+      !!ok25 && ok25.name === '测试乙' && ok25.year === 1978 && ok25.hour === 10, true));
+    tests.push(eq('SN25-3: parseLastChart 坏 JSON 返回 null', A.parseLastChart('{oops'), null));
+    tests.push(eq('SN25-4: parseLastChart 缺时间字段返回 null',
+      A.parseLastChart(JSON.stringify({ name:'x', year:1982, month:10 })), null));
+    tests.push(eq('SN25-5: parseLastChart hour=0 子时合法',
+      (A.parseLastChart(JSON.stringify({ name:'x', year:1982, month:10, day:18, hour:0 })) || {}).hour === 0, true));
+    try { localStorage.removeItem(A.LAST_CHART_KEY); } catch (e) {}
+    tests.push(eq('SN25-6: test=1 页面不恢复最后盘（restoreLastChart=false）',
+      A.restoreLastChart() === false, true));
+    try {
+      localStorage.setItem(A.LAST_CHART_KEY, '{"name":"哨兵"}');
+      A.saveLastChart();
+      tests.push(eq('SN25-7: test=1 页面不写入最后盘（哨兵不变）',
+        localStorage.getItem(A.LAST_CHART_KEY), '{"name":"哨兵"}'));
+    } finally {
+      try { localStorage.removeItem(A.LAST_CHART_KEY); } catch (e) {}
+    }
+  })();
+
+  // ===== v0.86.10 出生数据护栏：出生行变更先备份「历史/」再覆盖 =====
+  (function() {
+    tests.push({ section:'出生数据护栏(v0.86.10 SN26)' });
+    var A26 = window.ARCHIVE;
+    if (!A26 || typeof A26.syncBirthGuardDecide !== 'function' || typeof A26.syncBirthGuardWrite !== 'function') {
+      tests.push(fail('SN26 前置: 护栏接口挂载', '缺失'));
+      return;
+    }
+    var oldMd26 = '# 测试丙　女\n\n出生：1983-12-03 16:30\n\n## 四柱\n';
+    var same26 = '# 测试丙　女\n\n出生：1983-12-03 16:30\n\n## 四柱\n（内容微调）';
+    var diff26 = '# 测试丙　女\n\n出生：1978-05-12 10:00\n\n## 四柱\n';
+    tests.push(eq('SN26-1: 出生行相同→不备份（null）',
+      A26.syncBirthGuardDecide(oldMd26, same26, '盘面-测试丙.md', new Date(2026, 9, 28, 14, 30, 5)), null));
+    var hn26 = A26.syncBirthGuardDecide(oldMd26, diff26, '盘面-测试丙.md', new Date(2026, 9, 28, 14, 30, 5));
+    tests.push(eq('SN26-2: 出生行变更→备份名「MM-DD_HH-MM-SS-出生变更.md」',
+      hn26, '盘面-测试丙-10-28_14-30-05-出生变更.md'));
+    var lunarMd26 = '# 测试丁　女\n\n出生：1983-12-03 18:30（农历，公历 1984-01-06）\n';
+    tests.push(eq('SN26-3: 农历标注出生行也能识别变更',
+      /^盘面-测试丁-.*-出生变更\.md$/.test(A26.syncBirthGuardDecide(lunarMd26, diff26, '盘面-测试丁.md', Date.now()) || ''), true));
+    tests.push(eq('SN26-4: 旧文件为空（新建）不触发备份',
+      A26.syncBirthGuardDecide('', oldMd26, '盘面-测试戊.md', Date.now()), null));
+    try {
+      var src26 = '';
+      for (var s26 = 0; s26 < document.scripts.length; s26++) src26 += document.scripts[s26].textContent;
+      tests.push(eq('SN26-5: syncBirthGuardWrite 走 decide→历史副本→主文件两段写',
+        src26.indexOf('syncBirthGuardDecide(old, newText, name, Date.now())') > -1
+        && /getDirectoryHandle\('历史', \{ create: true \}\)/.test(src26)
+        && src26.indexOf("覆盖前旧盘面自动备份") > -1, true));
+      tests.push(eq('SN26-6: syncAll 对「盘面-*.md」挂护栏',
+        src26.indexOf('.test(name)) return syncBirthGuardWrite(_syncDir, name, f[1]);') > -1
+        && src26.indexOf('syncBirthGuardDecide(old, newText, name, Date.now())') > -1, true));
+    } catch (e26) {
+      tests.push(fail('SN26 源码断言异常', String(e26 && e26.message || e26)));
+    }
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====

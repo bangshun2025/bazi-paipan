@@ -445,6 +445,40 @@ function setFormData(d) {
   }
 }
 
+// ============================================================
+// v0.86.8 记住最后查看的盘 — 刷新后恢复，不再跳回默认盘
+// ============================================================
+var LAST_CHART_KEY = 'bz_last_chart';
+
+function isTestMode() {
+  return /[\?&]test=1(&|$)/.test(location.search);
+}
+
+function saveLastChart() {
+  if (isTestMode()) return;
+  try { localStorage.setItem(LAST_CHART_KEY, JSON.stringify(getFormData())); } catch (e) {}
+}
+
+function parseLastChart(raw) {
+  if (!raw) return null;
+  var d = null;
+  try { d = JSON.parse(raw); } catch (e) { return null; }
+  // hour=0（子时）合法，四个时间字段只拒绝 null/undefined/NaN
+  if (!d || isNaN(d.year) || isNaN(d.month) || isNaN(d.day) ||
+      d.hour === null || d.hour === undefined || isNaN(d.hour)) return null;
+  return d;
+}
+
+function restoreLastChart() {
+  if (isTestMode()) return false;
+  var raw = null;
+  try { raw = localStorage.getItem(LAST_CHART_KEY); } catch (e) {}
+  var d = parseLastChart(raw);
+  if (!d) return false;
+  try { setFormData(d); } catch (e) { return false; }
+  return true;
+}
+
 // 下拉框里没有该选项时保持原值，避免回填出列表里不存在的地址
 function hasOption(sel, val) {
   if (!sel) return false;
@@ -1845,6 +1879,31 @@ function syncWriteOne(dir, name, text) {
   });
 }
 
+// 出生数据护栏：写「盘面-*.md」前比对旧文件出生行，不一致先把旧盘面备份进「历史/」再覆盖
+function birthLineOf(md) {
+  var m = /^出生：.*$/m.exec(md || '');
+  return m ? m[0] : '';
+}
+function syncBirthGuardDecide(oldText, newText, name, now) {
+  if (!oldText || birthLineOf(oldText) === birthLineOf(newText)) return null;
+  var d = new Date(now);
+  return name.replace(/\.md$/, '') + '-' + syncPad2(d.getMonth() + 1) + '-' + syncPad2(d.getDate())
+    + '_' + syncPad2(d.getHours()) + '-' + syncPad2(d.getMinutes()) + '-' + syncPad2(d.getSeconds()) + '-出生变更.md';
+}
+function syncBirthGuardWrite(dir, name, newText) {
+  return dir.getFileHandle(name).then(function(fh) {
+    return fh.getFile().then(function(f) { return f.slice(0, 600).text(); }).then(function(old) {
+      var hn = syncBirthGuardDecide(old, newText, name, Date.now());
+      if (!hn) return false;
+      return dir.getDirectoryHandle('历史', { create: true }).then(function(hd) {
+        return syncWriteOne(hd, hn, '<!-- 出生数据变更，覆盖前旧盘面自动备份 -->\n' + old).then(function() { return true; });
+      });
+    }).catch(function() { return false; });
+  }).then(function(saved) {
+    return syncWriteOne(dir, name, newText).then(function() { return saved; });
+  });
+}
+
 function syncAll() {
   if (!_syncDir) return Promise.resolve(0);
   if (_syncRunning) { _syncPending = true; return Promise.resolve(-1); }
@@ -1855,7 +1914,10 @@ function syncAll() {
   files.forEach(function(f) {
     p = p.then(function() {
       var name = f[0], slash = name.indexOf('/');
-      if (slash < 0) return syncWriteOne(_syncDir, name, f[1]);
+      if (slash < 0) {
+        if (/^盘面-.+\.md$/.test(name)) return syncBirthGuardWrite(_syncDir, name, f[1]);
+        return syncWriteOne(_syncDir, name, f[1]);
+      }
       return _syncDir.getDirectoryHandle(name.slice(0, slash), { create: true }).then(function(d) {
         return syncWriteOne(d, name.slice(slash + 1), f[1]);
       });
@@ -2204,6 +2266,8 @@ function openChartMd() {
     syncSupported: syncSupported,
     syncStatus: syncStatus,
     syncAll: syncAll,
+    syncBirthGuardDecide: syncBirthGuardDecide,
+    syncBirthGuardWrite: syncBirthGuardWrite,
     syncAllNow: syncAllNow,
     syncTouch: syncTouch,
     syncResume: syncResume,
@@ -2242,6 +2306,13 @@ function openChartMd() {
     refreshArchiveModalIfOpen: refreshArchiveModalIfOpen,
     getFormData: getFormData,
     setFormData: setFormData,
+    saveLastChart: saveLastChart,
+    restoreLastChart: restoreLastChart,
+    parseLastChart: parseLastChart,
+    LAST_CHART_KEY: LAST_CHART_KEY,
+    saveLastChart: saveLastChart,
+    restoreLastChart: restoreLastChart,
+    LAST_CHART_KEY: LAST_CHART_KEY,
     autoSaveArchive: autoSaveArchive,
     saveArchive: saveArchive,
     loadArchive: loadArchive,

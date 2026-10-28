@@ -3642,7 +3642,7 @@ function captureScreenshot() {
     }
     try {
       var md16 = R16.bzTranscriptMd({ name:'SN16', dur:60, notes:[] }, '总述', '原文');
-      tests.push(eq('SN16-1: 整理模型升级 Qwen3-235B', md16.indexOf('Qwen3-235B-A22B-Instruct-2507') > -1, true));
+      tests.push(eq('SN16-1: 整理模型切换 DeepSeek-V4-Flash', md16.indexOf('deepseek-ai/DeepSeek-V4-Flash') > -1, true));
 
       var clip16 = { name:'SN16', dur:60, ts:Date.now(), notes:[] };
       var p16 = R16.bzPromptOf(clip16, '[00:00:01] 测试内容');
@@ -3882,11 +3882,12 @@ function captureScreenshot() {
     }
     tests.push(eq('SN19-1: 模型名取短名（去厂商前缀与指令后缀）',
       R.recModelShort('Qwen/Qwen3-235B-A22B-Instruct-2507'), 'Qwen3-235B-A22B'));
+    tests.push(eq('SN19-1b: DeepSeek-V4-Flash 取短名', R.recModelShort('deepseek-ai/DeepSeek-V4-Flash'), 'DeepSeek-V4-Flash'));
     tests.push(eq('SN19-2: 识别模型短名保持', R.recModelShort('FunAudioLLM/SenseVoiceSmall'), 'SenseVoiceSmall'));
     var cur19 = R.recModelsOf({ transcript: { text:'x' } });
     tests.push(eq('SN19-3: 老录音无模型快照回落当前默认',
       (cur19.asr === 'Qwen/Qwen3-ASR-1.7B'
-        && cur19.llm === 'Qwen/Qwen3-235B-A22B-Instruct-2507'), true));
+        && cur19.llm === 'deepseek-ai/DeepSeek-V4-Flash'), true));
     var snap19 = R.recModelsOf({ transcript: { text:'x', models: { asr:'FunAudioLLM/SenseVoiceSmall', llm:'Qwen/Qwen2.5-72B-Instruct' } } });
     tests.push(eq('SN19-4: 有快照时沿用转录当时的模型名', snap19.llm, 'Qwen/Qwen2.5-72B-Instruct'));
 
@@ -3935,7 +3936,10 @@ function captureScreenshot() {
       old20.llm + '|' + old20.src, 'Qwen/Qwen2.5-72B-Instruct|guess'));
     var new20 = R.recModelsOf({ transcript: { text:'x', raw:'y', ts: Date.now() } });
     tests.push(eq('SN20-2: 近期无快照转录按当前模型标记',
-      new20.llm + '|' + new20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|cur'));
+      new20.llm + '|' + new20.src, 'deepseek-ai/DeepSeek-V4-Flash|cur'));
+    var era20 = R.recModelsOf({ transcript: { text:'x', ts: 1793100000000 } });
+    tests.push(eq('SN20-2b: v0.86.9 前两周的无快照转录推定 Qwen3-235B',
+      era20.llm + '|' + era20.src, 'Qwen/Qwen3-235B-A22B-Instruct-2507|guess'));
     tests.push(eq('SN20-3: 有快照时来源为 snap',
       R.recModelsOf({ transcript: { text:'x', models:{ asr:'A', llm:'B' } } }).src, 'snap'));
     var p20a = R.recParseMdModels('> 咨询人物：邦顺、案主 ｜ 识别：FunAudioLLM/SenseVoiceSmall ｜ 整理/归属：Qwen/Qwen2.5-72B-Instruct ｜ 2026/10/24');
@@ -4081,6 +4085,74 @@ function captureScreenshot() {
     for (i = 0; i < 8; i++) { one.set(male, rate * i); segsOne.push({ s: i, e: i + 1 }); }
     tests.push(eq('SN24-8: 纯单一声线不强行二分', R.bzSpkSplit(one, rate, segsOne), null));
     tests.push(eq('SN24-9: 段数过少不分组', R.bzSpkSplit(ch, rate, [{ s:0, e:1 }, { s:4, e:5 }]), null));
+  })();
+
+  // ===== v0.86.8 记住最后查看的盘：刷新后不再跳回邦顺默认 =====
+  (function() {
+    tests.push({ section:'记住最后查看的盘(v0.86.8 SN25)' });
+    var A = window.ARCHIVE;
+    if (!A || typeof A.saveLastChart !== 'function' || typeof A.restoreLastChart !== 'function' || typeof A.parseLastChart !== 'function') {
+      tests.push(fail('SN25 前置: ARCHIVE 最后盘接口挂载', '缺失'));
+      return;
+    }
+    tests.push(eq('SN25-1: saveLastChart/restoreLastChart/parseLastChart/LAST_CHART_KEY 挂载',
+      typeof A.saveLastChart === 'function' && typeof A.restoreLastChart === 'function'
+      && typeof A.parseLastChart === 'function' && A.LAST_CHART_KEY === 'bz_last_chart', true));
+    var ok25 = A.parseLastChart(JSON.stringify({ name:'测试乙', year:1978, month:5, day:12, hour:10, min:0 }));
+    tests.push(eq('SN25-2: parseLastChart 合法数据返回对象字段对',
+      !!ok25 && ok25.name === '测试乙' && ok25.year === 1978 && ok25.hour === 10, true));
+    tests.push(eq('SN25-3: parseLastChart 坏 JSON 返回 null', A.parseLastChart('{oops'), null));
+    tests.push(eq('SN25-4: parseLastChart 缺时间字段返回 null',
+      A.parseLastChart(JSON.stringify({ name:'x', year:1982, month:10 })), null));
+    tests.push(eq('SN25-5: parseLastChart hour=0 子时合法',
+      (A.parseLastChart(JSON.stringify({ name:'x', year:1982, month:10, day:18, hour:0 })) || {}).hour === 0, true));
+    try { localStorage.removeItem(A.LAST_CHART_KEY); } catch (e) {}
+    tests.push(eq('SN25-6: test=1 页面不恢复最后盘（restoreLastChart=false）',
+      A.restoreLastChart() === false, true));
+    try {
+      localStorage.setItem(A.LAST_CHART_KEY, '{"name":"哨兵"}');
+      A.saveLastChart();
+      tests.push(eq('SN25-7: test=1 页面不写入最后盘（哨兵不变）',
+        localStorage.getItem(A.LAST_CHART_KEY), '{"name":"哨兵"}'));
+    } finally {
+      try { localStorage.removeItem(A.LAST_CHART_KEY); } catch (e) {}
+    }
+  })();
+
+  // ===== v0.86.10 出生数据护栏：出生行变更先备份「历史/」再覆盖 =====
+  (function() {
+    tests.push({ section:'出生数据护栏(v0.86.10 SN26)' });
+    var A26 = window.ARCHIVE;
+    if (!A26 || typeof A26.syncBirthGuardDecide !== 'function' || typeof A26.syncBirthGuardWrite !== 'function') {
+      tests.push(fail('SN26 前置: 护栏接口挂载', '缺失'));
+      return;
+    }
+    var oldMd26 = '# 测试丙　女\n\n出生：1983-12-03 16:30\n\n## 四柱\n';
+    var same26 = '# 测试丙　女\n\n出生：1983-12-03 16:30\n\n## 四柱\n（内容微调）';
+    var diff26 = '# 测试丙　女\n\n出生：1978-05-12 10:00\n\n## 四柱\n';
+    tests.push(eq('SN26-1: 出生行相同→不备份（null）',
+      A26.syncBirthGuardDecide(oldMd26, same26, '盘面-测试丙.md', new Date(2026, 9, 28, 14, 30, 5)), null));
+    var hn26 = A26.syncBirthGuardDecide(oldMd26, diff26, '盘面-测试丙.md', new Date(2026, 9, 28, 14, 30, 5));
+    tests.push(eq('SN26-2: 出生行变更→备份名「MM-DD_HH-MM-SS-出生变更.md」',
+      hn26, '盘面-测试丙-10-28_14-30-05-出生变更.md'));
+    var lunarMd26 = '# 测试丁　女\n\n出生：1983-12-03 18:30（农历，公历 1984-01-06）\n';
+    tests.push(eq('SN26-3: 农历标注出生行也能识别变更',
+      /^盘面-测试丁-.*-出生变更\.md$/.test(A26.syncBirthGuardDecide(lunarMd26, diff26, '盘面-测试丁.md', Date.now()) || ''), true));
+    tests.push(eq('SN26-4: 旧文件为空（新建）不触发备份',
+      A26.syncBirthGuardDecide('', oldMd26, '盘面-测试戊.md', Date.now()), null));
+    try {
+      var src26 = '';
+      for (var s26 = 0; s26 < document.scripts.length; s26++) src26 += document.scripts[s26].textContent;
+      tests.push(eq('SN26-5: syncBirthGuardWrite 走 decide→历史副本→主文件两段写',
+        src26.indexOf('syncBirthGuardDecide(old, newText, name, Date.now())') > -1
+        && /getDirectoryHandle\('历史', \{ create: true \}\)/.test(src26)
+        && src26.indexOf("覆盖前旧盘面自动备份") > -1, true));
+      tests.push(eq('SN26-6: syncAll 对「盘面-*.md」挂护栏',
+        src26.indexOf('.test(name)) return syncBirthGuardWrite(_syncDir, name, f[1]);') > -1
+        && src26.indexOf('syncBirthGuardDecide(old, newText, name, Date.now())') > -1, true));
+    } catch (e26) {
+      tests.push(fail('SN26 源码断言异常', String(e26 && e26.message || e26)));
+    }
   })();
 
   // ===== v0.47.1 分析记录×流月流日 版面回归（记录模式下流月表不得撑爆内在宽度）=====

@@ -196,8 +196,10 @@
   var getFormData = ARCHIVE.getFormData;
   var setFormData = ARCHIVE.setFormData;
   var autoSaveArchive = ARCHIVE.autoSaveArchive;
-  var saveArchive = ARCHIVE.saveArchive;
-  var loadArchive = ARCHIVE.loadArchive;
+    var saveArchive = ARCHIVE.saveArchive;
+    var saveLastChart = ARCHIVE.saveLastChart;
+    var restoreLastChart = ARCHIVE.restoreLastChart;
+    var parseLastChart = ARCHIVE.parseLastChart;  var loadArchive = ARCHIVE.loadArchive;
   var delArchive = ARCHIVE.delArchive;
   var moveToTrash = ARCHIVE.moveToTrash;
   var openEditPanel = ARCHIVE.openEditPanel;
@@ -1576,7 +1578,7 @@ function recAudioDelete(btn) {
 // ===== v0.82.0 录音自动转录（v0.83.1 升级：VAD 分段带真实时间戳 + GLM 说话人归属→文字记录「对话还原」），key 存 localStorage 不进仓库 =====
 var BZ_AI_LS = 'bz_ai_cfg';
 var BZ_LLM_BASE = 'https://api.siliconflow.cn/v1';
-var BZ_LLM_MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
+var BZ_LLM_MODEL = 'deepseek-ai/DeepSeek-V4-Flash';
 var BZ_ASR_URL = 'https://api.siliconflow.cn/v1/audio/transcriptions';
 var BZ_ASR_MODEL = 'Qwen/Qwen3-ASR-1.7B';
 var BZ_ASR_PREV = 'FunAudioLLM/SenseVoiceSmall';
@@ -1584,6 +1586,8 @@ var BZ_ASR_FALLBACK = 'FunAudioLLM/SenseVoiceSmall';
 var BZ_ASR_SWITCH_TS = 1792974900000;
 var BZ_LLM_PREV = 'Qwen/Qwen2.5-72B-Instruct';
 var BZ_LLM_SWITCH_TS = 1792971835000;
+var BZ_LLM_PREV2 = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
+var BZ_LLM_SWITCH_TS2 = 1793165414037;
 var BZ_KB_LINES = '财富体系（财库/获取方式）；十神做功表（十神组合与做事方式）；四柱信息流（年月日时四层信息）；职业匹配喜忌；宫位与命理结构（六亲/身体/空间）；五行基础；国家组织对应';
 // v0.85.0 术语表纠错：只纠正实测反复出现的同音错，整段须先命中 BZ_CTX 关键词才启用，避免误伤日常用语
 var BZ_CTX = /八字|命盘|命理|日主|日干|月令|月支|年干|时柱|十神|食神|伤官|七杀|正官|正印|偏印|比肩|劫财|偏财|正财|大运|流年|格局|天干|地支|旺衰|喜忌|宫位|刑冲|合害|扶抑|用神/;
@@ -1741,20 +1745,49 @@ function bzAsr(wavBlob, key, model) {
     })
     .then(function(j) { return (j.text || '').trim(); });
 }
+var BZ_LLM_STALL_MS = 60000;
 function bzLlm(prompt, key) {
-  return fetch(BZ_LLM_BASE + '/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-    body: JSON.stringify({ model: BZ_LLM_MODEL, messages: [{ role: 'user', content: prompt }], max_tokens: 8192, temperature: 0.3 })
-  }).then(function(r) {
-    return r.json().then(function(j) {
-      if (!r.ok) throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status));
-      return j;
+  var tries = 0;
+  function once() {
+    var ac = new AbortController();
+    return fetch(BZ_LLM_BASE + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: BZ_LLM_MODEL, messages: [{ role: 'user', content: prompt }], max_tokens: 32768, temperature: 0.3, stream: true }),
+      signal: ac.signal
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(j) { throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status)); });
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', out = '', last = Date.now();
+      var wd = setInterval(function() { if (Date.now() - last > BZ_LLM_STALL_MS) { try { ac.abort(); } catch (e) {} } }, Math.max(2000, BZ_LLM_STALL_MS / 4));
+      function pump() {
+        return reader.read().then(function(res) {
+          last = Date.now();
+          if (res.done) { clearInterval(wd); return out; }
+          buf += dec.decode(res.value, { stream: true });
+          var ls = buf.split('\n'); buf = ls.pop();
+          for (var i = 0; i < ls.length; i++) {
+            var ln = ls[i].trim();
+            if (ln.slice(0, 5) !== 'data:') continue;
+            var dt = ln.slice(5).trim();
+            if (dt === '[DONE]') continue;
+            try {
+              var j = JSON.parse(dt);
+              var d = j.choices && j.choices[0] && (j.choices[0].delta || j.choices[0].message);
+              if (d && d.content) out += d.content;
+            } catch (e) {}
+          }
+          return pump();
+        }, function(e) { clearInterval(wd); throw e; });
+      }
+      return pump();
+    }).catch(function(e) {
+      var stalled = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
+      if (stalled && tries < 2) { tries++; return once(); }
+      if (stalled) throw new Error('整理模型流式停滞，已自动重试 3 次仍无输出（多为高峰期排队），请稍后重试');
+      throw e;
     });
-  }).then(function(j) {
-    var m = j.choices && j.choices[0] && j.choices[0].message;
-    return ((m && m.content) || '').trim();
-  });
+  }
+  return once().then(function(out) { return String(out).trim(); });
 }
 function bzPromptOf(clip, raw) {
   var d = window._paipanData || {};
@@ -1815,10 +1848,14 @@ function recModelsOf(clip) {
   if (mm.llm) return { asr: mm.asr || BZ_ASR_MODEL, llm: mm.llm, src: mm.src || 'snap' };
   var oldAsr = (t && t.ts && t.ts < BZ_ASR_SWITCH_TS) ? BZ_ASR_PREV : BZ_ASR_MODEL;
   if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS) return { asr: BZ_ASR_PREV, llm: BZ_LLM_PREV, src: 'guess' };
+  if (t && t.ts && t.ts < BZ_LLM_SWITCH_TS2) return { asr: oldAsr, llm: BZ_LLM_PREV2, src: 'guess' };
   return { asr: oldAsr, llm: BZ_LLM_MODEL, src: 'cur' };
 }
 function recModelSrcNote(m) {
-  if (m.src === 'guess') return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  if (m.src === 'guess') {
+    if (m.llm === BZ_LLM_PREV2) return '（推定：这次转录早于 2026-10-28 切换 DeepSeek-V4-Flash，当时整理用 Qwen3-235B）';
+    return '（推定：这次转录早于 2026-10-26 07:43 的模型升级，当时未记录模型名）';
+  }
   if (m.src === 'md') return '（从归档录音稿 md 头部读回的真实记录）';
   if (m.src === 'cur') return '（未留模型名，按当前模型显示）';
   return '';
@@ -4763,6 +4800,7 @@ function doPaipan() {
     GONGWEI.selectedGongWei = savedGongWei;
     updateGongWeiTags();
     autoSaveArchive();
+    saveLastChart();
   } catch(e) {
     document.getElementById('output').innerHTML = '<div class="loading" style="color:var(--c-red)">排盘出错：' + e.message + '</div>';
     console.error(e);
@@ -4798,13 +4836,16 @@ function scrollToNow(scope) {
   }
 }
 
-// 页面加载时用邦顺默认数据排盘
+// 页面加载时优先恢复上次查看的盘（v0.86.8），无记录/解析失败才回落邦顺默认数据
 window.addEventListener('DOMContentLoaded', function() {
   migrateFromV1();
   initPresetArchives();
   refreshArchiveModalIfOpen();
   APP.setupTwinTypeChange();
+  var restoredLast = false;
+  try { restoredLast = restoreLastChart(); } catch (e) { restoredLast = false; }
   doPaipan();
+  if (restoredLast) console.log('[bz] 已恢复上次查看的盘');
   if (window.ARCHIVE && window.ARCHIVE.syncResume) window.ARCHIVE.syncResume();
 });
 
