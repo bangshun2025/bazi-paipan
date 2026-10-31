@@ -3571,6 +3571,123 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.87.0 分析维度：全局维度表 + 每命盘显隐 + 维度 tabs 写入即存 =====
+  (function() {
+    tests.push({ section: '分析维度(v0.87.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.dimList !== 'function' || typeof R.renderChart !== 'function' || typeof R.recSaveNow !== 'function' || typeof R.switchRecDim !== 'function') {
+      tests.push(fail('DIM 前置: RENDER 维度接口已挂载', '缺失'));
+      return;
+    }
+    var oldPd = null, savedList = null, savedMode = null, savedVis = null, visKey = null, tstD = null;
+    var fpD = '维度测试|男|1982|10|18|5|1';
+    var testKeys = [];
+    try {
+      savedList = localStorage.getItem('bz_dim_list_v1');
+      savedMode = localStorage.getItem('bz_rec_mode');
+      oldPd = window._paipanData;
+      localStorage.removeItem('bz_dim_list_v1');
+
+      // T01-T08 全局维度表：默认表 / 新增 / 去重 / 非法拦截 / 主维度保护
+      tests.push(eq('DIM T01: 默认维度表=[分析记录]', R.dimList().join(','), '分析记录'));
+      var rAdd = R.dimAdd('事业');
+      tests.push(eq('DIM T02: 新增维度成功', rAdd.ok === true ? R.dimList().join(',') : 'fail', '分析记录,事业'));
+      tests.push(eq('DIM T03: 重复新增被拒', R.dimAdd('事业').ok, false));
+      tests.push(eq('DIM T04: 空名被拒', R.dimAdd('  ').ok, false));
+      tests.push(eq('DIM T05: 含|被拒', R.dimAdd('a|b').ok, false));
+      tests.push(eq('DIM T06: 含§被拒', R.dimAdd('a§b').ok, false));
+      tests.push(eq('DIM T07: 删除非主维度', R.dimRemove('事业').ok === true ? R.dimList().length : -1, 1));
+      tests.push(eq('DIM T08: 主维度不可删', R.dimRemove('分析记录').ok, false));
+      R.dimAdd('事业'); // 后续用例保留两个维度
+
+      // T09-T13 键构造与解析：主维度兼容旧键；子维度带§段；twin 叠加
+      var pdD = paipan('维度测试', '男', 1982, 10, 18, 5, 1);
+      window._paipanData = pdD;
+      tests.push(eq('DIM T09: 主维度键无§段(兼容旧数据)', R.recNotesKey('', '分析记录'), 'bz_rec_notes_' + fpD));
+      tests.push(eq('DIM T10: 子维度键带§段', R.recNotesKey('', '事业'), 'bz_rec_notes_§事业|' + fpD));
+      tests.push(eq('DIM T11: twin+子维度组合', R.recNotesKey('twin|', '事业'), 'bz_rec_notes_twin|§事业|' + fpD));
+      var kp = R.recKeyParts('bz_rec_notes_twin|§事业|' + fpD);
+      tests.push(eq('DIM T12: recKeyParts 解析维度键', kp ? (kp.prefix + '/' + kp.dim + '/' + kp.name + '/' + kp.y) : 'null', 'twin|/事业/维度测试/1982'));
+      var kp0 = R.recKeyParts('bz_rec_notes_' + fpD);
+      tests.push(eq('DIM T13: recKeyParts 旧键 dim 为空', kp0 ? (kp0.dim === '' && kp0.name === '维度测试' && kp0.prefix === '') : false, true));
+
+      // T14-T17 每命盘显隐：默认全显 / 勾掉隐藏 / 隐藏空维度只藏空文档
+      visKey = R.dimVisKey();
+      savedVis = visKey ? localStorage.getItem(visKey) : null;
+      tests.push(eq('DIM T14: 显隐默认全显示', R.dimVisibleDims().join(','), '分析记录,事业'));
+      var vis = R.dimVisGet();
+      vis.hidden['事业'] = 1;
+      R.dimVisSet(vis);
+      tests.push(eq('DIM T15: 勾掉后维度隐藏', R.dimVisibleDims().join(','), '分析记录'));
+      R.dimVisSet({ hideEmpty: true, hidden: {} });
+      tests.push(eq('DIM T16: 隐藏空维度开启时空维度隐藏', R.dimVisibleDims().join(','), '分析记录'));
+      localStorage.setItem('bz_rec_notes_§事业|' + fpD, '事业文档有内容');
+      testKeys.push('bz_rec_notes_§事业|' + fpD);
+      R.dimVisSet({ hideEmpty: false, hidden: {} });
+      tests.push(eq('DIM T17: 有内容的维度不受隐藏空维度影响', R.dimVisibleDims().join(','), '分析记录,事业'));
+
+      // T18-T27 渲染与编辑：tabs 随显隐生成 / 切换即装载 / 写入落对应键 / 徽标
+      localStorage.removeItem('bz_rec_mode');
+      tstD = document.createElement('div');
+      tstD.id = 'tst-dim';
+      document.body.appendChild(tstD);
+      R.renderChart(pdD, undefined, 'tst-dim');
+      R.toggleRecMode(true, tstD);
+      var taD = tstD.querySelector('.rec-text');
+      tests.push(eq('DIM T18: 记录区存在维度 tab 条', !!tstD.querySelector('.rec-tabs'), true));
+      tests.push(eq('DIM T19: tab 数=可见维度数', tstD.querySelectorAll('.rec-tab').length, 2));
+      tests.push(eq('DIM T20: 激活 tab 为主维度', (tstD.querySelector('.rec-tab.active') || { textContent: '' }).textContent.replace(/\d+$/, ''), '分析记录'));
+      taD.value = '主维度正文';
+      R.recSaveNow(tstD, taD, '');
+      tests.push(eq('DIM T21: 主维度写入落兼容旧键', localStorage.getItem('bz_rec_notes_' + fpD), '主维度正文'));
+      var tabSy = tstD.querySelector('.rec-tab[data-dim="事业"]');
+      tests.push(eq('DIM T22: 子维度 tab 存在', !!tabSy, true));
+      R.switchRecDim(tabSy);
+      tests.push(eq('DIM T23: 切换后 ta._recDim 更新', taD._recDim, '事业'));
+      taD.value = '事业维度正文';
+      R.recSaveNow(tstD, taD, '');
+      tests.push(eq('DIM T24: 子维度写入落§键', localStorage.getItem('bz_rec_notes_§事业|' + fpD), '事业维度正文'));
+      tests.push(eq('DIM T25: 字数徽标出现', (tstD.querySelector('.rec-tab[data-dim="事业"] .rec-tab-len') || { textContent: '' }).textContent, '6'));
+      R.switchRecDim(tstD.querySelector('.rec-tab[data-dim="分析记录"]'));
+      tests.push(eq('DIM T26: 切回主维度读回主文档', taD.value, '主维度正文'));
+      tests.push(eq('DIM T27: recNoteCandidates 按维度过滤', R.recNoteCandidates('', '事业').key, 'bz_rec_notes_§事业|' + fpD));
+      tests.push(eq('DIM T27b: 主维度候选键归一化(无§段)', R.recNoteCandidates('', '分析记录').key, 'bz_rec_notes_' + fpD));
+
+      // T28-T32 维度下拉：面板结构 / 勾选即时生效
+      var dimBtn = tstD.querySelector('.rec-dim-btn');
+      tests.push(eq('DIM T28: 记录头有「维度」下拉按钮', !!dimBtn, true));
+      if (dimBtn) dimBtn.click();
+      var pop = tstD.querySelector('.rec-dim-pop.open');
+      tests.push(eq('DIM T29: 下拉面板展开且含隐藏空维度开关', !!(pop && pop.querySelector('input[type="checkbox"]')), true));
+      tests.push(eq('DIM T30: 面板含每维度勾选行', pop ? pop.querySelectorAll('input[data-dim]').length : 0, 2));
+      tests.push(eq('DIM T31: 面板含新增输入框', !!(pop && pop.querySelector('.rec-dim-new')), true));
+      var cb = pop ? pop.querySelector('input[data-dim="事业"]') : null;
+      if (cb) { cb.checked = false; R.dimVisToggle(cb); }
+      tests.push(eq('DIM T32: 勾掉即时隐藏 tab', tstD.querySelectorAll('.rec-tab').length, 1));
+      R.dimVisSet({ hideEmpty: false, hidden: {} });
+
+      // T33 盘面 md 带维度分节
+      var mdDims = window.ARCHIVE.syncChartMd({ name: '维度测试', gender: '男', year: 1982, month: 10, day: 18, hour: 5, min: 1 }, '主记录', [['事业', '事业内容']]);
+      tests.push(eq('DIM T33: 盘面 md 含维度分节', (mdDims.indexOf('## 分析记录\n') >= 0 && mdDims.indexOf('## 分析记录·事业') >= 0 && mdDims.indexOf('事业内容') >= 0) ? 'Y' : 'N', 'Y'));
+    } finally {
+      try {
+        if (savedList === null) localStorage.removeItem('bz_dim_list_v1'); else localStorage.setItem('bz_dim_list_v1', savedList);
+        if (visKey) { if (savedVis === null) localStorage.removeItem(visKey); else localStorage.setItem(visKey, savedVis); }
+        testKeys.forEach(function(k) { localStorage.removeItem(k); });
+        localStorage.removeItem('bz_rec_notes_' + fpD);
+        localStorage.removeItem('bz_rec_notes_§事业|' + fpD);
+        if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);
+        window._paipanData = oldPd;
+        if (tstD && tstD.parentNode) tstD.parentNode.removeChild(tstD);
+      } catch (e) {}
+      tests.push(eq('DIM 现场还原: 维度表/显隐/草稿清理', (function() {
+        return localStorage.getItem('bz_rec_notes_维度测试|男|1982|10|18|5|1') === null
+          && localStorage.getItem('bz_rec_notes_§事业|维度测试|男|1982|10|18|5|1') === null
+          && localStorage.getItem('bz_dim_list_v1') === savedList;
+      })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
   // ===== SN15 v0.83.3 录音状态机加固：真实 state 分派+幽灵清理+预期结束标记（onerror/track ended/巡检兜底走 E2E）=====
   (function() {
     tests.push({ section: '录音状态机加固(SN15)' });

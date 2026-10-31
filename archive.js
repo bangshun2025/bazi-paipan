@@ -1546,6 +1546,7 @@ function deleteNote(id) {
 // 分析记录只存本机 localStorage（不上云），换电脑 / 清缓存前必须先导一份
 // ============================================================
 var REC_NOTES_PREFIX = 'bz_rec_notes_';
+var REC_DIM_MARK = '§'; // v0.87.0 维度键段标记：bz_rec_notes_[twin|]§维度名|指纹
 var BACKUP_APP = 'bazi-paipan';
 
 function collectRecNotes() {
@@ -1754,7 +1755,7 @@ function syncStatus() {
 }
 function syncGz(o) { return o && o.gan ? (o.gan + o.zhi) : '—'; }
 
-function syncChartMd(a, noteText) {
+function syncChartMd(a, noteText, dimNotes) {
   var L = [];
   var nm = a.name || '未命名';
   var isLunar = a.calendarType === 'lunar';
@@ -1777,6 +1778,7 @@ function syncChartMd(a, noteText) {
     L.push('（排盘失败：生日字段不完整）');
     L.push('');
     if (noteText) { L.push('## 分析记录'); L.push(''); L.push(noteText); }
+    appendDimMd(L, dimNotes);
     return L.join('\n') + '\n';
   }
   var heads = ['年柱', '月柱', '日柱', '时柱'];
@@ -1824,6 +1826,7 @@ function syncChartMd(a, noteText) {
   L.push('');
   L.push(noteText ? noteText : '（暂无）');
   L.push('');
+  appendDimMd(L, dimNotes);
   return L.join('\n');
 }
 
@@ -1837,9 +1840,46 @@ function syncNoteOf(a, notes) {
   var best = '';
   for (var k in notes) {
     if (k.indexOf(REC_NOTES_PREFIX + pfx) !== 0) continue;
+    if (k.indexOf(REC_DIM_MARK) >= 0) continue; // v0.87.0：维度键不参与主记录兜底，防串档
     if ((notes[k] || '').trim().length > best.trim().length) best = notes[k];
   }
   return best;
+}
+
+// v0.87.0：收集该档案全部分析维度的文档 → [['维度名', 内容], …]（只收有内容的）
+// 维度名来源：全局维度表（RENDER.dimList）优先；RENDER 不在时从键名反推，保证同步不依赖渲染层
+function syncNoteDimsOf(a, notes) {
+  var sd = archiveSolarYmd(a) || { y: a.year, m: a.month, d: a.day };
+  var pfx = REC_NOTES_PREFIX + REC_DIM_MARK;
+  var dims = (window.RENDER && typeof window.RENDER.dimList === 'function') ? window.RENDER.dimList() : [];
+  var order = [];
+  dims.forEach(function(dm) {
+    if (dm !== '分析记录' && order.indexOf(dm) < 0) order.push(dm);
+  });
+  for (var k in notes) {
+    if (k.indexOf(pfx) !== 0) continue;
+    var rest = k.slice(pfx.length);
+    var cut = rest.indexOf('|');
+    if (cut <= 0) continue;
+    var dm2 = rest.slice(0, cut);
+    if (order.indexOf(dm2) < 0) order.push(dm2);
+  }
+  var tail = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
+  var out = [];
+  for (var i = 0; i < order.length; i++) {
+    var txt = notes[pfx + order[i] + '|' + tail] || '';
+    if (String(txt).trim()) out.push([order[i], txt]);
+  }
+  return out;
+}
+
+function appendDimMd(L, dimNotes) {
+  (dimNotes || []).forEach(function(it) {
+    L.push('## 分析记录·' + it[0]);
+    L.push('');
+    L.push(it[1] || '（暂无）');
+    L.push('');
+  });
 }
 
 function syncBuildFiles() {
@@ -1856,15 +1896,18 @@ function syncBuildFiles() {
     var a = arch[i];
     var nm = a.name || '未命名';
     var note = syncNoteOf(a, notes);
+    var dimNotes = syncNoteDimsOf(a, notes);
+    var allLen = note.trim().length;
+    dimNotes.forEach(function(it) { allLen += String(it[1] || '').trim().length; });
     var fn = '盘面-' + nm + '.md';
     if (used[fn]) fn = '盘面-' + nm + '-' + (a.id || i) + '.md';
     used[fn] = true;
-    files.push([fn, syncChartMd(a, note)]);
+    files.push([fn, syncChartMd(a, note, dimNotes)]);
     var vf = syncVerDecide(a, i, note, Date.now());
-    if (vf) files.push([vf, '<!-- 八字排盘记录版本 ' + new Date().toISOString() + ' -->\n' + syncChartMd(a, note)]);
+    if (vf) files.push([vf, '<!-- 八字排盘记录版本 ' + new Date().toISOString() + ' -->\n' + syncChartMd(a, note, dimNotes)]);
     idx.push('| ' + nm + ' | ' + (a.gender || '') + ' | '
       + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day) + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0)
-      + ' | ' + (note ? note.trim().length : 0) + ' |');
+      + ' | ' + allLen + ' |');
   }
   idx.push('');
   files.push(['INDEX.md', idx.join('\n')]);

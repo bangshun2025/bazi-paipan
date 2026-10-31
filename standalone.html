@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.12 | 2026-10-28 -->
+<!-- 八字排盘 ·  从真版 v0.87.0 | 2026-10-31 -->
+<!-- v0.87.0: 分析维度 —— 记录区多维度 tabs + 每命盘显隐 + 全局维度管理：rec-head 加「维度 ▾」下拉（勾选本命盘显示哪些维度 + 隐藏内容为空的维度开关，存 bz_dim_vis_<指纹> 仅当前命盘生效）；下拉内可新增维度（全局维度表 bz_dim_list_v1，最多 12 个、重名与非法字符拦截、主维度「分析记录」不可删）与 ✕ 移除（只从列表去掉，文档保留本机，同名重建即找回）；记录区标题下新增维度 tab 条，点击切换即装载该维度文档，输入/compositionend/blur/4 秒巡检/beforeunload 五道保存兜底沿用；主维度键与旧版完全一致（bz_rec_notes_指纹）历史数据无损，子维度键 = bz_rec_notes_[twin|]§维度名|指纹，双胞胎卡同样支持；tab 实时字数徽标；记录防丢候选（同生日/同名回捞）按维度隔离；盘面 md 在「## 分析记录」后逐维度追加「## 分析记录·维度名」分节，INDEX.md 记录字数含全部维度 -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -441,6 +442,29 @@
   .rec-title { font-family:var(--font-display); font-size:13px; letter-spacing:.08em; color:var(--c-ink); }
   .rec-status { font-size:12px; color:var(--c-red); opacity:0; transition:opacity .2s; }
   .rec-status.show { opacity:1; }
+  /* v0.87.0 分析维度：维度 tabs + 维度下拉 */
+  .rec-tabs { display:flex; flex-wrap:wrap; align-items:stretch; border-bottom:0.5px solid var(--c-line); background:rgba(201,169,110,.05); padding:0 6px; flex:0 0 auto; }
+  .rec-tab { padding:6px 12px 5px; font-size:12px; font-family:var(--font-display); letter-spacing:.05em; color:var(--c-gray); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+  .rec-tab:hover { color:var(--c-ink); }
+  .rec-tab.active { color:var(--c-ink); border-bottom-color:#c9a96e; }
+  .rec-tab-len { font-size:10px; color:var(--c-gray); font-family:var(--font-body); line-height:1; padding:1px 5px; border:0.5px solid var(--c-line); border-radius:8px; }
+  .rec-dim-wrap { position:relative; display:inline-block; }
+  .rec-dim-btn { padding:2px 8px; font-size:11px; font-family:var(--font-body); color:var(--c-gray); background:none; border:1px solid var(--c-line); border-radius:2px; cursor:pointer; }
+  .rec-dim-btn:hover { color:var(--c-ink); border-color:var(--c-gray); }
+  .rec-dim-pop { display:none; position:absolute; top:100%; left:0; z-index:120; min-width:280px; max-width:calc(100vw - 24px); background:var(--c-paper); border:1px solid var(--c-line); border-radius:4px; box-shadow:0 4px 16px rgba(0,0,0,.14); padding:10px 12px; margin-top:4px; font-size:13px; color:var(--c-ink); }
+  .rec-dim-pop.open { display:block; }
+  .rec-dim-sec { font-size:11px; color:var(--c-gray); letter-spacing:.08em; margin:8px 0 2px; }
+  .rec-dim-sec:first-child { margin-top:0; }
+  .rec-dim-row { display:flex; align-items:center; gap:6px; padding:4px 0; cursor:pointer; }
+  .rec-dim-row input[type="checkbox"] { margin:0; }
+  .rec-dim-len { font-size:11px; color:var(--c-gray); margin-left:auto; }
+  .rec-dim-del { border:none; background:none; color:var(--c-gray); cursor:pointer; font-size:12px; padding:0 4px; }
+  .rec-dim-del:hover { color:var(--c-red); }
+  .rec-dim-add { display:flex; gap:6px; margin-top:4px; }
+  .rec-dim-new { flex:1; min-width:0; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; font-size:13px; font-family:var(--font-body); color:var(--c-ink); background:var(--c-paper); }
+  .rec-dim-addbtn { padding:4px 12px; font-size:12px; border:1px solid var(--c-line); background:var(--c-paper); color:var(--c-ink); border-radius:2px; cursor:pointer; }
+  .rec-dim-addbtn:hover { border-color:var(--c-gray); }
+  .rec-dim-hint { font-size:11px; color:var(--c-gray); margin-top:8px; line-height:1.5; }
   .rec-text { min-height:360px; max-height:max(360px, calc(100dvh - 140px)); border:none; outline:none; resize:none; overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:var(--c-gray) transparent; padding:18px 12px; font-family:var(--font-body); font-size:14px; line-height:1.7; color:var(--c-ink); background:transparent; }
   .rec-text::-webkit-scrollbar { width:8px; }
   .rec-text::-webkit-scrollbar-thumb { background:var(--c-gray); border:2px solid var(--c-paper); border-radius:4px; }
@@ -7009,6 +7033,7 @@ function deleteNote(id) {
 // 分析记录只存本机 localStorage（不上云），换电脑 / 清缓存前必须先导一份
 // ============================================================
 var REC_NOTES_PREFIX = 'bz_rec_notes_';
+var REC_DIM_MARK = '§'; // v0.87.0 维度键段标记：bz_rec_notes_[twin|]§维度名|指纹
 var BACKUP_APP = 'bazi-paipan';
 
 function collectRecNotes() {
@@ -7217,7 +7242,7 @@ function syncStatus() {
 }
 function syncGz(o) { return o && o.gan ? (o.gan + o.zhi) : '—'; }
 
-function syncChartMd(a, noteText) {
+function syncChartMd(a, noteText, dimNotes) {
   var L = [];
   var nm = a.name || '未命名';
   var isLunar = a.calendarType === 'lunar';
@@ -7240,6 +7265,7 @@ function syncChartMd(a, noteText) {
     L.push('（排盘失败：生日字段不完整）');
     L.push('');
     if (noteText) { L.push('## 分析记录'); L.push(''); L.push(noteText); }
+    appendDimMd(L, dimNotes);
     return L.join('\n') + '\n';
   }
   var heads = ['年柱', '月柱', '日柱', '时柱'];
@@ -7287,6 +7313,7 @@ function syncChartMd(a, noteText) {
   L.push('');
   L.push(noteText ? noteText : '（暂无）');
   L.push('');
+  appendDimMd(L, dimNotes);
   return L.join('\n');
 }
 
@@ -7300,9 +7327,46 @@ function syncNoteOf(a, notes) {
   var best = '';
   for (var k in notes) {
     if (k.indexOf(REC_NOTES_PREFIX + pfx) !== 0) continue;
+    if (k.indexOf(REC_DIM_MARK) >= 0) continue; // v0.87.0：维度键不参与主记录兜底，防串档
     if ((notes[k] || '').trim().length > best.trim().length) best = notes[k];
   }
   return best;
+}
+
+// v0.87.0：收集该档案全部分析维度的文档 → [['维度名', 内容], …]（只收有内容的）
+// 维度名来源：全局维度表（RENDER.dimList）优先；RENDER 不在时从键名反推，保证同步不依赖渲染层
+function syncNoteDimsOf(a, notes) {
+  var sd = archiveSolarYmd(a) || { y: a.year, m: a.month, d: a.day };
+  var pfx = REC_NOTES_PREFIX + REC_DIM_MARK;
+  var dims = (window.RENDER && typeof window.RENDER.dimList === 'function') ? window.RENDER.dimList() : [];
+  var order = [];
+  dims.forEach(function(dm) {
+    if (dm !== '分析记录' && order.indexOf(dm) < 0) order.push(dm);
+  });
+  for (var k in notes) {
+    if (k.indexOf(pfx) !== 0) continue;
+    var rest = k.slice(pfx.length);
+    var cut = rest.indexOf('|');
+    if (cut <= 0) continue;
+    var dm2 = rest.slice(0, cut);
+    if (order.indexOf(dm2) < 0) order.push(dm2);
+  }
+  var tail = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
+  var out = [];
+  for (var i = 0; i < order.length; i++) {
+    var txt = notes[pfx + order[i] + '|' + tail] || '';
+    if (String(txt).trim()) out.push([order[i], txt]);
+  }
+  return out;
+}
+
+function appendDimMd(L, dimNotes) {
+  (dimNotes || []).forEach(function(it) {
+    L.push('## 分析记录·' + it[0]);
+    L.push('');
+    L.push(it[1] || '（暂无）');
+    L.push('');
+  });
 }
 
 function syncBuildFiles() {
@@ -7319,15 +7383,18 @@ function syncBuildFiles() {
     var a = arch[i];
     var nm = a.name || '未命名';
     var note = syncNoteOf(a, notes);
+    var dimNotes = syncNoteDimsOf(a, notes);
+    var allLen = note.trim().length;
+    dimNotes.forEach(function(it) { allLen += String(it[1] || '').trim().length; });
     var fn = '盘面-' + nm + '.md';
     if (used[fn]) fn = '盘面-' + nm + '-' + (a.id || i) + '.md';
     used[fn] = true;
-    files.push([fn, syncChartMd(a, note)]);
+    files.push([fn, syncChartMd(a, note, dimNotes)]);
     var vf = syncVerDecide(a, i, note, Date.now());
-    if (vf) files.push([vf, '<!-- 八字排盘记录版本 ' + new Date().toISOString() + ' -->\n' + syncChartMd(a, note)]);
+    if (vf) files.push([vf, '<!-- 八字排盘记录版本 ' + new Date().toISOString() + ' -->\n' + syncChartMd(a, note, dimNotes)]);
     idx.push('| ' + nm + ' | ' + (a.gender || '') + ' | '
       + a.year + '-' + syncPad2(a.month) + '-' + syncPad2(a.day) + ' ' + syncPad2(a.hour) + ':' + syncPad2(a.min || 0)
-      + ' | ' + (note ? note.trim().length : 0) + ' |');
+      + ' | ' + allLen + ' |');
   }
   idx.push('');
   files.push(['INDEX.md', idx.join('\n')]);
@@ -12319,7 +12386,8 @@ function renderChart(data, twin, targetId, opts) {
       </div>`;
   const recPanelHtml = `
       <div class="record-panel${recOn ? ' open' : ''}">
-        <div class="rec-head"><span class="rec-title">分析记录</span><span class="rec-status" id="bzRecStatus"></span></div>
+        <div class="rec-head"><span style="display:inline-flex;align-items:center;gap:8px;"><span class="rec-title">分析记录</span><span class="rec-dim-wrap"><button type="button" class="rec-dim-btn" onclick="RENDER.toggleDimPop(event)" title="分析维度：勾选本命盘显示的维度，或新增/移除维度">维度 ▾</button><div class="rec-dim-pop" onclick="event.stopPropagation()"></div></span></span><span class="rec-status" id="bzRecStatus"></span></div>
+        <div class="rec-tabs" role="tablist"></div>
         <div class="rec-alts"></div>
         <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
         <div class="rec-audio" data-suffix="">
@@ -12378,10 +12446,87 @@ var LS_REC_NOTES = 'bz_rec_notes_';
 function isRecOn() {
   try { return localStorage.getItem(LS_REC_MODE) === '1'; } catch (e) { return false; }
 }
-function recNotesKey(suffix) {
+// ===== v0.87.0 分析维度：全局维度表 + 每命盘显隐 + 记录区维度 tabs =====
+// 主维度「分析记录」键不带 § 段，与历史数据完全兼容；子维度键 = bz_rec_notes_[twin|]§维度名|指纹
+var LS_DIM_LIST = 'bz_dim_list_v1';
+var LS_DIM_VIS = 'bz_dim_vis_';
+var DIM_MAIN = '分析记录';
+var DIM_SEG_MARK = '§';
+var DIM_NAME_MAX = 12;
+var DIM_COUNT_MAX = 12;
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+function dimSegOf(dim) { return (dim && dim !== DIM_MAIN) ? (DIM_SEG_MARK + dim + '|') : ''; }
+function dimList() {
+  var arr = null;
+  try { arr = JSON.parse(localStorage.getItem(LS_DIM_LIST)); } catch (e) {}
+  if (!Array.isArray(arr)) arr = [DIM_MAIN];
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var nm = String(arr[i] == null ? '' : arr[i]).trim();
+    if (!nm || out.indexOf(nm) < 0) out.push(nm);
+  }
+  if (out.indexOf(DIM_MAIN) < 0) out.unshift(DIM_MAIN);
+  return out;
+}
+function dimSetList(arr) {
+  try { localStorage.setItem(LS_DIM_LIST, JSON.stringify(arr)); return true; } catch (e) { return false; }
+}
+function dimAdd(name) {
+  var nm = String(name == null ? '' : name).trim();
+  if (!nm) return { ok: false, err: '维度名不能为空' };
+  if (/[|§"'<>]/.test(nm)) return { ok: false, err: '维度名不能含 | § " \' < > 字符' };
+  if (nm.length > DIM_NAME_MAX) return { ok: false, err: '维度名最长 ' + DIM_NAME_MAX + ' 字' };
+  var list = dimList();
+  if (list.indexOf(nm) >= 0) return { ok: false, err: '维度「' + nm + '」已存在' };
+  if (list.length >= DIM_COUNT_MAX) return { ok: false, err: '最多 ' + DIM_COUNT_MAX + ' 个维度' };
+  list.push(nm);
+  return dimSetList(list) ? { ok: true, list: list } : { ok: false, err: '保存失败：浏览器存储空间不足' };
+}
+function dimRemove(name) {
+  if (name === DIM_MAIN) return { ok: false, err: '「' + DIM_MAIN + '」是默认维度，不能删除' };
+  var list = dimList();
+  var i = list.indexOf(name);
+  if (i < 0) return { ok: false, err: '维度不存在' };
+  list.splice(i, 1);
+  // 只从列表移除；文档数据保留在本机（重新添加同名维度即可找回）
+  return dimSetList(list) ? { ok: true, list: list } : { ok: false, err: '保存失败：浏览器存储空间不足' };
+}
+function dimVisKey() {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_REC_NOTES + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  return LS_DIM_VIS + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+}
+function dimVisGet() {
+  var v = null;
+  try { v = JSON.parse(localStorage.getItem(dimVisKey())); } catch (e) {}
+  var out = { hideEmpty: false, hidden: {} };
+  if (v && typeof v === 'object') {
+    out.hideEmpty = !!v.hideEmpty;
+    if (v.hidden && typeof v.hidden === 'object') out.hidden = v.hidden;
+  }
+  return out;
+}
+function dimVisSet(vis) {
+  var k = dimVisKey();
+  if (!k) return false;
+  try { localStorage.setItem(k, JSON.stringify(vis || {})); return true; } catch (e) { return false; }
+}
+function dimVisibleDims() {
+  var dims = dimList(), vis = dimVisGet(), out = [];
+  for (var i = 0; i < dims.length; i++) {
+    var dm = dims[i];
+    if (vis.hidden[dm]) continue;
+    if (vis.hideEmpty && !recNoteGet(recNotesKey('', dm)).trim()) continue;
+    out.push(dm);
+  }
+  if (!out.length) out.push(DIM_MAIN); // 全被隐藏时兜底显示主维度，编辑区不落空
+  return out;
+}
+function recNotesKey(suffix, dim) {
+  var d = window._paipanData;
+  if (!d) return null;
+  return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
 
 // ===== v0.66.0 分析记录防丢（指纹取不到时不再显示空白）=====
@@ -12393,9 +12538,17 @@ function recKeyParts(key) {
   if (!key || key.indexOf(LS_REC_NOTES) !== 0) return null;
   var raw = key.slice(LS_REC_NOTES.length), prefix = '';
   if (raw.indexOf('twin|') === 0) { prefix = 'twin|'; raw = raw.slice(5); }
+  // v0.87.0：可选维度段 §维度名| （主维度无此段）
+  var dim = '';
+  if (raw.charAt(0) === DIM_SEG_MARK) {
+    var cut = raw.indexOf('|');
+    if (cut < 1) return null;
+    dim = raw.slice(1, cut);
+    raw = raw.slice(cut + 1);
+  }
   var p = raw.split('|');
   if (p.length !== 7) return null;
-  return { prefix: prefix, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
+  return { prefix: prefix, dim: dim, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
 }
 function recNoteGet(key) {
   try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
@@ -12403,12 +12556,13 @@ function recNoteGet(key) {
 function recNoteSet(key, val) {
   try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
 }
-function recNoteCandidates(suffix) {
+function recNoteCandidates(suffix, dim) {
+  dim = (dim && dim !== DIM_MAIN) ? dim : ''; // 主维度键段为空串，须归一化后再过滤
   var out = { key: null, text: '', sameBirthday: [], sameName: [], better: [] };
   var d = window._paipanData;
   if (!d) return out;
   var prefix = suffix || '';
-  out.key = LS_REC_NOTES + prefix + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  out.key = LS_REC_NOTES + prefix + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
   var exact = recNoteGet(out.key);
   // v0.79.0：精确键有内容也继续收集候选，否则档案改时辰后完整版被永久隐藏
   if (exact.trim()) out.text = exact;
@@ -12421,7 +12575,7 @@ function recNoteCandidates(suffix) {
       var k = localStorage.key(i);
       if (!k || k === out.key || k.indexOf(LS_REC_NOTES) !== 0) continue;
       var p = recKeyParts(k);
-      if (!p || p.prefix !== prefix || p.name !== name || p.gender !== gender) continue;
+      if (!p || p.prefix !== prefix || p.dim !== dim || p.name !== name || p.gender !== gender) continue;
       var txt = recNoteGet(k);
       if (!txt.trim()) continue;
       all.push({ key: k, ymd: [p.y, p.m, p.d].join('|'), h: p.h, mi: p.mi, text: txt });
@@ -12458,14 +12612,14 @@ function recStatusShow(container, text, sticky) {
   clearTimeout(st._t);
   if (!sticky) st._t = setTimeout(function() { st.classList.remove('show'); }, 1500);
 }
-function recRenderAlts(container, list, hint, suffix) {
+function recRenderAlts(container, list, hint, suffix, dim) {
   var box = container.querySelector('.rec-alts');
   if (!box || !list.length) return;
   var h = '<div style="font-size:12px;color:#a86400;margin:2px 0 4px;">' + hint + '</div>';
   for (var i = 0; i < list.length && i < REC_ALT_LIMIT; i++) {
     var it = list[i];
     var label = it.ymd.replace(/\|/g, '-') + ' ' + recPad(it.h) + ':' + recPad(it.mi) + ' · ' + it.text.trim().length + ' 字';
-    h += '<button type="button" class="rec-alt" data-key="' + it.key.replace(/"/g, '&quot;') + '" data-suffix="' + (suffix || '') + '"'
+    h += '<button type="button" class="rec-alt" data-key="' + it.key.replace(/"/g, '&quot;') + '" data-suffix="' + (suffix || '') + '" data-dim="' + escAttr(dim || '') + '"'
       + ' onclick="RENDER.loadRecAlt(this)"'
       + ' style="margin:0 6px 4px 0;padding:2px 8px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:12px;font-family:var(--font-display);">'
       + label + '</button>';
@@ -12473,7 +12627,7 @@ function recRenderAlts(container, list, hint, suffix) {
   box.innerHTML = h;
   box.style.display = '';
 }
-function recRenderBetter(container, list, suffix) {
+function recRenderBetter(container, list, suffix, dim) {
   var box = container.querySelector('.rec-alts');
   if (!box || !list.length) return;
   var ta = container.querySelector('.rec-text');
@@ -12482,7 +12636,7 @@ function recRenderBetter(container, list, suffix) {
   var bestLen = best.text.trim().length;
   var hint = '⚠ 发现更完整的历史版本（' + bestLen + ' 字，当前 ' + curLen + ' 字'
     + (best.holds ? '，已包含当前全部内容' : '，内容有差异') + '），点此载入：';
-  recRenderAlts(container, [best], hint, suffix);
+  recRenderAlts(container, [best], hint, suffix, dim);
 }
 function loadRecAlt(btn) {
   var panel = btn && btn.closest ? btn.closest('.record-panel') : null;
@@ -12493,7 +12647,8 @@ function loadRecAlt(btn) {
   if (!txt) return;
   ta.value = txt;
   recAutogrow(ta);
-  var cur = recNotesKey(btn.getAttribute('data-suffix') || '');
+  var dim = btn.getAttribute('data-dim') || '';
+  var cur = recNotesKey(btn.getAttribute('data-suffix') || '', dim);
   if (cur && cur !== k) recNoteSet(cur, txt);
   var box = panel.querySelector('.rec-alts');
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
@@ -12508,10 +12663,16 @@ function bindRecPanel(container, suffix) {
   var ta = container.querySelector('.rec-text');
   if (!ta || ta._recBound) return;
   ta._recBound = true;
-  var cand = recNoteCandidates(suffix);
+  suffix = suffix || '';
+  // v0.87.0 维度：初始编辑首个可见维度的文档，候选回捞按维度隔离
+  var dims = dimVisibleDims();
+  var firstDim = dims.length ? dims[0] : DIM_MAIN;
+  ta._recSuffix = suffix;
+  ta._recDim = firstDim;
+  var cand = recNoteCandidates(suffix, firstDim);
   if (cand.text) {
     ta.value = cand.text;
-    if (cand.better.length) recRenderBetter(container, cand.better, suffix);
+    if (cand.better.length) recRenderBetter(container, cand.better, suffix, firstDim);
   } else if (cand.sameBirthday.length === 1) {
     ta.value = cand.sameBirthday[0].text;
     recStatusShow(container, '已按同生日记录恢复（原 ' + recPad(cand.sameBirthday[0].h) + ':' + recPad(cand.sameBirthday[0].mi) + '）', true);
@@ -12520,11 +12681,11 @@ function bindRecPanel(container, suffix) {
     var hint = cand.sameBirthday.length > 1
       ? '同名同生日有 ' + cand.sameBirthday.length + ' 条记录（时辰不同），点选载入：'
       : '有 ' + cand.sameName.length + ' 条同名记录（生日不同），点选载入：';
-    recRenderAlts(container, list, hint, suffix);
+    recRenderAlts(container, list, hint, suffix, firstDim);
   }
+  ta._recKey0 = recNotesKey(suffix, firstDim);
+  renderRecTabs(container, suffix);
   recAutogrow(ta);
-  ta._recSuffix = suffix || '';
-  ta._recKey0 = recNotesKey(suffix);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
     recSaveNow(container, ta, suffix);
@@ -12541,8 +12702,149 @@ function bindRecPanel(container, suffix) {
   var rp = ta.closest ? ta.closest('.record-panel') : null;
   initRecAudioPanel(rp, suffix);
 }
+// ===== v0.87.0 维度 tabs：渲染/切换/字数徽标 =====
+function renderRecTabs(container, suffix) {
+  if (!container || !container.querySelector) return;
+  var tabs = container.querySelector('.rec-tabs');
+  var ta = container.querySelector('.rec-text');
+  if (!tabs || !ta) return;
+  suffix = suffix || ta._recSuffix || '';
+  var dims = dimVisibleDims();
+  var cur = ta._recDim || '';
+  if (dims.indexOf(cur) < 0) {
+    recSaveNow(container, ta, suffix); // 当前维度被隐藏：先把草稿落盘再切走
+    cur = dims[0] || DIM_MAIN;
+    applyDimToTa(container, ta, cur);
+  }
+  var html = '';
+  for (var i = 0; i < dims.length; i++) {
+    var dm = dims[i];
+    var n = recNoteGet(recNotesKey(suffix, dm)).trim().length;
+    html += '<button type="button" role="tab" class="rec-tab' + (dm === cur ? ' active' : '') + '" data-dim="' + escAttr(dm) + '" onclick="RENDER.switchRecDim(this)">'
+      + escHtml(dm) + (n ? '<span class="rec-tab-len">' + n + '</span>' : '') + '</button>';
+  }
+  tabs.innerHTML = html;
+}
+function applyDimToTa(container, ta, dim) {
+  ta._recDim = dim;
+  ta._recKey0 = recNotesKey(ta._recSuffix || '', dim);
+  var cand = recNoteCandidates(ta._recSuffix || '', dim);
+  ta.value = cand.text;
+  var alts = container.querySelector('.rec-alts');
+  if (alts) { alts.innerHTML = ''; alts.style.display = 'none'; }
+  if (cand.better.length) recRenderBetter(container, cand.better, ta._recSuffix || '', dim);
+  recAutogrow(ta);
+  return cand;
+}
+function switchRecDim(btn) {
+  var panel = btn && btn.closest ? btn.closest('.record-panel') : null;
+  if (!panel) return;
+  var ta = panel.querySelector('.rec-text');
+  if (!ta) return;
+  var dm = btn.getAttribute('data-dim') || '';
+  if (ta._recDim === dm) { btn.classList.add('active'); return; }
+  recSaveNow(panel, ta, ta._recSuffix || '');
+  var cand = applyDimToTa(panel, ta, dm);
+  panel.querySelectorAll('.rec-tab').forEach(function(b) { b.classList.toggle('active', b === btn); });
+  recStatusShow(panel, '「' + dm + '」' + (cand.text.trim() ? cand.text.trim().length + ' 字' : '空'), true);
+}
+function updateRecTabLen(container, dim, text) {
+  if (!container || !container.querySelector) return;
+  var tab = container.querySelector('.rec-tab[data-dim="' + escAttr(dim || '') + '"]');
+  if (!tab) return;
+  var n = (text || '').trim().length;
+  var len = tab.querySelector('.rec-tab-len');
+  if (n) {
+    if (!len) { len = document.createElement('span'); len.className = 'rec-tab-len'; tab.appendChild(len); }
+    len.textContent = n;
+  } else if (len) len.remove();
+}
+// ===== v0.87.0 维度下拉：每命盘显隐 + 全局维度管理 =====
+function toggleDimPop(e) {
+  var wrap = e && e.target && e.target.closest ? e.target.closest('.rec-dim-wrap') : null;
+  if (!wrap) return;
+  var pop = wrap.querySelector('.rec-dim-pop');
+  if (!pop) return;
+  var was = pop.classList.contains('open');
+  closeDimPops();
+  if (was) return;
+  var panel = wrap.closest('.record-panel');
+  var ta = panel ? panel.querySelector('.rec-text') : null;
+  pop._suffix = (ta && ta._recSuffix) || '';
+  pop.innerHTML = buildDimPopHtml(pop._suffix);
+  pop.classList.add('open');
+}
+function closeDimPops() {
+  document.querySelectorAll('.rec-dim-pop.open').forEach(function(p) { p.classList.remove('open'); });
+}
+if (typeof window !== 'undefined' && !window._dimPopGuard) {
+  window._dimPopGuard = true;
+  document.addEventListener('click', function(e) {
+    if (e.target.closest && e.target.closest('.rec-dim-wrap')) return;
+    closeDimPops();
+  }, true);
+}
+function dimLenOf(suffix, dim) { return recNoteGet(recNotesKey(suffix || '', dim)).trim().length; }
+function buildDimPopHtml(suffix) {
+  var dims = dimList(), vis = dimVisGet();
+  var h = '<div class="rec-dim-sec">本命盘显示（只影响当前命盘）</div>';
+  h += '<label class="rec-dim-row"><input type="checkbox"' + (vis.hideEmpty ? ' checked' : '') + ' onchange="RENDER.dimHideEmptyToggle(this)">隐藏内容为空的维度</label>';
+  h += '<div class="rec-dim-sec">显示哪些维度</div>';
+  for (var i = 0; i < dims.length; i++) {
+    var dm = dims[i];
+    var n = dimLenOf(suffix, dm);
+    var del = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-del" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimDeleteBtn(this)" title="从维度列表移除（文档内容保留本机）">✕</button>';
+    h += '<label class="rec-dim-row"><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
+      + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + del + '</label>';
+  }
+  h += '<div class="rec-dim-sec">新增维度（全局，所有命盘可用）</div>';
+  h += '<div class="rec-dim-add"><input type="text" class="rec-dim-new" maxlength="' + DIM_NAME_MAX + '" placeholder="如：事业 / 婚姻 / 健康" onkeydown="if(event.key===\'Enter\'){event.preventDefault();RENDER.dimAddBtn(this)}"><button type="button" class="rec-dim-addbtn" onclick="RENDER.dimAddBtn(this)">＋ 新增</button></div>';
+  h += '<div class="rec-dim-hint">移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
+  return h;
+}
+function dimVisToggle(input) {
+  var dm = input.getAttribute('data-dim') || '';
+  var vis = dimVisGet();
+  if (input.checked) delete vis.hidden[dm]; else vis.hidden[dm] = 1;
+  if (!dimVisSet(vis)) return;
+  refreshDimUI();
+}
+function dimHideEmptyToggle(input) {
+  var vis = dimVisGet();
+  vis.hideEmpty = !!input.checked;
+  if (!dimVisSet(vis)) return;
+  refreshDimUI();
+}
+function refreshDimUI() {
+  document.querySelectorAll('.record-panel').forEach(function(panel) {
+    var ta = panel.querySelector('.rec-text');
+    if (!ta) return;
+    renderRecTabs(panel, ta._recSuffix || '');
+  });
+  var pop = document.querySelector('.rec-dim-pop.open');
+  if (pop) pop.innerHTML = buildDimPopHtml(pop._suffix || '');
+}
+function dimAddBtn(btn) {
+  var pop = btn.closest ? btn.closest('.rec-dim-pop') : null;
+  var input = pop ? pop.querySelector('.rec-dim-new') : null;
+  var r = dimAdd(input ? input.value : '');
+  var panel = btn.closest ? btn.closest('.record-panel') : null;
+  if (!r.ok) {
+    recStatusShow(panel || document.body, '⚠ ' + r.err, true);
+    if (input) input.focus();
+    return;
+  }
+  refreshDimUI();
+}
+function dimDeleteBtn(btn) {
+  var dm = btn.getAttribute('data-dim') || '';
+  var r = dimRemove(dm);
+  var panel = btn.closest ? btn.closest('.record-panel') : null;
+  if (!r.ok) { recStatusShow(panel || document.body, '⚠ ' + r.err, true); return; }
+  refreshDimUI();
+}
 function recSaveNow(container, ta, suffix) {
-  var k = recNotesKey(suffix);
+  var k = recNotesKey(suffix, ta._recDim);
   if (!k || k !== ta._recKey0) return false;
   var prev = null;
   try { prev = localStorage.getItem(k); } catch (e) {}
@@ -12552,7 +12854,8 @@ function recSaveNow(container, ta, suffix) {
     recStatusShow(container, '⚠ 保存失败：浏览器存储空间不足，请先复制内容再清理', true);
     return false;
   }
-  recStatusShow(container, '已保存 ' + new Date().toTimeString().slice(0, 8));
+  recStatusShow(container, '「' + (ta._recDim || DIM_MAIN) + '」已保存 ' + new Date().toTimeString().slice(0, 8));
+  updateRecTabLen(container, ta._recDim, ta.value);
   if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
   return true;
 }
@@ -12564,7 +12867,7 @@ if (typeof window !== 'undefined' && !window._recUnloadGuard) {
       var t = tas[i];
       if (!(t.value || '').trim()) continue;
       var stored = null;
-      try { stored = localStorage.getItem(recNotesKey(t._recSuffix)); } catch (err) {}
+      try { stored = localStorage.getItem(recNotesKey(t._recSuffix, t._recDim)); } catch (err) {}
       if (stored !== t.value) { e.preventDefault(); e.returnValue = ''; return ''; }
     }
   });
@@ -14257,7 +14560,8 @@ function twinRecBtnHtml() {
 function twinRecPanelHtml() {
   var on = isRecOn();
   return '<div class="record-panel twin-rec' + (on ? ' open' : '') + '">'
-    + '<div class="rec-head"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-status" role="status"></span></div>'
+    + '<div class="rec-head"><span style="display:inline-flex;align-items:center;gap:8px;"><span class="rec-title">分析记录（双胞胎）</span><span class="rec-dim-wrap"><button type="button" class="rec-dim-btn" onclick="RENDER.toggleDimPop(event)" title="分析维度：勾选本命盘显示的维度，或新增/移除维度">维度 ▾</button><div class="rec-dim-pop" onclick="event.stopPropagation()"></div></span></span><span class="rec-status" role="status"></span></div>'
+    + '<div class="rec-tabs" role="tablist"></div>'
     + '<div class="rec-alts"></div>'
     + '<textarea class="rec-text" placeholder="记录本次双胞胎合盘分析……写入即自动保存"></textarea>'
     + '<div class="rec-audio" data-suffix="">'
@@ -16915,7 +17219,22 @@ function cmpSetState(entries) {
     recSaveNow: recSaveNow,
     recNotesKey: recNotesKey,
     recNoteCandidates: recNoteCandidates,
+    recKeyParts: recKeyParts,
     loadRecAlt: loadRecAlt,
+    dimList: dimList,
+    dimAdd: dimAdd,
+    dimRemove: dimRemove,
+    dimVisKey: dimVisKey,
+    dimVisGet: dimVisGet,
+    dimVisSet: dimVisSet,
+    dimVisibleDims: dimVisibleDims,
+    renderRecTabs: renderRecTabs,
+    switchRecDim: switchRecDim,
+    toggleDimPop: toggleDimPop,
+    dimVisToggle: dimVisToggle,
+    dimHideEmptyToggle: dimHideEmptyToggle,
+    dimAddBtn: dimAddBtn,
+    dimDeleteBtn: dimDeleteBtn,
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     recAudioToggle: recAudioToggle,
@@ -20953,6 +21272,123 @@ function captureScreenshot() {
         var tR = document.getElementById('tst-rec'); if (tR && tR.parentNode) tR.parentNode.removeChild(tR);
       } catch (e) {}
       tests.push(eq('REC 现场还原: bz_rec_mode/草稿清空', (function() { var m = localStorage.getItem('bz_rec_mode'); return m === savedMode && (keyR === null || localStorage.getItem(keyR) === savedNotes); })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
+  // ===== v0.87.0 分析维度：全局维度表 + 每命盘显隐 + 维度 tabs 写入即存 =====
+  (function() {
+    tests.push({ section: '分析维度(v0.87.0)' });
+    var R = window.RENDER;
+    if (!R || typeof R.dimList !== 'function' || typeof R.renderChart !== 'function' || typeof R.recSaveNow !== 'function' || typeof R.switchRecDim !== 'function') {
+      tests.push(fail('DIM 前置: RENDER 维度接口已挂载', '缺失'));
+      return;
+    }
+    var oldPd = null, savedList = null, savedMode = null, savedVis = null, visKey = null, tstD = null;
+    var fpD = '维度测试|男|1982|10|18|5|1';
+    var testKeys = [];
+    try {
+      savedList = localStorage.getItem('bz_dim_list_v1');
+      savedMode = localStorage.getItem('bz_rec_mode');
+      oldPd = window._paipanData;
+      localStorage.removeItem('bz_dim_list_v1');
+
+      // T01-T08 全局维度表：默认表 / 新增 / 去重 / 非法拦截 / 主维度保护
+      tests.push(eq('DIM T01: 默认维度表=[分析记录]', R.dimList().join(','), '分析记录'));
+      var rAdd = R.dimAdd('事业');
+      tests.push(eq('DIM T02: 新增维度成功', rAdd.ok === true ? R.dimList().join(',') : 'fail', '分析记录,事业'));
+      tests.push(eq('DIM T03: 重复新增被拒', R.dimAdd('事业').ok, false));
+      tests.push(eq('DIM T04: 空名被拒', R.dimAdd('  ').ok, false));
+      tests.push(eq('DIM T05: 含|被拒', R.dimAdd('a|b').ok, false));
+      tests.push(eq('DIM T06: 含§被拒', R.dimAdd('a§b').ok, false));
+      tests.push(eq('DIM T07: 删除非主维度', R.dimRemove('事业').ok === true ? R.dimList().length : -1, 1));
+      tests.push(eq('DIM T08: 主维度不可删', R.dimRemove('分析记录').ok, false));
+      R.dimAdd('事业'); // 后续用例保留两个维度
+
+      // T09-T13 键构造与解析：主维度兼容旧键；子维度带§段；twin 叠加
+      var pdD = paipan('维度测试', '男', 1982, 10, 18, 5, 1);
+      window._paipanData = pdD;
+      tests.push(eq('DIM T09: 主维度键无§段(兼容旧数据)', R.recNotesKey('', '分析记录'), 'bz_rec_notes_' + fpD));
+      tests.push(eq('DIM T10: 子维度键带§段', R.recNotesKey('', '事业'), 'bz_rec_notes_§事业|' + fpD));
+      tests.push(eq('DIM T11: twin+子维度组合', R.recNotesKey('twin|', '事业'), 'bz_rec_notes_twin|§事业|' + fpD));
+      var kp = R.recKeyParts('bz_rec_notes_twin|§事业|' + fpD);
+      tests.push(eq('DIM T12: recKeyParts 解析维度键', kp ? (kp.prefix + '/' + kp.dim + '/' + kp.name + '/' + kp.y) : 'null', 'twin|/事业/维度测试/1982'));
+      var kp0 = R.recKeyParts('bz_rec_notes_' + fpD);
+      tests.push(eq('DIM T13: recKeyParts 旧键 dim 为空', kp0 ? (kp0.dim === '' && kp0.name === '维度测试' && kp0.prefix === '') : false, true));
+
+      // T14-T17 每命盘显隐：默认全显 / 勾掉隐藏 / 隐藏空维度只藏空文档
+      visKey = R.dimVisKey();
+      savedVis = visKey ? localStorage.getItem(visKey) : null;
+      tests.push(eq('DIM T14: 显隐默认全显示', R.dimVisibleDims().join(','), '分析记录,事业'));
+      var vis = R.dimVisGet();
+      vis.hidden['事业'] = 1;
+      R.dimVisSet(vis);
+      tests.push(eq('DIM T15: 勾掉后维度隐藏', R.dimVisibleDims().join(','), '分析记录'));
+      R.dimVisSet({ hideEmpty: true, hidden: {} });
+      tests.push(eq('DIM T16: 隐藏空维度开启时空维度隐藏', R.dimVisibleDims().join(','), '分析记录'));
+      localStorage.setItem('bz_rec_notes_§事业|' + fpD, '事业文档有内容');
+      testKeys.push('bz_rec_notes_§事业|' + fpD);
+      R.dimVisSet({ hideEmpty: false, hidden: {} });
+      tests.push(eq('DIM T17: 有内容的维度不受隐藏空维度影响', R.dimVisibleDims().join(','), '分析记录,事业'));
+
+      // T18-T27 渲染与编辑：tabs 随显隐生成 / 切换即装载 / 写入落对应键 / 徽标
+      localStorage.removeItem('bz_rec_mode');
+      tstD = document.createElement('div');
+      tstD.id = 'tst-dim';
+      document.body.appendChild(tstD);
+      R.renderChart(pdD, undefined, 'tst-dim');
+      R.toggleRecMode(true, tstD);
+      var taD = tstD.querySelector('.rec-text');
+      tests.push(eq('DIM T18: 记录区存在维度 tab 条', !!tstD.querySelector('.rec-tabs'), true));
+      tests.push(eq('DIM T19: tab 数=可见维度数', tstD.querySelectorAll('.rec-tab').length, 2));
+      tests.push(eq('DIM T20: 激活 tab 为主维度', (tstD.querySelector('.rec-tab.active') || { textContent: '' }).textContent.replace(/\d+$/, ''), '分析记录'));
+      taD.value = '主维度正文';
+      R.recSaveNow(tstD, taD, '');
+      tests.push(eq('DIM T21: 主维度写入落兼容旧键', localStorage.getItem('bz_rec_notes_' + fpD), '主维度正文'));
+      var tabSy = tstD.querySelector('.rec-tab[data-dim="事业"]');
+      tests.push(eq('DIM T22: 子维度 tab 存在', !!tabSy, true));
+      R.switchRecDim(tabSy);
+      tests.push(eq('DIM T23: 切换后 ta._recDim 更新', taD._recDim, '事业'));
+      taD.value = '事业维度正文';
+      R.recSaveNow(tstD, taD, '');
+      tests.push(eq('DIM T24: 子维度写入落§键', localStorage.getItem('bz_rec_notes_§事业|' + fpD), '事业维度正文'));
+      tests.push(eq('DIM T25: 字数徽标出现', (tstD.querySelector('.rec-tab[data-dim="事业"] .rec-tab-len') || { textContent: '' }).textContent, '6'));
+      R.switchRecDim(tstD.querySelector('.rec-tab[data-dim="分析记录"]'));
+      tests.push(eq('DIM T26: 切回主维度读回主文档', taD.value, '主维度正文'));
+      tests.push(eq('DIM T27: recNoteCandidates 按维度过滤', R.recNoteCandidates('', '事业').key, 'bz_rec_notes_§事业|' + fpD));
+      tests.push(eq('DIM T27b: 主维度候选键归一化(无§段)', R.recNoteCandidates('', '分析记录').key, 'bz_rec_notes_' + fpD));
+
+      // T28-T32 维度下拉：面板结构 / 勾选即时生效
+      var dimBtn = tstD.querySelector('.rec-dim-btn');
+      tests.push(eq('DIM T28: 记录头有「维度」下拉按钮', !!dimBtn, true));
+      if (dimBtn) dimBtn.click();
+      var pop = tstD.querySelector('.rec-dim-pop.open');
+      tests.push(eq('DIM T29: 下拉面板展开且含隐藏空维度开关', !!(pop && pop.querySelector('input[type="checkbox"]')), true));
+      tests.push(eq('DIM T30: 面板含每维度勾选行', pop ? pop.querySelectorAll('input[data-dim]').length : 0, 2));
+      tests.push(eq('DIM T31: 面板含新增输入框', !!(pop && pop.querySelector('.rec-dim-new')), true));
+      var cb = pop ? pop.querySelector('input[data-dim="事业"]') : null;
+      if (cb) { cb.checked = false; R.dimVisToggle(cb); }
+      tests.push(eq('DIM T32: 勾掉即时隐藏 tab', tstD.querySelectorAll('.rec-tab').length, 1));
+      R.dimVisSet({ hideEmpty: false, hidden: {} });
+
+      // T33 盘面 md 带维度分节
+      var mdDims = window.ARCHIVE.syncChartMd({ name: '维度测试', gender: '男', year: 1982, month: 10, day: 18, hour: 5, min: 1 }, '主记录', [['事业', '事业内容']]);
+      tests.push(eq('DIM T33: 盘面 md 含维度分节', (mdDims.indexOf('## 分析记录\n') >= 0 && mdDims.indexOf('## 分析记录·事业') >= 0 && mdDims.indexOf('事业内容') >= 0) ? 'Y' : 'N', 'Y'));
+    } finally {
+      try {
+        if (savedList === null) localStorage.removeItem('bz_dim_list_v1'); else localStorage.setItem('bz_dim_list_v1', savedList);
+        if (visKey) { if (savedVis === null) localStorage.removeItem(visKey); else localStorage.setItem(visKey, savedVis); }
+        testKeys.forEach(function(k) { localStorage.removeItem(k); });
+        localStorage.removeItem('bz_rec_notes_' + fpD);
+        localStorage.removeItem('bz_rec_notes_§事业|' + fpD);
+        if (savedMode === null) localStorage.removeItem('bz_rec_mode'); else localStorage.setItem('bz_rec_mode', savedMode);
+        window._paipanData = oldPd;
+        if (tstD && tstD.parentNode) tstD.parentNode.removeChild(tstD);
+      } catch (e) {}
+      tests.push(eq('DIM 现场还原: 维度表/显隐/草稿清理', (function() {
+        return localStorage.getItem('bz_rec_notes_维度测试|男|1982|10|18|5|1') === null
+          && localStorage.getItem('bz_rec_notes_§事业|维度测试|男|1982|10|18|5|1') === null
+          && localStorage.getItem('bz_dim_list_v1') === savedList;
+      })() ? 'Y' : 'N', 'Y'));
     }
   })();
 

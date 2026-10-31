@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.86.12 | 2026-10-28 -->
+<!-- 八字排盘 ·  从真版 v0.87.0 | 2026-10-31 -->
+<!-- v0.87.0: 分析维度 —— 记录区多维度 tabs + 每命盘显隐 + 全局维度管理：rec-head 加「维度 ▾」下拉（勾选本命盘显示哪些维度 + 隐藏内容为空的维度开关，存 bz_dim_vis_<指纹> 仅当前命盘生效）；下拉内可新增维度（全局维度表 bz_dim_list_v1，最多 12 个、重名与非法字符拦截、主维度「分析记录」不可删）与 ✕ 移除（只从列表去掉，文档保留本机，同名重建即找回）；记录区标题下新增维度 tab 条，点击切换即装载该维度文档，输入/compositionend/blur/4 秒巡检/beforeunload 五道保存兜底沿用；主维度键与旧版完全一致（bz_rec_notes_指纹）历史数据无损，子维度键 = bz_rec_notes_[twin|]§维度名|指纹，双胞胎卡同样支持；tab 实时字数徽标；记录防丢候选（同生日/同名回捞）按维度隔离；盘面 md 在「## 分析记录」后逐维度追加「## 分析记录·维度名」分节，INDEX.md 记录字数含全部维度 -->
 <!-- v0.86.8: 录音稿整理升级 —— ①要点从 5-12 条×1-3 句升到 12-25 条×3-6 句：必须覆盖录音全部实质话题，写明盘面对照依据（宫位/干支/十神/大运流年如何作用）、结论、例子与原话，具像到人事物数字日期；②LLM 输出新增「## 解读的思路与步骤」（按录音时序逐步还原：先看什么→为什么→从哪推出什么→如何表达→案主反应，复盘学习用）与「## 规划的结果以及原理」（每条建议=内容+命理原理+预期与时间线）；③录音与 AI 交互区新增同名两页签（rz-tab steps/plan，bzMdSectionOf 按章节标题切分渲染，旧稿无章节提示点🔄重转录升级）；SN16-2 断言改 12-25 条，新增 SN16-2b/SN13-16/SN13-17，共 1834 条 -->
 <!-- v0.86.6: 「📄 档案md」提速：热路径 ~1.7s → <100ms —— syncTouch 标脏 _syncDirty、syncWaitIdle 无脏直接过有脏才 syncAll；syncChartFileQuick 主档名一次直取；SN17-7/SN20-5 改写+SN20-6 新增，1831 全绿 -->
 <!-- v0.86.3: 点档案行默认打开编辑器 —— 档案弹窗点行（名字区）直接进 ✏️ 编辑器（悬停手型+下划线提示），排盘仍走「排盘」按钮；closeEditPanel 改动比对对旧档案缺省字段（useSolar/calendarType/min/lunarMonth/prov/city/dist）归一化，打开后不动字段直关不再误弹「未保存修改」确认 -->
@@ -443,6 +444,29 @@
   .rec-title { font-family:var(--font-display); font-size:13px; letter-spacing:.08em; color:var(--c-ink); }
   .rec-status { font-size:12px; color:var(--c-red); opacity:0; transition:opacity .2s; }
   .rec-status.show { opacity:1; }
+  /* v0.87.0 分析维度：维度 tabs + 维度下拉 */
+  .rec-tabs { display:flex; flex-wrap:wrap; align-items:stretch; border-bottom:0.5px solid var(--c-line); background:rgba(201,169,110,.05); padding:0 6px; flex:0 0 auto; }
+  .rec-tab { padding:6px 12px 5px; font-size:12px; font-family:var(--font-display); letter-spacing:.05em; color:var(--c-gray); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+  .rec-tab:hover { color:var(--c-ink); }
+  .rec-tab.active { color:var(--c-ink); border-bottom-color:#c9a96e; }
+  .rec-tab-len { font-size:10px; color:var(--c-gray); font-family:var(--font-body); line-height:1; padding:1px 5px; border:0.5px solid var(--c-line); border-radius:8px; }
+  .rec-dim-wrap { position:relative; display:inline-block; }
+  .rec-dim-btn { padding:2px 8px; font-size:11px; font-family:var(--font-body); color:var(--c-gray); background:none; border:1px solid var(--c-line); border-radius:2px; cursor:pointer; }
+  .rec-dim-btn:hover { color:var(--c-ink); border-color:var(--c-gray); }
+  .rec-dim-pop { display:none; position:absolute; top:100%; left:0; z-index:120; min-width:280px; max-width:calc(100vw - 24px); background:var(--c-paper); border:1px solid var(--c-line); border-radius:4px; box-shadow:0 4px 16px rgba(0,0,0,.14); padding:10px 12px; margin-top:4px; font-size:13px; color:var(--c-ink); }
+  .rec-dim-pop.open { display:block; }
+  .rec-dim-sec { font-size:11px; color:var(--c-gray); letter-spacing:.08em; margin:8px 0 2px; }
+  .rec-dim-sec:first-child { margin-top:0; }
+  .rec-dim-row { display:flex; align-items:center; gap:6px; padding:4px 0; cursor:pointer; }
+  .rec-dim-row input[type="checkbox"] { margin:0; }
+  .rec-dim-len { font-size:11px; color:var(--c-gray); margin-left:auto; }
+  .rec-dim-del { border:none; background:none; color:var(--c-gray); cursor:pointer; font-size:12px; padding:0 4px; }
+  .rec-dim-del:hover { color:var(--c-red); }
+  .rec-dim-add { display:flex; gap:6px; margin-top:4px; }
+  .rec-dim-new { flex:1; min-width:0; padding:4px 8px; border:1px solid var(--c-line); border-radius:2px; font-size:13px; font-family:var(--font-body); color:var(--c-ink); background:var(--c-paper); }
+  .rec-dim-addbtn { padding:4px 12px; font-size:12px; border:1px solid var(--c-line); background:var(--c-paper); color:var(--c-ink); border-radius:2px; cursor:pointer; }
+  .rec-dim-addbtn:hover { border-color:var(--c-gray); }
+  .rec-dim-hint { font-size:11px; color:var(--c-gray); margin-top:8px; line-height:1.5; }
   .rec-text { min-height:360px; max-height:max(360px, calc(100dvh - 140px)); border:none; outline:none; resize:none; overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:var(--c-gray) transparent; padding:18px 12px; font-family:var(--font-body); font-size:14px; line-height:1.7; color:var(--c-ink); background:transparent; }
   .rec-text::-webkit-scrollbar { width:8px; }
   .rec-text::-webkit-scrollbar-thumb { background:var(--c-gray); border:2px solid var(--c-paper); border-radius:4px; }
