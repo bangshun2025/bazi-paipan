@@ -1531,13 +1531,14 @@ function buildDimPopHtml(suffix) {
   for (var i = 0; i < dims.length; i++) {
     var dm = dims[i];
     var n = dimLenOf(suffix, dm);
+    var ren = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-ren" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimRenameBtn(this)" title="重命名维度（本机文档与显隐设置一并迁移）">✎</button>';
     var del = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-del" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimDeleteBtn(this)" title="从维度列表移除（文档内容保留本机）">✕</button>';
     h += '<label class="rec-dim-row"><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
-      + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + del + '</label>';
+      + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + ren + del + '</label>';
   }
   h += '<div class="rec-dim-sec">新增维度（全局，所有命盘可用）</div>';
   h += '<div class="rec-dim-add"><input type="text" class="rec-dim-new" maxlength="' + DIM_NAME_MAX + '" placeholder="如：事业 / 婚姻 / 健康" onkeydown="if(event.key===\'Enter\'){event.preventDefault();RENDER.dimAddBtn(this)}"><button type="button" class="rec-dim-addbtn" onclick="RENDER.dimAddBtn(this)">＋ 新增</button></div>';
-  h += '<div class="rec-dim-hint">移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
+  h += '<div class="rec-dim-hint">✎ 改名会把本机文档与显隐设置一并迁到新名字下；移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
   return h;
 }
 function dimVisToggle(input) {
@@ -1580,6 +1581,92 @@ function dimDeleteBtn(btn) {
   var panel = btn.closest ? btn.closest('.record-panel') : null;
   if (!r.ok) { recStatusShow(panel || document.body, '⚠ ' + r.err, true); return; }
   refreshDimUI();
+}
+// v0.87.2 行内改名：✎ 把该行换成输入框，Enter/✓ 确认，Esc/失焦取消（✓ 用 mousedown 抢在 blur 前）
+function dimRenameBtn(btn) {
+  var dm = btn.getAttribute('data-dim') || '';
+  var row = btn.closest ? btn.closest('.rec-dim-row') : null;
+  if (!row || !dm || dm === DIM_MAIN) return;
+  row.innerHTML = '<input type="text" class="rec-dim-renin" maxlength="' + DIM_NAME_MAX + '" value="' + escAttr(dm) + '" onkeydown="RENDER.dimRenameKey(event,this)" onblur="RENDER.dimRenameCancel(this)">'
+    + '<button type="button" class="rec-dim-addbtn" onmousedown="RENDER.dimRenameCommit(this)" title="确认改名">✓</button>';
+  var inp = row.querySelector('.rec-dim-renin');
+  if (inp) { inp.focus(); inp.select(); }
+}
+function dimRenameKey(e, inp) {
+  if (e.key === 'Enter') { e.preventDefault(); dimRenameCommit(inp); }
+  else if (e.key === 'Escape') { e.preventDefault(); dimRenameCancel(inp); }
+}
+function dimRenameCommit(inp) {
+  var oldName = inp && inp.defaultValue || '';
+  var r = dimRename(oldName, inp ? inp.value : '');
+  var panel = inp && inp.closest ? inp.closest('.record-panel') : null;
+  if (!r.ok) {
+    refreshDimUI();
+    recStatusShow(panel || document.body, '⚠ ' + r.err, true);
+    return;
+  }
+  refreshDimUI();
+}
+function dimRenameCancel(inp) {
+  if (!inp || !document.body.contains(inp)) return;
+  refreshDimUI();
+}
+// v0.87.2 维度改名：维度表替换 + 本机文档/显隐设置一并迁移到新名，旧名不留孤儿键
+function dimRename(oldName, newName) {
+  if (oldName === DIM_MAIN) return { ok: false, err: '「' + DIM_MAIN + '」是默认维度，不能改名' };
+  newName = String(newName == null ? '' : newName).trim();
+  if (!newName) return { ok: false, err: '维度名不能为空' };
+  if (newName === oldName) return { ok: true, list: dimList() };
+  if (/[|§"'<>]/.test(newName)) return { ok: false, err: '维度名不能含 | § " \' < > 字符' };
+  if (newName.length > DIM_NAME_MAX) return { ok: false, err: '维度名最长 ' + DIM_NAME_MAX + ' 字' };
+  var list = dimList();
+  if (list.indexOf(newName) >= 0) return { ok: false, err: '维度「' + newName + '」已存在' };
+  // 冲突预检：目标名在本机留有历史文档（曾删维度的孤儿数据）时拒绝，防覆盖
+  var moves = [], conflict = null;
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k) continue;
+      var p = recKeyParts(k);
+      if (p && p.dim === oldName) {
+        var nk = LS_REC_NOTES + p.prefix + dimSegOf(newName) + [p.name, p.gender, p.y, p.m, p.d, p.h, p.mi].join('|');
+        if (recNoteGet(nk).trim()) { conflict = nk; break; }
+        moves.push({ from: k, to: nk });
+      } else if (k.indexOf(LS_DIM_VIS) === 0) {
+        var v = null;
+        try { v = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+        if (v && v.hidden && Object.prototype.hasOwnProperty.call(v.hidden, oldName)) moves.push({ vis: k });
+      }
+    }
+  } catch (e) { return { ok: false, err: '读取本机存储失败，改名中止' }; }
+  if (conflict) return { ok: false, err: '「' + newName + '」名下已有本机历史文档，为防覆盖请换个名字' };
+  for (var j = 0; j < moves.length; j++) {
+    var mv = moves[j];
+    if (mv.vis) {
+      try {
+        var vv = JSON.parse(localStorage.getItem(mv.vis));
+        if (vv && vv.hidden && Object.prototype.hasOwnProperty.call(vv.hidden, oldName)) {
+          vv.hidden[newName] = vv.hidden[oldName];
+          delete vv.hidden[oldName];
+          localStorage.setItem(mv.vis, JSON.stringify(vv));
+        }
+      } catch (e) {}
+    } else {
+      if (!recNoteSet(mv.to, recNoteGet(mv.from))) return { ok: false, err: '写入失败：存储空间不足，改名中止（原数据未动）' };
+      try { localStorage.removeItem(mv.from); } catch (e) {}
+    }
+  }
+  var idx = list.indexOf(oldName);
+  if (idx >= 0) list[idx] = newName;
+  if (!dimSetList(list)) return { ok: false, err: '保存失败：存储空间不足' };
+  // 打开中的编辑区：当前维度旧名 → 新名，避免 tabs 刷新时把草稿存回旧键
+  document.querySelectorAll('.rec-text').forEach(function(ta) {
+    if (ta._recDim === oldName) {
+      ta._recDim = newName;
+      ta._recKey0 = recNotesKey(ta._recSuffix || '', newName, ta._recPd);
+    }
+  });
+  return { ok: true, list: list };
 }
 function recSaveNow(container, ta, suffix, userAct) {
   var k = recNotesKey(suffix, ta._recDim, ta._recPd);
@@ -5976,6 +6063,10 @@ function cmpSetState(entries) {
     dimHideEmptyToggle: dimHideEmptyToggle,
     dimAddBtn: dimAddBtn,
     dimDeleteBtn: dimDeleteBtn,
+    dimRenameBtn: dimRenameBtn,
+    dimRenameKey: dimRenameKey,
+    dimRenameCommit: dimRenameCommit,
+    dimRenameCancel: dimRenameCancel,
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     recAudioToggle: recAudioToggle,
