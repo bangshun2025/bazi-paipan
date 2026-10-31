@@ -1392,7 +1392,8 @@ function renderArchiveModal() {
   renderSortBar();
   renderArchiveBackupWarn();
 
-  var k = _searchKeyword.trim().toLowerCase();
+  var _aiOn = !!(window.RENDER_AI && RENDER_AI.aiActive && RENDER_AI.aiActive());
+  var k = _aiOn ? '' : _searchKeyword.trim().toLowerCase(); // AI 模式下关键词过滤让位
   if (archives.length === 0) {
     listEl.innerHTML = '<div class="archive-modal-empty">暂无档案，排盘后自动保存</div>';
     return;
@@ -1403,10 +1404,12 @@ function renderArchiveModal() {
   for (var i = 0; i < archives.length; i++) {
     var a = archives[i];
     if (!matchTagFilter(a, _activeTag)) continue;
+    if (_aiOn && !RENDER_AI.aiMatch(a)) continue;
     if (k && !archiveMatchesKeyword(a, k)) continue;
     html += archiveRowHtml(a, i);
     hit++;
   }
+  if (window.RENDER_AI) RENDER_AI.aiStatus(hit);
   listEl.innerHTML = hit ? html : '<div class="archive-modal-empty">未找到匹配档案</div>';
 }
 

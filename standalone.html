@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.87.2 | 2026-10-31 -->
-<!-- v0.87.2: 维度改名 —— 维度下拉每行加 ✎ 重命名入口（主维度不可改名），行内输入框 Enter/✓ 确认、Esc/失焦取消；dimRename 做全库迁移：维度表替换 + 该维度全部记录键（含 twin 盘）改段到新名 + 各命盘显隐设置 hidden 键迁移，旧名不留孤儿键；目标名在本机留有历史文档（曾删维度的孤儿数据）时拒绝改名防覆盖；改名前冲突预检通过才动数据，写失败即中止原数据不动；打开中的编辑区当前维度同步换名，避免 tabs 刷新把草稿存回旧键 -->
+<!-- 八字排盘 ·  从真版 v0.88.0 | 2026-10-31 -->
+<!-- v0.88.0: AI 档案搜索 —— 档案搜索框旁新增「🤖 AI 搜」：自然语言描述条件（如「找出有两个同柱的命盘」「三戌同支」「日主甲木的女性」），LLM 只做翻译（自然语言→查询条件 JSON），过滤在本地执行（四柱优先用存档 bazi、缺失时以主排盘同源 paipan 现算）：条件引擎支持 指定柱干支/天干地支完整干支计数/同柱同干同支/五行个数/日主/纳音/年柱/出生区间 + and/or/not 组合；接口走用户自配 OpenAI 兼容（DeepSeek/GLM/OpenAI/自定义），⚙ 设置面板填 Key（仅存本机 localStorage，浏览器直连），30 秒超时，返回非 JSON 时提示重试；命中显示 AI 理解摘要 + 命中数 + ✕ 退出 AI，AI 模式下关键词过滤让位；renderArchiveModal 加过滤钩子（index/standalone 同步三行） -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
 <!-- v0.85.1: 录音锁定内置麦克风 + 静音守卫 —— ① 录音前枚举输入设备并锁定 Mac 内置麦（deviceId exact），iPhone 连续互通麦、BlackHole/豆包/Oray/iShot/miaowa 等虚拟设备一律排除，避免系统默认输入被别的软件悄悄切走；② 录制中每 3 秒用 AnalyserNode 测一次真实电平，连续 18 秒低于 -48dBFS 立刻红字告警 + 三声蜂鸣，每满 60 秒再响一次；③ 监听 MediaStreamTrack 的 mute 事件，设备被系统断开时即时提示；④ 保存时按采样统计判定整段是否几乎全静音，卡片名标「⚠静音」并给红字提示，避免再出现 89 分钟录音只有开头几秒有声却全程无提示；⑤ 开录时状态条显示当前锁定的设备名，未锁定内置麦时红字常驻。 -->
 <!-- v0.84.0: 转录模型换成 Qwen3-ASR-1.7B —— 实测同一段命理录音字错率 16.67% → 2.56%，35.6 秒长音频原本 SenseVoiceSmall 直接 500 失败、现在 6.94 秒出稿；术语（食神/偏财/七杀有制/正印护身/夫妻宫逢冲）基本全对；主模型失败自动回落到 SenseVoiceSmall 并如实记录实际所用模型；历史录音仍按 ASR 换代时间点标注当年模型 -->
@@ -6882,7 +6882,8 @@ function renderArchiveModal() {
   renderSortBar();
   renderArchiveBackupWarn();
 
-  var k = _searchKeyword.trim().toLowerCase();
+  var _aiOn = !!(window.RENDER_AI && RENDER_AI.aiActive && RENDER_AI.aiActive());
+  var k = _aiOn ? '' : _searchKeyword.trim().toLowerCase(); // AI 模式下关键词过滤让位
   if (archives.length === 0) {
     listEl.innerHTML = '<div class="archive-modal-empty">暂无档案，排盘后自动保存</div>';
     return;
@@ -6893,10 +6894,12 @@ function renderArchiveModal() {
   for (var i = 0; i < archives.length; i++) {
     var a = archives[i];
     if (!matchTagFilter(a, _activeTag)) continue;
+    if (_aiOn && !RENDER_AI.aiMatch(a)) continue;
     if (k && !archiveMatchesKeyword(a, k)) continue;
     html += archiveRowHtml(a, i);
     hit++;
   }
+  if (window.RENDER_AI) RENDER_AI.aiStatus(hit);
   listEl.innerHTML = hit ? html : '<div class="archive-modal-empty">未找到匹配档案</div>';
 }
 
@@ -17802,6 +17805,373 @@ function cmpSetState(entries) {
   _cmpApplyCols();
   _cmpApplyBar();
   _cmpApplyFocus();
+})();
+
+// ============================================================
+// v0.88.0 AI 档案搜索：自然语言 → 查询条件 JSON → 本地排盘过滤
+// LLM 只负责「翻译」，过滤在本地执行（四柱纯计算，与主排盘同源），
+// 「两个同柱」「三戌同支」这类盘面结构特征靠算不靠猜，结果可靠可复现。
+// API 走用户自配的 OpenAI 兼容接口（DeepSeek / GLM / OpenAI），key 只存本机 localStorage。
+// ============================================================
+(function() {
+  'use strict';
+  var LS_AI = 'bz_ai_cfg';
+  var PRESETS = {
+    deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+    glm: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+    openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' }
+  };
+  var AI_WX_STEM = { '甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水' };
+  var AI_WX_ZHI = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
+  var TG_SET = '甲乙丙丁戊己庚辛壬癸', DZ_SET = '子丑寅卯辰巳午未申酉戌亥';
+  var POS_MAP = { '年':'年','月':'月','日':'日','时':'时','year':'年','month':'月','day':'日','hour':'时' };
+  var _aiQuery = null, _aiSummary = '', _aiBusy = false, _bar = null;
+
+  function cfgGet() {
+    try { var c = JSON.parse(localStorage.getItem(LS_AI)); return (c && typeof c === 'object') ? c : {}; } catch (e) { return {}; }
+  }
+  function cfgSet(cfg) { try { localStorage.setItem(LS_AI, JSON.stringify(cfg || {})); return true; } catch (e) { return false; } }
+  function cfgReady() { var c = cfgGet(); return !!(c.apiKey && c.baseUrl && c.model); }
+
+  // 每份档案的四柱：优先用存档 bazi，缺失时本地现算（与主排盘同源 paipan）
+  function pillarsOf(a) {
+    if (!a) return null;
+    if (a.bazi && a.bazi.nian && a.bazi.nian.gan && a.bazi.ri && a.bazi.ri.gan) {
+      var out = [];
+      [['nian','年'],['yue','月'],['ri','日'],['shi','时']].forEach(function(it) {
+        var c = a.bazi[it[0]];
+        if (c && c.gan) out.push({ pos: it[1], gan: c.gan, zhi: c.zhi });
+      });
+      if (out.length >= 3) return out;
+    }
+    if (!a.year || !a.month || !a.day) return null;
+    try {
+      var pp = (typeof ALGO !== 'undefined' && ALGO.paipan) ? ALGO.paipan : (typeof paipan === 'function' ? paipan : null);
+      if (!pp) return null;
+      var p = pp(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0);
+      if (!p) return null;
+      var arr = [];
+      [['nian','年'],['yue','月'],['ri','日'],['shi','时']].forEach(function(it2) {
+        if (p[it2[0]] && p[it2[0]].gan) arr.push({ pos: it2[1], gan: p[it2[0]].gan, zhi: p[it2[0]].zhi });
+      });
+      return arr.length >= 3 ? arr : null;
+    } catch (e) { return null; }
+  }
+  function gzName(c) { return (c && c.gan ? c.gan : '') + (c && c.zhi ? c.zhi : ''); }
+
+  function sameGroupCount(pls, key) {
+    var m = {}, max = 0;
+    for (var i = 0; i < pls.length; i++) {
+      var v = key === 'gz' ? gzName(pls[i]) : pls[i][key];
+      m[v] = (m[v] || 0) + 1;
+      if (m[v] > max) max = m[v];
+    }
+    return max;
+  }
+
+  // 单条件求值。a=档案，pls=四柱（可为 null），c=条件
+  function matchCond(a, pls, c) {
+    if (!c || typeof c !== 'object' || !c.type) return false;
+    var t = c.type;
+    if (t === 'name') {
+      var s = ((a.nickname || '') + (a.yiming || '') + (a.name || '')).toLowerCase();
+      return s.indexOf(String(c.text == null ? '' : c.text).toLowerCase()) >= 0;
+    }
+    if (t === 'gender') return a.gender === c.value;
+    if (t === 'birthday') {
+      if (!a.year || !a.month || !a.day) return false;
+      var v = a.year * 10000 + a.month * 100 + a.day;
+      var lo = 0, hi = 99999999;
+      if (c.from) { var f = String(c.from).replace(/[^0-9]/g, ''); if (f.length === 8) lo = +f; }
+      if (c.to) { var g = String(c.to).replace(/[^0-9]/g, ''); if (g.length === 8) hi = +g; }
+      return v >= lo && v <= hi;
+    }
+    // 以下依赖四柱
+    if (!pls || !pls.length) return false;
+    var i, cnt;
+    if (t === 'pillar') {
+      var gz = String(c.gz || '').trim();
+      var part = c.part || (gz.length === 2 ? 'full' : (TG_SET.indexOf(gz) >= 0 ? 'gan' : (DZ_SET.indexOf(gz) >= 0 ? 'zhi' : 'full')));
+      var pos = c.pos ? POS_MAP[c.pos] : null;
+      return pls.some(function(p) {
+        if (pos && p.pos !== pos) return false;
+        if (part === 'gan') return p.gan === gz;
+        if (part === 'zhi') return p.zhi === gz;
+        return p.gan + p.zhi === gz;
+      });
+    }
+    if (t === 'stem') {
+      cnt = 0; for (i = 0; i < pls.length; i++) if (pls[i].gan === c.gz) cnt++;
+      return cnt >= (c.min || 1);
+    }
+    if (t === 'branch') {
+      cnt = 0; for (i = 0; i < pls.length; i++) if (pls[i].zhi === c.gz) cnt++;
+      return cnt >= (c.min || 1);
+    }
+    if (t === 'gz') {
+      cnt = 0; for (i = 0; i < pls.length; i++) if (gzName(pls[i]) === c.gz) cnt++;
+      return cnt >= (c.min || 1);
+    }
+    if (t === 'same_pillar') return sameGroupCount(pls, 'gz') >= (c.min || 2);
+    if (t === 'same_stem') return sameGroupCount(pls, 'gan') >= (c.min || 2);
+    if (t === 'same_branch') return sameGroupCount(pls, 'zhi') >= (c.min || 2);
+    if (t === 'wuxing') {
+      cnt = 0;
+      for (i = 0; i < pls.length; i++) {
+        if (AI_WX_STEM[pls[i].gan] === c.wx) cnt++;
+        if (AI_WX_ZHI[pls[i].zhi] === c.wx) cnt++;
+      }
+      return cnt >= (c.min || 1);
+    }
+    if (t === 'daymaster') {
+      for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') return pls[i].gan === c.gz;
+      return false;
+    }
+    if (t === 'nayin') {
+      if (typeof NAYIN === 'undefined') return false;
+      var pos2 = c.pos ? POS_MAP[c.pos] : null;
+      return pls.some(function(p) {
+        if (pos2 && p.pos !== pos2) return false;
+        var ny = NAYIN[gzName(p)];
+        return !!ny && String(ny).indexOf(c.text || '') >= 0;
+      });
+    }
+    if (t === 'year_gz') {
+      for (i = 0; i < pls.length; i++) if (pls[i].pos === '年') return gzName(pls[i]) === c.gz;
+      return false;
+    }
+    return false; // 未知类型不放行
+  }
+
+  function matchQuery(a, pls, q) {
+    if (!q || typeof q !== 'object') return false;
+    if (q.type) return matchCond(a, pls, q);
+    if (q.op === 'and' && Array.isArray(q.conds)) {
+      for (var i = 0; i < q.conds.length; i++) if (!matchQuery(a, pls, q.conds[i])) return false;
+      return true;
+    }
+    if (q.op === 'or' && Array.isArray(q.conds)) {
+      for (var j = 0; j < q.conds.length; j++) if (matchQuery(a, pls, q.conds[j])) return true;
+      return false;
+    }
+    if (q.op === 'not' && q.cond) return !matchQuery(a, pls, q.cond);
+    return false;
+  }
+
+  // ===== AI 模式过滤入口（renderArchiveModal 钩子）=====
+  function aiMatch(a) { if (!_aiQuery) return true; return matchQuery(a, pillarsOf(a), _aiQuery); }
+  function aiActive() { return !!_aiQuery; }
+  function aiClear() {
+    _aiQuery = null; _aiSummary = '';
+    barHide();
+    if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives((document.getElementById('archive-search-modal') || {}).value || '');
+  }
+  function aiStatus(hit) {
+    if (!_aiQuery || !_bar) return;
+    barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>'
+      + '<span class="archive-ai-n">命中 ' + hit + ' 份</span>'
+      + '<button type="button" class="archive-ai-exit" onclick="RENDER_AI.aiClear()">✕ 退出 AI</button>', '');
+  }
+
+  function escA(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function barHtml(html, cls) {
+    if (!_bar) return;
+    _bar.style.display = 'flex';
+    _bar.className = 'archive-ai-bar' + (cls ? ' ' + cls : '');
+    _bar.innerHTML = html;
+  }
+  function barHide() { if (_bar) { _bar.style.display = 'none'; _bar.innerHTML = ''; } }
+
+  // ===== LLM 调用：自然语言 → {summary, query} =====
+  var SYSTEM_PROMPT = [
+    '你是「八字排盘」应用的档案搜索解析器。把用户的自然语言请求翻译成 JSON 查询条件，交给本地引擎对每份命盘排盘后过滤。只输出一个 JSON 对象，禁止输出任何其他文字、注释或代码块标记。',
+    '可用条件类型（type）：',
+    '{"type":"name","text":"关键词"} — 姓名/昵称/艺名包含',
+    '{"type":"gender","value":"男"} — 性别（"男" 或 "女"）',
+    '{"type":"pillar","pos":"日","gz":"甲辰"} — 指定柱的干支；pos 可选 年/月/日/时，缺省=任意柱；gz 为完整干支"甲辰"，或单个天干"甲"，或单个地支"辰"',
+    '{"type":"stem","gz":"甲","min":2} — 某天干在四柱出现次数 ≥ min',
+    '{"type":"branch","gz":"戌","min":3} — 某地支在四柱出现次数 ≥ min',
+    '{"type":"gz","gz":"甲辰","min":1} — 某完整干支出现次数 ≥ min',
+    '{"type":"same_pillar","min":2} — 存在 ≥ min 根柱干支完全相同（同柱）',
+    '{"type":"same_stem","min":2} — 存在 ≥ min 根柱天干相同',
+    '{"type":"same_branch","min":2} — 存在 ≥ min 根柱地支相同',
+    '{"type":"wuxing","wx":"金","min":4} — 八字（4天干+4地支本气）中某五行（木/火/土/金/水）个数 ≥ min',
+    '{"type":"daymaster","gz":"甲"} — 日主（日柱天干）为某干',
+    '{"type":"nayin","text":"涧下水"} — 某柱纳音名包含',
+    '{"type":"year_gz","gz":"丙午"} — 年柱干支为某干支',
+    '{"type":"birthday","from":"1980-01-01","to":"1989-12-31"} — 出生日期在此区间',
+    '组合节点：{"op":"and","conds":[条件...]}、{"op":"or","conds":[...]}、{"op":"not","cond":{条件}}',
+    '输出格式：{"summary":"一句话向用户确认你的理解","query":{条件或组合}}',
+    '模糊说法请取合理阈值：如「金旺」→ 金≥4；「金多」→ 金≥3；「两个同柱」→ same_pillar min=2。',
+    '示例：「帮我找出有两个同柱的命盘」→ {"summary":"找出任意两柱干支完全相同的命盘","query":{"type":"same_pillar","min":2}}',
+    '示例：「三戌同支的人」→ {"summary":"地支中『戌』出现三次及以上的命盘","query":{"type":"branch","gz":"戌","min":3}}',
+    '示例：「日主甲木的女性」→ {"summary":"日主为甲木且性别为女","query":{"op":"and","conds":[{"type":"daymaster","gz":"甲"},{"type":"gender","value":"女"}]}}'
+  ].join('\n');
+
+  function extractJson(text) {
+    var s = String(text || '');
+    var l = s.indexOf('{'), r = s.lastIndexOf('}');
+    if (l < 0 || r <= l) return null;
+    try { return JSON.parse(s.slice(l, r + 1)); } catch (e) { return null; }
+  }
+
+  function aiSearch() {
+    if (_aiBusy) return;
+    var inp = document.getElementById('archive-search-modal');
+    var text = inp ? String(inp.value || '').trim() : '';
+    if (!text) { if (inp) inp.focus(); return; }
+    if (!cfgReady()) {
+      barHtml('<span class="archive-ai-sum">⚙ 使用 AI 搜索前，先配置 AI 接口（填一次 API Key 即可，只存在本机）</span><button type="button" class="archive-ai-exit" onclick="RENDER_AI.barHide()">✕ 关闭</button>', 'err');
+      aiOpenSettings('使用 AI 搜索前，先配置 AI 接口（填一次 API Key 即可，只存在本机）');
+      return;
+    }
+    var cfg = cfgGet();
+    _aiBusy = true;
+    barHtml('<span class="archive-ai-sum">🤖 AI 理解中：「' + escA(text) + '」…</span>', 'busy');
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var to = setTimeout(function() { if (ac) ac.abort(); }, 30000);
+    fetch(String(cfg.baseUrl).replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      signal: ac ? ac.signal : undefined,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+      body: JSON.stringify({
+        model: cfg.model,
+        temperature: 0,
+        messages: [ { role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: '用户请求：' + text } ]
+      })
+    }).then(function(r) {
+      clearTimeout(to);
+      if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + (t ? ' ' + t.slice(0, 120) : '')); });
+      return r.json();
+    }).then(function(j) {
+      var content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      var obj = extractJson(content);
+      if (!obj || !obj.query) throw new Error('AI 返回格式异常，请重试或换个说法');
+      _aiQuery = obj.query;
+      _aiSummary = String(obj.summary || 'AI 已理解你的条件');
+      if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives(text);
+    }).catch(function(err) {
+      var m = (err && err.name === 'AbortError') ? '请求超时（30 秒）' : (err && err.message ? err.message : '未知错误');
+      barHtml('<span class="archive-ai-sum">⚠ AI 请求失败：' + escA(m) + '</span><button type="button" class="archive-ai-exit" onclick="RENDER_AI.barHide()">✕ 关闭</button>', 'err');
+    }).then(function() { _aiBusy = false; });
+  }
+
+  // ===== 设置面板 =====
+  function aiOpenSettings(msg) {
+    var old = document.getElementById('aiCfgOverlay');
+    if (old) { old.parentNode.removeChild(old); }
+    var cfg = cfgGet();
+    var ov = document.createElement('div');
+    ov.id = 'aiCfgOverlay';
+    ov.className = 'ai-cfg-overlay';
+    ov.innerHTML = '<div class="ai-cfg-card">'
+      + '<div class="ai-cfg-title">🤖 AI 搜索设置</div>'
+      + (msg ? '<div class="ai-cfg-msg">' + escA(msg) + '</div>' : '')
+      + '<label class="ai-cfg-row">接口<select id="aiCfgProvider">'
+      + '<option value="deepseek">DeepSeek（推荐）</option><option value="glm">智谱 GLM</option><option value="openai">OpenAI</option><option value="custom">自定义</option></select></label>'
+      + '<label class="ai-cfg-row">接口地址<input id="aiCfgBase" type="text" placeholder="https://api.deepseek.com"></label>'
+      + '<label class="ai-cfg-row">模型<input id="aiCfgModel" type="text" placeholder="deepseek-chat"></label>'
+      + '<label class="ai-cfg-row">API Key<input id="aiCfgKey" type="password" placeholder="' + (cfg.apiKey ? '已保存（不回显，留空即沿用）' : 'sk-...') + '"></label>'
+      + '<div class="ai-cfg-hint">Key 只保存在本机浏览器（localStorage），请求由浏览器直连你选的接口。没有 Key 可在 platform.deepseek.com 申请。</div>'
+      + '<div class="ai-cfg-btns"><button type="button" id="aiCfgSave">保存</button><button type="button" id="aiCfgCancel">取消</button></div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    var sel = ov.querySelector('#aiCfgProvider');
+    sel.value = PRESETS[cfg.provider] ? cfg.provider : (cfg.baseUrl ? 'custom' : 'deepseek');
+    var base = ov.querySelector('#aiCfgBase'), model = ov.querySelector('#aiCfgModel');
+    base.value = cfg.baseUrl || PRESETS[sel.value].baseUrl;
+    model.value = cfg.model || PRESETS[sel.value].model;
+    sel.onchange = function() { if (PRESETS[sel.value]) { base.value = PRESETS[sel.value].baseUrl; model.value = PRESETS[sel.value].model; } };
+    ov.querySelector('#aiCfgCancel').onclick = function() { ov.parentNode.removeChild(ov); };
+    ov.querySelector('#aiCfgSave').onclick = function() {
+      var p = sel.value;
+      var nc = {
+        provider: p,
+        baseUrl: (base.value || '').trim() || (PRESETS[p] ? PRESETS[p].baseUrl : ''),
+        model: (model.value || '').trim() || (PRESETS[p] ? PRESETS[p].model : ''),
+        apiKey: (ov.querySelector('#aiCfgKey').value || '').trim() || cfg.apiKey || ''
+      };
+      cfgSet(nc);
+      ov.parentNode.removeChild(ov);
+      if (window.ARCHIVE && ARCHIVE.flashBackupHint) { try { ARCHIVE.flashBackupHint('AI 设置已保存'); } catch (e) {} }
+    };
+    ov.addEventListener('click', function(e) { if (e.target === ov) ov.parentNode.removeChild(ov); });
+  }
+
+  // ===== UI 注入：搜索行按钮 + 状态条 =====
+  var CSS = ''
+    + '.archive-ai-btn{margin-left:6px;white-space:nowrap;}'
+    + '.archive-ai-gear{margin-left:4px;padding:8px 10px !important;white-space:nowrap;}'
+    + '.archive-ai-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 14px;font-size:12.5px;background:rgba(138,109,59,.08);border-bottom:1px solid var(--c-line);}'
+    + '.archive-ai-bar.err{background:rgba(160,60,50,.08);}'
+    + '.archive-ai-bar.busy{color:#6b5a3e;}'
+    + '.archive-ai-sum{flex:1;min-width:0;}'
+    + '.archive-ai-n{white-space:nowrap;font-weight:600;}'
+    + '.archive-ai-exit{border:none;background:none;cursor:pointer;font-size:12px;color:#8a6d3b;padding:2px 4px;}'
+    + '.archive-ai-exit:hover{text-decoration:underline;}'
+    + '.ai-cfg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:4000;display:flex;align-items:center;justify-content:center;}'
+    + '.ai-cfg-card{background:var(--c-paper,#fff);color:var(--c-ink,#222);border-radius:8px;padding:20px 22px;width:min(420px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.25);font-size:13px;}'
+    + '.ai-cfg-title{font-size:15px;font-weight:700;margin-bottom:10px;}'
+    + '.ai-cfg-msg{font-size:12.5px;color:#8a6d3b;margin-bottom:10px;}'
+    + '.ai-cfg-row{display:flex;align-items:center;gap:8px;margin:8px 0;justify-content:space-between;}'
+    + '.ai-cfg-row select,.ai-cfg-row input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--c-line,#ccc);border-radius:4px;font-size:13px;background:#fff;color:#222;}'
+    + '.ai-cfg-hint{font-size:11.5px;color:#888;margin:8px 0 12px;line-height:1.5;}'
+    + '.ai-cfg-btns{display:flex;gap:8px;justify-content:flex-end;}'
+    + '.ai-cfg-btns button{padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}'
+    + '.ai-cfg-btns #aiCfgSave{background:#8a6d3b;color:#fff;}'
+    + '.ai-cfg-btns #aiCfgCancel{background:#eee;color:#444;}';
+
+  function inject() {
+    var row = null;
+    document.querySelectorAll('.archive-modal-search').forEach(function(r) {
+      if (!row && r.querySelector('#archive-search-modal')) row = r; // 合盘面板有同名 class，只认含档案搜索框的行
+    });
+    if (!row || row._aiInjected) return;
+    row._aiInjected = true;
+    if (!document.getElementById('aiCfgStyle')) {
+      var st = document.createElement('style');
+      st.id = 'aiCfgStyle';
+      st.textContent = CSS;
+      document.head.appendChild(st);
+    }
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'archive-search-btn archive-ai-btn';
+    b.textContent = '🤖 AI 搜';
+    b.title = '用自然语言搜索档案（如：找出有两个同柱的命盘）';
+    b.onclick = function() { aiSearch(); };
+    var bg = document.createElement('button');
+    bg.type = 'button';
+    bg.className = 'archive-search-btn archive-ai-gear';
+    bg.textContent = '⚙';
+    bg.title = 'AI 搜索设置（接口与 Key，只存本机）';
+    bg.onclick = function() { aiOpenSettings(''); };
+    row.appendChild(b);
+    row.appendChild(bg);
+    _bar = document.createElement('div');
+    _bar.className = 'archive-ai-bar';
+    row.parentNode.insertBefore(_bar, row.nextSibling);
+    var inp = row.querySelector('#archive-search-modal');
+    if (inp) inp.placeholder = '输入姓名筛选，或点 🤖 AI 用一句话搜（如：找出有两个同柱的命盘）';
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+  else inject();
+
+  // ===== 导出 =====
+  window.RENDER_AI = {
+    aiSearch: aiSearch,
+    aiMatch: aiMatch,
+    aiActive: aiActive,
+    aiStatus: aiStatus,
+    aiClear: aiClear,
+    barHide: barHide,
+    aiOpenSettings: aiOpenSettings,
+    cfgGet: cfgGet,
+    cfgSet: cfgSet,
+    // 测试钩子：直接对单档案求值查询树（不落盘、无副作用）
+    debugEval: function(query, archive) { return matchQuery(archive, pillarsOf(archive), query); },
+    debugPillars: function(archive) { var p = pillarsOf(archive); return p ? p.map(gzName) : null; }
+  };
 })();
 </script></script></script></script></script>
 <script>
