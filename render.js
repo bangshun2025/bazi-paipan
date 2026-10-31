@@ -6737,6 +6737,261 @@ function cmpSetState(entries) {
     if (q.cond) collectUnsupported(q.cond, out);
     return out;
   }
+  // ===== v0.90.0 条件树可视化：把 AI 生成的条件摊开，可看、可改、可删、可还原 =====
+  // 设计目标：摘要只是一句话，用户无法判断 AI 到底按什么在筛。把条件树渲染成可读行，
+  // 每行可改参数（含 scope 四柱/七柱切换）、可删除、可从原始条件一键还原。
+  var _aiEditing = null, _aiPanel = null, _aiOpen = false, _aiOrig = null, _lastHit = 0;
+  var SCOPE_OPTS = [['four','四柱'],['seven','七柱（含三垣）'],['dayun','大运序列']];
+  var POS_OPTS = [['','任意柱'],['年','年柱'],['月','月柱'],['日','日柱'],['时','时柱'],['胎元','胎元'],['命宫','命宫'],['身宫','身宫']];
+  var WX_OPTS = [['木','木'],['火','火'],['土','土'],['金','金'],['水','水']];
+  var REL_TXT = { chong:'六冲', he:'六合', tong:'同地支', sameGz:'同干支', sameGan:'同天干', sanhe:'三合', sanhui:'三会' };
+  var REL_OPTS = [['chong','六冲'],['he','六合'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
+  var SS_OPTS = [['比肩','比肩'],['劫财','劫财'],['食神','食神'],['伤官','伤官'],['枭神','枭神'],['正印','正印'],['偏财','偏财'],['正财','正财'],['七杀','七杀'],['正官','正官']];
+  var WHERE_OPTS = [['gan','天干透出'],['zhi','地支本气'],['both','干支都算']];
+  var GENDER_OPTS = [['男','男'],['女','女']];
+  var AB_OPTS = [['流年','流年'],['大运','大运']];
+  var IN_OPTS = [['notes','分析记录'],['rec','录音转录'],['both','两者都查']];
+  var FIELD_OPTS = [['age','起运岁数'],['year','交运年份']];
+
+  // 一个条件 → 可读标签 + 详情 + 可编辑字段清单
+  function condView(c) {
+    var t = (c && c.type) || '';
+    var sc = c.scope || 'four';
+    var scTxt = (sc === 'seven') ? '七柱' : (sc === 'dayun' ? '大运' : '四柱');
+    var v = { label: '条件', detail: '', params: [], uns: (t === 'unsupported') };
+    var sco = { k: 'scope', lab: '范围', t: 'sel', opts: SCOPE_OPTS };
+    var minP = { k: 'min', lab: '至少', t: 'num' };
+    var mn = function(x, d) { return (x == null) ? d : x; };
+    if (t === 'name') {
+      v.label = '姓名'; v.detail = '姓名/艺名含「' + (c.text || '') + '」';
+      v.params = [{ k: 'text', lab: '关键词', t: 'txt' }];
+    } else if (t === 'gender') {
+      v.label = '性别'; v.detail = '性别 = ' + (c.value || '');
+      v.params = [{ k: 'value', lab: '性别', t: 'sel', opts: GENDER_OPTS }];
+    } else if (t === 'birthday') {
+      v.label = '生日'; v.detail = '出生 ' + (c.from || '不限') + ' ~ ' + (c.to || '不限');
+      v.params = [{ k: 'from', lab: '起', t: 'txt', ph: '1980-01-01' }, { k: 'to', lab: '止', t: 'txt', ph: '1989-12-31' }];
+    } else if (t === 'pillar') {
+      v.label = '柱'; v.detail = scTxt + ' · ' + (c.pos ? (posOf(c.pos) || c.pos) : '任意柱') + ' ' + (c.gz ? ('匹配 ' + c.gz) : '任意干支');
+      v.params = [{ k: 'pos', lab: '柱位', t: 'sel', opts: POS_OPTS }, { k: 'gz', lab: '干支', t: 'txt' }, sco];
+    } else if (t === 'stem') {
+      v.label = '天干'; v.detail = scTxt + ' 天干 ' + (c.gz || '') + ' 出现 ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'gz', lab: '天干', t: 'txt' }, minP, sco];
+    } else if (t === 'branch') {
+      v.label = '地支'; v.detail = scTxt + ' 地支 ' + (c.gz || '') + ' 出现 ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'gz', lab: '地支', t: 'txt' }, minP, sco];
+    } else if (t === 'gz') {
+      v.label = '干支'; v.detail = scTxt + ' 干支 ' + (c.gz || '') + ' 出现 ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'gz', lab: '干支', t: 'txt' }, minP, sco];
+    } else if (t === 'same_pillar') {
+      v.label = '同柱'; v.detail = scTxt + ' 有 ≥ ' + mn(c.min, 2) + ' 柱干支完全相同';
+      v.params = [minP, sco];
+    } else if (t === 'same_stem') {
+      v.label = '同天干'; v.detail = scTxt + ' 有 ≥ ' + mn(c.min, 2) + ' 柱天干相同';
+      v.params = [minP, sco];
+    } else if (t === 'same_branch') {
+      v.label = '同地支'; v.detail = scTxt + ' 有 ≥ ' + mn(c.min, 2) + ' 柱地支相同';
+      v.params = [minP, sco];
+    } else if (t === 'wuxing') {
+      v.label = '五行'; v.detail = (c.wx || '') + ' 个数 ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'wx', lab: '五行', t: 'sel', opts: WX_OPTS }, minP];
+    } else if (t === 'daymaster') {
+      v.label = '日主'; v.detail = '日主 = ' + (c.gz || '');
+      v.params = [{ k: 'gz', lab: '天干', t: 'txt' }];
+    } else if (t === 'shishen') {
+      v.label = '十神'; v.detail = '「' + (c.text || '') + '」' + (c.where === 'zhi' ? '地支本气' : (c.where === 'both' ? '干支都算' : '天干透出')) + ' ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'text', lab: '十神', t: 'sel', opts: SS_OPTS }, { k: 'where', lab: '位置', t: 'sel', opts: WHERE_OPTS }, { k: 'pos', lab: '柱位', t: 'sel', opts: POS_OPTS }, minP];
+    } else if (t === 'nayin') {
+      v.label = '纳音'; v.detail = '纳音含「' + (c.text || '') + '」';
+      v.params = [{ k: 'text', lab: '纳音', t: 'txt' }];
+    } else if (t === 'year_gz') {
+      v.label = '年柱'; v.detail = '年柱 = ' + (c.gz || '');
+      v.params = [{ k: 'gz', lab: '干支', t: 'txt' }];
+    } else if (t === 'sanhui' || t === 'sanhe') {
+      v.label = (t === 'sanhui') ? '三会局' : '三合局';
+      v.detail = scTxt + ' 地支成 ' + (c.gz || c.wx || ('任意' + v.label));
+      v.params = [{ k: 'gz', lab: '组合/五行', t: 'txt', ph: (t === 'sanhui' ? '寅卯辰' : '申子辰') }, sco];
+    } else if (t === 'qiyun') {
+      var isY = (c.field === 'year');
+      v.label = '起运';
+      v.detail = (isY ? '交运年' : '起运岁数') + ' ' + (c.exact != null ? ('= ' + c.exact) : ((c.min != null ? c.min : '不限') + ' ~ ' + (c.max != null ? c.max : '不限')));
+      v.params = [{ k: 'field', lab: '按', t: 'sel', opts: FIELD_OPTS }, { k: 'min', lab: '最小', t: 'num' }, { k: 'max', lab: '最大', t: 'num' }, { k: 'exact', lab: '精确', t: 'num' }];
+    } else if (t === 'dayun') {
+      var dt = [];
+      if (c.gz) dt.push('干支 ' + c.gz);
+      if (c.ageMin != null || c.ageMax != null) dt.push('年龄 ' + mn(c.ageMin, '') + '~' + mn(c.ageMax, ''));
+      if (c.yearMin != null || c.yearMax != null) dt.push('年份 ' + mn(c.yearMin, '') + '~' + mn(c.yearMax, ''));
+      v.label = '大运'; v.detail = '大运某步 ' + (dt.length ? dt.join('，') : '任意');
+      v.params = [{ k: 'gz', lab: '干支', t: 'txt' }, { k: 'ageMin', lab: '年龄起', t: 'num' }, { k: 'ageMax', lab: '年龄止', t: 'num' }, { k: 'yearMin', lab: '年份起', t: 'num' }, { k: 'yearMax', lab: '年份止', t: 'num' }];
+    } else if (t === 'liunian') {
+      var lt = [];
+      if (c.gz) lt.push('干支 ' + c.gz);
+      if (c.year != null) lt.push('年 ' + c.year);
+      if (c.fromYear != null || c.toYear != null) lt.push('区间 ' + mn(c.fromYear, '') + '~' + mn(c.toYear, ''));
+      v.label = '流年'; v.detail = '流年 ' + (lt.length ? lt.join('，') : '任意');
+      v.params = [{ k: 'gz', lab: '干支', t: 'txt' }, { k: 'year', lab: '年', t: 'num' }, { k: 'fromYear', lab: '起年', t: 'num' }, { k: 'toYear', lab: '止年', t: 'num' }];
+    } else if (t === 'interact') {
+      var tgt = posOf(c.b || '日') || (c.b || '日');
+      var when = (c.year != null) ? (c.a === '大运' ? ((c.year) + ' 年的大运') : ('流年 ' + c.year))
+               : (c.age != null ? (c.age + ' 岁') : (c.fromYear != null ? (c.fromYear + '~' + mn(c.toYear, '') + ' 年') : '任意时候'));
+      v.label = '运×命'; v.detail = when + ' ' + (REL_TXT[c.rel] || '六冲') + ' ' + tgt + '柱';
+      v.params = [{ k: 'a', lab: '运', t: 'sel', opts: AB_OPTS }, { k: 'b', lab: '命柱', t: 'sel', opts: POS_OPTS }, { k: 'rel', lab: '关系', t: 'sel', opts: REL_OPTS }, { k: 'year', lab: '年', t: 'num' }, { k: 'age', lab: '岁', t: 'num' }, { k: 'fromYear', lab: '起年', t: 'num' }, { k: 'toYear', lab: '止年', t: 'num' }, { k: 'bScope', lab: '命柱范围', t: 'sel', opts: SCOPE_OPTS }];
+    } else if (t === 'text') {
+      v.label = '全文'; v.detail = (c.in === 'rec' ? '录音转录' : (c.in === 'notes' ? '分析记录' : '记录+录音')) + ' 含「' + (c.q || c.text || '') + '」';
+      v.params = [{ k: 'q', lab: '关键词', t: 'txt' }, { k: 'in', lab: '范围', t: 'sel', opts: IN_OPTS }];
+    } else if (t === 'unsupported') {
+      v.label = '超出能力'; v.detail = String(c.need || c.reason || '未命名需求');
+      v.params = [{ k: 'need', lab: '说明', t: 'txt' }];
+    } else {
+      v.label = '未知'; v.detail = '未知条件类型：' + String(t);
+    }
+    return v;
+  }
+
+  function countConds(q) {
+    if (!q || typeof q !== 'object') return 0;
+    if (Array.isArray(q.conds)) { var n = 0; for (var i = 0; i < q.conds.length; i++) n += countConds(q.conds[i]); return n; }
+    if (q.cond) return countConds(q.cond);
+    return 1;
+  }
+  // 点分路径 → 条件节点
+  function nodeAt(p) {
+    if (p === '' || p == null) return _aiQuery;
+    var segs = String(p).split('.'), n = _aiQuery;
+    for (var i = 0; i < segs.length; i++) {
+      if (!n) return null;
+      if (segs[i] === 'cond') n = n.cond;
+      else if (Array.isArray(n.conds)) n = n.conds[Number(segs[i])];
+      else return null;
+    }
+    return n || null;
+  }
+  function escAttr(s) { return escA(s).replace(/"/g, '&quot;'); }
+
+  function renderPanel() {
+    if (!_aiPanel) return;
+    if (!_aiQuery || !_aiOpen) { _aiPanel.style.display = 'none'; _aiPanel.innerHTML = ''; return; }
+    _aiPanel.style.display = 'block';
+    var rows = [], n = countConds(_aiQuery);
+    var changed = _aiOrig && JSON.stringify(_aiOrig) !== JSON.stringify(_aiQuery);
+    rows.push('<div class="archive-ai-cond-hd">AI 解析出 ' + n + ' 项条件 · ✎ 改参数 · ✕ 删掉不想要的'
+      + (changed ? ' · <button type="button" class="archive-ai-cond-bt" data-act="reset" data-p="">↺ 还原 AI 原始条件</button>' : '')
+      + '</div>');
+    walkCond(_aiQuery, '', rows);
+    _aiPanel.innerHTML = rows.join('');
+  }
+
+  function walkCond(q, p, rows) {
+    if (!q || typeof q !== 'object') return;
+    if (Array.isArray(q.conds)) {
+      rows.push('<div class="archive-ai-cond-op">' + (q.op === 'or' ? '满足任一' : '同时满足') + '</div>');
+      for (var i = 0; i < q.conds.length; i++) walkCond(q.conds[i], (p ? p + '.' : '') + i, rows);
+      return;
+    }
+    if (q.cond) {
+      rows.push('<div class="archive-ai-cond-row archive-ai-cond-op">排除…'
+        + '<button type="button" class="archive-ai-cond-bt del" data-act="del" data-p="' + escAttr(p) + '" title="删除整条排除">✕</button></div>');
+      walkCond(q.cond, (p ? p + '.' : '') + 'cond', rows);
+      return;
+    }
+    var vs = condView(q);
+    if (_aiEditing && _aiEditing.p === p) { rows.push(formRow(vs, p)); return; }
+    rows.push('<div class="archive-ai-cond-row' + (vs.uns ? ' uns' : '') + '">'
+      + '<span class="archive-ai-cond-lb">' + escA(vs.label) + '</span>'
+      + '<span class="archive-ai-cond-dt">' + escA(vs.detail) + '</span>'
+      + '<button type="button" class="archive-ai-cond-bt" data-act="edit" data-p="' + escAttr(p) + '" title="修改参数">✎</button>'
+      + '<button type="button" class="archive-ai-cond-bt del" data-act="del" data-p="' + escAttr(p) + '" title="删除该条件">✕</button>'
+      + '</div>');
+  }
+
+  function formRow(vs, p) {
+    var d = _aiEditing.draft, h = ['<div class="archive-ai-cond-form"><div class="archive-ai-cond-lb">' + escA(vs.label) + '</div>'];
+    for (var i = 0; i < vs.params.length; i++) {
+      var pr = vs.params[i], val = (d[pr.k] == null) ? '' : d[pr.k];
+      h.push('<label class="archive-ai-pf"><span>' + escA(pr.lab) + '</span>');
+      if (pr.t === 'sel') {
+        var op = [];
+        for (var j = 0; j < pr.opts.length; j++) {
+          var o = pr.opts[j];
+          op.push('<option value="' + escAttr(o[0]) + '"' + (String(val) === o[0] ? ' selected' : '') + '>' + escA(o[1]) + '</option>');
+        }
+        h.push('<select data-k="' + escAttr(pr.k) + '" data-t="txt">' + op.join('') + '</select>');
+      } else if (pr.t === 'num') {
+        h.push('<input type="number" step="any" data-k="' + escAttr(pr.k) + '" data-t="num" value="' + escAttr(val) + '"' + (pr.ph ? ' placeholder="' + escAttr(pr.ph) + '"' : '') + '>');
+      } else {
+        h.push('<input type="text" data-k="' + escAttr(pr.k) + '" data-t="txt" value="' + escAttr(val) + '"' + (pr.ph ? ' placeholder="' + escAttr(pr.ph) + '"' : '') + '>');
+      }
+      h.push('</label>');
+    }
+    h.push('<button type="button" class="archive-ai-cond-bt ok" data-act="ok" data-p="' + escAttr(p) + '">✓ 应用</button>');
+    h.push('<button type="button" class="archive-ai-cond-bt" data-act="cancel" data-p="' + escAttr(p) + '">取消</button></div>');
+    return h.join('');
+  }
+
+  function condToggle() { _aiOpen = !_aiOpen; aiStatus(_lastHit); }
+  function condClose() { _aiOpen = false; _aiEditing = null; renderPanel(); }
+
+  // 删除条件（含把空掉的父节点一并摘除）；'xxx.cond' 规范化为整个 not 节点
+  function removePath(p) {
+    var segs = String(p).split('.');
+    while (segs.length && segs[segs.length - 1] === 'cond') segs.pop();
+    if (!segs.length) { _aiQuery = null; _aiWarn = []; return true; }
+    var key = segs.pop();
+    var parent = segs.length ? nodeAt(segs.join('.')) : _aiQuery;
+    if (!parent) return false;
+    if (Array.isArray(parent.conds) && /^\d+$/.test(key)) {
+      parent.conds.splice(Number(key), 1);
+      if (!parent.conds.length) {
+        if (!segs.length) { _aiQuery = null; _aiWarn = []; }
+        else removePath(segs.join('.'));
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function afterEdit() {
+    _aiWarn = collectUnsupported(_aiQuery);
+    if (!_aiQuery) { aiClear(); return; }
+    _aiSummary = String(_aiSummary || '').replace(/（已手动调整）$/, '') + '（已手动调整）';
+    aiApply();
+    renderPanel();
+  }
+
+  function bindPanel() {
+    if (!_aiPanel) return;
+    _aiPanel.addEventListener('click', function(e) {
+      var el = e.target;
+      while (el && el !== _aiPanel && !(el.getAttribute && el.getAttribute('data-act'))) el = el.parentNode;
+      if (!el || el === _aiPanel) return;
+      var act = el.getAttribute('data-act'), p = el.getAttribute('data-p') || '';
+      if (act === 'del') { if (removePath(p)) afterEdit(); }
+      else if (act === 'edit') { var n = nodeAt(p); if (n) { _aiEditing = { p: p, draft: JSON.parse(JSON.stringify(n)) }; renderPanel(); } }
+      else if (act === 'ok') {
+        if (!_aiEditing) return;
+        var tgt = nodeAt(_aiEditing.p), d = _aiEditing.draft, k;
+        if (tgt) {
+          for (k in d) {
+            if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
+            var val = d[k];
+            if (val === '' || val == null || (typeof val === 'number' && !isFinite(val))) delete tgt[k];
+            else tgt[k] = val;
+          }
+        }
+        _aiEditing = null; afterEdit();
+      }
+      else if (act === 'cancel') { _aiEditing = null; renderPanel(); }
+      else if (act === 'reset') { if (_aiOrig) { _aiQuery = JSON.parse(JSON.stringify(_aiOrig)); _aiWarn = collectUnsupported(_aiQuery); _aiSummary = String(_aiSummary).replace(/（已手动调整）$/, ''); aiApply(); renderPanel(); } }
+    });
+    _aiPanel.addEventListener('input', function(e) {
+      if (!_aiEditing) return;
+      var k = e.target.getAttribute && e.target.getAttribute('data-k');
+      if (!k) return;
+      var nt = e.target.getAttribute('data-t'), v = e.target.value;
+      _aiEditing.draft[k] = (nt === 'num') ? (v === '' ? '' : Number(v)) : v;
+    });
+  }
+
   function plsFor(a, sc) {
     if (sc === 'dayun') return dayunPillars(a);
     if (sc === 'seven') return pillarsOf(a, 'seven');
@@ -6776,7 +7031,10 @@ function cmpSetState(entries) {
   function matchCond(a, pls, c) {
     if (!c || typeof c !== 'object' || !c.type) return false;
     var t = c.type;
-    if (t === 'unsupported') return false; // v0.89.0 模型明示「这条我表达不了」，不计命中，由 UI 告警
+    // v0.90.0：unsupported 视为「中性条件」——不参与筛选，也不否决同组其他条件。
+    // 早先返回 false 会让 and 结构一票否决：提示词正要求「可查条件 + unsupported 用 and 连接」，
+    // 那样命中恒为 0，用户会误以为「没有这样的命盘」。告警交给 UI 黄条。
+    if (t === 'unsupported') return true;
     // v0.89.0 scope 分层：four=四柱（默认）/ seven=七柱（含三垣）/ dayun=大运
     var scope = c.scope || 'four';
     if (scope === 'seven' || scope === 'dayun') pls = plsFor(a, scope);
@@ -6999,16 +7257,27 @@ function cmpSetState(entries) {
     return false; // 未知类型不放行
   }
 
+  function isUnsupported(c) { return !!(c && typeof c === 'object' && c.type === 'unsupported'); }
   function matchQuery(a, pls, q) {
     if (!q || typeof q !== 'object') return false;
     if (q.type) return matchCond(a, pls, q);
+    // v0.90.0：unsupported 是中性条件——组合层直接跳过它，
+    // 否则 and 会一票否决（命中恒 0）、or 会恒真（等于不筛）。
     if (q.op === 'and' && Array.isArray(q.conds)) {
-      for (var i = 0; i < q.conds.length; i++) if (!matchQuery(a, pls, q.conds[i])) return false;
+      for (var i = 0; i < q.conds.length; i++) {
+        if (isUnsupported(q.conds[i])) continue;
+        if (!matchQuery(a, pls, q.conds[i])) return false;
+      }
       return true;
     }
     if (q.op === 'or' && Array.isArray(q.conds)) {
-      for (var j = 0; j < q.conds.length; j++) if (matchQuery(a, pls, q.conds[j])) return true;
-      return false;
+      var anyO = false, hitO = false;
+      for (var j = 0; j < q.conds.length; j++) {
+        if (isUnsupported(q.conds[j])) continue;
+        anyO = true;
+        if (matchQuery(a, pls, q.conds[j])) { hitO = true; break; }
+      }
+      return anyO ? hitO : true; // 该分支全是无法表达的项 → 不构成筛选
     }
     if (q.op === 'not' && q.cond) return !matchQuery(a, pls, q.cond);
     return false;
@@ -7019,7 +7288,9 @@ function cmpSetState(entries) {
   function aiActive() { return !!_aiQuery; }
   function aiClear() {
     _aiQuery = null; _aiSummary = ''; _aiWarn = []; _aiText = '';
+    _aiEditing = null; _aiOrig = null; _aiOpen = false;
     barHide();
+    if (_aiPanel) { _aiPanel.style.display = 'none'; _aiPanel.innerHTML = ''; }
     // 退出 AI 时清空输入框：否则自然语言会被当成普通关键词过滤，列表变空
     var inp = document.getElementById('archive-search-modal');
     if (inp) inp.value = '';
@@ -7032,11 +7303,14 @@ function cmpSetState(entries) {
   }
   function aiStatus(hit) {
     if (!_aiQuery || !_bar) return;
+    _lastHit = (hit == null ? _lastHit : hit);
     var hasWarn = !!(_aiWarn && _aiWarn.length);
     var warn = hasWarn ? '<span class="archive-ai-warn">⚠ 有 ' + _aiWarn.length + ' 项超出能力：' + escA(_aiWarn.join('、')) + '</span>' : '';
     barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>' + warn
       + '<span class="archive-ai-n">命中 ' + hit + ' 份</span>'
+      + '<button type="button" class="archive-ai-exit archive-ai-toggle" onclick="RENDER_AI.condToggle()" title="展开/收起 AI 解析出的查询条件">' + (_aiOpen ? '▾' : '▸') + ' 条件 ' + countConds(_aiQuery) + '</button>'
       + '<button type="button" class="archive-ai-exit" onclick="RENDER_AI.aiClear()">✕ 退出 AI</button>', hasWarn ? 'warn' : '');
+    renderPanel();
   }
 
   function escA(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -7092,7 +7366,7 @@ function cmpSetState(entries) {
     '{"type":"liunian","gz":"丙午","fromYear":2026,"toYear":2035} — 该年份区间内出现指定流年干支。必须给年份范围，否则条件无意义',
     '{"type":"interact","a":"流年","year":2026,"b":"日","rel":"chong"} — 运与命局某柱的关系。a: 流年|大运（大运用 age/year 定位某步）；b: 年/月/日/时/胎元/命宫/身宫（bScope 可设 four/seven）；rel: chong=六冲、he=六合、tong=同支、sameGz=同干支、sameGan=同天干、sanhe=三合、sanhui=三会',
     '{"type":"text","q":"关键词","in":"notes"} — 全文检索。in: notes=分析记录、rec=录音转录（含整理稿与原始识别）、both=两者（默认）',
-    '{"type":"unsupported","need":"无法表达的需求"} — 明示这条请求超出能力，界面会提示用户，不要假装能查',
+    '{"type":"unsupported","need":"无法表达的需求"} — 明示这条请求超出能力，界面黄条告警，不要假装能查。它是中性条件：不参与筛选，既不筛掉命盘也不否决同组其他条件',
     '组合节点：{"op":"and","conds":[...]}、{"op":"or","conds":[...]}、{"op":"not","cond":{...}}',
     '',
     '【边界】以下请求无法用本引擎表达，必须输出 unsupported，禁止用近似条件冒充：',
@@ -7162,6 +7436,8 @@ function cmpSetState(entries) {
       var obj = extractJson(content);
       if (!obj || !obj.query) throw new Error('AI 返回格式异常，请重试或换个说法');
       _aiQuery = obj.query;
+      _aiOrig = JSON.parse(JSON.stringify(obj.query));
+      _aiEditing = null; _aiOpen = true;
       _aiSummary = String(obj.summary || 'AI 已理解你的条件');
       _aiWarn = collectUnsupported(obj.query);
       _aiText = text;
@@ -7231,6 +7507,25 @@ function cmpSetState(entries) {
     + '.archive-ai-n{white-space:nowrap;font-weight:600;}'
     + '.archive-ai-exit{border:none;background:none;cursor:pointer;font-size:12px;color:#8a6d3b;padding:2px 4px;}'
     + '.archive-ai-exit:hover{text-decoration:underline;}'
+    + '.archive-ai-toggle{color:#6b5a3e;font-weight:600;}'
+    + '.archive-ai-cond{display:none;padding:8px 14px 10px;background:rgba(138,109,59,.04);border-bottom:1px solid var(--c-line);font-size:12.5px;}'
+    + '.archive-ai-cond-hd{font-size:11.5px;color:#8a6d3b;margin-bottom:6px;line-height:1.6;}'
+    + '.archive-ai-cond-op{font-size:11.5px;color:#a09a8c;margin:6px 0 2px;letter-spacing:.03em;}'
+    + '.archive-ai-cond-row{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:4px;line-height:1.6;}'
+    + '.archive-ai-cond-row:hover{background:rgba(138,109,59,.08);}'
+    + '.archive-ai-cond-row.uns{color:#a06800;}'
+    + '.archive-ai-cond-lb{flex:0 0 auto;font-size:11px;color:#8a6d3b;background:rgba(138,109,59,.12);border-radius:3px;padding:1px 6px;white-space:nowrap;}'
+    + '.archive-ai-cond-row.uns .archive-ai-cond-lb{color:#a06800;background:rgba(200,140,20,.18);}'
+    + '.archive-ai-cond-dt{flex:1;min-width:0;color:#3a332a;word-break:break-word;}'
+    + '.archive-ai-cond-bt{border:none;background:none;cursor:pointer;color:#8a6d3b;font-size:12px;padding:1px 5px;border-radius:3px;white-space:nowrap;}'
+    + '.archive-ai-cond-bt:hover{background:rgba(138,109,59,.14);}'
+    + '.archive-ai-cond-bt.del{color:#a05a4a;}'
+    + '.archive-ai-cond-bt.ok{color:#2f7d4f;font-weight:600;}'
+    + '.archive-ai-cond-form{padding:8px 10px;background:rgba(138,109,59,.09);border-radius:5px;margin:4px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;}'
+    + '.archive-ai-cond-form .archive-ai-cond-lb{margin-right:2px;}'
+    + '.archive-ai-pf{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#6b5a3e;}'
+    + '.archive-ai-pf input,.archive-ai-pf select{padding:3px 6px;border:1px solid var(--c-line,#ccc);border-radius:4px;font-size:12px;background:#fff;color:#222;width:80px;}'
+    + '.archive-ai-pf select{width:auto;max-width:150px;}'
     + '.ai-cfg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:4000;display:flex;align-items:center;justify-content:center;}'
     + '.ai-cfg-card{background:var(--c-paper,#fff);color:var(--c-ink,#222);border-radius:8px;padding:20px 22px;width:min(420px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.25);font-size:13px;}'
     + '.ai-cfg-title{font-size:15px;font-weight:700;margin-bottom:10px;}'
@@ -7273,6 +7568,12 @@ function cmpSetState(entries) {
     _bar = document.createElement('div');
     _bar.className = 'archive-ai-bar';
     row.parentNode.insertBefore(_bar, row.nextSibling);
+    // v0.90.0 条件面板（状态条下一行，默认收起）。每次注入都重建，跟随 _bar 生命周期
+    _aiPanel = document.createElement('div');
+    _aiPanel.className = 'archive-ai-cond';
+    _bar.parentNode.insertBefore(_aiPanel, _bar.nextSibling);
+    bindPanel();
+    if (_aiOpen) renderPanel();
     var inp = row.querySelector('#archive-search-modal');
     if (inp) inp.placeholder = '输入姓名筛选，或点 🤖 AI 用一句话搜（如：找出有两个同柱的命盘）';
   }
@@ -7287,6 +7588,8 @@ function cmpSetState(entries) {
     aiStatus: aiStatus,
     aiClear: aiClear,
     barHide: barHide,
+    condToggle: condToggle,
+    condClose: condClose,
     aiOpenSettings: aiOpenSettings,
     cfgGet: cfgGet,
     cfgSet: cfgSet,
@@ -7301,6 +7604,17 @@ function cmpSetState(entries) {
     debugPrompt: function() { return SYSTEM_PROMPT; },
     debugQuery: function() { return _aiQuery; },
     debugWarn: function() { return _aiWarn.slice(); },
-    debugLiunian: function(yr) { return liunianGZ(yr); }
+    debugLiunian: function(yr) { return liunianGZ(yr); },
+    // v0.90.0 条件树可视化测试钩子
+    debugCondView: function(q) { return condView(q); },
+    debugCondSet: function(q, sum) { _aiQuery = q; _aiOrig = JSON.parse(JSON.stringify(q)); _aiSummary = sum || '测试条件'; _aiWarn = collectUnsupported(q); _aiEditing = null; _aiOpen = true; aiApply(); renderPanel(); return _aiQuery; },
+    debugCondHtml: function() { return _aiPanel ? _aiPanel.innerHTML : null; },
+    debugCondOpen: function() { return _aiOpen; },
+    debugCondEdit: function(p) { var n = nodeAt(p); if (!n) return null; _aiEditing = { p: p, draft: JSON.parse(JSON.stringify(n)) }; renderPanel(); return _aiEditing.draft; },
+    debugCondCommit: function(patch) { if (!_aiEditing) return false; var k; for (k in (patch || {})) if (Object.prototype.hasOwnProperty.call(patch, k)) _aiEditing.draft[k] = patch[k]; var tgt = nodeAt(_aiEditing.p), d = _aiEditing.draft;
+      if (tgt) for (k in d) { if (!Object.prototype.hasOwnProperty.call(d, k)) continue; var v = d[k]; if (v === '' || v == null || (typeof v === 'number' && !isFinite(v))) delete tgt[k]; else tgt[k] = v; }
+      _aiEditing = null; afterEdit(); return true; },
+    debugCondDel: function(p) { var r = removePath(p); if (r) afterEdit(); return r; },
+    debugCondReset: function() { if (!_aiOrig) return false; _aiQuery = JSON.parse(JSON.stringify(_aiOrig)); _aiWarn = collectUnsupported(_aiQuery); aiApply(); renderPanel(); return true; }
   };
 })();
