@@ -6534,7 +6534,7 @@ function cmpSetState(entries) {
 })();
 
 // ============================================================
-// v0.88.0 AI 档案搜索：自然语言 → 查询条件 JSON → 本地排盘过滤
+// v0.88.1 AI 档案搜索：自然语言 → 查询条件 JSON → 本地排盘过滤
 // LLM 只负责「翻译」，过滤在本地执行（四柱纯计算，与主排盘同源），
 // 「两个同柱」「三戌同支」这类盘面结构特征靠算不靠猜，结果可靠可复现。
 // API 走用户自配的 OpenAI 兼容接口（DeepSeek / GLM / OpenAI），key 只存本机 localStorage。
@@ -6595,6 +6595,24 @@ function cmpSetState(entries) {
     return max;
   }
 
+  // v0.88.1 纯十神：不走 ALGO.shiShen，避开太极激活换中心的副作用（档案搜索永远按原生日主）
+  function aiShiShen(riGan, gan) {
+    var WX = { '甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水' };
+    if (!WX[riGan] || !WX[gan]) return '?';
+    if (riGan === gan) return '比肩';
+    var dw = WX[riGan], tw = WX[gan];
+    var yy = ('甲丙戊庚壬'.indexOf(riGan) >= 0) === ('甲丙戊庚壬'.indexOf(gan) >= 0);
+    if (dw === tw) return yy ? '比肩' : '劫财';
+    var sheng = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+    var ke = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+    if (sheng[dw] === tw) return yy ? '食神' : '伤官';
+    if (sheng[tw] === dw) return yy ? '枭神' : '正印';
+    if (ke[dw] === tw) return yy ? '偏财' : '正财';
+    if (ke[tw] === dw) return yy ? '七杀' : '正官';
+    return '?';
+  }
+  var SS_ALIAS = { '偏官':'七杀', '七煞':'七杀' };
+
   // 单条件求值。a=档案，pls=四柱（可为 null），c=条件
   function matchCond(a, pls, c) {
     if (!c || typeof c !== 'object' || !c.type) return false;
@@ -6652,6 +6670,24 @@ function cmpSetState(entries) {
     if (t === 'daymaster') {
       for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') return pls[i].gan === c.gz;
       return false;
+    }
+    // v0.88.1 十神条件：{"type":"shishen","text":"七杀","where":"gan|zhi|both","pos":"年|月|日|时","min":1}
+    // where 默认 gan（透出天干）；zhi=地支本气十神；both=干支都算
+    if (t === 'shishen') {
+      var want = SS_ALIAS[c.text] || c.text;
+      var riGan = '';
+      for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') riGan = pls[i].gan;
+      if (!riGan) return false;
+      var where = c.where || 'gan';
+      var pos4 = c.pos ? POS_MAP[c.pos] : null;
+      var ZM = (typeof CONST !== 'undefined' && CONST.ZHI_MAIN) ? CONST.ZHI_MAIN : {};
+      cnt = 0;
+      for (i = 0; i < pls.length; i++) {
+        if (pos4 && pls[i].pos !== pos4) continue;
+        if ((where === 'gan' || where === 'both') && aiShiShen(riGan, pls[i].gan) === want) { cnt++; continue; }
+        if ((where === 'zhi' || where === 'both') && ZM[pls[i].zhi] && aiShiShen(riGan, ZM[pls[i].zhi]) === want) cnt++;
+      }
+      return cnt >= (c.min || 1);
     }
     if (t === 'nayin') {
       if (typeof NAYIN === 'undefined') return false;
@@ -6722,7 +6758,8 @@ function cmpSetState(entries) {
     '{"type":"same_stem","min":2} — 存在 ≥ min 根柱天干相同',
     '{"type":"same_branch","min":2} — 存在 ≥ min 根柱地支相同',
     '{"type":"wuxing","wx":"金","min":4} — 八字（4天干+4地支本气）中某五行（木/火/土/金/水）个数 ≥ min',
-    '{"type":"daymaster","gz":"甲"} — 日主（日柱天干）为某干',
+    '{\"type\":\"daymaster\",\"gz\":\"甲\"} — 日主（日柱天干）为某干',
+    '{\"type\":\"shishen\",\"text\":\"七杀\",\"where\":\"gan\",\"min\":1} — 十神条件：某十神出现次数 ≥ min。text 用标准十神名（比肩/劫财/食神/伤官/枭神/正印/偏财/正财/七杀/正官）；where:\"gan\"=透出天干（默认，用户说「透出」「透干」就用它），\"zhi\"=地支本气十神，\"both\"=干支都算；pos 可选限定柱位',
     '{"type":"nayin","text":"涧下水"} — 某柱纳音名包含',
     '{"type":"year_gz","gz":"丙午"} — 年柱干支为某干支',
     '{"type":"birthday","from":"1980-01-01","to":"1989-12-31"} — 出生日期在此区间',
@@ -6731,7 +6768,8 @@ function cmpSetState(entries) {
     '模糊说法请取合理阈值：如「金旺」→ 金≥4；「金多」→ 金≥3；「两个同柱」→ same_pillar min=2。',
     '示例：「帮我找出有两个同柱的命盘」→ {"summary":"找出任意两柱干支完全相同的命盘","query":{"type":"same_pillar","min":2}}',
     '示例：「三戌同支的人」→ {"summary":"地支中『戌』出现三次及以上的命盘","query":{"type":"branch","gz":"戌","min":3}}',
-    '示例：「日主甲木的女性」→ {"summary":"日主为甲木且性别为女","query":{"op":"and","conds":[{"type":"daymaster","gz":"甲"},{"type":"gender","value":"女"}]}}'
+    '示例：「日主甲木的女性」→ {\"summary\":\"日主为甲木且性别为女\",\"query\":{\"op\":\"and\",\"conds\":[{\"type\":\"daymaster\",\"gz\":\"甲\"},{\"type\":\"gender\",\"value\":\"女\"}]}}',
+    '示例：「找出七杀和伤官透出的八字」→ {\"summary\":\"天干透出七杀且透出伤官的命盘\",\"query\":{\"op\":\"and\",\"conds\":[{\"type\":\"shishen\",\"text\":\"七杀\",\"where\":\"gan\"},{\"type\":\"shishen\",\"text\":\"伤官\",\"where\":\"gan\"}]}}'
   ].join('\n');
 
   function extractJson(text) {
@@ -6745,7 +6783,11 @@ function cmpSetState(entries) {
     if (_aiBusy) return;
     var inp = document.getElementById('archive-search-modal');
     var text = inp ? String(inp.value || '').trim() : '';
-    if (!text) { if (inp) inp.focus(); return; }
+    if (!text) {
+      barHtml('<span class=\"archive-ai-sum\">请先输入自然语言描述（如「找出七杀和伤官透出的八字」），再点 AI 搜</span><button type=\"button\" class=\"archive-ai-exit\" onclick=\"RENDER_AI.barHide()\">✕ 关闭</button>', 'err');
+      if (inp) inp.focus();
+      return;
+    }
     if (!cfgReady()) {
       barHtml('<span class="archive-ai-sum">⚙ 使用 AI 搜索前，先配置 AI 接口（填一次 API Key 即可，只存在本机）</span><button type="button" class="archive-ai-exit" onclick="RENDER_AI.barHide()">✕ 关闭</button>', 'err');
       aiOpenSettings('使用 AI 搜索前，先配置 AI 接口（填一次 API Key 即可，只存在本机）');
@@ -6755,7 +6797,7 @@ function cmpSetState(entries) {
     _aiBusy = true;
     barHtml('<span class="archive-ai-sum">🤖 AI 理解中：「' + escA(text) + '」…</span>', 'busy');
     var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var to = setTimeout(function() { if (ac) ac.abort(); }, 30000);
+    var to = setTimeout(function() { if (ac) ac.abort(); }, 75000);
     fetch(String(cfg.baseUrl).replace(/\/+$/, '') + '/chat/completions', {
       method: 'POST',
       signal: ac ? ac.signal : undefined,
@@ -6777,7 +6819,7 @@ function cmpSetState(entries) {
       _aiSummary = String(obj.summary || 'AI 已理解你的条件');
       if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives(text);
     }).catch(function(err) {
-      var m = (err && err.name === 'AbortError') ? '请求超时（30 秒）' : (err && err.message ? err.message : '未知错误');
+      var m = (err && err.name === 'AbortError') ? '请求超时（75 秒）' : (err && err.message ? err.message : '未知错误');
       barHtml('<span class="archive-ai-sum">⚠ AI 请求失败：' + escA(m) + '</span><button type="button" class="archive-ai-exit" onclick="RENDER_AI.barHide()">✕ 关闭</button>', 'err');
     }).then(function() { _aiBusy = false; });
   }
