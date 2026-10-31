@@ -1244,19 +1244,19 @@ function dimVisSet(vis) {
   if (!k) return false;
   try { localStorage.setItem(k, JSON.stringify(vis || {})); return true; } catch (e) { return false; }
 }
-function dimVisibleDims() {
+function dimVisibleDims(suffix, pd) {
   var dims = dimList(), vis = dimVisGet(), out = [];
   for (var i = 0; i < dims.length; i++) {
     var dm = dims[i];
     if (vis.hidden[dm]) continue;
-    if (vis.hideEmpty && !recNoteGet(recNotesKey('', dm)).trim()) continue;
+    if (vis.hideEmpty && !recNoteGet(recNotesKey(suffix || '', dm, pd)).trim()) continue; // v0.87.1 suffix/pd 穿透：twin 盘判空不再错用主盘键
     out.push(dm);
   }
   if (!out.length) out.push(DIM_MAIN); // 全被隐藏时兜底显示主维度，编辑区不落空
   return out;
 }
-function recNotesKey(suffix, dim) {
-  var d = window._paipanData;
+function recNotesKey(suffix, dim, pd) {
+  var d = pd || window._paipanData;
   if (!d) return null;
   return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
 }
@@ -1288,10 +1288,10 @@ function recNoteGet(key) {
 function recNoteSet(key, val) {
   try { localStorage.setItem(key, val); return true; } catch (e) { return false; }
 }
-function recNoteCandidates(suffix, dim) {
+function recNoteCandidates(suffix, dim, pd) {
   dim = (dim && dim !== DIM_MAIN) ? dim : ''; // 主维度键段为空串，须归一化后再过滤
   var out = { key: null, text: '', sameBirthday: [], sameName: [], better: [] };
-  var d = window._paipanData;
+  var d = pd || window._paipanData;
   if (!d) return out;
   var prefix = suffix || '';
   out.key = LS_REC_NOTES + prefix + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
@@ -1380,7 +1380,8 @@ function loadRecAlt(btn) {
   ta.value = txt;
   recAutogrow(ta);
   var dim = btn.getAttribute('data-dim') || '';
-  var cur = recNotesKey(btn.getAttribute('data-suffix') || '', dim);
+  var taX = panel.querySelector('.rec-text');
+  var cur = recNotesKey(btn.getAttribute('data-suffix') || '', dim, taX && taX._recPd);
   if (cur && cur !== k) recNoteSet(cur, txt);
   var box = panel.querySelector('.rec-alts');
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
@@ -1396,12 +1397,16 @@ function bindRecPanel(container, suffix) {
   if (!ta || ta._recBound) return;
   ta._recBound = true;
   suffix = suffix || '';
+  // v0.87.1 数据源自愈：window._paipanData 可能被其他视图渲染清掉，容器副本与 DOM 同生命周期必在；
+  // 装载/保存一律以 ta._recPd 为准，发现 window 份丢失时顺手补回（流年/录音等仍读 window）
+  ta._recPd = container._paipanData || window._paipanData || null;
+  if (!window._paipanData && ta._recPd) window._paipanData = ta._recPd;
   // v0.87.0 维度：初始编辑首个可见维度的文档，候选回捞按维度隔离
-  var dims = dimVisibleDims();
+  var dims = dimVisibleDims(suffix, ta._recPd);
   var firstDim = dims.length ? dims[0] : DIM_MAIN;
   ta._recSuffix = suffix;
   ta._recDim = firstDim;
-  var cand = recNoteCandidates(suffix, firstDim);
+  var cand = recNoteCandidates(suffix, firstDim, ta._recPd);
   if (cand.text) {
     ta.value = cand.text;
     if (cand.better.length) recRenderBetter(container, cand.better, suffix, firstDim);
@@ -1415,21 +1420,21 @@ function bindRecPanel(container, suffix) {
       : '有 ' + cand.sameName.length + ' 条同名记录（生日不同），点选载入：';
     recRenderAlts(container, list, hint, suffix, firstDim);
   }
-  ta._recKey0 = recNotesKey(suffix, firstDim);
+  ta._recKey0 = recNotesKey(suffix, firstDim, ta._recPd);
   renderRecTabs(container, suffix);
   recAutogrow(ta);
   ta.addEventListener('input', function() {
     recAutogrow(ta);
-    recSaveNow(container, ta, suffix);
+    recSaveNow(container, ta, suffix, true);
   });
   // v0.83.2 丢字加固：听写/部分输入法直填 value 不派发 input 事件，字只存在内存、刷新即蒸发，
   // 补 compositionend + blur + 定时巡检 + beforeunload 拦截四道兜底
-  ta.addEventListener('compositionend', function() { recSaveNow(container, ta, suffix); });
-  ta.addEventListener('blur', function() { recSaveNow(container, ta, suffix); });
+  ta.addEventListener('compositionend', function() { recSaveNow(container, ta, suffix, true); });
+  ta.addEventListener('blur', function() { recSaveNow(container, ta, suffix, true); });
   if (ta._recWatch) clearInterval(ta._recWatch);
   ta._recWatch = setInterval(function() {
     if (!document.body || !document.body.contains(ta)) { clearInterval(ta._recWatch); return; }
-    recSaveNow(container, ta, suffix);
+    recSaveNow(container, ta, suffix); // 巡检非用户主动：空写保护生效
   }, 4000);
   var rp = ta.closest ? ta.closest('.record-panel') : null;
   initRecAudioPanel(rp, suffix);
@@ -1441,10 +1446,10 @@ function renderRecTabs(container, suffix) {
   var ta = container.querySelector('.rec-text');
   if (!tabs || !ta) return;
   suffix = suffix || ta._recSuffix || '';
-  var dims = dimVisibleDims();
+  var dims = dimVisibleDims(suffix, ta ? ta._recPd : null);
   var cur = ta._recDim || '';
   if (dims.indexOf(cur) < 0) {
-    recSaveNow(container, ta, suffix); // 当前维度被隐藏：先把草稿落盘再切走
+    recSaveNow(container, ta, suffix, true); // 当前维度被隐藏：先把草稿落盘再切走
     cur = dims[0] || DIM_MAIN;
     applyDimToTa(container, ta, cur);
   }
@@ -1458,9 +1463,10 @@ function renderRecTabs(container, suffix) {
   tabs.innerHTML = html;
 }
 function applyDimToTa(container, ta, dim) {
+  if (!window._paipanData && ta._recPd) window._paipanData = ta._recPd; // v0.87.1 自愈
   ta._recDim = dim;
-  ta._recKey0 = recNotesKey(ta._recSuffix || '', dim);
-  var cand = recNoteCandidates(ta._recSuffix || '', dim);
+  ta._recKey0 = recNotesKey(ta._recSuffix || '', dim, ta._recPd);
+  var cand = recNoteCandidates(ta._recSuffix || '', dim, ta._recPd);
   ta.value = cand.text;
   var alts = container.querySelector('.rec-alts');
   if (alts) { alts.innerHTML = ''; alts.style.display = 'none'; }
@@ -1475,7 +1481,7 @@ function switchRecDim(btn) {
   if (!ta) return;
   var dm = btn.getAttribute('data-dim') || '';
   if (ta._recDim === dm) { btn.classList.add('active'); return; }
-  recSaveNow(panel, ta, ta._recSuffix || '');
+  recSaveNow(panel, ta, ta._recSuffix || '', true);
   var cand = applyDimToTa(panel, ta, dm);
   panel.querySelectorAll('.rec-tab').forEach(function(b) { b.classList.toggle('active', b === btn); });
   recStatusShow(panel, '「' + dm + '」' + (cand.text.trim() ? cand.text.trim().length + ' 字' : '空'), true);
@@ -1575,12 +1581,15 @@ function dimDeleteBtn(btn) {
   if (!r.ok) { recStatusShow(panel || document.body, '⚠ ' + r.err, true); return; }
   refreshDimUI();
 }
-function recSaveNow(container, ta, suffix) {
-  var k = recNotesKey(suffix, ta._recDim);
+function recSaveNow(container, ta, suffix, userAct) {
+  var k = recNotesKey(suffix, ta._recDim, ta._recPd);
   if (!k || k !== ta._recKey0) return false;
   var prev = null;
   try { prev = localStorage.getItem(k); } catch (e) {}
   if (prev === ta.value) return true;
+  // v0.87.1 空写保护：非用户主动的保存（定时巡检等）在已存值非空时不写空，
+  // 防止其他视图渲染清掉数据源后、或双开页面旧状态下，巡检把空值盖掉真实内容
+  if (!userAct && !ta.value && prev && prev.trim()) return true;
   recAutogrow(ta);
   if (!recNoteSet(k, ta.value)) {
     recStatusShow(container, '⚠ 保存失败：浏览器存储空间不足，请先复制内容再清理', true);
@@ -1599,7 +1608,7 @@ if (typeof window !== 'undefined' && !window._recUnloadGuard) {
       var t = tas[i];
       if (!(t.value || '').trim()) continue;
       var stored = null;
-      try { stored = localStorage.getItem(recNotesKey(t._recSuffix, t._recDim)); } catch (err) {}
+      try { stored = localStorage.getItem(recNotesKey(t._recSuffix, t._recDim, t._recPd)); } catch (err) {}
       if (stored !== t.value) { e.preventDefault(); e.returnValue = ''; return ''; }
     }
   });

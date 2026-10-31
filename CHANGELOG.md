@@ -1,3 +1,13 @@
+## v0.87.1（2026-10-31）
+分析记录「切维度后内容变空」修复 + 空写保护
+
+- **背景**（邦顺）：v0.87.0 上线后实测「刷新时有内容，点其它 tab 页再回来分析记录空了」。CDP 现场取证：`window._paipanData` 变 undefined（容器副本 `output._paipanData` 完好），`recNotesKey` 只读 window 份 → 返回 null → `ta._recKey0=null`、编辑区被装载成空、4s 巡检空转。localStorage 真实数据始终未丢（读取环节瞎，不是存储丢）
+- **修复一（数据源下沉+自愈）**：`bindRecPanel` 把命盘数据挂到 `ta._recPd`（与 DOM 同生命周期），装载/保存/切换/beforeunload 全链优先用 `ta._recPd`，window 份仅作兜底；发现 window 份丢失时自动从容器副本补回（流年/录音等仍读 window 的功能一并自愈）
+- **修复二（空写保护）**：`recSaveNow` 新增 `userAct` 语义——非用户主动的保存（4s 巡检等）在已存值非空时不写空，堵死「数据源错位/双开页面旧状态 → 巡检把空值盖掉真实内容」的放大路径；用户主动输入/清空不受影响
+- **修复三（twin 判空错位）**：`dimVisibleDims(suffix, pd)` 参数化——双胞胎盘「隐藏内容为空的维度」此前固定用主盘键判空，过滤错位
+- 回归：`node --check` 过；六门禁过（五核心模块三端一致，render md5 `b4185373`）；CDP 实测「delete window._paipanData 后切维度再切回」= 100 字完整 + window 自愈回 object；空写保护三态（非用户写空被拒 100 / 用户清空生效 0 / 恢复写入 100）全过
+
+
 ## v0.87.0（2026-10-31）
 分析维度：多维 tab 文档 + 每命盘显隐设置
 
