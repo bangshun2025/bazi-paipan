@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.88.2 | 2026-10-31 -->
+<!-- 八字排盘 ·  从真版 v0.89.0 | 2026-10-31 -->
+<!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
 <!-- v0.88.2: 档案面板排序栏右侧新增「清空勾选（n）」—— 一键清空所有档案行的对比勾选（= 清空盘面对比的选择，含「当前盘」条目），按钮显示当前勾选数、为 0 时置灰；同时摘掉对应的「盘面对比」标签并刷新对比画布 -->
 <!-- v0.88.0: AI 档案搜索 —— 档案搜索框旁新增「🤖 AI 搜」：自然语言描述条件（如「找出有两个同柱的命盘」「三戌同支」「日主甲木的女性」），LLM 只做翻译（自然语言→查询条件 JSON），过滤在本地执行（四柱优先用存档 bazi、缺失时以主排盘同源 paipan 现算）：条件引擎支持 指定柱干支/天干地支完整干支计数/同柱同干同支/五行个数/日主/纳音/年柱/出生区间 + and/or/not 组合；接口走用户自配 OpenAI 兼容（DeepSeek/GLM/OpenAI/自定义），⚙ 设置面板填 Key（仅存本机 localStorage，浏览器直连），30 秒超时，返回非 JSON 时提示重试；命中显示 AI 理解摘要 + 命中数 + ✕ 退出 AI，AI 模式下关键词过滤让位；renderArchiveModal 加过滤钩子（index/standalone 同步三行） -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
@@ -17849,7 +17850,12 @@ function cmpSetState(entries) {
   var AI_WX_ZHI = { '子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水' };
   var TG_SET = '甲乙丙丁戊己庚辛壬癸', DZ_SET = '子丑寅卯辰巳午未申酉戌亥';
   var POS_MAP = { '年':'年','月':'月','日':'日','时':'时','year':'年','month':'月','day':'日','hour':'时' };
+  // v0.89.0 七柱术语：四柱 + 三垣（胎元/命宫/身宫）。POS_MAP7 只用于解析 pos/柱位参数。
+  var POS_MAP7 = { '年':'年','月':'月','日':'日','时':'时','胎元':'胎元','命宫':'命宫','身宫':'身宫',
+                   '胎':'胎元','命':'命宫','身':'身宫','tai':'胎元','ming':'命宫','shen':'身宫' };
+  function posOf(v) { return v ? (POS_MAP7[v] || POS_MAP[v] || null) : null; }
   var _aiQuery = null, _aiSummary = '', _aiBusy = false, _bar = null;
+  var _aiWarn = [], _aiText = '';
 
   function cfgGet() {
     try { var c = JSON.parse(localStorage.getItem(LS_AI)); return (c && typeof c === 'object') ? c : {}; } catch (e) { return {}; }
@@ -17857,29 +17863,183 @@ function cmpSetState(entries) {
   function cfgSet(cfg) { try { localStorage.setItem(LS_AI, JSON.stringify(cfg || {})); return true; } catch (e) { return false; } }
   function cfgReady() { var c = cfgGet(); return !!(c.apiKey && c.baseUrl && c.model); }
 
-  // 每份档案的四柱：优先用存档 bazi，缺失时本地现算（与主排盘同源 paipan）
-  function pillarsOf(a) {
+  // 每份档案的柱集：four=四柱（默认）；seven=七柱（四柱+三垣）。缺失时本地现算（与主排盘同源 paipan）
+  var _ppCache = {}, _ppCacheN = 0;
+  function paipanOf(a) {
+    if (!a || !a.year) return null;
+    var k = (a.id || '') + '#' + (a.name || '') + '|' + a.year + '-' + a.month + '-' + a.day + '-' + a.hour + '-' + (a.min || 0);
+    if (Object.prototype.hasOwnProperty.call(_ppCache, k)) return _ppCache[k];
+    var p = null;
+    try {
+      var pp = (typeof ALGO !== 'undefined' && ALGO.paipan) ? ALGO.paipan : (typeof paipan === 'function' ? paipan : null);
+      if (pp) p = pp(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0);
+    } catch (e) { p = null; }
+    if (_ppCacheN > 600) { _ppCache = {}; _ppCacheN = 0; }
+    _ppCache[k] = p; _ppCacheN++;
+    return p;
+  }
+  function pillarsOf(a, sc) {
     if (!a) return null;
+    var out = [], p = null;
     if (a.bazi && a.bazi.nian && a.bazi.nian.gan && a.bazi.ri && a.bazi.ri.gan) {
-      var out = [];
       [['nian','年'],['yue','月'],['ri','日'],['shi','时']].forEach(function(it) {
         var c = a.bazi[it[0]];
         if (c && c.gan) out.push({ pos: it[1], gan: c.gan, zhi: c.zhi });
       });
-      if (out.length >= 3) return out;
-    }
-    if (!a.year || !a.month || !a.day) return null;
-    try {
-      var pp = (typeof ALGO !== 'undefined' && ALGO.paipan) ? ALGO.paipan : (typeof paipan === 'function' ? paipan : null);
-      if (!pp) return null;
-      var p = pp(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0);
+    } else {
+      p = paipanOf(a);
       if (!p) return null;
-      var arr = [];
       [['nian','年'],['yue','月'],['ri','日'],['shi','时']].forEach(function(it2) {
-        if (p[it2[0]] && p[it2[0]].gan) arr.push({ pos: it2[1], gan: p[it2[0]].gan, zhi: p[it2[0]].zhi });
+        if (p[it2[0]] && p[it2[0]].gan) out.push({ pos: it2[1], gan: p[it2[0]].gan, zhi: p[it2[0]].zhi });
       });
-      return arr.length >= 3 ? arr : null;
-    } catch (e) { return null; }
+    }
+    if (out.length < 3) return null;
+    if (sc === 'seven') {
+      var sy = a.sanyuan || null;
+      if (!sy || !sy.tai || !sy.tai.gan) { if (!p) p = paipanOf(a); if (p) sy = { tai: p.tai, ming: p.ming, shen: p.shen }; }
+      [['tai','胎元'],['ming','命宫'],['shen','身宫']].forEach(function(it3) {
+        var c2 = sy && sy[it3[0]];
+        if (c2 && c2.gan) out.push({ pos: it3[1], gan: c2.gan, zhi: c2.zhi });
+      });
+    }
+    return out;
+  }
+  // 大运：优先档案存档，缺失则现算
+  function dayunOf(a) {
+    if (a && Array.isArray(a.daYun) && a.daYun.length) return a.daYun;
+    var p = paipanOf(a);
+    return (p && Array.isArray(p.daYun)) ? p.daYun : [];
+  }
+  function dayunPillars(a) {
+    return dayunOf(a).map(function(d, idx) {
+      var sY = (d.startYear != null) ? d.startYear : null;
+      var sA = (d.startAge != null) ? d.startAge : null;
+      return { pos: '大运' + (idx + 1), gan: d.gan || '', zhi: d.zhi || '',
+               startAge: sA, endAge: (d.endAge != null ? d.endAge : (sA != null ? sA + 9 : null)),
+               startYear: sY, endYear: (sY != null ? sY + 9 : null) };
+    });
+  }
+  // 起运：兼容存档 {year,month,day,hour} 与排盘 {years,months,days,hours}
+  function qiyunOf(a) {
+    var qy = (a && a.qiYun) || null;
+    if (!qy) { var p = paipanOf(a); qy = (p && p.qiYun) || null; }
+    if (!qy) return null;
+    var n = function(v) { v = Number(v); return isFinite(v) ? v : 0; };
+    var yrs = n(qy.years != null ? qy.years : qy.year);
+    var mos = n(qy.months != null ? qy.months : qy.month);
+    var dys = dayunOf(a);
+    var jy = (qy.jyYear != null) ? qy.jyYear
+           : (dys[0] && dys[0].startYear != null ? dys[0].startYear
+           : (a && a.year ? a.year + Math.round(yrs + mos / 12) : null));
+    return { years: yrs, months: mos, days: n(qy.days != null ? qy.days : qy.day), age: yrs + mos / 12, startYear: jy, shun: qy.shun };
+  }
+  var TG_SET2 = '甲乙丙丁戊己庚辛壬癸', DZ_SET2 = '子丑寅卯辰巳午未申酉戌亥';
+  function liunianGZ(yr) {
+    yr = Number(yr); if (!isFinite(yr)) return null;
+    return { gan: TG_SET2.charAt(((yr - 4) % 10 + 10) % 10), zhi: DZ_SET2.charAt(((yr - 4) % 12 + 12) % 12) };
+  }
+  var SANHUI_SETS = [['寅','卯','辰','木'],['巳','午','未','火'],['申','酉','戌','金'],['亥','子','丑','水']];
+  var SANHE_SETS  = [['申','子','辰','水'],['亥','卯','未','木'],['寅','午','戌','火'],['巳','酉','丑','金']];
+  var CHONG_MAP = { '子':'午','午':'子','丑':'未','未':'丑','寅':'申','申':'寅','卯':'酉','酉':'卯','辰':'戌','戌':'辰','巳':'亥','亥':'巳' };
+  var LIUHE_MAP = { '子':'丑','丑':'子','寅':'亥','亥':'寅','卯':'戌','戌':'卯','辰':'酉','酉':'辰','巳':'申','申':'巳','午':'未','未':'午' };
+  // 全文索引：identity（姓名|性别|年月日，忽略时辰以容忍改时辰）→ [{src:'note'|'rec', text}]
+  var _ftIndex = null, _ftBuilding = null;
+  function ftIdOf(a) { return (a && a.name || '') + '|' + (a && a.gender || '') + '|' + (a && a.year) + '|' + (a && a.month) + '|' + (a && a.day); }
+  function ftIdFromKey(k) {
+    if (!k) return null;
+    var parts = String(k).split('|');
+    if (parts.length < 7) return null;
+    var s = parts.slice(-7);           // name, gender, y, m, d, h, mi
+    var first = s[0];
+    // 首段可能带库前缀与维度标记：bz_rec_notes_[suffix][§维度]姓名
+    if (first.indexOf('bz_rec_notes_') === 0 || first.indexOf('bz_rec_audio_') === 0) {
+      var rest = first.replace(/^bz_rec_(notes|audio)_/, '');
+      var cut = rest.lastIndexOf('§');
+      first = (cut >= 0) ? rest.slice(cut + 1) : rest;
+    }
+    return first + '|' + s[1] + '|' + s[2] + '|' + s[3] + '|' + s[4];
+  }
+  function buildFTIndex() {
+    var idx = {};
+    function push(key, src, text) {
+      if (!text) return;
+      var id = ftIdFromKey(key);
+      if (!id) return;
+      (idx[id] = idx[id] || []).push({ src: src, text: String(text) });
+    }
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('bz_rec_notes_') !== 0) continue;
+        push(k, 'notes', localStorage.getItem(k) || '');
+      }
+    } catch (e) {}
+    // 录音转录：IndexedDB bz_rec_audio / clips（与录音模块同库同名，直连读取，不依赖其私有闭包）
+    var p = new Promise(function(res) {
+      var out = [];
+      try {
+        var rq = indexedDB.open('bz_rec_audio', 1);
+        rq.onupgradeneeded = function() {
+          var db0 = rq.result;
+          if (!db0.objectStoreNames.contains('clips')) {
+            var st0 = db0.createObjectStore('clips', { keyPath: 'id' });
+            st0.createIndex('key', 'key', { unique: false });
+          }
+        };
+        rq.onsuccess = function() {
+          var db = rq.result;
+          try {
+            var rq2 = db.transaction('clips', 'readonly').objectStore('clips').openCursor();
+            rq2.onsuccess = function() {
+              var cur = rq2.result;
+              if (cur) { out.push(cur.value); cur.continue(); }
+              else { try { db.close(); } catch (e2) {} res(out); }
+            };
+            rq2.onerror = function() { try { db.close(); } catch (e3) {} res(out); };
+          } catch (e5) { try { db.close(); } catch (e6) {} res(out); }
+        };
+        rq.onerror = function() { res(out); };
+      } catch (e7) { res(out); }
+    });
+    return p.then(function(clips) {
+      (clips || []).forEach(function(cl) {
+        var txt = (cl.transcript && (cl.transcript.text || cl.transcript.raw)) || '';
+        if (cl.notes && cl.notes.length) {
+          var ns = [];
+          for (var j = 0; j < cl.notes.length; j++) ns.push((cl.notes[j] && cl.notes[j].text) || '');
+          txt += '\n' + ns.join('\n');
+        }
+        push(cl.key || '', 'rec', txt);
+      });
+      return idx;
+    }).catch(function() { return idx; });
+  }
+  function ensureFTIndex() {
+    if (_ftIndex) return Promise.resolve(_ftIndex);
+    if (_ftBuilding) return _ftBuilding;
+    _ftBuilding = buildFTIndex().then(function(idx) { _ftIndex = idx; _ftBuilding = null; return idx; },
+                                     function() { _ftBuilding = null; return {}; });
+    return _ftBuilding;
+  }
+  function queryNeedsFT(q) {
+    if (!q || typeof q !== 'object') return false;
+    if (q.type === 'text') return true;
+    if (Array.isArray(q.conds)) { for (var i = 0; i < q.conds.length; i++) if (queryNeedsFT(q.conds[i])) return true; }
+    if (q.cond && queryNeedsFT(q.cond)) return true;
+    return false;
+  }
+  function collectUnsupported(q, out) {
+    out = out || [];
+    if (!q || typeof q !== 'object') return out;
+    if (q.type === 'unsupported') out.push(String(q.need || q.reason || '未命名的条件'));
+    if (Array.isArray(q.conds)) { for (var i = 0; i < q.conds.length; i++) collectUnsupported(q.conds[i], out); }
+    if (q.cond) collectUnsupported(q.cond, out);
+    return out;
+  }
+  function plsFor(a, sc) {
+    if (sc === 'dayun') return dayunPillars(a);
+    if (sc === 'seven') return pillarsOf(a, 'seven');
+    return pillarsOf(a);
   }
   function gzName(c) { return (c && c.gan ? c.gan : '') + (c && c.zhi ? c.zhi : ''); }
 
@@ -17915,6 +18075,11 @@ function cmpSetState(entries) {
   function matchCond(a, pls, c) {
     if (!c || typeof c !== 'object' || !c.type) return false;
     var t = c.type;
+    if (t === 'unsupported') return false; // v0.89.0 模型明示「这条我表达不了」，不计命中，由 UI 告警
+    // v0.89.0 scope 分层：four=四柱（默认）/ seven=七柱（含三垣）/ dayun=大运
+    var scope = c.scope || 'four';
+    if (scope === 'seven' || scope === 'dayun') pls = plsFor(a, scope);
+    var pls4 = (scope === 'four') ? pls : pillarsOf(a);
     if (t === 'name') {
       var s = ((a.nickname || '') + (a.yiming || '') + (a.name || '')).toLowerCase();
       return s.indexOf(String(c.text == null ? '' : c.text).toLowerCase()) >= 0;
@@ -17934,7 +18099,7 @@ function cmpSetState(entries) {
     if (t === 'pillar') {
       var gz = String(c.gz || '').trim();
       var part = c.part || (gz.length === 2 ? 'full' : (TG_SET.indexOf(gz) >= 0 ? 'gan' : (DZ_SET.indexOf(gz) >= 0 ? 'zhi' : 'full')));
-      var pos = c.pos ? POS_MAP[c.pos] : null;
+      var pos = c.pos ? posOf(c.pos) : null;
       return pls.some(function(p) {
         if (pos && p.pos !== pos) return false;
         if (part === 'gan') return p.gan === gz;
@@ -17966,7 +18131,7 @@ function cmpSetState(entries) {
       return cnt >= (c.min || 1);
     }
     if (t === 'daymaster') {
-      for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') return pls[i].gan === c.gz;
+      for (i = 0; i < pls4.length; i++) if (pls4[i].pos === '日') return pls4[i].gan === c.gz;
       return false;
     }
     // v0.88.1 十神条件：{"type":"shishen","text":"七杀","where":"gan|zhi|both","pos":"年|月|日|时","min":1}
@@ -17977,7 +18142,7 @@ function cmpSetState(entries) {
       for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') riGan = pls[i].gan;
       if (!riGan) return false;
       var where = c.where || 'gan';
-      var pos4 = c.pos ? POS_MAP[c.pos] : null;
+      var pos4 = c.pos ? posOf(c.pos) : null;
       var ZM = (typeof CONST !== 'undefined' && CONST.ZHI_MAIN) ? CONST.ZHI_MAIN : {};
       cnt = 0;
       for (i = 0; i < pls.length; i++) {
@@ -17989,7 +18154,7 @@ function cmpSetState(entries) {
     }
     if (t === 'nayin') {
       if (typeof NAYIN === 'undefined') return false;
-      var pos2 = c.pos ? POS_MAP[c.pos] : null;
+      var pos2 = c.pos ? posOf(c.pos) : null;
       return pls.some(function(p) {
         if (pos2 && p.pos !== pos2) return false;
         var ny = NAYIN[gzName(p)];
@@ -17997,7 +18162,137 @@ function cmpSetState(entries) {
       });
     }
     if (t === 'year_gz') {
-      for (i = 0; i < pls.length; i++) if (pls[i].pos === '年') return gzName(pls[i]) === c.gz;
+      for (i = 0; i < pls4.length; i++) if (pls4[i].pos === '年') return gzName(pls4[i]) === c.gz;
+      return false;
+    }
+    // ===== v0.89.0 全局搜索：组合局 / 时间轴 / 关系 / 全文 =====
+    // 三会局 / 三合局：{"type":"sanhui","gz":"寅卯辰","scope":"seven"}；gz 可省（任意局）、可写五行
+    if (t === 'sanhui' || t === 'sanhe') {
+      var setsX = (t === 'sanhui') ? SANHUI_SETS : SANHE_SETS;
+      var wantX = String(c.gz || c.text || c.wx || '').trim();
+      var zsX = [];
+      for (i = 0; i < pls.length; i++) zsX.push(pls[i].zhi);
+      for (var sx = 0; sx < setsX.length; sx++) {
+        var stX = setsX[sx], nmX = stX[0] + stX[1] + stX[2];
+        if (wantX) {
+          if (wantX.length >= 2) { if (wantX !== nmX) continue; }
+          else if (wantX !== stX[3] && nmX.indexOf(wantX) < 0) continue;
+        }
+        if (zsX.indexOf(stX[0]) >= 0 && zsX.indexOf(stX[1]) >= 0 && zsX.indexOf(stX[2]) >= 0) return true;
+      }
+      return false;
+    }
+    // 起运：{"type":"qiyun","field":"age|year","min":5,"max":9}（age=起运岁数，year=交运年）
+    if (t === 'qiyun') {
+      var qyX = qiyunOf(a);
+      if (!qyX) return false;
+      var vX = (c.field === 'year') ? qyX.startYear : qyX.age;
+      if (vX == null) return false;
+      if (c.min != null && vX < Number(c.min)) return false;
+      if (c.max != null && vX > Number(c.max)) return false;
+      if (c.exact != null && Math.abs(vX - Number(c.exact)) > 0.51) return false;
+      return true;
+    }
+    // 大运：{"type":"dayun","gz":"甲子","min":30,"max":40}（min/max 可指年龄或年份，用 ageMin/yearMin 更精确）
+    if (t === 'dayun') {
+      var dysX = dayunOf(a);
+      if (!dysX.length) return false;
+      var wantD = String(c.gz || '').trim();
+      var loA = (c.ageMin != null) ? Number(c.ageMin) : (c.min != null && c.field !== 'year' ? Number(c.min) : null);
+      var hiA = (c.ageMax != null) ? Number(c.ageMax) : (c.max != null && c.field !== 'year' ? Number(c.max) : null);
+      var loY = (c.yearMin != null) ? Number(c.yearMin) : (c.min != null && c.field === 'year' ? Number(c.min) : null);
+      var hiY = (c.yearMax != null) ? Number(c.yearMax) : (c.max != null && c.field === 'year' ? Number(c.max) : null);
+      for (var dj = 0; dj < dysX.length; dj++) {
+        var dX = dysX[dj], gzX = (dX.gan || '') + (dX.zhi || '');
+        if (wantD && gzX !== wantD && dX.gan !== wantD && dX.zhi !== wantD) continue;
+        var sAX = dX.startAge, eAX = (dX.endAge != null ? dX.endAge : (sAX != null ? sAX + 9 : null));
+        var sYX = dX.startYear, eYX = (sYX != null ? sYX + 9 : null);
+        if (loA != null && (eAX == null || eAX < loA)) continue;
+        if (hiA != null && (sAX == null || sAX > hiA)) continue;
+        if (loY != null && (eYX == null || eYX < loY)) continue;
+        if (hiY != null && (sYX == null || sYX > hiY)) continue;
+        return true;
+      }
+      return false;
+    }
+    // 流年干支：{"type":"liunian","gz":"丙午","year":2026} 或 {"type":"liunian","gz":"午","fromYear":2026,"toYear":2035}
+    if (t === 'liunian') {
+      var ly0 = (c.year != null) ? Number(c.year) : null;
+      var ly1 = (c.toYear != null) ? Number(c.toYear) : (c.fromYear != null ? Number(c.fromYear) + 9 : null);
+      if (ly0 == null && c.fromYear != null) ly0 = Number(c.fromYear);
+      if (ly0 == null && c.age != null && a.year) ly0 = a.year + Number(c.age);
+      if (ly0 == null) return true; // 未限定年份范围：任何流年都会轮到，不构成筛选
+      if (ly1 == null) ly1 = ly0;
+      var wantL = String(c.gz || '').trim();
+      var span = (ly1 >= ly0) ? Math.min(ly1 - ly0, 120) : 0;
+      for (var ly = 0; ly <= span; ly++) {
+        var lgX = liunianGZ(ly0 + ly);
+        if (!lgX) continue;
+        if (wantL) { if (lgX.gan + lgX.zhi !== wantL && lgX.gan !== wantL && lgX.zhi !== wantL) continue; }
+        if (c.wx && AI_WX_ZHI[lgX.zhi] !== c.wx && AI_WX_STEM[lgX.gan] !== c.wx) continue;
+        return true;
+      }
+      return false;
+    }
+    // 运与命局的关系：{"type":"interact","a":"流年|大运","year":2026,"b":"日","rel":"chong|he|tong|sanhe|sanhui|sameGz|sameGan"}
+    if (t === 'interact') {
+      var relX = c.rel || 'chong';
+      var bPosX = posOf(c.b || '日');
+      var bPlsX = plsFor(a, c.bScope || 'four');
+      if (!bPlsX) return false;
+      var tgtX = null;
+      for (i = 0; i < bPlsX.length; i++) if (bPlsX[i].pos === bPosX) { tgtX = bPlsX[i]; break; }
+      if (!tgtX) return false;
+      var candsX = [], aSide = c.a || '流年';
+      if (aSide === '流年' || aSide === 'liunian') {
+        var yrsX = [];
+        if (c.year != null) yrsX.push(Number(c.year));
+        else if (c.age != null && a.year) yrsX.push(a.year + Number(c.age));
+        else if (c.fromYear != null || c.toYear != null) {
+          var fyX = (c.fromYear != null) ? Number(c.fromYear) : ((a.year || 1900) + (c.age || 0));
+          var tyX = (c.toYear != null) ? Number(c.toYear) : fyX + 9;
+          for (var yyX = fyX; yyX <= tyX && yyX - fyX < 120; yyX++) yrsX.push(yyX);
+        } else return false;
+        for (var yiX = 0; yiX < yrsX.length; yiX++) {
+          var g3 = liunianGZ(yrsX[yiX]);
+          if (g3) candsX.push({ gan: g3.gan, zhi: g3.zhi });
+        }
+      } else {
+        var dpX = dayunPillars(a);
+        for (var piX = 0; piX < dpX.length; piX++) {
+          if (c.year != null && (dpX[piX].startYear == null || c.year < dpX[piX].startYear || c.year > dpX[piX].endYear)) continue;
+          if (c.age != null && (dpX[piX].startAge == null || c.age < dpX[piX].startAge || c.age > dpX[piX].endAge)) continue;
+          candsX.push(dpX[piX]);
+        }
+      }
+      for (var cjX = 0; cjX < candsX.length; cjX++) {
+        var xX = candsX[cjX];
+        if (relX === 'chong' && CHONG_MAP[tgtX.zhi] === xX.zhi) return true;
+        if (relX === 'he' && LIUHE_MAP[tgtX.zhi] === xX.zhi) return true;
+        if (relX === 'tong' && tgtX.zhi === xX.zhi) return true;
+        if (relX === 'sameGz' && (tgtX.gan + tgtX.zhi) === (xX.gan + xX.zhi)) return true;
+        if (relX === 'sameGan' && tgtX.gan === xX.gan) return true;
+        if (relX === 'sanhe' && tgtX.zhi !== xX.zhi) {
+          for (var sm = 0; sm < SANHE_SETS.length; sm++) { var smx = SANHE_SETS[sm]; if (smx.indexOf(tgtX.zhi) >= 0 && smx.indexOf(xX.zhi) >= 0) return true; }
+        }
+        if (relX === 'sanhui' && tgtX.zhi !== xX.zhi) {
+          for (var sn = 0; sn < SANHUI_SETS.length; sn++) { var snx = SANHUI_SETS[sn]; if (snx.indexOf(tgtX.zhi) >= 0 && snx.indexOf(xX.zhi) >= 0) return true; }
+        }
+      }
+      return false;
+    }
+    // 全文：{"type":"text","q":"关键词","in":"notes|rec|both"}（notes=分析记录，rec=录音转录）
+    if (t === 'text') {
+      var qX = String(c.q || c.text || '').trim();
+      if (!qX) return false;
+      var bagX = _ftIndex ? (_ftIndex[ftIdOf(a)] || null) : null;
+      if (!bagX) return false;
+      var whX = c.in || 'both';
+      if (whX === 'note') whX = 'notes';
+      for (var biX = 0; biX < bagX.length; biX++) {
+        if (whX !== 'both' && bagX[biX].src !== whX) continue;
+        if (bagX[biX].text.indexOf(qX) >= 0) return true;
+      }
       return false;
     }
     return false; // 未知类型不放行
@@ -18022,15 +18317,25 @@ function cmpSetState(entries) {
   function aiMatch(a) { if (!_aiQuery) return true; return matchQuery(a, pillarsOf(a), _aiQuery); }
   function aiActive() { return !!_aiQuery; }
   function aiClear() {
-    _aiQuery = null; _aiSummary = '';
+    _aiQuery = null; _aiSummary = ''; _aiWarn = []; _aiText = '';
     barHide();
-    if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives((document.getElementById('archive-search-modal') || {}).value || '');
+    // 退出 AI 时清空输入框：否则自然语言会被当成普通关键词过滤，列表变空
+    var inp = document.getElementById('archive-search-modal');
+    if (inp) inp.value = '';
+    if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives('');
+  }
+  function aiApply() {
+    var txt = _aiText || '';
+    _aiText = '';
+    if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives(txt);
   }
   function aiStatus(hit) {
     if (!_aiQuery || !_bar) return;
-    barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>'
+    var hasWarn = !!(_aiWarn && _aiWarn.length);
+    var warn = hasWarn ? '<span class="archive-ai-warn">⚠ 有 ' + _aiWarn.length + ' 项超出能力：' + escA(_aiWarn.join('、')) + '</span>' : '';
+    barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>' + warn
       + '<span class="archive-ai-n">命中 ' + hit + ' 份</span>'
-      + '<button type="button" class="archive-ai-exit" onclick="RENDER_AI.aiClear()">✕ 退出 AI</button>', '');
+      + '<button type="button" class="archive-ai-exit" onclick="RENDER_AI.aiClear()">✕ 退出 AI</button>', hasWarn ? 'warn' : '');
   }
 
   function escA(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -18043,31 +18348,73 @@ function cmpSetState(entries) {
   function barHide() { if (_bar) { _bar.style.display = 'none'; _bar.innerHTML = ''; } }
 
   // ===== LLM 调用：自然语言 → {summary, query} =====
+  // v0.89.0 全局检索提示词：术语表 + 分层 scope + 时间轴 + 全文 + 边界（含 unsupported 出口）
   var SYSTEM_PROMPT = [
-    '你是「八字排盘」应用的档案搜索解析器。把用户的自然语言请求翻译成 JSON 查询条件，交给本地引擎对每份命盘排盘后过滤。只输出一个 JSON 对象，禁止输出任何其他文字、注释或代码块标记。',
-    '可用条件类型（type）：',
+    '你是「八字排盘」应用的档案全局检索解析器。把用户的自然语言请求翻译成一个 JSON 查询对象，交给本地引擎对每份命盘过滤。只输出一个 JSON 对象，禁止输出其他文字、注释或代码块标记。',
+    '',
+    '【术语表】',
+    '四柱 = 年柱、月柱、日柱、时柱。',
+    '三垣 = 胎元、命宫、身宫（各一柱）。',
+    '七柱 = 四柱 + 三垣，共 7 柱。用户说「七柱」「七个柱」「带三垣」「胎元命宫身宫一起看」时，相关柱类条件的 scope 必须写 "seven"。',
+    '大运 = 起运后每十年一步的干支，含起始年龄与起始年份。',
+    '起运 = 出生后多久交运（岁数/年月）与交运年份。',
+    '流年 = 某一公历年份对应的干支（如 2026 = 丙午）。',
+    '三会局 = 寅卯辰、巳午未、申酉戌、亥子丑 三支齐全。三合局 = 申子辰、亥卯未、寅午戌、巳酉丑 三支齐全。',
+    '透出 = 天干上出现（where="gan"）。本气十神 = 地支主气所对应的十神（where="zhi"）。',
+    '',
+    '【scope 分层】所有柱类条件都可带 scope 字段：',
+    '  "four"（默认）= 只看四柱；',
+    '  "seven" = 看七柱（四柱+三垣）；',
+    '  "dayun" = 看大运干支（此时 branch/stem/gz/same_* 在大运序列里统计）。',
+    '用户没有明确说七柱/三垣时，一律用默认 four，不要擅自加三垣。',
+    '',
+    '【能力清单】条件类型（type）：',
     '{"type":"name","text":"关键词"} — 姓名/昵称/艺名包含',
-    '{"type":"gender","value":"男"} — 性别（"男" 或 "女"）',
-    '{"type":"pillar","pos":"日","gz":"甲辰"} — 指定柱的干支；pos 可选 年/月/日/时，缺省=任意柱；gz 为完整干支"甲辰"，或单个天干"甲"，或单个地支"辰"',
-    '{"type":"stem","gz":"甲","min":2} — 某天干在四柱出现次数 ≥ min',
-    '{"type":"branch","gz":"戌","min":3} — 某地支在四柱出现次数 ≥ min',
-    '{"type":"gz","gz":"甲辰","min":1} — 某完整干支出现次数 ≥ min',
-    '{"type":"same_pillar","min":2} — 存在 ≥ min 根柱干支完全相同（同柱）',
-    '{"type":"same_stem","min":2} — 存在 ≥ min 根柱天干相同',
-    '{"type":"same_branch","min":2} — 存在 ≥ min 根柱地支相同',
-    '{"type":"wuxing","wx":"金","min":4} — 八字（4天干+4地支本气）中某五行（木/火/土/金/水）个数 ≥ min',
-    '{\"type\":\"daymaster\",\"gz\":\"甲\"} — 日主（日柱天干）为某干',
-    '{\"type\":\"shishen\",\"text\":\"七杀\",\"where\":\"gan\",\"min\":1} — 十神条件：某十神出现次数 ≥ min。text 用标准十神名（比肩/劫财/食神/伤官/枭神/正印/偏财/正财/七杀/正官）；where:\"gan\"=透出天干（默认，用户说「透出」「透干」就用它），\"zhi\"=地支本气十神，\"both\"=干支都算；pos 可选限定柱位',
-    '{"type":"nayin","text":"涧下水"} — 某柱纳音名包含',
-    '{"type":"year_gz","gz":"丙午"} — 年柱干支为某干支',
-    '{"type":"birthday","from":"1980-01-01","to":"1989-12-31"} — 出生日期在此区间',
-    '组合节点：{"op":"and","conds":[条件...]}、{"op":"or","conds":[...]}、{"op":"not","cond":{条件}}',
-    '输出格式：{"summary":"一句话向用户确认你的理解","query":{条件或组合}}',
-    '模糊说法请取合理阈值：如「金旺」→ 金≥4；「金多」→ 金≥3；「两个同柱」→ same_pillar min=2。',
-    '示例：「帮我找出有两个同柱的命盘」→ {"summary":"找出任意两柱干支完全相同的命盘","query":{"type":"same_pillar","min":2}}',
-    '示例：「三戌同支的人」→ {"summary":"地支中『戌』出现三次及以上的命盘","query":{"type":"branch","gz":"戌","min":3}}',
-    '示例：「日主甲木的女性」→ {\"summary\":\"日主为甲木且性别为女\",\"query\":{\"op\":\"and\",\"conds\":[{\"type\":\"daymaster\",\"gz\":\"甲\"},{\"type\":\"gender\",\"value\":\"女\"}]}}',
-    '示例：「找出七杀和伤官透出的八字」→ {\"summary\":\"天干透出七杀且透出伤官的命盘\",\"query\":{\"op\":\"and\",\"conds\":[{\"type\":\"shishen\",\"text\":\"七杀\",\"where\":\"gan\"},{\"type\":\"shishen\",\"text\":\"伤官\",\"where\":\"gan\"}]}}'
+    '{"type":"gender","value":"男"} — 性别（男/女）',
+    '{"type":"birthday","from":"1980-01-01","to":"1989-12-31"} — 出生日期区间',
+    '{"type":"pillar","pos":"日","gz":"甲辰"} — 指定柱的干支。pos 可选 年/月/日/时/胎元/命宫/身宫，缺省=范围内任意柱；gz 可为完整干支、单天干或单地支',
+    '{"type":"stem","gz":"甲","min":2} — 天干出现次数 ≥ min',
+    '{"type":"branch","gz":"戌","min":3} — 地支出现次数 ≥ min',
+    '{"type":"gz","gz":"甲辰","min":1} — 完整干支出现次数 ≥ min',
+    '{"type":"same_pillar","min":2} — 有 ≥ min 柱干支完全相同',
+    '{"type":"same_stem","min":2} — 有 ≥ min 柱天干相同',
+    '{"type":"same_branch","min":2} — 有 ≥ min 柱地支相同',
+    '{"type":"wuxing","wx":"金","min":4} — 某五行（木火土金水）个数 ≥ min（按天干+地支本气计）',
+    '{"type":"daymaster","gz":"甲"} — 日主为某天干（固定取日柱）',
+    '{"type":"shishen","text":"七杀","where":"gan","min":1} — 十神条件。text 用标准名（比肩/劫财/食神/伤官/枭神/正印/偏财/正财/七杀/正官）；where: gan=透出天干（默认）、zhi=地支本气、both=干支都算；pos 可限定柱位',
+    '{"type":"nayin","text":"涧下水"} — 纳音名包含',
+    '{"type":"year_gz","gz":"丙午"} — 年柱干支（固定取年柱）',
+    '{"type":"sanhui","gz":"寅卯辰","scope":"seven"} — 三会局三支齐全。gz 可省略（任意三会局），也可写五行（如"木"）',
+    '{"type":"sanhe","gz":"申子辰","scope":"seven"} — 三合局三支齐全，用法同上',
+    '{"type":"qiyun","field":"age","min":5,"max":8} — 起运。field: age=起运岁数、year=交运年份；可用 min/max 区间或 exact 精确值',
+    '{"type":"dayun","gz":"甲子","ageMin":30,"ageMax":40} — 大运中有某步满足：干支匹配 + 年龄/年份区间有交集。区间字段也可用 yearMin/yearMax',
+    '{"type":"liunian","gz":"丙午","fromYear":2026,"toYear":2035} — 该年份区间内出现指定流年干支。必须给年份范围，否则条件无意义',
+    '{"type":"interact","a":"流年","year":2026,"b":"日","rel":"chong"} — 运与命局某柱的关系。a: 流年|大运（大运用 age/year 定位某步）；b: 年/月/日/时/胎元/命宫/身宫（bScope 可设 four/seven）；rel: chong=六冲、he=六合、tong=同支、sameGz=同干支、sameGan=同天干、sanhe=三合、sanhui=三会',
+    '{"type":"text","q":"关键词","in":"notes"} — 全文检索。in: notes=分析记录、rec=录音转录（含整理稿与原始识别）、both=两者（默认）',
+    '{"type":"unsupported","need":"无法表达的需求"} — 明示这条请求超出能力，界面会提示用户，不要假装能查',
+    '组合节点：{"op":"and","conds":[...]}、{"op":"or","conds":[...]}、{"op":"not","cond":{...}}',
+    '',
+    '【边界】以下请求无法用本引擎表达，必须输出 unsupported，禁止用近似条件冒充：',
+    '  1) 吉凶评价：婚姻好不好、有没有钱、事业成不成、命好不好；',
+    '  2) 旺衰强弱、用神、格局高低、喜忌；',
+    '  3) 未实现的柱间关系：刑、害、破、暗合、伏吟、反吟（只支持 chong/he/tong/sanhe/sanhui/sameGz/sameGan）；',
+    '  4) 流月、流日、流时；跨盘对比与合盘；',
+    '  5) 录音稿历史版本与附件文件（只索引应用内录音转录文本与分析记录）；',
+    '  6) 纯事件回忆且记录里没有对应文字（如「去年离婚的那个」而记录没写离婚）。',
+    '遇到部分可查、部分不可查的请求：把可查部分写成正常条件，把不可查部分追加一个 unsupported 条件（用 and 连接），并在 summary 里说明哪部分没查。',
+    '',
+    '【输出格式】{"summary":"一句话向用户确认理解（含降级说明）","query":{条件或组合}}',
+    '模糊阈值：「金旺」→ 金≥4；「金多」→ 金≥3；「两个同柱」→ same_pillar min=2。',
+    '',
+    '【示例】',
+    '「七柱地支成三会局的」→ {"summary":"七柱（四柱+三垣）地支构成三会局的命盘","query":{"type":"sanhui","scope":"seven"}}',
+    '「四柱里有寅卯辰的」→ {"summary":"四柱地支构成寅卯辰三会木局的命盘","query":{"type":"sanhui","gz":"寅卯辰"}}',
+    '「2026 年流年冲日支的」→ {"summary":"2026 丙午年流年地支冲日支的命盘","query":{"type":"interact","a":"流年","year":2026,"b":"日","rel":"chong"}}',
+    '「起运在 5 到 8 岁的」→ {"summary":"起运岁数在 5 到 8 岁之间","query":{"type":"qiyun","field":"age","min":5,"max":8}}',
+    '「大运里走过甲子的」→ {"summary":"大运序列中出现甲子这一步","query":{"type":"dayun","gz":"甲子"}}',
+    '「分析记录里提到离婚的」→ {"summary":"分析记录全文包含「离婚」的命盘","query":{"type":"text","q":"离婚","in":"notes"}}',
+    '「七柱有戌且日主甲木的女性」→ {"summary":"七柱中戌出现且日主为甲木的女性","query":{"op":"and","conds":[{"type":"branch","gz":"戌","scope":"seven"},{"type":"daymaster","gz":"甲"},{"type":"gender","value":"女"}]}}',
+    '「找婚姻不好的」→ {"summary":"婚姻吉凶属于评价性判断，当前只能按结构或记录检索，例如「分析记录里提到婚姻」","query":{"type":"unsupported","need":"婚姻吉凶评价"}}'
   ].join('\n');
 
   function extractJson(text) {
@@ -18115,7 +18462,13 @@ function cmpSetState(entries) {
       if (!obj || !obj.query) throw new Error('AI 返回格式异常，请重试或换个说法');
       _aiQuery = obj.query;
       _aiSummary = String(obj.summary || 'AI 已理解你的条件');
-      if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives(text);
+      _aiWarn = collectUnsupported(obj.query);
+      _aiText = text;
+      if (queryNeedsFT(obj.query)) {
+        barHtml('<span class="archive-ai-sum">🔍 正在检索分析记录与录音转录…</span>', 'busy');
+        return ensureFTIndex().then(function() { aiApply(); });
+      }
+      aiApply();
     }).catch(function(err) {
       var m = (err && err.name === 'AbortError') ? '请求超时（75 秒）' : (err && err.message ? err.message : '未知错误');
       barHtml('<span class="archive-ai-sum">⚠ AI 请求失败：' + escA(m) + '</span><button type="button" class="archive-ai-exit" onclick="RENDER_AI.barHide()">✕ 关闭</button>', 'err');
@@ -18171,6 +18524,8 @@ function cmpSetState(entries) {
     + '.archive-ai-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 14px;font-size:12.5px;background:rgba(138,109,59,.08);border-bottom:1px solid var(--c-line);}'
     + '.archive-ai-bar.err{background:rgba(160,60,50,.08);}'
     + '.archive-ai-bar.busy{color:#6b5a3e;}'
+    + '.archive-ai-bar.warn{background:rgba(200,140,20,.12);}'
+    + '.archive-ai-warn{color:#a06800;font-size:12px;white-space:nowrap;}'
     + '.archive-ai-sum{flex:1;min-width:0;}'
     + '.archive-ai-n{white-space:nowrap;font-weight:600;}'
     + '.archive-ai-exit{border:none;background:none;cursor:pointer;font-size:12px;color:#8a6d3b;padding:2px 4px;}'
@@ -18236,7 +18591,16 @@ function cmpSetState(entries) {
     cfgSet: cfgSet,
     // 测试钩子：直接对单档案求值查询树（不落盘、无副作用）
     debugEval: function(query, archive) { return matchQuery(archive, pillarsOf(archive), query); },
-    debugPillars: function(archive) { var p = pillarsOf(archive); return p ? p.map(gzName) : null; }
+    debugPillars: function(archive) { var p = pillarsOf(archive); return p ? p.map(gzName) : null; },
+    // v0.89.0 全局检索测试钩子
+    debugPillars7: function(archive) { var p = pillarsOf(archive, 'seven'); return p ? p.map(function(x) { return x.pos + ':' + gzName(x); }) : null; },
+    debugQiyun: function(archive) { return qiyunOf(archive); },
+    debugDayun: function(archive) { return dayunPillars(archive); },
+    debugFT: function() { return ensureFTIndex(); },
+    debugPrompt: function() { return SYSTEM_PROMPT; },
+    debugQuery: function() { return _aiQuery; },
+    debugWarn: function() { return _aiWarn.slice(); },
+    debugLiunian: function(yr) { return liunianGZ(yr); }
   };
 })();
 </script></script></script></script></script>
