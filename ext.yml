@@ -1,7 +1,7 @@
 id: bazi-paipan
 name: 八字排盘
 description: 八字排盘 · 从真版
-version: "0.88.1"
+version: "0.88.2"
 joy_write_server: "http://127.0.0.1:9876"
 joy_write_sync_dir: "/Users/feng/人生资产/96-八字档案"
 author: 邦顺

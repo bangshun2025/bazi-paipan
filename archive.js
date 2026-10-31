@@ -1312,6 +1312,17 @@ function renderSortBar() {
     html += '<button class="archive-sort-btn' + (on ? ' active' : '') + '" title="' + opts[i].title
       + '" onclick="ARCHIVE.setSort(\'' + opts[i].k + '\')">' + opts[i].label + arrow + '</button>';
   }
+  // v0.88.2 一键清空档案行勾选（= 清空盘面对比的选择）
+  var nPick = 0;
+  try {
+    var st = JSON.parse(localStorage.getItem('bz_cmp_state'));
+    if (Array.isArray(st)) {
+      for (var j = 0; j < st.length; j++) { if (st[j] && st[j].type === 'arch') nPick++; }
+    }
+  } catch (e) { nPick = 0; }
+  html += '<button class="archive-clear-cmp"' + (nPick ? '' : ' disabled')
+    + ' title="清空所有档案行勾选 = 清空盘面对比的选择"'
+    + ' onclick="ARCHIVE.clearCmpPicks()">清空勾选' + (nPick ? '（' + nPick + '）' : '') + '</button>';
   bar.innerHTML = html;
 }
 
@@ -1353,6 +1364,13 @@ function cmpPick(id, checked) {
   localStorage.setItem('bz_cmp_state', JSON.stringify(entries));
   syncCmpTag(id, checked);
   if (window.COMPARE && COMPARE.isOpen && COMPARE.isOpen()) COMPARE.refresh();
+}
+
+// v0.88.2 一键清空档案行勾选（= 清空盘面对比的选择；含「当前盘」条目一并清掉）
+function clearCmpPicks() {
+  if (window.COMPARE && typeof COMPARE.clear === 'function') COMPARE.clear();
+  else localStorage.setItem('bz_cmp_state', '[]');
+  renderArchiveModal();
 }
 
 // v0.40.0 选盘状态与「盘面对比」标签互为镜像：勾上补标、取消摘标（手动标签不受影响）
@@ -2391,6 +2409,7 @@ function openChartMd() {
     closeArchivePanel: closeArchivePanel,
     renderArchiveModal: renderArchiveModal,
     cmpPick: cmpPick,
+    clearCmpPicks: clearCmpPicks,
     syncCmpTag: syncCmpTag,
     onArchiveSearch: onArchiveSearch,
     filterArchives: filterArchives,
