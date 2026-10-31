@@ -6643,6 +6643,60 @@ function cmpSetState(entries) {
   var SANHE_SETS  = [['申','子','辰','水'],['亥','卯','未','木'],['寅','午','戌','火'],['巳','酉','丑','金']];
   var CHONG_MAP = { '子':'午','午':'子','丑':'未','未':'丑','寅':'申','申':'寅','卯':'酉','酉':'卯','辰':'戌','戌':'辰','巳':'亥','亥':'巳' };
   var LIUHE_MAP = { '子':'丑','丑':'子','寅':'亥','亥':'寅','卯':'戌','戌':'卯','辰':'酉','酉':'辰','巳':'申','申':'巳','午':'未','未':'午' };
+
+  // ===== v0.91.0 柱间关系：刑 / 害 / 破 / 暗合 / 伏吟 / 反吟 =====
+  // 刑：子卯（无礼之刑）、寅巳申（无恩之刑）、丑戌未（恃势之刑）、辰午酉亥（自刑）
+  var ZHI_XING = {
+    '子':['卯'], '卯':['子'],
+    '寅':['巳','申'], '巳':['寅','申'], '申':['寅','巳'],
+    '丑':['戌','未'], '戌':['丑','未'], '未':['丑','戌'],
+    '辰':['辰'], '午':['午'], '酉':['酉'], '亥':['亥']
+  };
+  // 害（六害/六穿）：子未 丑午 寅巳 卯辰 申亥 酉戌
+  var ZHI_HAI = { '子':'未','未':'子','丑':'午','午':'丑','寅':'巳','巳':'寅','卯':'辰','辰':'卯','申':'亥','亥':'申','酉':'戌','戌':'酉' };
+  // 破（六破）：子酉 丑辰 寅亥 卯午 巳申 未戌
+  var ZHI_PO = { '子':'酉','酉':'子','丑':'辰','辰':'丑','寅':'亥','亥':'寅','卯':'午','午':'卯','巳':'申','申':'巳','未':'戌','戌':'未' };
+  // 天干五合（暗合判定用）
+  var GAN_HE5 = { '甲':'己','己':'甲','乙':'庚','庚':'乙','丙':'辛','辛':'丙','丁':'壬','壬':'丁','戊':'癸','癸':'戊' };
+  // 天干相冲（反吟 = 天克地冲；戊己居中不冲）
+  var GAN_CHONG = { '甲':'庚','庚':'甲','乙':'辛','辛':'乙','丙':'壬','壬':'丙','丁':'癸','癸':'丁' };
+
+  // 暗合（通行表）：子巳、丑寅、卯申、午亥、巳酉。
+  // 注意：这里用的是传统配对表，不是「藏干全体两两相合」——后者会多出子寅、子辰、卯巳、未寅、亥丑等
+  // 一批非通行组合（子藏癸、寅藏戊，癸戊合），与传统暗合表不符。巳同时与子和酉暗合，故用数组。
+  var ZHI_ANHE = { '子':['巳'], '巳':['子','酉'], '丑':['寅'], '寅':['丑'], '卯':['申'], '申':['卯'], '午':['亥'], '亥':['午'], '酉':['巳'] };
+  function anheHit(z1, z2) { return (ZHI_ANHE[z1] || []).indexOf(z2) >= 0; }
+  function sameSanhe(z1, z2) {
+    if (z1 === z2) return false;
+    for (var i = 0; i < SANHE_SETS.length; i++) if (SANHE_SETS[i].indexOf(z1) >= 0 && SANHE_SETS[i].indexOf(z2) >= 0) return true;
+    return false;
+  }
+  function sameSanhui(z1, z2) {
+    if (z1 === z2) return false;
+    for (var i = 0; i < SANHUI_SETS.length; i++) if (SANHUI_SETS[i].indexOf(z1) >= 0 && SANHUI_SETS[i].indexOf(z2) >= 0) return true;
+    return false;
+  }
+  // 统一关系判定：p1/p2 为 {gan,zhi}（柱对象或流年干支）
+  function relHit(rel, p1, p2) {
+    if (!p1 || !p2 || !p1.zhi || !p2.zhi) return false;
+    var z1 = p1.zhi, z2 = p2.zhi, g1 = p1.gan, g2 = p2.gan;
+    switch (rel) {
+      case 'chong':   return CHONG_MAP[z1] === z2;
+      case 'he':      return LIUHE_MAP[z1] === z2;
+      case 'tong':    return z1 === z2;
+      case 'sameGz':  return !!g1 && !!g2 && (g1 + z1) === (g2 + z2);
+      case 'sameGan': return !!g1 && !!g2 && g1 === g2;
+      case 'sanhe':   return sameSanhe(z1, z2);
+      case 'sanhui':  return sameSanhui(z1, z2);
+      case 'xing':    return (ZHI_XING[z1] || []).indexOf(z2) >= 0;
+      case 'hai':     return ZHI_HAI[z1] === z2;
+      case 'po':      return ZHI_PO[z1] === z2;
+      case 'anhe':    return anheHit(z1, z2);
+      case 'fuyin':   return !!g1 && !!g2 && (g1 + z1) === (g2 + z2);
+      case 'fanyin':  return !!g1 && !!g2 && GAN_CHONG[g1] === g2 && CHONG_MAP[z1] === z2;
+    }
+    return false;
+  }
   // 全文索引：identity（姓名|性别|年月日，忽略时辰以容忍改时辰）→ [{src:'note'|'rec', text}]
   var _ftIndex = null, _ftBuilding = null;
   function ftIdOf(a) { return (a && a.name || '') + '|' + (a && a.gender || '') + '|' + (a && a.year) + '|' + (a && a.month) + '|' + (a && a.day); }
@@ -6744,8 +6798,10 @@ function cmpSetState(entries) {
   var SCOPE_OPTS = [['four','四柱'],['seven','七柱（含三垣）'],['dayun','大运序列']];
   var POS_OPTS = [['','任意柱'],['年','年柱'],['月','月柱'],['日','日柱'],['时','时柱'],['胎元','胎元'],['命宫','命宫'],['身宫','身宫']];
   var WX_OPTS = [['木','木'],['火','火'],['土','土'],['金','金'],['水','水']];
-  var REL_TXT = { chong:'六冲', he:'六合', tong:'同地支', sameGz:'同干支', sameGan:'同天干', sanhe:'三合', sanhui:'三会' };
-  var REL_OPTS = [['chong','六冲'],['he','六合'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
+  var REL_TXT = { chong:'六冲', he:'六合', xing:'相刑', hai:'相害', po:'相破', anhe:'暗合', fuyin:'伏吟', fanyin:'反吟', tong:'同地支', sameGz:'同干支', sameGan:'同天干', sanhe:'三合', sanhui:'三会' };
+  // v0.91.0 关系全集（柱间与运×命通用）：前 8 项为刑害破暗合伏吟反吟六类新增
+  var REL_OPTS = [['chong','六冲'],['he','六合'],['xing','相刑'],['hai','相害'],['po','相破'],['anhe','暗合'],['fuyin','伏吟'],['fanyin','反吟'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
+  var SCOPE2_OPTS = [['four','四柱'],['seven','七柱（含三垣）']];
   var SS_OPTS = [['比肩','比肩'],['劫财','劫财'],['食神','食神'],['伤官','伤官'],['枭神','枭神'],['正印','正印'],['偏财','偏财'],['正财','正财'],['七杀','七杀'],['正官','正官']];
   var WHERE_OPTS = [['gan','天干透出'],['zhi','地支本气'],['both','干支都算']];
   var GENDER_OPTS = [['男','男'],['女','女']];
@@ -6836,6 +6892,14 @@ function cmpSetState(entries) {
                : (c.age != null ? (c.age + ' 岁') : (c.fromYear != null ? (c.fromYear + '~' + mn(c.toYear, '') + ' 年') : '任意时候'));
       v.label = '运×命'; v.detail = when + ' ' + (REL_TXT[c.rel] || '六冲') + ' ' + tgt + '柱';
       v.params = [{ k: 'a', lab: '运', t: 'sel', opts: AB_OPTS }, { k: 'b', lab: '命柱', t: 'sel', opts: POS_OPTS }, { k: 'rel', lab: '关系', t: 'sel', opts: REL_OPTS }, { k: 'year', lab: '年', t: 'num' }, { k: 'age', lab: '岁', t: 'num' }, { k: 'fromYear', lab: '起年', t: 'num' }, { k: 'toYear', lab: '止年', t: 'num' }, { k: 'bScope', lab: '命柱范围', t: 'sel', opts: SCOPE_OPTS }];
+    } else if (t === 'pair') {
+      var _posLab = {};
+      for (var _pi = 0; _pi < POS_OPTS.length; _pi++) _posLab[POS_OPTS[_pi][0]] = POS_OPTS[_pi][1];
+      var _la = _posLab[c.a || ''] || '任意柱';
+      var _lb = _posLab[c.b || ''] || '任意柱';
+      v.label = '柱间';
+      v.detail = ('scope' in c && c.scope === 'seven' ? '七柱 ' : '') + _la + ' × ' + _lb + ' ' + (REL_TXT[c.rel] || '相刑');
+      v.params = [{ k: 'rel', lab: '关系', t: 'sel', opts: REL_OPTS }, { k: 'a', lab: '柱A', t: 'sel', opts: POS_OPTS }, { k: 'b', lab: '柱B', t: 'sel', opts: POS_OPTS }, { k: 'scope', lab: '范围', t: 'sel', opts: SCOPE2_OPTS }];
     } else if (t === 'text') {
       v.label = '全文'; v.detail = (c.in === 'rec' ? '录音转录' : (c.in === 'notes' ? '分析记录' : '记录+录音')) + ' 含「' + (c.q || c.text || '') + '」';
       v.params = [{ k: 'q', lab: '关键词', t: 'txt' }, { k: 'in', lab: '范围', t: 'sel', opts: IN_OPTS }];
@@ -7225,17 +7289,28 @@ function cmpSetState(entries) {
         }
       }
       for (var cjX = 0; cjX < candsX.length; cjX++) {
-        var xX = candsX[cjX];
-        if (relX === 'chong' && CHONG_MAP[tgtX.zhi] === xX.zhi) return true;
-        if (relX === 'he' && LIUHE_MAP[tgtX.zhi] === xX.zhi) return true;
-        if (relX === 'tong' && tgtX.zhi === xX.zhi) return true;
-        if (relX === 'sameGz' && (tgtX.gan + tgtX.zhi) === (xX.gan + xX.zhi)) return true;
-        if (relX === 'sameGan' && tgtX.gan === xX.gan) return true;
-        if (relX === 'sanhe' && tgtX.zhi !== xX.zhi) {
-          for (var sm = 0; sm < SANHE_SETS.length; sm++) { var smx = SANHE_SETS[sm]; if (smx.indexOf(tgtX.zhi) >= 0 && smx.indexOf(xX.zhi) >= 0) return true; }
-        }
-        if (relX === 'sanhui' && tgtX.zhi !== xX.zhi) {
-          for (var sn = 0; sn < SANHUI_SETS.length; sn++) { var snx = SANHUI_SETS[sn]; if (snx.indexOf(tgtX.zhi) >= 0 && snx.indexOf(xX.zhi) >= 0) return true; }
+        if (relHit(relX, tgtX, candsX[cjX])) return true;
+      }
+      return false;
+    }
+    // 柱间关系：{"type":"pair","rel":"xing","a":"年","b":"日","scope":"four"}
+    // a/b 可省略（省略 = 范围内任意两柱）；rel 同 interact，另支持 xing/hai/po/anhe/fuyin/fanyin
+    if (t === 'pair') {
+      var relP = c.rel || 'xing';
+      var plsP = plsFor(a, c.scope || 'four');
+      if (!plsP) return false;
+      var posA = c.a ? posOf(c.a) : null;
+      var posB = c.b ? posOf(c.b) : null;
+      var setA = [], setB = [];
+      for (i = 0; i < plsP.length; i++) {
+        if (!posA || plsP[i].pos === posA) setA.push(plsP[i]);
+        if (!posB || plsP[i].pos === posB) setB.push(plsP[i]);
+      }
+      if (!setA.length || !setB.length) return false;
+      for (var ia = 0; ia < setA.length; ia++) {
+        for (var ib = 0; ib < setB.length; ib++) {
+          if (setA[ia] === setB[ib]) continue;          // 同一柱不比
+          if (relHit(relP, setA[ia], setB[ib])) return true;
         }
       }
       return false;
@@ -7364,7 +7439,8 @@ function cmpSetState(entries) {
     '{"type":"qiyun","field":"age","min":5,"max":8} — 起运。field: age=起运岁数、year=交运年份；可用 min/max 区间或 exact 精确值',
     '{"type":"dayun","gz":"甲子","ageMin":30,"ageMax":40} — 大运中有某步满足：干支匹配 + 年龄/年份区间有交集。区间字段也可用 yearMin/yearMax',
     '{"type":"liunian","gz":"丙午","fromYear":2026,"toYear":2035} — 该年份区间内出现指定流年干支。必须给年份范围，否则条件无意义',
-    '{"type":"interact","a":"流年","year":2026,"b":"日","rel":"chong"} — 运与命局某柱的关系。a: 流年|大运（大运用 age/year 定位某步）；b: 年/月/日/时/胎元/命宫/身宫（bScope 可设 four/seven）；rel: chong=六冲、he=六合、tong=同支、sameGz=同干支、sameGan=同天干、sanhe=三合、sanhui=三会',
+    '{"type":"interact","a":"流年","year":2026,"b":"日","rel":"chong"} — 运与命局某柱的关系。a: 流年|大运（大运不写 age/year 表示任何一步；写了则只算那一步）；b: 年/月/日/时/胎元/命宫/身宫（bScope 可设 four/seven）；rel: chong=六冲、he=六合、xing=相刑、hai=相害、po=相破、anhe=暗合、fuyin=伏吟（干支全同）、fanyin=反吟（天克地冲）、tong=同支、sameGz=同干支、sameGan=同天干、sanhe=三合、sanhui=三会',
+    '{"type":"pair","rel":"xing","a":"年","b":"日"} — 命局内部两柱的关系。a/b 可省略（省略 = 范围内任意两柱）；scope 可设 four/seven（默认 four）；rel 同上，自刑（辰辰/午午/酉酉/亥亥）也按相刑算',
     '{"type":"text","q":"关键词","in":"notes"} — 全文检索。in: notes=分析记录、rec=录音转录（含整理稿与原始识别）、both=两者（默认）',
     '{"type":"unsupported","need":"无法表达的需求"} — 明示这条请求超出能力，界面黄条告警，不要假装能查。它是中性条件：不参与筛选，既不筛掉命盘也不否决同组其他条件',
     '组合节点：{"op":"and","conds":[...]}、{"op":"or","conds":[...]}、{"op":"not","cond":{...}}',
@@ -7372,10 +7448,13 @@ function cmpSetState(entries) {
     '【边界】以下请求无法用本引擎表达，必须输出 unsupported，禁止用近似条件冒充：',
     '  1) 吉凶评价：婚姻好不好、有没有钱、事业成不成、命好不好；',
     '  2) 旺衰强弱、用神、格局高低、喜忌；',
-    '  3) 未实现的柱间关系：刑、害、破、暗合、伏吟、反吟（只支持 chong/he/tong/sanhe/sanhui/sameGz/sameGan）；',
+    '  3) 三刑只要成对就算：寅巳、巳申、寅申、丑戌、戌未、丑未 都判「相刑」，但不判定「三刑齐」这类格局；',
     '  4) 流月、流日、流时；跨盘对比与合盘；',
     '  5) 录音稿历史版本与附件文件（只索引应用内录音转录文本与分析记录）；',
     '  6) 纯事件回忆且记录里没有对应文字（如「去年离婚的那个」而记录没写离婚）。',
+    '暗合口径：按传统暗合表判定，只有 子巳、丑寅、卯申、午亥、巳酉 五组（子寅、子辰、卯巳之类不算暗合）。',
+    '反吟 = 天干相冲且地支相冲（天克地冲）；伏吟 = 干支完全相同。',
+    '【多柱联动】多个条件用 and/or 组合即可，例如「大运冲月柱且流年合日支」= 两个 interact 用 and 连接，不要输出 unsupported。',
     '遇到部分可查、部分不可查的请求：把可查部分写成正常条件，把不可查部分追加一个 unsupported 条件（用 and 连接），并在 summary 里说明哪部分没查。',
     '',
     '【输出格式】{"summary":"一句话向用户确认理解（含降级说明）","query":{条件或组合}}',
@@ -7389,6 +7468,9 @@ function cmpSetState(entries) {
     '「大运里走过甲子的」→ {"summary":"大运序列中出现甲子这一步","query":{"type":"dayun","gz":"甲子"}}',
     '「分析记录里提到离婚的」→ {"summary":"分析记录全文包含「离婚」的命盘","query":{"type":"text","q":"离婚","in":"notes"}}',
     '「七柱有戌且日主甲木的女性」→ {"summary":"七柱中戌出现且日主为甲木的女性","query":{"op":"and","conds":[{"type":"branch","gz":"戌","scope":"seven"},{"type":"daymaster","gz":"甲"},{"type":"gender","value":"女"}]}}',
+    '「年柱和日柱相刑的」→ {"summary":"年柱与日柱地支相刑的命盘","query":{"type":"pair","rel":"xing","a":"年","b":"日"}}',
+    '「四柱里有六害的」→ {"summary":"四柱地支之间存在六害的命盘","query":{"type":"pair","rel":"hai"}}',
+    '「大运冲月柱且流年合日支的」→ {"summary":"任何一步大运冲月柱，且 2026 年流年六合日支","query":{"op":"and","conds":[{"type":"interact","a":"大运","b":"月","rel":"chong"},{"type":"interact","a":"流年","year":2026,"b":"日","rel":"he"}]}}',
     '「找婚姻不好的」→ {"summary":"婚姻吉凶属于评价性判断，当前只能按结构或记录检索，例如「分析记录里提到婚姻」","query":{"type":"unsupported","need":"婚姻吉凶评价"}}'
   ].join('\n');
 
@@ -7607,6 +7689,8 @@ function cmpSetState(entries) {
     debugLiunian: function(yr) { return liunianGZ(yr); },
     // v0.90.0 条件树可视化测试钩子
     debugCondView: function(q) { return condView(q); },
+    // v0.91.0 关系判定直通：debugRel('xing','甲','子','乙','卯') → true
+    debugRel: function(rel, g1, z1, g2, z2) { return relHit(rel, { gan: g1, zhi: z1 }, { gan: g2, zhi: z2 }); },
     debugCondSet: function(q, sum) { _aiQuery = q; _aiOrig = JSON.parse(JSON.stringify(q)); _aiSummary = sum || '测试条件'; _aiWarn = collectUnsupported(q); _aiEditing = null; _aiOpen = true; aiApply(); renderPanel(); return _aiQuery; },
     debugCondHtml: function() { return _aiPanel ? _aiPanel.innerHTML : null; },
     debugCondOpen: function() { return _aiOpen; },
