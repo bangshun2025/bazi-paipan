@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.92.0 | 2026-10-31 -->
+<!-- 八字排盘 ·  从真版 v0.93.0 | 2026-10-31 -->
 <!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
 <!-- v0.90.0: AI 搜索条件树可视化 —— 状态条下可展开查看 AI 解析出的每一项条件，支持就地改参数（含四柱/七柱/大运范围切换）、删除单条、还原 AI 原始条件 -->
 <!-- v0.91.0: 柱间关系六类落地（刑/害/破/暗合/伏吟/反吟）—— 新增 pair 条件查命局内部两柱关系，interact 的 rel 同步扩展；多柱联动（如「大运冲月柱且流年合日支」）用 and 组合即成立；档案弹窗改为随视口自适应 min(880px,88vh)，列表可显示行数由 4.5 行提到 9~13 行 -->
 <!-- v0.92.0: 暗合口径改为体系口径 —— 两地支藏干中有任意一对天干相合即为暗合，不再按传统五组表筛选；相异地支命中 30 组（原 5 组），辰辰因戊癸自合亦成立；提示词同步写明口径 -->
+<!-- v0.93.0: AI 搜索跨盘对比查找 —— 搜索栏新增「跨盘」勾选（默认关闭，状态存本机）；勾选后 AI 可解析 cross 条件，支持四柱全同、日柱天干冲/合、地支六冲/六合/刑/害/破/暗合/伏吟/反吟/同干支/同天干/三合/三会，可选 base 点名基准盘；基准取对比面板勾选的盘（含当前盘），跳过自身；未勾选时 cross 条件全部忽略并提示 -->
 <!-- v0.88.2: 档案面板排序栏右侧新增「清空勾选（n）」—— 一键清空所有档案行的对比勾选（= 清空盘面对比的选择，含「当前盘」条目），按钮显示当前勾选数、为 0 时置灰；同时摘掉对应的「盘面对比」标签并刷新对比画布 -->
 <!-- v0.88.0: AI 档案搜索 —— 档案搜索框旁新增「🤖 AI 搜」：自然语言描述条件（如「找出有两个同柱的命盘」「三戌同支」「日主甲木的女性」），LLM 只做翻译（自然语言→查询条件 JSON），过滤在本地执行（四柱优先用存档 bazi、缺失时以主排盘同源 paipan 现算）：条件引擎支持 指定柱干支/天干地支完整干支计数/同柱同干同支/五行个数/日主/纳音/年柱/出生区间 + and/or/not 组合；接口走用户自配 OpenAI 兼容（DeepSeek/GLM/OpenAI/自定义），⚙ 设置面板填 Key（仅存本机 localStorage，浏览器直连），30 秒超时，返回非 JSON 时提示重试；命中显示 AI 理解摘要 + 命中数 + ✕ 退出 AI，AI 模式下关键词过滤让位；renderArchiveModal 加过滤钩子（index/standalone 同步三行） -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
@@ -18125,6 +18126,14 @@ function cmpSetState(entries) {
   // v0.91.0 关系全集（柱间与运×命通用）：前 8 项为刑害破暗合伏吟反吟六类新增
   var REL_OPTS = [['chong','六冲'],['he','六合'],['xing','相刑'],['hai','相害'],['po','相破'],['anhe','暗合'],['fuyin','伏吟'],['fanyin','反吟'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
   var SCOPE2_OPTS = [['four','四柱'],['seven','七柱（含三垣）']];
+  // 跨盘关系：sameBazi 为整盘比较，其余为同柱位比较
+  var CROSS_REL_TXT = { sameBazi:'四柱全同', ganChong:'天干冲', ganHe:'天干五合', chong:'地支冲', he:'六合',
+    xing:'相刑', hai:'相害', po:'相破', anhe:'暗合', fuyin:'干支全同', fanyin:'天克地冲',
+    tong:'同地支', sameGz:'同干支', sameGan:'同天干', sanhe:'三合', sanhui:'三会' };
+  var CROSS_REL_OPTS = [['sameBazi','四柱全同'],['ganChong','天干冲'],['ganHe','天干五合'],['chong','地支冲'],
+    ['he','六合'],['xing','相刑'],['hai','相害'],['po','相破'],['anhe','暗合'],['fuyin','干支全同'],
+    ['fanyin','天克地冲'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
+  var CROSS_POS_OPTS = [['年','年柱'],['月','月柱'],['日','日柱'],['时','时柱']];
   var SS_OPTS = [['比肩','比肩'],['劫财','劫财'],['食神','食神'],['伤官','伤官'],['枭神','枭神'],['正印','正印'],['偏财','偏财'],['正财','正财'],['七杀','七杀'],['正官','正官']];
   var WHERE_OPTS = [['gan','天干透出'],['zhi','地支本气'],['both','干支都算']];
   var GENDER_OPTS = [['男','男'],['女','女']];
@@ -18223,6 +18232,14 @@ function cmpSetState(entries) {
       v.label = '柱间';
       v.detail = ('scope' in c && c.scope === 'seven' ? '七柱 ' : '') + _la + ' × ' + _lb + ' ' + (REL_TXT[c.rel] || '相刑');
       v.params = [{ k: 'rel', lab: '关系', t: 'sel', opts: REL_OPTS }, { k: 'a', lab: '柱A', t: 'sel', opts: POS_OPTS }, { k: 'b', lab: '柱B', t: 'sel', opts: POS_OPTS }, { k: 'scope', lab: '范围', t: 'sel', opts: SCOPE2_OPTS }];
+    } else if (t === 'cross') {
+      var _cpLab = {};
+      for (var _ci = 0; _ci < CROSS_POS_OPTS.length; _ci++) _cpLab[CROSS_POS_OPTS[_ci][0]] = CROSS_POS_OPTS[_ci][1];
+      var _cr = CROSS_REL_TXT[c.rel] || c.rel || '';
+      v.label = '跨盘';
+      v.detail = (c.base ? '对 ' + c.base : '对勾选盘') + (c.rel === 'sameBazi' ? ' ' + _cr : ' ' + (_cpLab[posOf(c.a || '日')] || '日柱') + ' ' + _cr)
+        + (_aiCross ? '' : '（跨盘未开启）');
+      v.params = [{ k: 'rel', lab: '关系', t: 'sel', opts: CROSS_REL_OPTS }, { k: 'a', lab: '柱位', t: 'sel', opts: CROSS_POS_OPTS }];
     } else if (t === 'text') {
       v.label = '全文'; v.detail = (c.in === 'rec' ? '录音转录' : (c.in === 'notes' ? '分析记录' : '记录+录音')) + ' 含「' + (c.q || c.text || '') + '」';
       v.params = [{ k: 'q', lab: '关键词', t: 'txt' }, { k: 'in', lab: '范围', t: 'sel', opts: IN_OPTS }];
@@ -18439,6 +18456,7 @@ function cmpSetState(entries) {
       if (c.to) { var g = String(c.to).replace(/[^0-9]/g, ''); if (g.length === 8) hi = +g; }
       return v >= lo && v <= hi;
     }
+    if (t === 'cross') return matchCross(a, pls4, c);
     // 以下依赖四柱
     if (!pls || !pls.length) return false;
     var i, cnt;
@@ -18656,6 +18674,139 @@ function cmpSetState(entries) {
   }
 
   function isUnsupported(c) { return !!(c && typeof c === 'object' && c.type === 'unsupported'); }
+  // ===== v0.93.0 跨盘对比查找 =====
+  // 语义：以「基准盘」为准，判断本盘与基准盘的整盘/柱级关系。
+  // 基准来源：①条件里写 base（档案名/艺名）  ②否则取档案面板里「对比勾选」的盘（含当前盘）
+  // 门槛：必须勾选「跨盘」开关（默认关）。未勾选时 cross 条件一律不命中，UI 另给提示。
+  var AI_CROSS_KEY = 'bz_ai_cross';
+  var _aiCross = false;
+  try { _aiCross = localStorage.getItem(AI_CROSS_KEY) === '1'; } catch(e) {}
+
+  function crossOn() { return _aiCross; }
+  function crossSet(on) {
+    _aiCross = !!on;
+    try { localStorage.setItem(AI_CROSS_KEY, _aiCross ? '1' : ''); } catch(e) {}
+    var cb = document.getElementById('aiCrossChk');
+    if (cb) cb.checked = _aiCross;
+    if (_aiQuery) aiApply();
+    else if (window.ARCHIVE && ARCHIVE.filterArchives) ARCHIVE.filterArchives('');
+  }
+
+  function crossCurPls() {
+    var p = null;
+    try { p = window._paipanData; } catch(e) {}
+    if (!p && typeof _cmpCurrentForm === 'function') {
+      var f = _cmpCurrentForm();
+      if (f && typeof paipanOf === 'function') { try { p = paipanOf(f); } catch(e2) {} }
+    }
+    if (!p) return null;
+    var out = [];
+    [['nian','年'],['yue','月'],['ri','日'],['shi','时']].forEach(function(it) {
+      var c = p[it[0]];
+      if (c && c.gan) out.push({ pos: it[1], gan: c.gan, zhi: c.zhi });
+    });
+    return out.length === 4 ? out : null;
+  }
+
+  function crossBaseByName(name) {
+    if (!name) return null;
+    var nm = String(name).trim();
+    var ars = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : [];
+    for (var i = 0; i < ars.length; i++) {
+      var a = ars[i];
+      if ((a.nickname || '') === nm || (a.name || '') === nm || (a.yiming || '') === nm) {
+        return { id: a.id, name: nm, pls: pillarsOf(a) };
+      }
+    }
+    return null;
+  }
+
+  // 自包含读对比勾选：_cmpEntries/_cmpArchById 在 COMPARE 的闭包里，全局取不到
+  var CMP_KEY_AI = 'bz_cmp_state';
+  function crossEntries() {
+    try {
+      var arr = JSON.parse(localStorage.getItem(CMP_KEY_AI));
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(function(e) { return e && (e.type === 'current' || e.type === 'arch'); });
+    } catch (e) { return []; }
+  }
+  function crossArchById(id) {
+    var ars = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : [];
+    for (var i = 0; i < ars.length; i++) if (String(ars[i].id) === String(id)) return ars[i];
+    return null;
+  }
+
+  function crossBases(c) {
+    // 条件里点名了基准盘 → 只认它
+    if (c && c.base) {
+      var one = crossBaseByName(c.base);
+      return one ? [one] : [];
+    }
+    var out = [], es = crossEntries();
+    for (var i = 0; i < es.length; i++) {
+      var e = es[i];
+      if (e.type === 'current') {
+        var cp = crossCurPls();
+        if (cp) out.push({ id: null, name: '当前盘', pls: cp });
+      } else {
+        var ar = crossArchById(e.id);
+        if (ar) out.push({ id: ar.id, name: (ar.nickname || ar.name || '档案'), pls: pillarsOf(ar) });
+      }
+    }
+    return out;
+  }
+
+  // 供测试与面板用：当前勾选的名称清单
+  function crossBaseNames() {
+    return crossBases({}).map(function(b) { return b.name; });
+  }
+
+  function crossSameBazi(p1, p2) {
+    if (!p1 || !p2 || p1.length !== 4 || p2.length !== 4) return false;
+    for (var i = 0; i < 4; i++) {
+      if (p1[i].gan !== p2[i].gan || p1[i].zhi !== p2[i].zhi) return false;
+    }
+    return true;
+  }
+
+  function crossHit(rel, pm, pb) {
+    if (!pm || !pb) return false;
+    if (rel === 'ganChong') return GAN_CHONG[pm.gan] === pb.gan;
+    if (rel === 'ganHe')    return GAN_HE5[pm.gan] === pb.gan;
+    return relHit(rel, pm, pb);
+  }
+
+  // 本盘 vs 基准盘：任一基准命中即算
+  function matchCross(a, pls, c) {
+    if (!_aiCross) return false;
+    var bases = crossBases(c);
+    if (!bases.length) return false;
+    var whole = (c.rel === 'sameBazi');
+    var pos = posOf(c.a || '日');
+    for (var i = 0; i < bases.length; i++) {
+      var b = bases[i];
+      // 基准盘自己不算命中（否则 sameBazi 恒真）
+      if (b.id != null && a && String(b.id) === String(a.id)) continue;
+      if (whole) {
+        if (crossSameBazi(pls, b.pls)) return true;
+        continue;
+      }
+      var pm = null, pb = null, j;
+      for (j = 0; j < (pls || []).length; j++) if (pls[j].pos === pos) pm = pls[j];
+      for (j = 0; j < (b.pls || []).length; j++) if (b.pls[j].pos === pos) pb = b.pls[j];
+      if (crossHit(c.rel, pm, pb)) return true;
+    }
+    return false;
+  }
+
+  function hasCrossCond(q) {
+    if (!q || typeof q !== 'object') return false;
+    if (q.type === 'cross') return true;
+    if (Array.isArray(q.conds)) { for (var i = 0; i < q.conds.length; i++) if (hasCrossCond(q.conds[i])) return true; }
+    if (q.cond && hasCrossCond(q.cond)) return true;
+    return false;
+  }
+
   function matchQuery(a, pls, q) {
     if (!q || typeof q !== 'object') return false;
     if (q.type) return matchCond(a, pls, q);
@@ -18704,7 +18855,13 @@ function cmpSetState(entries) {
     _lastHit = (hit == null ? _lastHit : hit);
     var hasWarn = !!(_aiWarn && _aiWarn.length);
     var warn = hasWarn ? '<span class="archive-ai-warn">⚠ 有 ' + _aiWarn.length + ' 项超出能力：' + escA(_aiWarn.join('、')) + '</span>' : '';
-    barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>' + warn
+    var xw = '';
+    if (hasCrossCond(_aiQuery)) {
+      xw = _aiCross
+        ? '<span class="archive-ai-cross-tag">跨盘 · 基准 ' + crossBases({}).length + ' 份</span>'
+        : '<span class="archive-ai-warn">⚠ 含跨盘条件但「跨盘」未勾选，已全部忽略</span>';
+    }
+    barHtml('<span class="archive-ai-sum">🤖 ' + escA(_aiSummary) + '</span>' + warn + xw
       + '<span class="archive-ai-n">命中 ' + hit + ' 份</span>'
       + '<button type="button" class="archive-ai-exit archive-ai-toggle" onclick="RENDER_AI.condToggle()" title="展开/收起 AI 解析出的查询条件">' + (_aiOpen ? '▾' : '▸') + ' 条件 ' + countConds(_aiQuery) + '</button>'
       + '<button type="button" class="archive-ai-exit" onclick="RENDER_AI.aiClear()">✕ 退出 AI</button>', hasWarn ? 'warn' : '');
@@ -18797,6 +18954,30 @@ function cmpSetState(entries) {
     '「找婚姻不好的」→ {"summary":"婚姻吉凶属于评价性判断，当前只能按结构或记录检索，例如「分析记录里提到婚姻」","query":{"type":"unsupported","need":"婚姻吉凶评价"}}'
   ].join('\n');
 
+  // 跨盘段按开关动态拼：关着时明确告诉模型「别输出 cross」
+  function crossPromptLines() {
+    var L = [];
+    L.push('【跨盘对比查找】');
+    if (!_aiCross) {
+      L.push('当前未开启。用户若要求跨盘/对比查找（如「相同的八字」「和某盘日柱天干冲的八字」「和 XX 同一天的」），不要输出 cross，改为返回 {"type":"unsupported","need":"跨盘对比查找未开启，请在搜索栏勾选「跨盘」"}。其他条件照常解析。');
+      return L;
+    }
+    var bs = crossBases({});
+    L.push('当前已开启。基准盘 = ' + (bs.length
+      ? '档案面板里勾选的 ' + bs.length + ' 份（' + bs.map(function(b) { return b.name; }).join('、') + '）'
+      : '暂无（面板里没有勾选任何盘，此时 cross 条件不会命中）') + '。');
+    L.push('可用条件 {"type":"cross", ...}：');
+    L.push('  {"type":"cross","rel":"sameBazi"} — 与基准盘四柱干支完全相同（八字全同）。');
+    L.push('  {"type":"cross","a":"日","rel":"ganChong"} — 本盘某柱与基准盘同柱位的关系。a 可省略（默认日柱），可选 年/月/日/时；rel 可选 ganChong(天干冲)、ganHe(天干五合)、chong(地支冲)、he(六合)、xing(相刑)、hai(相害)、po(相破)、anhe(暗合)、fuyin(干支全同)、fanyin(天克地冲)、tong(同地支)、sameGz(同干支)、sameGan(同天干)、sanhe(三合)、sanhui(三会)。');
+    L.push('  {"type":"cross","base":"邦顺","a":"日","rel":"ganChong"} — 用 base 点名基准盘（姓名/艺名），此时不看面板勾选。');
+    L.push('例：「相同的八字」→ {"type":"cross","rel":"sameBazi"}；「和邦顺日柱天干冲的八字」→ {"type":"cross","base":"邦顺","a":"日","rel":"ganChong"}。');
+    L.push('跨盘条件可与其他条件 and/or 组合，例如「和邦顺日柱天干冲、且日主为甲的八字」。');
+    return L;
+  }
+  function sysPromptText() {
+    return SYSTEM_PROMPT + '\n' + crossPromptLines().join('\n');
+  }
+
   function extractJson(text) {
     var s = String(text || '');
     var l = s.indexOf('{'), r = s.lastIndexOf('}');
@@ -18830,7 +19011,7 @@ function cmpSetState(entries) {
       body: JSON.stringify({
         model: cfg.model,
         temperature: 0,
-        messages: [ { role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: '用户请求：' + text } ]
+        messages: [ { role: 'system', content: sysPromptText() }, { role: 'user', content: '用户请求：' + text } ]
       })
     }).then(function(r) {
       clearTimeout(to);
@@ -18902,6 +19083,9 @@ function cmpSetState(entries) {
   // ===== UI 注入：搜索行按钮 + 状态条 =====
   var CSS = ''
     + '.archive-ai-btn{margin-left:6px;white-space:nowrap;}'
+    + '.archive-ai-cross{display:inline-flex;align-items:center;gap:4px;margin-left:6px;font-size:12.5px;white-space:nowrap;cursor:pointer;color:#5a4a30;}'
+    + '.archive-ai-cross input{margin:0;cursor:pointer;}'
+    + '.archive-ai-cross-tag{font-size:12px;color:#6b5a3e;background:rgba(138,109,59,.12);padding:1px 6px;border-radius:4px;}'
     + '.archive-ai-gear{margin-left:4px;padding:8px 10px !important;white-space:nowrap;}'
     + '.archive-ai-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 14px;font-size:12.5px;background:rgba(138,109,59,.08);border-bottom:1px solid var(--c-line);}'
     + '.archive-ai-bar.err{background:rgba(160,60,50,.08);}'
@@ -18970,6 +19154,13 @@ function cmpSetState(entries) {
     bg.onclick = function() { aiOpenSettings(''); };
     row.appendChild(b);
     row.appendChild(bg);
+    // v0.93.0 跨盘对比查找勾选（默认关，状态存本机）
+    var bcr = document.createElement('label');
+    bcr.className = 'archive-ai-cross';
+    bcr.title = '跨盘对比查找：以档案面板里勾选的盘（或条件里点名的盘）为基准，查找与之有关系的其他盘。默认关闭。';
+    bcr.innerHTML = '<input type="checkbox" id="aiCrossChk"' + (_aiCross ? ' checked' : '') + '><span>跨盘</span>';
+    bcr.querySelector('input').onchange = function() { crossSet(this.checked); };
+    row.appendChild(bcr);
     _bar = document.createElement('div');
     _bar.className = 'archive-ai-bar';
     row.parentNode.insertBefore(_bar, row.nextSibling);
@@ -19006,7 +19197,13 @@ function cmpSetState(entries) {
     debugQiyun: function(archive) { return qiyunOf(archive); },
     debugDayun: function(archive) { return dayunPillars(archive); },
     debugFT: function() { return ensureFTIndex(); },
-    debugPrompt: function() { return SYSTEM_PROMPT; },
+    debugPrompt: function() { return sysPromptText(); },
+    crossSet: crossSet,
+    crossOn: crossOn,
+    crossBases: crossBases,
+    crossBaseNames: crossBaseNames,
+    hasCrossCond: hasCrossCond,
+    debugCross: function(rel, pos, archive) { return matchCross(archive, pillarsOf(archive), { type: 'cross', rel: rel, a: pos }); },
     debugQuery: function() { return _aiQuery; },
     debugWarn: function() { return _aiWarn.slice(); },
     debugLiunian: function(yr) { return liunianGZ(yr); },
