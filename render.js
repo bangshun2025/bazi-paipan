@@ -1533,12 +1533,15 @@ function buildDimPopHtml(suffix) {
     var n = dimLenOf(suffix, dm);
     var ren = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-ren" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimRenameBtn(this)" title="重命名维度（本机文档与显隐设置一并迁移）">✎</button>';
     var del = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-del" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimDeleteBtn(this)" title="从维度列表移除（文档内容保留本机）">✕</button>';
-    h += '<label class="rec-dim-row"><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
-      + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + ren + del + '</label>';
+    var isMain = dm === DIM_MAIN;
+    var dragAttrs = isMain ? '' : ' draggable="true" ondragstart="RENDER.dimRowDragStart(event,this)" ondragend="RENDER.dimRowDragEnd(event,this)" ondragover="RENDER.dimRowDragOver(event,this)" ondrop="RENDER.dimRowDrop(event,this)"';
+    var grip = isMain ? '' : '<span class="rec-dim-grip" title="拖动排序">⠿</span>';
+    h += '<label class="rec-dim-row' + (isMain ? ' rec-dim-main' : '') + '" data-dim="' + escAttr(dm) + '"' + dragAttrs + '><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
+      + grip + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + ren + del + '</label>';
   }
   h += '<div class="rec-dim-sec">新增维度（全局，所有命盘可用）</div>';
   h += '<div class="rec-dim-add"><input type="text" class="rec-dim-new" maxlength="' + DIM_NAME_MAX + '" placeholder="如：事业 / 婚姻 / 健康" onkeydown="if(event.key===\'Enter\'){event.preventDefault();RENDER.dimAddBtn(this)}"><button type="button" class="rec-dim-addbtn" onclick="RENDER.dimAddBtn(this)">＋ 新增</button></div>';
-  h += '<div class="rec-dim-hint">✎ 改名会把本机文档与显隐设置一并迁到新名字下；移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
+  h += '<div class="rec-dim-hint">⠿ 拖动行可排序（分析记录恒居首，顺序全局生效）；✎ 改名会把本机文档与显隐设置一并迁到新名字下；移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
   return h;
 }
 function dimVisToggle(input) {
@@ -1581,6 +1584,65 @@ function dimDeleteBtn(btn) {
   var panel = btn.closest ? btn.closest('.record-panel') : null;
   if (!r.ok) { recStatusShow(panel || document.body, '⚠ ' + r.err, true); return; }
   refreshDimUI();
+}
+// ===== v0.94.0 维度拖动排序：弹层里拖行调序，写回全局维度表（tabs 顺序随之）=====
+var _dimDragName = '';
+function dimRowDragStart(e, el) {
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main')) { e.preventDefault(); return; } // 主维度恒居首，不参与拖动
+  _dimDragName = row.getAttribute('data-dim') || '';
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', _dimDragName); } catch (err) {}
+  }
+  row.classList.add('rec-dim-dragging');
+}
+function dimRowDragEnd(e, el) {
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (row) row.classList.remove('rec-dim-dragging');
+  document.querySelectorAll('.rec-dim-drop-hint-before,.rec-dim-drop-hint-after').forEach(function(r) {
+    r.classList.remove('rec-dim-drop-hint-before', 'rec-dim-drop-hint-after');
+  });
+  _dimDragName = '';
+}
+function dimRowDragOver(e, el) {
+  if (!_dimDragName) return;
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main') || (row.getAttribute('data-dim') || '') === _dimDragName) return; // 不 preventDefault：显示禁止，drop 不触发
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  var rect = row.getBoundingClientRect();
+  var after = (e.clientY - rect.top) > rect.height / 2;
+  document.querySelectorAll('.rec-dim-drop-hint-before,.rec-dim-drop-hint-after').forEach(function(r) {
+    r.classList.remove('rec-dim-drop-hint-before', 'rec-dim-drop-hint-after');
+  });
+  row.classList.add(after ? 'rec-dim-drop-hint-after' : 'rec-dim-drop-hint-before');
+  row._dropAfter = after;
+}
+function dimRowDrop(e, el) {
+  if (!_dimDragName) return;
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main')) return;
+  var name = _dimDragName; // 先取值再清状态：DragEnd 会把 _dimDragName 清空
+  var target = row.getAttribute('data-dim') || '';
+  var after = !!row._dropAfter;
+  dimRowDragEnd(e, el);
+  if (!target || target === name) return;
+  var r = dimReorder(name, target, after);
+  if (!r.ok) return;
+  refreshDimUI();
+}
+// 核心重排：主维度恒居首位，其余按拖动结果相对排序；顺序全局落盘 bz_dim_list_v1
+function dimReorder(name, target, after) {
+  if (name === DIM_MAIN) return { ok: false, err: '「' + DIM_MAIN + '」是默认维度，固定在第一位' };
+  var list = dimList();
+  var from = list.indexOf(name), to = list.indexOf(target);
+  if (from < 0 || to < 0) return { ok: false, err: '维度不存在' };
+  list.splice(from, 1);
+  var insertAt = list.indexOf(target) + (after ? 1 : 0);
+  if (insertAt < 1) insertAt = 1; // 主维度占位 0，其余只能从 1 起
+  list.splice(insertAt, 0, name);
+  return dimSetList(list) ? { ok: true, list: list } : { ok: false, err: '保存失败：浏览器存储空间不足' };
 }
 // v0.87.2 行内改名：✎ 把该行换成输入框，Enter/✓ 确认，Esc/失焦取消（✓ 用 mousedown 抢在 blur 前）
 function dimRenameBtn(btn) {
@@ -6055,6 +6117,7 @@ function cmpSetState(entries) {
     dimVisKey: dimVisKey,
     dimVisGet: dimVisGet,
     dimVisSet: dimVisSet,
+    dimList: dimList,
     dimVisibleDims: dimVisibleDims,
     renderRecTabs: renderRecTabs,
     switchRecDim: switchRecDim,
@@ -6063,6 +6126,11 @@ function cmpSetState(entries) {
     dimHideEmptyToggle: dimHideEmptyToggle,
     dimAddBtn: dimAddBtn,
     dimDeleteBtn: dimDeleteBtn,
+    dimReorder: dimReorder,
+    dimRowDragStart: dimRowDragStart,
+    dimRowDragEnd: dimRowDragEnd,
+    dimRowDragOver: dimRowDragOver,
+    dimRowDrop: dimRowDrop,
     dimRenameBtn: dimRenameBtn,
     dimRenameKey: dimRenameKey,
     dimRenameCommit: dimRenameCommit,

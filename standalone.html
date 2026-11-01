@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.93.0 | 2026-10-31 -->
+<!-- 八字排盘 ·  从真版 v0.94.0 | 2026-11-01 -->
 <!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
 <!-- v0.90.0: AI 搜索条件树可视化 —— 状态条下可展开查看 AI 解析出的每一项条件，支持就地改参数（含四柱/七柱/大运范围切换）、删除单条、还原 AI 原始条件 -->
 <!-- v0.91.0: 柱间关系六类落地（刑/害/破/暗合/伏吟/反吟）—— 新增 pair 条件查命局内部两柱关系，interact 的 rel 同步扩展；多柱联动（如「大运冲月柱且流年合日支」）用 and 组合即成立；档案弹窗改为随视口自适应 min(880px,88vh)，列表可显示行数由 4.5 行提到 9~13 行 -->
 <!-- v0.92.0: 暗合口径改为体系口径 —— 两地支藏干中有任意一对天干相合即为暗合，不再按传统五组表筛选；相异地支命中 30 组（原 5 组），辰辰因戊癸自合亦成立；提示词同步写明口径 -->
 <!-- v0.93.0: AI 搜索跨盘对比查找 —— 搜索栏新增「跨盘」勾选（默认关闭，状态存本机）；勾选后 AI 可解析 cross 条件，支持四柱全同、日柱天干冲/合、地支六冲/六合/刑/害/破/暗合/伏吟/反吟/同干支/同天干/三合/三会，可选 base 点名基准盘；基准取对比面板勾选的盘（含当前盘），跳过自身；未勾选时 cross 条件全部忽略并提示 -->
+<!-- v0.94.0: 维度设置弹层支持拖动排序 —— 非主维度行可拖（⠿ 手柄），拖到目标行上/下半插入，写回全局维度表 bz_dim_list_v1，tabs 顺序即时跟随；「分析记录」主维度恒居首不可拖；drop 位置提示线实时显示、dragend 清理；显隐勾选与文档不受排序影响 -->
 <!-- v0.88.2: 档案面板排序栏右侧新增「清空勾选（n）」—— 一键清空所有档案行的对比勾选（= 清空盘面对比的选择，含「当前盘」条目），按钮显示当前勾选数、为 0 时置灰；同时摘掉对应的「盘面对比」标签并刷新对比画布 -->
 <!-- v0.88.0: AI 档案搜索 —— 档案搜索框旁新增「🤖 AI 搜」：自然语言描述条件（如「找出有两个同柱的命盘」「三戌同支」「日主甲木的女性」），LLM 只做翻译（自然语言→查询条件 JSON），过滤在本地执行（四柱优先用存档 bazi、缺失时以主排盘同源 paipan 现算）：条件引擎支持 指定柱干支/天干地支完整干支计数/同柱同干同支/五行个数/日主/纳音/年柱/出生区间 + and/or/not 组合；接口走用户自配 OpenAI 兼容（DeepSeek/GLM/OpenAI/自定义），⚙ 设置面板填 Key（仅存本机 localStorage，浏览器直连），30 秒超时，返回非 JSON 时提示重试；命中显示 AI 理解摘要 + 命中数 + ✕ 退出 AI，AI 模式下关键词过滤让位；renderArchiveModal 加过滤钩子（index/standalone 同步三行） -->
 <!-- v0.85.2: 说话人分离改基频二分 —— 83 分钟真实三人录音（邦顺/芝晓/龚洁）校准发现 MFCC 声纹聚类在真人对话上等同随机（19-24 分两类平均 F0 只差 6.7Hz、与 F0 判定一致率 37.1%，38-43 分 51.1%），改为每段自相关测基频中位数（8k 降采样/帧长 512/最短有效 lag 防八度错误）、165Hz 生理阈值分男/女、两组中位数须低 ≤150Hz 高 ≥170Hz 且间距 ≥40Hz 才出分组，否则返回 null 不误导 LLM；实测 19-24 分 85/17、38-43 分 53/34、0-5 分 9/97、纯女声 60 秒段正确拒绝、整段 83 分钟 612 男/930 女、中位差 78.8Hz、1.8 秒；两个女声（芝晓/龚洁）F0 与 MFCC 均重叠（强行聚两类质心仅差 2.42σ 且时间高度混合），经确认放弃三分，提示词改为 A 组男声(邦顺)/B 组女性说话人、同组可能不止一人、分不清标同一名字不得臆造第三人 -->
@@ -462,6 +463,11 @@
   .rec-dim-sec { font-size:11px; color:var(--c-gray); letter-spacing:.08em; margin:8px 0 2px; }
   .rec-dim-sec:first-child { margin-top:0; }
   .rec-dim-row { display:flex; align-items:center; gap:6px; padding:4px 0; cursor:pointer; }
+  .rec-dim-row[draggable="true"] { cursor:grab; }
+  .rec-dim-row.rec-dim-dragging { opacity:.45; }
+  .rec-dim-row.rec-dim-drop-hint-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
+  .rec-dim-row.rec-dim-drop-hint-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
+  .rec-dim-grip { color:var(--c-gray); cursor:grab; font-size:11px; user-select:none; flex:none; }
   .rec-dim-row input[type="checkbox"] { margin:0; }
   .rec-dim-len { font-size:11px; color:var(--c-gray); margin-left:auto; }
   .rec-dim-del { border:none; background:none; color:var(--c-gray); cursor:pointer; font-size:12px; padding:0 4px; }
@@ -12843,12 +12849,15 @@ function buildDimPopHtml(suffix) {
     var n = dimLenOf(suffix, dm);
     var ren = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-ren" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimRenameBtn(this)" title="重命名维度（本机文档与显隐设置一并迁移）">✎</button>';
     var del = dm === DIM_MAIN ? '' : '<button type="button" class="rec-dim-del" data-dim="' + escAttr(dm) + '" onclick="RENDER.dimDeleteBtn(this)" title="从维度列表移除（文档内容保留本机）">✕</button>';
-    h += '<label class="rec-dim-row"><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
-      + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + ren + del + '</label>';
+    var isMain = dm === DIM_MAIN;
+    var dragAttrs = isMain ? '' : ' draggable="true" ondragstart="RENDER.dimRowDragStart(event,this)" ondragend="RENDER.dimRowDragEnd(event,this)" ondragover="RENDER.dimRowDragOver(event,this)" ondrop="RENDER.dimRowDrop(event,this)"';
+    var grip = isMain ? '' : '<span class="rec-dim-grip" title="拖动排序">⠿</span>';
+    h += '<label class="rec-dim-row' + (isMain ? ' rec-dim-main' : '') + '" data-dim="' + escAttr(dm) + '"' + dragAttrs + '><input type="checkbox" data-dim="' + escAttr(dm) + '"' + (vis.hidden[dm] ? '' : ' checked') + ' onchange="RENDER.dimVisToggle(this)">'
+      + grip + escHtml(dm) + '<span class="rec-dim-len">' + (n ? n + ' 字' : '空') + '</span>' + ren + del + '</label>';
   }
   h += '<div class="rec-dim-sec">新增维度（全局，所有命盘可用）</div>';
   h += '<div class="rec-dim-add"><input type="text" class="rec-dim-new" maxlength="' + DIM_NAME_MAX + '" placeholder="如：事业 / 婚姻 / 健康" onkeydown="if(event.key===\'Enter\'){event.preventDefault();RENDER.dimAddBtn(this)}"><button type="button" class="rec-dim-addbtn" onclick="RENDER.dimAddBtn(this)">＋ 新增</button></div>';
-  h += '<div class="rec-dim-hint">✎ 改名会把本机文档与显隐设置一并迁到新名字下；移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
+  h += '<div class="rec-dim-hint">⠿ 拖动行可排序（分析记录恒居首，顺序全局生效）；✎ 改名会把本机文档与显隐设置一并迁到新名字下；移除维度只从列表去掉，文档内容保留本机，重新添加同名维度即可找回。</div>';
   return h;
 }
 function dimVisToggle(input) {
@@ -12891,6 +12900,65 @@ function dimDeleteBtn(btn) {
   var panel = btn.closest ? btn.closest('.record-panel') : null;
   if (!r.ok) { recStatusShow(panel || document.body, '⚠ ' + r.err, true); return; }
   refreshDimUI();
+}
+// ===== v0.94.0 维度拖动排序：弹层里拖行调序，写回全局维度表（tabs 顺序随之）=====
+var _dimDragName = '';
+function dimRowDragStart(e, el) {
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main')) { e.preventDefault(); return; } // 主维度恒居首，不参与拖动
+  _dimDragName = row.getAttribute('data-dim') || '';
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', _dimDragName); } catch (err) {}
+  }
+  row.classList.add('rec-dim-dragging');
+}
+function dimRowDragEnd(e, el) {
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (row) row.classList.remove('rec-dim-dragging');
+  document.querySelectorAll('.rec-dim-drop-hint-before,.rec-dim-drop-hint-after').forEach(function(r) {
+    r.classList.remove('rec-dim-drop-hint-before', 'rec-dim-drop-hint-after');
+  });
+  _dimDragName = '';
+}
+function dimRowDragOver(e, el) {
+  if (!_dimDragName) return;
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main') || (row.getAttribute('data-dim') || '') === _dimDragName) return; // 不 preventDefault：显示禁止，drop 不触发
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  var rect = row.getBoundingClientRect();
+  var after = (e.clientY - rect.top) > rect.height / 2;
+  document.querySelectorAll('.rec-dim-drop-hint-before,.rec-dim-drop-hint-after').forEach(function(r) {
+    r.classList.remove('rec-dim-drop-hint-before', 'rec-dim-drop-hint-after');
+  });
+  row.classList.add(after ? 'rec-dim-drop-hint-after' : 'rec-dim-drop-hint-before');
+  row._dropAfter = after;
+}
+function dimRowDrop(e, el) {
+  if (!_dimDragName) return;
+  var row = el && el.closest ? el.closest('.rec-dim-row[data-dim]') : null;
+  if (!row || row.classList.contains('rec-dim-main')) return;
+  var name = _dimDragName; // 先取值再清状态：DragEnd 会把 _dimDragName 清空
+  var target = row.getAttribute('data-dim') || '';
+  var after = !!row._dropAfter;
+  dimRowDragEnd(e, el);
+  if (!target || target === name) return;
+  var r = dimReorder(name, target, after);
+  if (!r.ok) return;
+  refreshDimUI();
+}
+// 核心重排：主维度恒居首位，其余按拖动结果相对排序；顺序全局落盘 bz_dim_list_v1
+function dimReorder(name, target, after) {
+  if (name === DIM_MAIN) return { ok: false, err: '「' + DIM_MAIN + '」是默认维度，固定在第一位' };
+  var list = dimList();
+  var from = list.indexOf(name), to = list.indexOf(target);
+  if (from < 0 || to < 0) return { ok: false, err: '维度不存在' };
+  list.splice(from, 1);
+  var insertAt = list.indexOf(target) + (after ? 1 : 0);
+  if (insertAt < 1) insertAt = 1; // 主维度占位 0，其余只能从 1 起
+  list.splice(insertAt, 0, name);
+  return dimSetList(list) ? { ok: true, list: list } : { ok: false, err: '保存失败：浏览器存储空间不足' };
 }
 // v0.87.2 行内改名：✎ 把该行换成输入框，Enter/✓ 确认，Esc/失焦取消（✓ 用 mousedown 抢在 blur 前）
 function dimRenameBtn(btn) {
@@ -17365,6 +17433,7 @@ function cmpSetState(entries) {
     dimVisKey: dimVisKey,
     dimVisGet: dimVisGet,
     dimVisSet: dimVisSet,
+    dimList: dimList,
     dimVisibleDims: dimVisibleDims,
     renderRecTabs: renderRecTabs,
     switchRecDim: switchRecDim,
@@ -17373,6 +17442,11 @@ function cmpSetState(entries) {
     dimHideEmptyToggle: dimHideEmptyToggle,
     dimAddBtn: dimAddBtn,
     dimDeleteBtn: dimDeleteBtn,
+    dimReorder: dimReorder,
+    dimRowDragStart: dimRowDragStart,
+    dimRowDragEnd: dimRowDragEnd,
+    dimRowDragOver: dimRowDragOver,
+    dimRowDrop: dimRowDrop,
     dimRenameBtn: dimRenameBtn,
     dimRenameKey: dimRenameKey,
     dimRenameCommit: dimRenameCommit,
