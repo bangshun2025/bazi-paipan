@@ -5476,6 +5476,54 @@ function captureScreenshot() {
     tests.push(eq(sec + ' T16: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
   })();
 
+  // ===== v0.94.1 藏气竖排双胞胎误拆回归：勾选十神/十干主题后日/时/命/身柱中余气丢失 =====
+  // 复现口径=苓菲盘：日柱甲辰（戊/乙/癸）、命宫乙巳（丙/庚/戊），均在默认 twinPillars
+  (function() {
+    var sec = 'CGV';
+    var R = window.RENDER, A = window.ALGO;
+    if (!R || typeof R.renderChart !== 'function') {
+      tests.push(fail(sec + ' 前置: RENDER.renderChart 已挂载', '缺失'));
+      return;
+    }
+    A.clearTaiji();
+    var savedSel = localStorage.getItem('bz_ssh_selected_v1');
+    var pdC = paipan('藏干竖排回归', '女', 1993, 1, 23, 0, 12);
+    var riLy = CONST.CANG_GAN[pdC.ri.zhi] || [];
+    var mingLy = CONST.CANG_GAN[pdC.ming.zhi] || [];
+    tests.push(eq(sec + ' C01: 复现盘日柱藏干三层', riLy.length, 3));
+    tests.push(eq(sec + ' C02: 复现盘命宫藏干三层', mingLy.length, 3));
+
+    localStorage.setItem('bz_ssh_selected_v1', JSON.stringify(['军队']));
+    R.renderChart(pdC, undefined, 'tst-out');
+    var hostC = document.getElementById('tst-out');
+
+    var cgRow = hostC.querySelector('tr[data-row-type="ln2"]');
+    var riCell = cgRow ? cgRow.cells[3] : null;
+    tests.push(eq(sec + ' C03: 勾主题后日柱竖排层数=藏干层数', riCell ? riCell.querySelectorAll('.ssh-cg-l').length : 0, riLy.length));
+    var riText = riCell ? riCell.textContent : '';
+    tests.push(eq(sec + ' C04: 日柱中气干未丢失', riText.indexOf(riLy[1] || '∅') >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' C05: 日柱余气干未丢失', riText.indexOf(riLy[2] || '∅') >= 0 ? 'Y' : 'N', 'Y'));
+
+    var syRow = hostC.querySelector('tr[data-row-type="sy-cg"]');
+    var mingCell = syRow ? syRow.cells[3] : null;
+    tests.push(eq(sec + ' C06: 勾主题后命宫竖排层数=藏干层数', mingCell ? mingCell.querySelectorAll('.ssh-cg-l').length : 0, mingLy.length));
+    var mingText = mingCell ? mingCell.textContent : '';
+    tests.push(eq(sec + ' C07: 命宫中气干未丢失', mingText.indexOf(mingLy[1] || '∅') >= 0 ? 'Y' : 'N', 'Y'));
+    tests.push(eq(sec + ' C08: 命宫余气干未丢失', mingText.indexOf(mingLy[2] || '∅') >= 0 ? 'Y' : 'N', 'Y'));
+
+    // 口径一致性：勾选与未勾选时藏气层数相同（cangGanText 与 sshCgVert 同为全三层）
+    localStorage.setItem('bz_ssh_selected_v1', '[]');
+    R.renderChart(pdC, undefined, 'tst-out');
+    var cgRowBare = hostC.querySelector('tr[data-row-type="ln2"]');
+    var riCellBare = cgRowBare ? cgRowBare.cells[3] : null;
+    var bareLines = riCellBare ? (riCellBare.innerHTML.match(/<br>/g) || []).length + 1 : 0;
+    tests.push(eq(sec + ' C09: 未勾主题日柱藏气层数', bareLines, riLy.length));
+
+    if (savedSel === null) localStorage.removeItem('bz_ssh_selected_v1'); else localStorage.setItem('bz_ssh_selected_v1', savedSel);
+    R.renderChart(pdC, undefined, 'tst-out');
+    tests.push(eq(sec + ' C10: 测试后勾选现场还原', localStorage.getItem('bz_ssh_selected_v1'), savedSel));
+  })();
+
   // ===== v0.60.2 popover 互斥 + 藏干对应名对齐 =====
   (function() {
     var sec = 'SSHX';

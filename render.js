@@ -926,12 +926,15 @@ function renderChart(data, twin, targetId, opts) {
     td('sep col-dy '+pDy.wz,pDy.zhi)+td('col-ln '+pLn.wz,pLn.zhi)+'</tr>';
   // 藏气: 单行合并（用 cg 而非 ly），删中气余气
   // v0.64.0 十神组：勾选组时藏气行竖排三列
+  // v0.94.0：sshCgVert 为单人主表专用（双胞胎卡不用），twin 必须传 0 ——
+  // 传 renderChart 的 twin(=1) 会被 cangGanLayers 当双胞胎老大拆层，
+  // 日/时/命/身柱（默认 twinPillars）只渲染本气，中气/余气丢失（苓菲盘复现）
   var sshCg = sshSel.length > 0 || ganSel.length > 0;
   mainRows[3] = '<tr class="rh" data-sec="cangqi" data-row-type="ln2">'+rl('藏气')
-    +td('', sshCg ? sshCgVert(pNian,'nian',twin,riGan,sshSel,ganSel) : pNian.cg)
-    +td('', sshCg ? sshCgVert(pYue,'yue',twin,riGan,sshSel,ganSel) : pYue.cg)
-    +td('', sshCg ? sshCgVert(pRi,'ri',twin,riGan,sshSel,ganSel) : pRi.cg)
-    +td('', sshCg ? sshCgVert(pShi,'shi',twin,riGan,sshSel,ganSel) : pShi.cg)
+    +td('', sshCg ? sshCgVert(pNian,'nian',0,riGan,sshSel,ganSel) : pNian.cg)
+    +td('', sshCg ? sshCgVert(pYue,'yue',0,riGan,sshSel,ganSel) : pYue.cg)
+    +td('', sshCg ? sshCgVert(pRi,'ri',0,riGan,sshSel,ganSel) : pRi.cg)
+    +td('', sshCg ? sshCgVert(pShi,'shi',0,riGan,sshSel,ganSel) : pShi.cg)
     +td('sep col-dy', sshCg ? sshCgVert(pDy,'dayun',0,riGan,sshSel,ganSel) : pDy.cg)
     +td('col-ln', sshCg ? sshCgVert(pLn,'liunian',0,riGan,sshSel,ganSel) : pLn.cg)+'</tr>';
   mainRows.splice(4, 2); // 删中气、余气 — 单人排盘只保留合并藏气行
@@ -983,10 +986,10 @@ function renderChart(data, twin, targetId, opts) {
     td(pShen.wz,pShen.zhi,' data-gk="zhi" data-gz="'+pShen.zhi+'" data-pk="shen"')+
     emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rh" data-sec="sanyuan cangqi" data-row-type="sy-cg">'+rl('藏气')
-    +td('', sshCg ? sshCgVert(pTaiNian,'taiNian',twin,riGan,sshSel,ganSel) : pTaiNian.cg)
-    +td('', sshCg ? sshCgVert(pTai,'tai',twin,riGan,sshSel,ganSel) : pTai.cg)
-    +td('', sshCg ? sshCgVert(pMing,'ming',twin,riGan,sshSel,ganSel) : pMing.cg)
-    +td('', sshCg ? sshCgVert(pShen,'shen',twin,riGan,sshSel,ganSel) : pShen.cg)
+    +td('', sshCg ? sshCgVert(pTaiNian,'taiNian',0,riGan,sshSel,ganSel) : pTaiNian.cg)
+    +td('', sshCg ? sshCgVert(pTai,'tai',0,riGan,sshSel,ganSel) : pTai.cg)
+    +td('', sshCg ? sshCgVert(pMing,'ming',0,riGan,sshSel,ganSel) : pMing.cg)
+    +td('', sshCg ? sshCgVert(pShen,'shen',0,riGan,sshSel,ganSel) : pShen.cg)
     +emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rn" data-sec="sanyuan" data-row-type="nayin">'+rl('纳音')+td('',pTaiNian.ny)+td('',pTai.ny)+td('',pMing.ny)+td('',pShen.ny)+emp('sep')+emp('col-ln')+'</tr>');
   syRows.push('<tr class="rm" data-sec="sanyuan" data-row-type="nayun">'+rl('纳运')+td('',pTaiNian.nayun)+td('',pTai.nayun)+td('',pMing.nayun)+td('',pShen.nayun)+emp('sep')+emp('col-ln')+'</tr>');
