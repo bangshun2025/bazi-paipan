@@ -1121,10 +1121,11 @@ function renderChart(data, twin, targetId, opts) {
       </div>`;
   const recPanelHtml = `
       <div class="record-panel${recOn ? ' open' : ''}">
-        <div class="rec-head"><span style="display:inline-flex;align-items:center;gap:8px;"><span class="rec-title">分析记录</span><span class="rec-dim-wrap"><button type="button" class="rec-dim-btn" onclick="RENDER.toggleDimPop(event)" title="分析维度：勾选本命盘显示的维度，或新增/移除维度">维度 ▾</button><div class="rec-dim-pop" onclick="event.stopPropagation()"></div></span></span><span class="rec-status" id="bzRecStatus"></span></div>
+        <div class="rec-head"><span style="display:inline-flex;align-items:center;gap:8px;"><span class="rec-title">分析记录</span><span class="rec-dim-wrap"><button type="button" class="rec-dim-btn" onclick="RENDER.toggleDimPop(event)" title="分析维度：勾选本命盘显示的维度，或新增/移除维度">维度 ▾</button><div class="rec-dim-pop" onclick="event.stopPropagation()"></div></span></span><span style="display:inline-flex;align-items:center;gap:8px;"><button type="button" class="rec-mode-btn" onclick="RENDER.recToggleView(this)" title="阅读模式：自动把记录排成易读版式（标题/编号列表/问答标签/规整段距），点「编辑」返回修改">阅读</button><span class="rec-status" id="bzRecStatus"></span></span></div>
         <div class="rec-tabs" role="tablist"></div>
         <div class="rec-alts"></div>
         <textarea class="rec-text" id="bzRecText" placeholder="记录本次八字分析……写入即自动保存"></textarea>
+        <div class="rec-view"></div>
         <div class="rec-audio" data-suffix="">
           <div class="rec-audio-bar">
             <button type="button" class="rec-audio-btn" onclick="RENDER.recAudioToggle(this)" title="录制语音分析，自动挂在当前档案下">● 录音</button>
@@ -1429,6 +1430,23 @@ function bindRecPanel(container, suffix) {
   ta.addEventListener('input', function() {
     recAutogrow(ta);
     recSaveNow(container, ta, suffix, true);
+    var rpNow = ta.closest ? ta.closest('.record-panel') : null;
+    if (rpNow && rpNow.classList.contains('reading')) recRenderView(rpNow);
+  });
+  ta.addEventListener('paste', function(e) {
+    var cd = e.clipboardData;
+    if (!cd) return;
+    var txt = cd.getData('text/plain');
+    if (!txt) return;
+    var norm = recNormalizeText(txt);
+    if (norm === txt) return;
+    e.preventDefault();
+    if (document.execCommand && document.execCommand('insertText', false, norm)) return;
+    var s = ta.selectionStart, epos = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + norm + ta.value.slice(epos);
+    ta.setSelectionRange(s + norm.length, s + norm.length);
+    recAutogrow(ta);
+    recSaveNow(container, ta, suffix, true);
   });
   // v0.83.2 丢字加固：听写/部分输入法直填 value 不派发 input 事件，字只存在内存、刷新即蒸发，
   // 补 compositionend + blur + 定时巡检 + beforeunload 拦截四道兜底
@@ -1440,6 +1458,7 @@ function bindRecPanel(container, suffix) {
     recSaveNow(container, ta, suffix); // 巡检非用户主动：空写保护生效
   }, 4000);
   var rp = ta.closest ? ta.closest('.record-panel') : null;
+  try { if (rp && localStorage.getItem('bz_rec_read_mode') === '1') recApplyReading(rp); } catch (e) {}
   initRecAudioPanel(rp, suffix);
 }
 // ===== v0.87.0 维度 tabs：渲染/切换/字数徽标 =====
@@ -1751,6 +1770,97 @@ function recSaveNow(container, ta, suffix, userAct) {
   updateRecTabLen(container, ta._recDim, ta.value);
   if (window.ARCHIVE && window.ARCHIVE.syncTouch) window.ARCHIVE.syncTouch();
   return true;
+}
+// ===== v0.95.0 阅读模式：纯文本智能排版 =====
+function recNormalizeText(t) {
+  t = String(t == null ? '' : t).replace(/\r\n?/g, '\n');
+  var lines = t.split('\n');
+  for (var i = 0; i < lines.length; i++) lines[i] = lines[i].replace(/[ \t\u3000]+$/, '');
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n+$/, '');
+}
+function recInlineFmt(s) {
+  s = escHtml(s);
+  return s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+}
+function recFormatView(raw) {
+  var t = recNormalizeText(raw);
+  if (!t.trim()) return '<div class="rv-empty">（暂无内容）</div>';
+  var reHead = /^ {0,3}(#{1,6})\s+(.+)$/;
+  var reBullet = /^ {0,3}[-*•·]\s+(.+)$/;
+  var reNum = /^ {0,3}((?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*[、.．)）])\s*(.*)$/;
+  var reQa = /^ {0,3}(问|答|师|徒|学员|客户)\s*[:：]\s*(.*)$/;
+  var out = [], para = [], ulItems = null;
+  function flushPara() { if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; } }
+  function flushUl() { if (ulItems) { out.push('<ul class="rv-list">' + ulItems.join('') + '</ul>'); ulItems = null; } }
+  var lines = t.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (!ln.trim()) { flushUl(); flushPara(); continue; }
+    var m = ln.match(reHead);
+    if (m) {
+      flushUl(); flushPara();
+      var lv = m[1].length;
+      out.push('<div class="rv-h' + (lv === 1 ? ' rv-h2' : '') + '">' + recInlineFmt(m[2]) + '</div>');
+      continue;
+    }
+    m = ln.match(reBullet);
+    if (m) {
+      flushPara();
+      if (!ulItems) ulItems = [];
+      ulItems.push('<li>' + recInlineFmt(m[1]) + '</li>');
+      continue;
+    }
+    flushUl();
+    m = ln.match(reQa);
+    if (m) {
+      flushPara();
+      var isA = m[1] === '答';
+      out.push('<div class="rv-qa"><span class="rv-tag' + (isA ? ' rv-tag-a' : '') + '">' + escHtml(m[1]) + '</span>' + recInlineFmt(m[2]) + '</div>');
+      continue;
+    }
+    m = ln.match(reNum);
+    if (m) {
+      flushPara();
+      out.push('<div class="rv-num"><b>' + escHtml(m[1]) + '</b>' + recInlineFmt(m[2]) + '</div>');
+      continue;
+    }
+    para.push(recInlineFmt(ln));
+  }
+  flushUl(); flushPara();
+  return out.join('');
+}
+function recRenderView(panel) {
+  var ta = panel.querySelector('.rec-text');
+  var view = panel.querySelector('.rec-view');
+  if (!ta || !view) return;
+  view.innerHTML = recFormatView(ta.value);
+  view.scrollTop = 0;
+}
+function recToggleView(btn) {
+  var panel = btn.closest ? btn.closest('.record-panel') : null;
+  if (!panel) return;
+  var on = !panel.classList.contains('reading');
+  panel.classList.toggle('reading', on);
+  btn.textContent = on ? '编辑' : '阅读';
+  btn.classList.toggle('on', on);
+  var ta = panel.querySelector('.rec-text');
+  if (on) {
+    recRenderView(panel);
+    try { localStorage.setItem('bz_rec_read_mode', '1'); } catch (e) {}
+    if (ta) ta.blur();
+  } else {
+    try { localStorage.removeItem('bz_rec_read_mode'); } catch (e) {}
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+  }
+}
+function recApplyReading(panel) {
+  if (!panel) return;
+  var btn = panel.querySelector('.rec-mode-btn');
+  if (!btn) return;
+  panel.classList.add('reading');
+  btn.textContent = '编辑';
+  btn.classList.add('on');
+  recRenderView(panel);
 }
 if (typeof window !== 'undefined' && !window._recUnloadGuard) {
   window._recUnloadGuard = true;
@@ -6141,6 +6251,9 @@ function cmpSetState(entries) {
     toggleTwinRec: toggleTwinRec,
     isRecOn: isRecOn,
     recAudioToggle: recAudioToggle,
+    recToggleView: recToggleView,
+    recFormatView: recFormatView,
+    recNormalizeText: recNormalizeText,
     recMicIsMine: recMicIsMine,
     recMicOpen: recMicOpen,
     recMicGuard: recMicGuard,

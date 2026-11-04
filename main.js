@@ -3688,6 +3688,88 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== RV v0.95.0 分析记录阅读模式：normalize/format/切换/记忆恢复 =====
+  (function() {
+    tests.push({ section: '阅读模式(RV)' });
+    var R = window.RENDER;
+    if (!R || typeof R.recToggleView !== 'function' || typeof R.recFormatView !== 'function' || typeof R.recNormalizeText !== 'function') {
+      tests.push(fail('RV 前置: 阅读模式接口挂载', '缺失'));
+      return;
+    }
+    var oldPdRV = window._paipanData;
+    var savedReadMode = null;
+    try { savedReadMode = localStorage.getItem('bz_rec_read_mode'); localStorage.removeItem('bz_rec_read_mode'); } catch (e) {}
+    var pdRV = paipan('阅读测试', '女', 1990, 1, 1, 12, 0);
+    window._paipanData = pdRV;
+    var keyRV = 'bz_rec_notes_' + [pdRV.name, pdRV.gender, pdRV.y, pdRV.m, pdRV.d, pdRV.h, pdRV.mi].join('|');
+    var tstRV = null, tstRV2 = null;
+    try {
+      tstRV = document.createElement('div');
+      tstRV.id = 'tst-recview';
+      tstRV.style.display = 'none';
+      document.body.appendChild(tstRV);
+      R.renderChart(pdRV, undefined, 'tst-recview');
+      var panelRV = tstRV.querySelector('.record-panel');
+      var taRV = tstRV.querySelector('.rec-text');
+
+      tests.push(eq('RV01: 阅读按钮存在', !!tstRV.querySelector('.rec-mode-btn'), true));
+      tests.push(eq('RV01: 阅读容器存在', !!tstRV.querySelector('.rec-view'), true));
+      tests.push(eq('RV01: 默认非阅读态', panelRV.classList.contains('reading'), false));
+      tests.push(eq('RV01: 按钮接线 recToggleView', (tstRV.querySelector('.rec-mode-btn').getAttribute('onclick') || '').indexOf('RENDER.recToggleView') >= 0, true));
+
+      tests.push(eq('RV02: 连续空行压缩', R.recNormalizeText('a\n\n\n\n\nb'), 'a\n\nb'));
+      tests.push(eq('RV02: 行尾空白清理', R.recNormalizeText('x \t\u3000\ny'), 'x\ny'));
+      tests.push(eq('RV02: CRLF 归一', R.recNormalizeText('p\r\nq'), 'p\nq'));
+      tests.push(eq('RV02: 首尾空行去除', R.recNormalizeText('\n\nab\n\n'), 'ab'));
+
+      var f1 = R.recFormatView('# 事业分析\n\n## 性格底色\n\n1、性格：身弱\n2、扩大规模\n\n问：转行吗？\n答：可以转\n\n- **重点**：深耕\n\n<img src=x onerror=alert(1)>');
+      tests.push(eq('RV03: md标题→rv-h', f1.indexOf('rv-h') >= 0 && f1.indexOf('rv-h2') >= 0, true));
+      tests.push(eq('RV03: 编号行→rv-num带序号', f1.indexOf('rv-num') >= 0 && f1.indexOf('<b>1、</b>') >= 0 && f1.indexOf('<b>2、</b>') >= 0, true));
+      tests.push(eq('RV03: 问答→rv-tag', f1.indexOf('rv-tag') >= 0 && f1.indexOf('rv-tag-a') >= 0, true));
+      tests.push(eq('RV03: bullet→rv-list', f1.indexOf('<ul class="rv-list">') >= 0 && f1.indexOf('<li>') >= 0, true));
+      tests.push(eq('RV03: 粗体→strong', f1.indexOf('<strong>重点</strong>') >= 0, true));
+      tests.push(eq('RV03: XSS转义无裸img', f1.indexOf('<img') < 0 && f1.indexOf('&lt;img') >= 0, true));
+      tests.push(eq('RV03: 空内容→占位', R.recFormatView('   \n\n '), '<div class="rv-empty">（暂无内容）</div>'));
+      tests.push(eq('RV03: 中文编号识别', R.recFormatView('一、总述').indexOf('<b>一、</b>') >= 0, true));
+
+      var btnRV = tstRV.querySelector('.rec-mode-btn');
+      taRV.value = '第一段内容\n\n1、要点甲';
+      btnRV.click();
+      tests.push(eq('RV04: 点击进阅读态', panelRV.classList.contains('reading'), true));
+      tests.push(eq('RV04: 按钮变编辑', btnRV.textContent, '编辑'));
+      tests.push(eq('RV04: view渲染编号', tstRV.querySelector('.rec-view').innerHTML.indexOf('rv-num') >= 0, true));
+      tests.push(eq('RV04: 模式记忆落键', localStorage.getItem('bz_rec_read_mode'), '1'));
+      taRV.value = '编辑后的新内容';
+      taRV.dispatchEvent(new Event('input', { bubbles: true }));
+      tests.push(eq('RV04: 阅读态编辑实时同步', tstRV.querySelector('.rec-view').innerHTML.indexOf('编辑后的新内容') >= 0, true));
+      btnRV.click();
+      tests.push(eq('RV04: 再点退出阅读态', panelRV.classList.contains('reading'), false));
+      tests.push(eq('RV04: 按钮变回阅读', btnRV.textContent, '阅读'));
+      tests.push(eq('RV04: 退出清模式键', localStorage.getItem('bz_rec_read_mode'), null));
+
+      localStorage.setItem('bz_rec_read_mode', '1');
+      tstRV2 = document.createElement('div');
+      tstRV2.id = 'tst-recview2';
+      tstRV2.style.display = 'none';
+      document.body.appendChild(tstRV2);
+      R.renderChart(pdRV, undefined, 'tst-recview2');
+      var panelRV2 = tstRV2.querySelector('.record-panel');
+      tests.push(eq('RV05: 记忆恢复自动进阅读态', panelRV2.classList.contains('reading'), true));
+      tests.push(eq('RV05: 恢复后按钮为编辑', tstRV2.querySelector('.rec-mode-btn').textContent, '编辑'));
+    } finally {
+      try {
+        if (savedReadMode === null) localStorage.removeItem('bz_rec_read_mode'); else localStorage.setItem('bz_rec_read_mode', savedReadMode);
+        localStorage.removeItem(keyRV);
+        window._paipanData = oldPdRV;
+        if (tstRV && tstRV.parentNode) tstRV.parentNode.removeChild(tstRV);
+        if (tstRV2 && tstRV2.parentNode) tstRV2.parentNode.removeChild(tstRV2);
+      } catch (e) {}
+      tests.push(eq('RV 现场还原: 模式键与草稿清理', (function() {
+        return localStorage.getItem(keyRV) === null && localStorage.getItem('bz_rec_read_mode') === savedReadMode;
+      })() ? 'Y' : 'N', 'Y'));
+    }
+  })();
+
   // ===== SN15 v0.83.3 录音状态机加固：真实 state 分派+幽灵清理+预期结束标记（onerror/track ended/巡检兜底走 E2E）=====
   (function() {
     tests.push({ section: '录音状态机加固(SN15)' });

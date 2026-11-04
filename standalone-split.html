@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.94.0 | 2026-11-01 -->
+<!-- 八字排盘 ·  从真版 v0.95.0 | 2026-11-04 -->
+<!-- v0.95.0: 分析记录阅读模式 —— 「分析记录」角上加「阅读/编辑」切换，阅读态把纯文本智能排版（md 标题/编号行/问答标签/列表/粗体，连续空行规整统一段距，15.5px·2.05 行距）；编辑态行距 1.7→2.0、字号 14→14.5px；粘贴自动规整（压空行、清行尾空白）；阅读偏好记忆跨会话 -->
 <!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
 <!-- v0.90.0: AI 搜索条件树可视化 —— 状态条下可展开查看 AI 解析出的每一项条件，支持就地改参数（含四柱/七柱/大运范围切换）、删除单条、还原 AI 原始条件 -->
 <!-- v0.91.0: 柱间关系六类落地（刑/害/破/暗合/伏吟/反吟）—— 新增 pair 条件查命局内部两柱关系，interact 的 rel 同步扩展；多柱联动（如「大运冲月柱且流年合日支」）用 and 组合即成立；档案弹窗改为随视口自适应 min(880px,88vh)，列表可显示行数由 4.5 行提到 9~13 行 -->
@@ -479,10 +480,33 @@
   .rec-dim-addbtn { padding:4px 12px; font-size:12px; border:1px solid var(--c-line); background:var(--c-paper); color:var(--c-ink); border-radius:2px; cursor:pointer; }
   .rec-dim-addbtn:hover { border-color:var(--c-gray); }
   .rec-dim-hint { font-size:11px; color:var(--c-gray); margin-top:8px; line-height:1.5; }
-  .rec-text { min-height:360px; max-height:max(360px, calc(100dvh - 140px)); border:none; outline:none; resize:none; overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:var(--c-gray) transparent; padding:18px 12px; font-family:var(--font-body); font-size:14px; line-height:1.7; color:var(--c-ink); background:transparent; }
+  .rec-text { min-height:360px; max-height:max(360px, calc(100dvh - 140px)); border:none; outline:none; resize:none; overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:var(--c-gray) transparent; padding:18px 14px; font-family:var(--font-body); font-size:14.5px; line-height:2.0; letter-spacing:.02em; color:var(--c-ink); background:transparent; }
   .rec-text::-webkit-scrollbar { width:8px; }
   .rec-text::-webkit-scrollbar-thumb { background:var(--c-gray); border:2px solid var(--c-paper); border-radius:4px; }
   .rec-text::-webkit-scrollbar-track { background:transparent; }
+  /* v0.95.0 分析记录阅读模式 */
+  .rec-mode-btn { padding:2px 8px; font-size:11px; font-family:var(--font-body); color:var(--c-gray); background:none; border:0.5px solid var(--c-line); border-radius:2px; cursor:pointer; letter-spacing:.05em; }
+  .rec-mode-btn:hover { color:var(--c-ink); border-color:var(--c-ink); }
+  .rec-mode-btn.on { color:#fff; background:#c9a96e; border-color:#c9a96e; }
+  .record-panel.reading .rec-text { display:none; }
+  .rec-view { display:none; min-height:360px; max-height:max(360px, calc(100dvh - 140px)); overflow-x:hidden; overflow-y:auto; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:var(--c-gray) transparent; padding:20px 18px; font-family:var(--font-body); font-size:15.5px; line-height:2.05; letter-spacing:.02em; color:var(--c-ink); }
+  .rec-view::-webkit-scrollbar { width:8px; }
+  .rec-view::-webkit-scrollbar-thumb { background:var(--c-gray); border:2px solid var(--c-paper); border-radius:4px; }
+  .record-panel.reading .rec-view { display:block; }
+  .rec-view p { margin:0 0 1em; }
+  .rec-view .rv-h { font-family:var(--font-display); font-weight:600; font-size:15px; letter-spacing:.06em; margin:1.5em 0 .6em; }
+  .rec-view .rv-h:first-child { margin-top:0; }
+  .rec-view .rv-h.rv-h2 { font-size:16.5px; border-left:3px solid #c9a96e; padding-left:9px; }
+  .rec-view ul.rv-list { margin:0 0 1em; padding-left:1.1em; }
+  .rec-view ul.rv-list li { margin:0 0 .45em; padding-left:.2em; }
+  .rec-view .rv-num { margin:0 0 .45em; padding-left:1.9em; text-indent:-1.9em; }
+  .rec-view .rv-num b { color:#8a6d3b; font-weight:600; margin-right:.25em; }
+  .rec-view .rv-qa { margin:0 0 .5em; }
+  .rec-view .rv-tag { display:inline-block; font-size:11px; line-height:1.5; padding:0 6px; margin-right:7px; border-radius:2px; background:rgba(201,169,110,.16); color:#8a6d3b; vertical-align:1px; }
+  .rec-view .rv-tag.rv-tag-a { background:rgba(90,130,100,.16); color:#3d6b4f; }
+  .rec-view strong { font-weight:600; }
+  .rec-view .rv-empty { color:var(--c-gray); font-size:13px; }
+  .record-panel.cmp-rec .rec-view { min-height:140px; max-height:34dvh; }
   .rec-audio { border-top:0.5px solid var(--c-line); padding:8px 10px 10px; flex:0 0 auto; }
   .rec-audio-bar { display:flex; align-items:center; gap:8px; }
   .rec-audio-btn { padding:3px 12px; background:var(--c-paper); color:var(--c-ink); border:1px solid var(--c-line); border-radius:2px; cursor:pointer; font-size:12px; font-family:var(--font-display); }
