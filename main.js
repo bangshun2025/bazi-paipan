@@ -6667,6 +6667,72 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.96.0 AI 搜索三垣十神组合：柱位指三垣自动升七柱 / 藏干口径 / 别名 / dayun十神 =====
+  (function () {
+    var sec = 'AI搜索三垣十神组合(v0.96.0)';
+    tests.push({ section: sec });
+    try {
+      if (!window.RENDER_AI || !RENDER_AI.debugCondSet || !RENDER_AI.aiMatch) {
+        tests.push(fail(sec + ' 前置', 'RENDER_AI 测试钩子缺失'));
+        return;
+      }
+      // 日主甲木：时干庚=七杀；胎元庚寅（干庚=七杀）；命宫辛丑（干辛=正官，丑藏己癸辛，本气己=正财）；
+      // 身宫壬巳（干壬=枭神，巳本气丙=食神，巳藏丙庚戊→庚=七杀）；大运第4步甲申（支申与胎元寅六冲）
+      var FX = {
+        id: 't96a', name: '测试96甲', gender: '男',
+        bazi: { nian: { gan: '丙', zhi: '寅' }, yue: { gan: '己', zhi: '亥' }, ri: { gan: '甲', zhi: '子' }, shi: { gan: '庚', zhi: '午' } },
+        sanyuan: { tai: { gan: '庚', zhi: '寅' }, ming: { gan: '辛', zhi: '丑' }, shen: { gan: '壬', zhi: '巳' } },
+        daYun: [
+          { gan: '庚', zhi: '午', startAge: 3, endAge: 12, startYear: 1999, endYear: 2008 },
+          { gan: '辛', zhi: '巳', startAge: 13, endAge: 22, startYear: 2009, endYear: 2018 },
+          { gan: '壬', zhi: '辰', startAge: 23, endAge: 32, startYear: 2019, endYear: 2028 },
+          { gan: '甲', zhi: '申', startAge: 33, endAge: 42, startYear: 2029, endYear: 2038 }
+        ],
+        year: 1996, month: 12, day: 6, hour: 12, min: 0
+      };
+      // 对照盘：胎元乙卯（干乙=劫财、卯藏乙）——「胎元有七杀」应不命中，防恒真
+      var FX2 = JSON.parse(JSON.stringify(FX));
+      FX2.id = 't96b'; FX2.name = '测试96乙';
+      FX2.sanyuan.tai = { gan: '乙', zhi: '卯' };
+      function m(q, a) { RENDER_AI.debugCondSet(q, 'v0.96 测试'); var r = RENDER_AI.aiMatch(a); RENDER_AI.aiClear(); return r; }
+      var nyMing = (typeof CONST !== 'undefined' && CONST.NAYIN && CONST.NAYIN['辛丑']) || '壁上土';
+      tests.push(eq(sec + ' 01: pillar胎元干支无scope自动七柱', m({ type: 'pillar', pos: '胎元', gz: '庚寅' }, FX), true));
+      tests.push(eq(sec + ' 02: shishen透胎元七杀无scope', m({ type: 'shishen', text: '七杀', where: 'gan', pos: '胎元' }, FX), true));
+      tests.push(eq(sec + ' 03: nayin命宫位', m({ type: 'nayin', text: nyMing, pos: '命宫' }, FX), true));
+      tests.push(eq(sec + ' 04: interact大运冲胎元b=胎元无bScope', m({ type: 'interact', a: '大运', b: '胎元', rel: 'chong' }, FX), true));
+      tests.push(eq(sec + ' 05: pair年胎同支无scope', m({ type: 'pair', a: '年', b: '胎元', rel: 'tong' }, FX), true));
+      tests.push(eq(sec + ' 06: zhi本气身宫不藏杀不中', m({ type: 'shishen', text: '七杀', where: 'zhi', pos: '身宫' }, FX), false));
+      tests.push(eq(sec + ' 07: cang藏干身宫中杀', m({ type: 'shishen', text: '七杀', where: 'cang', pos: '身宫' }, FX), true));
+      tests.push(eq(sec + ' 08: cang命宫无杀不中', m({ type: 'shishen', text: '七杀', where: 'cang', pos: '命宫' }, FX), false));
+      tests.push(eq(sec + ' 09: cang命宫藏正官中', m({ type: 'shishen', text: '正官', where: 'cang', pos: '命宫' }, FX), true));
+      tests.push(eq(sec + ' 10: 枭神透身宫七柱', m({ type: 'shishen', text: '枭神', where: 'gan', scope: 'seven' }, FX), true));
+      tests.push(eq(sec + ' 11: 别名偏印→枭神', m({ type: 'shishen', text: '偏印', where: 'gan', scope: 'seven' }, FX), true));
+      tests.push(eq(sec + ' 12: 十神scope=dayun运干七杀', m({ type: 'shishen', text: '七杀', where: 'gan', scope: 'dayun' }, FX), true));
+      tests.push(eq(sec + ' 13: 胎元有七杀or端到端', m({ op: 'or', conds: [
+        { type: 'shishen', text: '七杀', where: 'gan', pos: '胎元', scope: 'seven' },
+        { type: 'shishen', text: '七杀', where: 'cang', pos: '胎元', scope: 'seven' }
+      ] }, FX), true));
+      tests.push(eq(sec + ' 14: 胎元乙卯对照不中', m({ op: 'or', conds: [
+        { type: 'shishen', text: '七杀', where: 'gan', pos: '胎元', scope: 'seven' },
+        { type: 'shishen', text: '七杀', where: 'cang', pos: '胎元', scope: 'seven' }
+      ] }, FX2), false));
+      tests.push(eq(sec + ' 15: 显式seven胎元不回归', m({ type: 'shishen', text: '七杀', where: 'gan', pos: '胎元', scope: 'seven' }, FX), true));
+      tests.push(eq(sec + ' 16: 四柱pos时不受影响', m({ type: 'shishen', text: '七杀', where: 'gan', pos: '时' }, FX), true));
+      tests.push(eq(sec + ' 17: both行为不变', m({ type: 'shishen', text: '七杀', where: 'both' }, FX), true));
+      tests.push(eq(sec + ' 18: 日主判定与非恒真', m({ type: 'daymaster', gz: '甲' }, FX) + '/' + m({ type: 'daymaster', gz: '乙' }, FX), 'true/false'));
+      tests.push(eq(sec + ' 19: unsupported中性不否决', m({ op: 'and', conds: [
+        { type: 'shishen', text: '七杀', where: 'gan', pos: '胎元', scope: 'seven' },
+        { type: 'unsupported', need: '格局高低' }
+      ] }, FX), true));
+      tests.push(eq(sec + ' 20: 无pos条件不误升scope', m({ type: 'wuxing', wx: '水', min: 3 }, FX), false));
+      tests.push(eq(sec + ' 21: 显式seven五行含三垣', m({ type: 'wuxing', wx: '水', min: 3, scope: 'seven' }, FX), true));
+      var cv96 = (RENDER_AI.debugCondView || function () { return null; })({ type: 'shishen', text: '七杀', where: 'cang', pos: '胎元', scope: 'seven' });
+      tests.push(eq(sec + ' 22: 条件面板藏干文案', cv96 ? (cv96.detail.indexOf('藏干任一') >= 0 && cv96.detail.indexOf('七柱') >= 0) : 'NA', true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

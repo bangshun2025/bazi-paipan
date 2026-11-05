@@ -1,3 +1,17 @@
+## v0.96.0（2026-11-05）
+档案 AI 搜索·三垣（胎元/命宫/身宫）条件全面打通：「胎元中有七杀」这类话终于搜得出
+
+- **背景**（邦顺）：搜「胎元中有七杀」结果为空。审计发现三垣柱位零件（POS_MAP7 七柱 scope、pos=三垣、藏干表）在 v0.88.1 就都建好了，但没装在一起——十神条件 pos=三垣时柱集仍是四柱，三垣柱根本不在集合里，条件静默恒 false 且无任何告警
+- **完全分类审计后共修 5 类**：
+  - **A 静默失败×3**：matchCond 入口新增 `condTouchesYuan`（pos/b/a 指向三垣判定）——scope 缺省而柱位指向三垣时自动升 seven；interact 的 b、pair 的 a 同理（bScopeX/scopeP）。此前这类条件全部静默 false
+  - **B 十神口径补全**：shishen 新增 `where:'cang'`（藏干任一命中，含本气中余气）；日主 riGan 恒从四柱取（原实现 scope=dayun 时从大运序列找「日」柱得空串，条件恒 false）；SS_ALIAS 补 偏印/枭印/枭→枭神、杀→七杀
+  - **C 真 bug·纳音**：nayin 条件自 v0.88.1 起恒 false——`typeof NAYIN === 'undefined'` 恒真（顶层 const 不挂 window），改走 `CONST.NAYIN`（NY96）。纳音搜索从上线起就从未工作过
+  - **D prompt 教学**：SYSTEM_PROMPT 补三垣柱位、单垣无 scope 触发词、藏干术语（本气/藏干任一）、合并称谓拆解等六处 + 4 条 few-shot（「胎元中有七杀」→ 透出or藏干 or 组合、「命宫藏正印」cang、「大运天干透七杀」dayun、身宫干支）
+  - **E 可视化**：condView 十神/纳音行显示范围前缀（四柱/七柱/大运）与柱位，params 补 scope/pos 可改
+- **回归**：main.js 新增 22 条断言（debugCondSet+aiMatch 直测引擎，fixture 含身宫巳藏庚 vs 本气丙的对照盘）：三垣自动升 scope×5、cang/zhi 口径对比×4、偏印别名、dayun 日主、or 端到端+乙卯反例防恒真、静默失败回归×7、面板文案。**1943 条全绿**（1921+22）；六门禁过，index ≡ standalone md5 `26aec8f0bf731752b79cf609369f3896`
+- **真实库端到端**（file:// 本地版，34 档案）：「胎元中有七杀」（透出or藏干）命中 8 档案（卢敏姣胎元戊申藏庚打头），列表过滤+摘要条+条件面板正常；aiClear 后列表恢复 34 行，现场已清理
+- **遗留观察**：LLM 若输出缺 `type` 字段的畸形条件（如 `{shishen:'七杀'}`），matchQuery 会静默 return false 表现为「未找到匹配档案」，无告警——畸形 JSON 兜底告警记为后续可选改进
+
 ## v0.95.0（2026-11-04）
 分析记录阅读模式：从「编辑器」到「阅读器」
 

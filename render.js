@@ -6739,6 +6739,16 @@ function cmpSetState(entries) {
   var POS_MAP7 = { '年':'年','月':'月','日':'日','时':'时','胎元':'胎元','命宫':'命宫','身宫':'身宫',
                    '胎':'胎元','命':'命宫','身':'身宫','tai':'胎元','ming':'命宫','shen':'身宫' };
   function posOf(v) { return v ? (POS_MAP7[v] || POS_MAP[v] || null) : null; }
+  // v0.96.0 条件的柱位/目标柱指向三垣时，四柱集里没有该柱——判定出来供自动升七柱
+  function condTouchesYuan(c) {
+    if (!c || typeof c !== 'object') return false;
+    var ks = ['pos', 'b', 'a'];
+    for (var i = 0; i < ks.length; i++) {
+      var p = posOf(c[ks[i]]);
+      if (p === '胎元' || p === '命宫' || p === '身宫') return true;
+    }
+    return false;
+  }
   var _aiQuery = null, _aiSummary = '', _aiBusy = false, _bar = null;
   var _aiWarn = [], _aiText = '';
 
@@ -7009,7 +7019,7 @@ function cmpSetState(entries) {
     ['fanyin','天克地冲'],['tong','同地支'],['sameGz','同干支'],['sameGan','同天干'],['sanhe','三合'],['sanhui','三会']];
   var CROSS_POS_OPTS = [['年','年柱'],['月','月柱'],['日','日柱'],['时','时柱']];
   var SS_OPTS = [['比肩','比肩'],['劫财','劫财'],['食神','食神'],['伤官','伤官'],['枭神','枭神'],['正印','正印'],['偏财','偏财'],['正财','正财'],['七杀','七杀'],['正官','正官']];
-  var WHERE_OPTS = [['gan','天干透出'],['zhi','地支本气'],['both','干支都算']];
+  var WHERE_OPTS = [['gan','天干透出'],['zhi','地支本气'],['both','干支都算'],['cang','藏干任一']];
   var GENDER_OPTS = [['男','男'],['女','女']];
   var AB_OPTS = [['流年','流年'],['大运','大运']];
   var IN_OPTS = [['notes','分析记录'],['rec','录音转录'],['both','两者都查']];
@@ -7061,11 +7071,11 @@ function cmpSetState(entries) {
       v.label = '日主'; v.detail = '日主 = ' + (c.gz || '');
       v.params = [{ k: 'gz', lab: '天干', t: 'txt' }];
     } else if (t === 'shishen') {
-      v.label = '十神'; v.detail = '「' + (c.text || '') + '」' + (c.where === 'zhi' ? '地支本气' : (c.where === 'both' ? '干支都算' : '天干透出')) + ' ≥ ' + mn(c.min, 1);
-      v.params = [{ k: 'text', lab: '十神', t: 'sel', opts: SS_OPTS }, { k: 'where', lab: '位置', t: 'sel', opts: WHERE_OPTS }, { k: 'pos', lab: '柱位', t: 'sel', opts: POS_OPTS }, minP];
+      v.label = '十神'; v.detail = scTxt + '「' + (c.text || '') + '」' + (c.where === 'zhi' ? '地支本气' : (c.where === 'both' ? '干支都算' : (c.where === 'cang' ? '藏干任一' : '天干透出'))) + (c.pos ? (' @ ' + (posOf(c.pos) || c.pos)) : '') + ' ≥ ' + mn(c.min, 1);
+      v.params = [{ k: 'text', lab: '十神', t: 'sel', opts: SS_OPTS }, { k: 'where', lab: '位置', t: 'sel', opts: WHERE_OPTS }, { k: 'pos', lab: '柱位', t: 'sel', opts: POS_OPTS }, minP, sco];
     } else if (t === 'nayin') {
-      v.label = '纳音'; v.detail = '纳音含「' + (c.text || '') + '」';
-      v.params = [{ k: 'text', lab: '纳音', t: 'txt' }];
+      v.label = '纳音'; v.detail = scTxt + '纳音含「' + (c.text || '') + '」' + (c.pos ? (' @ ' + (posOf(c.pos) || c.pos)) : '');
+      v.params = [{ k: 'text', lab: '纳音', t: 'txt' }, { k: 'pos', lab: '柱位', t: 'sel', opts: POS_OPTS }, sco];
     } else if (t === 'year_gz') {
       v.label = '年柱'; v.detail = '年柱 = ' + (c.gz || '');
       v.params = [{ k: 'gz', lab: '干支', t: 'txt' }];
@@ -7303,7 +7313,7 @@ function cmpSetState(entries) {
     if (ke[tw] === dw) return yy ? '七杀' : '正官';
     return '?';
   }
-  var SS_ALIAS = { '偏官':'七杀', '七煞':'七杀' };
+  var SS_ALIAS = { '偏官':'七杀', '七煞':'七杀', '偏印':'枭神', '枭印':'枭神', '枭':'枭神', '杀':'七杀' };
 
   // 单条件求值。a=档案，pls=四柱（可为 null），c=条件
   function matchCond(a, pls, c) {
@@ -7314,7 +7324,9 @@ function cmpSetState(entries) {
     // 那样命中恒为 0，用户会误以为「没有这样的命盘」。告警交给 UI 黄条。
     if (t === 'unsupported') return true;
     // v0.89.0 scope 分层：four=四柱（默认）/ seven=七柱（含三垣）/ dayun=大运
+    // v0.96.0 柱位指向三垣（pos/b/a=胎元/命宫/身宫）而 scope 缺省时自动升 seven：此前四柱集里没有该柱，条件恒 false 且无告警
     var scope = c.scope || 'four';
+    if (scope === 'four' && condTouchesYuan(c)) scope = 'seven';
     if (scope === 'seven' || scope === 'dayun') pls = plsFor(a, scope);
     var pls4 = (scope === 'four') ? pls : pillarsOf(a);
     if (t === 'name') {
@@ -7372,30 +7384,39 @@ function cmpSetState(entries) {
       for (i = 0; i < pls4.length; i++) if (pls4[i].pos === '日') return pls4[i].gan === c.gz;
       return false;
     }
-    // v0.88.1 十神条件：{"type":"shishen","text":"七杀","where":"gan|zhi|both","pos":"年|月|日|时","min":1}
-    // where 默认 gan（透出天干）；zhi=地支本气十神；both=干支都算
+    // v0.88.1 十神条件：{"type":"shishen","text":"七杀","where":"gan|zhi|both|cang","pos":"年|月|日|时|胎元|命宫|身宫","min":1}
+    // where 默认 gan（透出天干）；zhi=地支本气十神；both=干支都算；cang=藏干任一（含本气，v0.96.0）
     if (t === 'shishen') {
       var want = SS_ALIAS[c.text] || c.text;
       var riGan = '';
-      for (i = 0; i < pls.length; i++) if (pls[i].pos === '日') riGan = pls[i].gan;
+      // v0.96.0 日主恒从四柱取：scope=dayun 时 pls 已换成大运序列，从 pls 找日柱会得空串导致恒 false
+      for (i = 0; i < pls4.length; i++) if (pls4[i].pos === '日') riGan = pls4[i].gan;
       if (!riGan) return false;
       var where = c.where || 'gan';
       var pos4 = c.pos ? posOf(c.pos) : null;
       var ZM = (typeof CONST !== 'undefined' && CONST.ZHI_MAIN) ? CONST.ZHI_MAIN : {};
+      var CG = (typeof CONST !== 'undefined' && CONST.CANG_GAN) ? CONST.CANG_GAN : {};
       cnt = 0;
       for (i = 0; i < pls.length; i++) {
         if (pos4 && pls[i].pos !== pos4) continue;
         if ((where === 'gan' || where === 'both') && aiShiShen(riGan, pls[i].gan) === want) { cnt++; continue; }
         if ((where === 'zhi' || where === 'both') && ZM[pls[i].zhi] && aiShiShen(riGan, ZM[pls[i].zhi]) === want) cnt++;
+        if (where === 'cang' && CG[pls[i].zhi]) {
+          var cgArr = CG[pls[i].zhi];
+          for (var ci2 = 0; ci2 < cgArr.length; ci2++) {
+            if (aiShiShen(riGan, cgArr[ci2]) === want) { cnt++; break; }
+          }
+        }
       }
       return cnt >= (c.min || 1);
     }
     if (t === 'nayin') {
-      if (typeof NAYIN === 'undefined') return false;
+      // v0.96.0 改走 CONST.NAYIN：本 IIFE 作用域无 NAYIN（const 不挂 window），typeof 恒 undefined 导致纳音条件自 v0.88.1 起恒 false
+      var NY96 = (typeof CONST !== 'undefined' && CONST.NAYIN) ? CONST.NAYIN : {};
       var pos2 = c.pos ? posOf(c.pos) : null;
       return pls.some(function(p) {
         if (pos2 && p.pos !== pos2) return false;
-        var ny = NAYIN[gzName(p)];
+        var ny = NY96[gzName(p)];
         return !!ny && String(ny).indexOf(c.text || '') >= 0;
       });
     }
@@ -7476,7 +7497,10 @@ function cmpSetState(entries) {
     if (t === 'interact') {
       var relX = c.rel || 'chong';
       var bPosX = posOf(c.b || '日');
-      var bPlsX = plsFor(a, c.bScope || 'four');
+      // v0.96.0 b 指向三垣而 bScope 缺省时自动升 seven（同 matchCond 入口口径）
+      var bScopeX = c.bScope || 'four';
+      if (bScopeX === 'four' && (bPosX === '胎元' || bPosX === '命宫' || bPosX === '身宫')) bScopeX = 'seven';
+      var bPlsX = plsFor(a, bScopeX);
       if (!bPlsX) return false;
       var tgtX = null;
       for (i = 0; i < bPlsX.length; i++) if (bPlsX[i].pos === bPosX) { tgtX = bPlsX[i]; break; }
@@ -7512,7 +7536,10 @@ function cmpSetState(entries) {
     // a/b 可省略（省略 = 范围内任意两柱）；rel 同 interact，另支持 xing/hai/po/anhe/fuyin/fanyin
     if (t === 'pair') {
       var relP = c.rel || 'xing';
-      var plsP = plsFor(a, c.scope || 'four');
+      // v0.96.0 a/b 指向三垣而 scope 缺省时自动升 seven（同 matchCond 入口口径）
+      var scopeP = c.scope || 'four';
+      if (scopeP === 'four' && condTouchesYuan(c)) scopeP = 'seven';
+      var plsP = plsFor(a, scopeP);
       if (!plsP) return false;
       var posA = c.a ? posOf(c.a) : null;
       var posB = c.b ? posOf(c.b) : null;
@@ -7764,13 +7791,15 @@ function cmpSetState(entries) {
     '起运 = 出生后多久交运（岁数/年月）与交运年份。',
     '流年 = 某一公历年份对应的干支（如 2026 = 丙午）。',
     '三会局 = 寅卯辰、巳午未、申酉戌、亥子丑 三支齐全。三合局 = 申子辰、亥卯未、寅午戌、巳酉丑 三支齐全。',
-    '透出 = 天干上出现（where="gan"）。本气十神 = 地支主气所对应的十神（where="zhi"）。',
+    '透出 = 天干上出现（where="gan"）。本气十神 = 地支主气所对应的十神（where="zhi"）。藏干十神 = 地支藏干（含本气、中气、余气）中任一位对应的十神（where="cang"）——用户说「藏干里有」「支中藏」「地支暗藏」时用 cang。',
+    '合并称谓拆解：官杀 = 正官或七杀、印星/印 = 正印或枭神（偏印）、比劫 = 比肩或劫财、财星 = 正财或偏财、食伤 = 食神或伤官——一律拆成 or 组合里的两条同类条件，不要输出 unsupported。',
     '',
     '【scope 分层】所有柱类条件都可带 scope 字段：',
     '  "four"（默认）= 只看四柱；',
     '  "seven" = 看七柱（四柱+三垣）；',
-    '  "dayun" = 看大运干支（此时 branch/stem/gz/same_* 在大运序列里统计）。',
+    '  "dayun" = 看大运干支（此时 branch/stem/gz/same_*/shishen 在大运序列里统计，十神按大运干支对日主计）。',
     '用户没有明确说七柱/三垣时，一律用默认 four，不要擅自加三垣。',
+    '例外——用户点名任一垣（胎元/命宫/身宫单独出现，如「胎元中有七杀」「命宫有正印」「身宫是乙卯」）时：柱类条件的 pos 直接写该垣名（如 pos:"胎元"），并且 scope 必须写 "seven"；interact 的 b 或 pair 的 a/b 写垣名时同理（bScope/scope 写 "seven"）。',
     '',
     '【能力清单】条件类型（type）：',
     '{"type":"name","text":"关键词"} — 姓名/昵称/艺名包含',
@@ -7785,8 +7814,8 @@ function cmpSetState(entries) {
     '{"type":"same_branch","min":2} — 有 ≥ min 柱地支相同',
     '{"type":"wuxing","wx":"金","min":4} — 某五行（木火土金水）个数 ≥ min（按天干+地支本气计）',
     '{"type":"daymaster","gz":"甲"} — 日主为某天干（固定取日柱）',
-    '{"type":"shishen","text":"七杀","where":"gan","min":1} — 十神条件。text 用标准名（比肩/劫财/食神/伤官/枭神/正印/偏财/正财/七杀/正官）；where: gan=透出天干（默认）、zhi=地支本气、both=干支都算；pos 可限定柱位',
-    '{"type":"nayin","text":"涧下水"} — 纳音名包含',
+    '{"type":"shishen","text":"七杀","where":"gan","min":1} — 十神条件。text 用标准名（比肩/劫财/食神/伤官/枭神/正印/偏财/正财/七杀/正官）；where: gan=透出天干（默认）、zhi=地支本气、both=干支都算、cang=藏干任一（含中余气）；pos 可选 年/月/日/时/胎元/命宫/身宫',
+    '{"type":"nayin","text":"涧下水","pos":"日"} — 纳音名包含。pos 可选 年/月/日/时/胎元/命宫/身宫，可省略',
     '{"type":"year_gz","gz":"丙午"} — 年柱干支（固定取年柱）',
     '{"type":"sanhui","gz":"寅卯辰","scope":"seven"} — 三会局三支齐全。gz 可省略（任意三会局），也可写五行（如"木"）',
     '{"type":"sanhe","gz":"申子辰","scope":"seven"} — 三合局三支齐全，用法同上',
@@ -7825,7 +7854,11 @@ function cmpSetState(entries) {
     '「年柱和日柱相刑的」→ {"summary":"年柱与日柱地支相刑的命盘","query":{"type":"pair","rel":"xing","a":"年","b":"日"}}',
     '「四柱里有六害的」→ {"summary":"四柱地支之间存在六害的命盘","query":{"type":"pair","rel":"hai"}}',
     '「大运冲月柱且流年合日支的」→ {"summary":"任何一步大运冲月柱，且 2026 年流年六合日支","query":{"op":"and","conds":[{"type":"interact","a":"大运","b":"月","rel":"chong"},{"type":"interact","a":"流年","year":2026,"b":"日","rel":"he"}]}}',
-    '「找婚姻不好的」→ {"summary":"婚姻吉凶属于评价性判断，当前只能按结构或记录检索，例如「分析记录里提到婚姻」","query":{"type":"unsupported","need":"婚姻吉凶评价"}}'
+    '「找婚姻不好的」→ {"summary":"婚姻吉凶属于评价性判断，当前只能按结构或记录检索，例如「分析记录里提到婚姻」","query":{"type":"unsupported","need":"婚姻吉凶评价"}}',
+    '「胎元中有七杀的」→ {"summary":"胎元干支十神含七杀（透出或藏干）的命盘","query":{"op":"or","conds":[{"type":"shishen","text":"七杀","where":"gan","pos":"胎元","scope":"seven"},{"type":"shishen","text":"七杀","where":"cang","pos":"胎元","scope":"seven"}]}}',
+    '「命宫藏正印的」→ {"summary":"命宫地支藏干中有正印的命盘","query":{"type":"shishen","text":"正印","where":"cang","pos":"命宫","scope":"seven"}}',
+    '「大运天干透七杀的」→ {"summary":"任意一步大运天干对日主为七杀","query":{"type":"shishen","text":"七杀","scope":"dayun"}}',
+    '「身宫是乙卯的」→ {"summary":"身宫干支为乙卯的命盘","query":{"type":"pillar","pos":"身宫","gz":"乙卯","scope":"seven"}}'
   ].join('\n');
 
   // 跨盘段按开关动态拼：关着时明确告诉模型「别输出 cross」
