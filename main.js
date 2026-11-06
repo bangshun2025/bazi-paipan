@@ -724,9 +724,11 @@ function genAiSystemPrompt() {
     'scope：four=只看四柱；seven=七柱（四柱＋胎元/命宫/身宫）。',
     '',
     '可用条件（id 必填）：',
-    '{"id":"root","mode":"none|any|all|count","scope":"four|seven","pos":null,"min":1}  通根',
+    '{\"id\":\"root\",\"mode\":\"none|any|all|count\",\"scope\":\"four|seven\",\"pos\":null,\"min\":1}  通根',
     '  有根＝天干五行出现在地支藏干里（本气/中气/余气同五行都算）。none=全部无根，all=每一个都有根，any=至少一个有根，count=有根的天干数≥min。',
-    '{"id":"tou","n":2,"exact":false,"pos":null}  地支藏干透到天干，n=透出个数下限，exact=正好这么多个',
+    '  流年/大运口径加 \"where\":\"liunian|dayun|both\" —— 改成看这一根天干在那个柱的地支藏干里有没有同五行；pos 缺省=2（日干）。',
+    '{\"id\":\"touc\",\"pos\":2,\"layer\":\"ben|zhong|yu|any\",\"to\":\"liunian|dayun|both\",\"mode\":\"any|all\"}  某柱地支的藏干透到流年/大运的天干（层缺省 any，pos 缺省 2=日支）',
+    '{\"id\":\"tou\",\"n\":2,\"exact\":false,\"pos\":null}  地支藏干透到天干，n=透出个数下限，exact=正好这么多个',
     '{"id":"toumax"}  一支藏干透出最多（极值）',
     '{"id":"quan","pos":null}  某柱藏干全部透干',
     '{"id":"shishen","targets":["七杀"],"n":1,"exact":false,"pos":null}  天干十神',
@@ -739,14 +741,19 @@ function genAiSystemPrompt() {
     '{"id":"sanhui"}  三会方；{"id":"wuhe"}  天干五合；{"id":"guansha"}  官杀混杂',
     '{"id":"shishang"}  食伤生财；{"id":"guanyin"}  官印相生；{"id":"liuchong"}  地支相冲',
     '{"id":"and","parts":[{...},{...}]}  多个条件同时成立',
-    '最外层还可以带 "not":["liuchong"] 表示排除地支相冲。',
+    '最外层还可以带 \"not\":[\"liuchong\"] 表示排除地支相冲。',
+    '流年/大运锚点也放最外层：\"lyYear\":2028=指定流年公历年，\"lyAge\":32=指定虚岁（二者都省略＝今年）；\"dyStep\":3=指定第几步大运（省略＝流年当年所行那一步）。',
     '',
     '例子：',
     '「七柱天干全盘无根」→ {"summary":"七柱含胎元命宫身宫，七个天干都没有根","spec":{"id":"root","mode":"none","scope":"seven"}}',
     '「日主无根而且地支见子」→ {"summary":"日干无根且地支有子","spec":{"id":"and","parts":[{"id":"root","mode":"none","pos":2},{"id":"branches","set":["子"]}]}}',
     '「月柱七杀，且不要相冲」→ {"summary":"月干是七杀，排除地支相冲","spec":{"id":"shishen","targets":["七杀"],"n":1,"pos":1,"not":["liuchong"]}}',
     '「八字里一个木都没有」→ {"summary":"四柱天干地支里没有木","spec":{"id":"wx","wxs":["木"],"where":"any","mode":"none"}}',
-    '「寅透甲丙戊」→ {"summary":"寅的藏干甲丙戊都透到天干","spec":{"id":"brtou","br":"寅","gans":["甲","丙","戊"]}}',
+    '「寅透甲丙戊」→ {\"summary\":\"寅的藏干甲丙戊都透到天干\",\"spec\":{\"id\":\"brtou\",\"br\":\"寅\",\"gans\":[\"甲\",\"丙\",\"戊\"]}}',
+    '「日干在流年中有根」→ {\"summary\":\"日干五行出现在流年地支藏干里（今年）\",\"spec\":{\"id\":\"root\",\"mode\":\"any\",\"where\":\"liunian\",\"pos\":2}}',
+    '「日干在流年和大运中都有根」→ {\"summary\":\"日干在流年地支和当年所行大运地支的藏干里都有同五行\",\"spec\":{\"id\":\"root\",\"mode\":\"all\",\"where\":\"both\",\"pos\":2}}',
+    '「日支藏干本气在流年透出」→ {\"summary\":\"日支的本气藏干就是流年天干\",\"spec\":{\"id\":\"touc\",\"pos\":2,\"layer\":\"ben\",\"to\":\"liunian\"}}',
+    '「2028年日干在大运中有根」→ {\"summary\":\"2028年所行大运的地支藏干里，有日干同五行\",\"spec\":{\"id\":\"root\",\"mode\":\"any\",\"where\":\"dayun\",\"pos\":2,\"lyYear\":2028}}',
     '「婚姻好不好」→ {"unsupported":"吉凶评价算不出来，只能按结构找盘，例如「官杀混杂」或「日支被冲」"}',
     '',
     '只输出 JSON。不要编造字段。把握不准时用最接近的可用条件，并在 summary 里写明你的理解。'
@@ -771,8 +778,19 @@ function genAiNormalize(spec) {
   if (spec.id === 'root') {
     spec.mode = spec.mode || 'none';
     spec.scope = spec.scope === 'seven' ? 'seven' : 'four';
+    if (spec.where !== 'liunian' && spec.where !== 'dayun' && spec.where !== 'both') delete spec.where;
+    if (spec.where && !(spec.pos >= 0)) spec.pos = 2;
     if (spec.mode === 'count' && !(spec.min >= 1)) spec.min = 1;
   }
+  if (spec.id === 'touc') {
+    if (!(spec.pos >= 0)) spec.pos = 2;
+    if (['ben', 'zhong', 'yu', 'any'].indexOf(spec.layer) < 0) spec.layer = 'any';
+    if (spec.to !== 'dayun' && spec.to !== 'both') spec.to = 'liunian';
+    spec.mode = spec.mode === 'all' ? 'all' : 'any';
+  }
+  if (spec.lyYear != null) { spec.lyYear = parseInt(spec.lyYear, 10) || null; if (!spec.lyYear) delete spec.lyYear; }
+  if (spec.lyAge != null) { spec.lyAge = parseInt(spec.lyAge, 10) || null; if (!spec.lyAge) delete spec.lyAge; }
+  if (spec.dyStep != null) { spec.dyStep = parseInt(spec.dyStep, 10) || null; if (!spec.dyStep) delete spec.dyStep; }
   if (spec.id === 'and') {
     if (!spec.parts || !spec.parts.length) return null;
     for (var i = 0; i < spec.parts.length; i++) {
@@ -7510,6 +7528,79 @@ function captureScreenshot() {
       tests.push(eq(sec + ' 31: AI 提示词含五行分布',
         !!(genAiSystemPrompt().indexOf('"id":"wx"') >= 0 &&
            genAiSystemPrompt().indexOf('一个木都没有') >= 0), true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
+  // === v0.100.0 流年 · 大运口径 ===
+  (function() {
+    var sec = 'v0.100 流年/大运';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '流年 · 大运口径（v0.100.0）' });
+
+      // 自然语言 → 外部柱条件
+      var e1 = G.parse('日干在流年中有根');
+      tests.push(eq(sec + ' 01: 「日干在流年中有根」→ root/liunian', e1.id + '/' + e1.where, 'root/liunian'));
+      tests.push(eq(sec + ' 02: 外部柱口径默认锁日干', e1.pos, 2));
+      tests.push(eq(sec + ' 03: 「日干在大运中有根」→ dayun', G.parse('日干在大运中有根').where, 'dayun'));
+      var e2 = G.parse('日干在流年和大运中都有根');
+      tests.push(eq(sec + ' 04: 「流年和大运都有根」→ both/all', e2.where + '/' + e2.mode, 'both/all'));
+      var e3 = G.parse('日干在流年和大运中都无根');
+      tests.push(eq(sec + ' 05: 「两处都无根」→ none', e3.mode, 'none'));
+      var e4 = G.parse('日支藏干本气在流年透出');
+      tests.push(eq(sec + ' 06: 「日支本气透流年」→ touc/ben/liunian',
+        e4.id + '/' + e4.layer + '/' + e4.to, 'touc/ben/liunian'));
+      tests.push(eq(sec + ' 07: 藏透来源默认日支', e4.pos, 2));
+      tests.push(eq(sec + ' 08: 「2028年流年…」抽成流年锚点', G.parse('2028年流年日干有根').lyYear, 2028));
+      tests.push(eq(sec + ' 09: 「32岁那年…」抽成虚岁锚点', G.parse('32岁那年日干在流年有根').lyAge, 32));
+      tests.push(eq(sec + ' 10: 「第3步大运…」抽成大运步数', G.parse('第3步大运日干有根').dyStep, 3));
+      tests.push(eq(sec + ' 11: 老说法不带锚点', G.parse('七柱天干全盘无根').lyYear, undefined));
+
+      // 判据正确性：2000-01-01 03:00 = 己卯 丙子 戊午 甲寅，日干戊（土）
+      var ch = ALGO.paipan('', '男', 2000, 1, 1, 3, 0);
+      var ext = G.extOf(ch, {});
+      tests.push(eq(sec + ' 12: 今年流年 2026 丙午', ext.ly.year + ext.ly.gan + ext.ly.zhi, '2026丙午'));
+      tests.push(eq(sec + ' 13: 缺省取当年所行大运（第2步 甲戌）',
+        ext.dy.step + ext.dy.gan + ext.dy.zhi, '2甲戌'));
+      var m1 = G.matchAt('日干在流年中有根', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 14: 日干戊在流年午（藏丁己）有根', m1.ok, true));
+      tests.push(eq(sec + ' 15: 证据点明流年干支', !!(m1.ok && m1.evidence.indexOf('丙午') >= 0), true));
+      var m2 = G.matchAt('日干在大运中有根', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 16: 日干戊在第2步大运戌有根', m2.ok, true));
+      tests.push(eq(sec + ' 17: 同盘不满足「流年大运都无根」',
+        G.matchAt('日干在流年和大运中都无根', 2000, 1, 1, 3, '男').ok, false));
+      tests.push(eq(sec + ' 18: 日支午本气丁，2026 丙午不透',
+        G.matchAt('日支藏干本气在流年透出', 2000, 1, 1, 3, '男').ok, false));
+      var m4 = G.matchAt('2027年流年日支藏干本气透出', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 19: 2027 丁未，日支午本气丁透出', m4.ok, true));
+      tests.push(eq(sec + ' 20: 2027 证据含年与干支', !!(m4.ok && m4.evidence.indexOf('2027') >= 0), true));
+      tests.push(eq(sec + ' 21: 第3步大运癸酉，日干戊无根',
+        G.matchAt('第3步大运日干有根', 2000, 1, 1, 3, '男').ok, false));
+      var early = G.extOf(ALGO.paipan('', '男', 2024, 6, 1, 6, 0), { year: 2024 });
+      tests.push(eq(sec + ' 22: 流年早于起运 → 大运缺柱', early.dy === null, true));
+      tests.push(eq(sec + ' 23: 大运缺柱时判据不成立',
+        G.matchAt('2024年流年日干在大运中有根', 2024, 6, 1, 6, '男').ok, false));
+
+      // 扫描
+      var s1 = G.scan(G.parse('日干在流年中有根'), { gender: '男', startYear: 1960, endYear: 2026 });
+      tests.push(eq(sec + ' 24: 流年口径能扫出盘', s1.ok, true));
+      tests.push(eq(sec + ' 25: 扫描证据带流年干支', !!(s1.ok && s1.evidence.indexOf('流年') >= 0), true));
+      var s2 = G.scan(G.parse('日支藏干本气在流年大运都透出'), { gender: '女', startYear: 1960, endYear: 2026 });
+      tests.push(eq(sec + ' 26: 双透口径能扫出盘并给两处证据',
+        !!(s2.ok && s2.evidence.indexOf('大运') >= 0 && s2.evidence.indexOf('流年') >= 0), true));
+      tests.push(eq(sec + ' 27: AI 提示词含流年/大运口径',
+        !!(genAiSystemPrompt().indexOf('"where":"liunian|dayun|both"') >= 0 &&
+           genAiSystemPrompt().indexOf('"id":"touc"') >= 0 &&
+           genAiSystemPrompt().indexOf('lyYear') >= 0), true));
+      var nz = genAiNormalize({ id: 'root', mode: 'any', where: 'liunian' });
+      tests.push(eq(sec + ' 28: AI 返回外部柱条件补默认日干', nz.pos, 2));
+      tests.push(eq(sec + ' 29: AI 返回 touc 补默认层与去向',
+        genAiNormalize({ id: 'touc' }).layer + '/' + genAiNormalize({ id: 'touc' }).to, 'any/liunian'));
+      var y1 = G.parse('2028年流年日干在大运中有根');
+      tests.push(eq(sec + ' 30: 年份定语不抢判据对象（仍是大运口径）', y1.where + '/' + y1.lyYear, 'dayun/2028'));
+      tests.push(eq(sec + ' 31: 大运定语 + 流年判据 → liunian', G.parse('大运日干在流年中有根').where, 'liunian'));
     } catch (e) {
       tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
     }

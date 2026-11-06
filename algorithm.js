@@ -777,6 +777,61 @@ function buildShunLabel(shun, gender, nianGan) {
       return ctxOf7(four, yuan);
     }
 
+    // ---------- 流年 / 大运：命局之外的两根柱子 ----------
+    // 锚点 anchors：{year} 指定流年公历年，{age} 虚岁（出生年＋虚岁－1），都缺省＝今年；
+    // {step} 指定第几步大运，缺省＝流年当年所行那一步。
+    function extOf(full, anchors) {
+      anchors = anchors || {};
+      var lyYear = parseInt(anchors.year, 10);
+      if (!(lyYear >= 1000)) {
+        var age = parseInt(anchors.age, 10);
+        if (age >= 1) lyYear = full.y + age - 1;
+      }
+      if (!(lyYear >= 1000)) lyYear = new Date().getFullYear();
+      var gz = liuNianJZ(lyYear);
+      var ext = { ly: { year: lyYear, gan: gz.charAt(0), zhi: gz.charAt(1) },
+                  dy: null, dyWhy: '' };
+
+      var dy = full.daYun || [];
+      if (!dy.length) { ext.dyWhy = '该年不排大运'; return ext; }
+      var step = parseInt(anchors.step, 10);
+      var pick = null, k;
+      if (step >= 1 && step <= dy.length) {
+        pick = { step: step, gan: dy[step - 1].gan, zhi: dy[step - 1].zhi,
+                 startYear: dy[step - 1].startYear, startAge: dy[step - 1].startAge };
+      } else {
+        for (k = 0; k < dy.length; k++) {
+          if (lyYear >= dy[k].startYear && lyYear < dy[k].startYear + 10) {
+            pick = { step: k + 1, gan: dy[k].gan, zhi: dy[k].zhi,
+                     startYear: dy[k].startYear, startAge: dy[k].startAge };
+            break;
+          }
+        }
+        if (!pick) {
+          var jy = full.qiYun ? full.qiYun.jyYear : null;
+          ext.dyWhy = (jy && lyYear < jy) ? '流年时还没起运' : '流年超出已排大运范围';
+        }
+      }
+      ext.dy = pick;
+      return ext;
+    }
+
+    var EXT_NAME = { liunian: '流年', dayun: '大运', both: '流年和大运' };
+
+    // 外部柱（流年/大运）取用：where = liunian|dayun|both；缺柱返回不足，判据一律不成立
+    function extPools(ctx, where) {
+      var e = ctx.ext || {}, out = [], k;
+      if (where === 'liunian' || where === 'both') {
+        if (e.ly) out.push({ kind: 'ly', name: '流年' + e.ly.year, gan: e.ly.gan, zhi: e.ly.zhi });
+      }
+      if (where === 'dayun' || where === 'both') {
+        if (e.dy) out.push({ kind: 'dy', name: '第' + e.dy.step + '步大运', gan: e.dy.gan, zhi: e.dy.zhi });
+      }
+      return out;
+    }
+
+    function extWant(where) { return where === 'both' ? 2 : 1; }
+
     // four/yuan 都是 {gan,zhi}；st/br/ss 保持四柱（老判据只看四柱），
     // st7/br7/ss7 含三垣，供「七柱」「全盘」口径使用
     function ctxOf7(four, yuan) {
@@ -939,7 +994,40 @@ function buildShunLabel(shun, gender, nianGan) {
       return out;
     }
 
+    // 流年/大运口径的通根：只问「这根天干的五行，在那个外部柱的地支藏干里有没有同五行」
+    function rootExtTest(spec) {
+      var mode = spec.mode || 'any';
+      var where = spec.where;
+      var pos = spec.pos != null ? spec.pos : 2;
+      return function(ctx) {
+        var pools = extPools(ctx, where);
+        if (pools.length < extWant(where)) return null;
+        var stem = ctx.st7[pos], wx = WU_XING[stem];
+        var rooted = 0, parts = [], k, m;
+        for (k = 0; k < pools.length; k++) {
+          var p = pools[k], cg = CANG_GAN[p.zhi] || [], hit = null;
+          for (m = 0; m < cg.length; m++) if (WU_XING[cg[m]] === wx) { hit = cg[m]; break; }
+          if (hit) rooted++;
+          parts.push(p.name + ' ' + p.gan + p.zhi + '（' + p.zhi + '藏' + cg.join('') +
+                     '，' + (hit ? '见' + hit : '无' + wx) + '）');
+        }
+        var head = POS7[pos] + '干' + stem + '（' + wx + '）在';
+        var body = parts.join('；');
+        if (mode === 'none') {
+          if (rooted) return null;
+          return { evidence: head + body + ' → 无根', score: pools.length };
+        }
+        if (mode === 'all') {
+          if (rooted < pools.length) return null;
+          return { evidence: head + body + ' → 都有根', score: rooted };
+        }
+        if (!rooted) return null;
+        return { evidence: head + body + ' → 有根', score: rooted };
+      };
+    }
+
     function rootTest(spec) {
+      if (spec.where === 'liunian' || spec.where === 'dayun' || spec.where === 'both') return rootExtTest(spec);
       var mode = spec.mode || 'none';
       var n = spec.scope === 'seven' ? 7 : 4;
       var scopeTxt = n === 7 ? '七柱' : '四柱';
@@ -972,6 +1060,34 @@ function buildShunLabel(shun, gender, nianGan) {
         if (!rooted.length) return null;
         return { evidence: '天干有根 ' + rooted.length + ' 个（' + rooted.map(fmt).join('；') + '）',
                  score: rooted.length };
+      };
+    }
+
+    var LAYER_TXT = { ben: '本气', zhong: '中气', yu: '余气', any: '藏干' };
+    var LAYER_IDX = { ben: 0, zhong: 1, yu: 2 };
+
+    // 藏干透到命局之外（流年/大运天干）：日支本气透流年 这类说法
+    function touExtTest(spec) {
+      var from = spec.pos != null ? spec.pos : 2;
+      var layer = spec.layer || 'any';
+      var to = spec.to || 'liunian';
+      var needAll = spec.mode === 'all';
+      return function(ctx) {
+        var pools = extPools(ctx, to);
+        if (pools.length < extWant(to)) return null;
+        var zhi = ctx.br[from], cg = CANG_GAN[zhi] || [];
+        var pick = layer === 'any' ? cg.slice() : (cg[LAYER_IDX[layer]] ? [cg[LAYER_IDX[layer]]] : []);
+        if (!pick.length) return null;
+        var src = POS[from] + '支' + zhi + '藏' + cg.join('') + '，' + LAYER_TXT[layer] + pick.join('、');
+        var hits = [], k;
+        for (k = 0; k < pools.length; k++) {
+          if (pick.indexOf(pools[k].gan) >= 0) hits.push(pools[k].name + ' ' + pools[k].gan + pools[k].zhi);
+        }
+        if (!hits.length) return null;
+        if (needAll && hits.length < pools.length) return null;
+        return { evidence: src + ' → ' + hits.join('、') + ' 天干' +
+                          (hits.length > 1 ? '分别' : '') + '取' + pick.join('/') + '，透出',
+                 score: hits.length };
       };
     }
 
@@ -1102,6 +1218,21 @@ function buildShunLabel(shun, gender, nianGan) {
 
     function isExact(t) { return /正好|恰好|刚好|仅仅|仅有|只有|不多不少|正好有/.test(t); }
 
+    // 「在流年/大运里」这层外部柱范围。
+    // 「2028年流年日干在大运中有根」里流年只是年份定语，判据对象是紧跟「在/于/入」的那个柱。
+    function extWhereOf(t) {
+      if (/流年大运|大运流年/.test(t)) return 'both';
+      var ly = /流年|太岁/.test(t), dy = /大运|行运/.test(t);
+      if (ly && dy) {
+        var m = t.match(/(?:在|于|入|走|逢)\s*(流年|大运)/g);
+        if (m && m.length) return m[m.length - 1].indexOf('大运') >= 0 ? 'dayun' : 'liunian';
+        return /大运/.test(t.replace(/流年|太岁/g, '')) ? 'dayun' : 'liunian';
+      }
+      if (ly) return 'liunian';
+      if (dy) return 'dayun';
+      return null;
+    }
+
     var TG_ALIAS = [
       ['七杀','七杀'],['偏官','七杀'],['正官','正官'],['官星','正官'],
       ['伤官','伤官'],['食神','食神'],['偏印','枭神'],['枭神','枭神'],['枭印','枭神'],
@@ -1175,10 +1306,11 @@ function buildShunLabel(shun, gender, nianGan) {
       // 通根 / 无根（整盘 或 指定柱位）
       var negRoot = /无根|没根|没有根|不带根|全无根|根都没有|根都无|无根气|根气全无/.test(t);
       var posRoot = !negRoot && /有根|通根|扎根|得根|根气/.test(t);
-      if (negRoot || posRoot) {
+      var extWhere = extWhereOf(t);
+      if ((negRoot || posRoot) && !extWhere) {
         var rScope = /七柱|三垣|胎元|命宫|身宫/.test(t) ? 'seven' : 'four';
         var rPos = pos && pos.part !== '支' ? pos.i : null;
-        if (rPos == null && /日主|日元/.test(t)) rPos = 2;
+        if (rPos == null && /日主|日元|日干/.test(t)) rPos = 2;
         var rn = cnt(t);
         var rMode = negRoot ? 'none' : (rn ? 'count' : (/全部|都|全|皆|个个|每|各/.test(t) ? 'all' : 'any'));
         var rScopeTxt = rScope === 'seven' ? '七柱' : '四柱';
@@ -1195,6 +1327,43 @@ function buildShunLabel(shun, gender, nianGan) {
         if (rScope === 'seven') rDetail += '（七柱＝四柱＋胎元/命宫/身宫）';
         return { ok: true, id: 'root', mode: rMode, scope: rScope, pos: rPos,
                  min: rn || 1, label: rLabel, raw: t, detail: rDetail };
+      }
+
+      // 流年/大运口径的通根（日干在流年中有根 / 在大运中有根 / 两处都有根）
+      if (extWhere && /根/.test(t)) {
+        var ePos = pos && pos.part !== '支' ? pos.i : 2;
+        var eNeg = /无根|没根|没有根|不带根|根都没有|根都无/.test(t);
+        var eNum = cnt(t);
+        var eMode = eNeg ? 'none'
+          : eNum ? 'count'
+          : (/都|全|均|皆|同时|两个都/.test(t) ? 'all' : 'any');
+        var eTgt = POS7[ePos] + '干';
+        var eName = EXT_NAME[extWhere];
+        var eLabel = eNeg ? (eTgt + '在' + eName + '无根')
+          : eMode === 'all' ? (eTgt + '在' + eName + '都有根')
+          : eMode === 'count' ? (eTgt + '在' + eName + '有根 ' + eNum + ' 处')
+          : (eTgt + '在' + eName + '有根');
+        var eDetail = eNeg
+          ? (eTgt + '的五行，在' + eName + '地支藏干里一处都找不到同五行')
+          : (eTgt + '的五行出现在' + eName + '地支的藏干里（本气/中气/余气同五行都算）');
+        if (extWhere !== 'dayun') eDetail += '；流年缺省取今年，可用「2028年流年」指定';
+        if (extWhere !== 'liunian') eDetail += '；大运缺省取流年当年所行那一步，可用「第3步大运」指定';
+        return { ok: true, id: 'root', mode: eMode, where: extWhere, scope: 'four', pos: ePos,
+                 min: eNum || 1, label: eLabel, raw: t, detail: eDetail };
+      }
+
+      // 藏干透到流年/大运：日支藏干本气在流年透出
+      if (extWhere && /透/.test(t)) {
+        var tPos = pos ? pos.i : 2;
+        var tLayer = /本气/.test(t) ? 'ben' : /中气/.test(t) ? 'zhong' : /余气/.test(t) ? 'yu' : 'any';
+        var tName = EXT_NAME[extWhere];
+        var tAll = /都|均|同时|两个都/.test(t) && extWhere === 'both';
+        return { ok: true, id: 'touc', pos: tPos, layer: tLayer, to: extWhere,
+                 mode: tAll ? 'all' : 'any',
+                 label: POS[tPos] + '支' + LAYER_TXT[tLayer] + '透' +
+                        (extWhere === 'both' ? '流年大运' : tName),
+                 raw: t,
+                 detail: POS[tPos] + '支的' + LAYER_TXT[tLayer] + '藏干，出现在' + tName + '的天干上' };
       }
 
       // 五行分布（缺木 / 一个金都没有 / 地支无水）
@@ -1328,10 +1497,48 @@ function buildShunLabel(shun, gender, nianGan) {
       return out.slice(0, 3);
     }
 
+    // 中文数字（大运步数用）
+    var CN_DIGIT = { '零':0,'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10 };
+
+    function cnNum(s) {
+      s = String(s || '').trim();
+      if (/^\d+$/.test(s)) return parseInt(s, 10);
+      if (CN_DIGIT[s] != null) return CN_DIGIT[s];
+      var m = s.match(/^十([一二三四五六七八九])$/);
+      if (m) return 10 + CN_DIGIT[m[1]];
+      m = s.match(/^([一二三四五六七八九])十([一二三四五六七八九])?$/);
+      if (m) return CN_DIGIT[m[1]] * 10 + (m[2] ? CN_DIGIT[m[2]] : 0);
+      return null;
+    }
+
     function parse(text) {
       var raw = String(text == null ? '' : text);
       var t = norm(raw);
       if (!t) return { ok: false, id: '', detail: '请输入要生成的特征', raw: raw, suggest: [] };
+
+      // 流年/大运锚点先于分句抽取：数字会被 cnt 误读成「几个」，抽完立刻从文本里抹掉
+      var anchors = {};
+      var lyM = t.match(/(\d{4})\s*年?(?:的)?\s*(?:流年|太岁)/) || t.match(/(?:流年|太岁)\s*(?:是)?\s*(\d{4})\s*年?/);
+      if (lyM) {
+        anchors.year = parseInt(lyM[1], 10);
+        t = t.replace(/\d{4}\s*年?(?:的)?\s*(?:流年|太岁)/g, '流年')
+             .replace(/(?:流年|太岁)\s*(?:是)?\s*\d{4}\s*年?/g, '流年');
+      } else {
+        var ageM = t.match(/虚岁\s*(\d{1,3})/) || t.match(/(\d{1,3})\s*虚?岁/) || t.match(/([一二三四五六七八九十]{1,3})\s*虚?岁/);
+        if (ageM) {
+          anchors.age = cnNum(ageM[1]);
+          t = t.replace(/虚岁\s*\d{1,3}|\d{1,3}\s*虚?岁|[一二三四五六七八九十]{1,3}\s*虚?岁/g, '');
+        }
+      }
+      var stM = t.match(/第\s*([一二三四五六七八九十两\d]{1,3})\s*步/) || t.match(/([一二三四五六七八九十两\d]{1,3})\s*步(?:大运|运)/);
+      if (stM) {
+        anchors.step = cnNum(stM[1]);
+        t = t.replace(/第\s*[一二三四五六七八九十两\d]{1,3}\s*步(?:大运|运)?/g, '大运')
+             .replace(/[一二三四五六七八九十两\d]{1,3}\s*步(?:大运|运)/g, '大运');
+      }
+      // 「在流年和大运中都有根」先合体，否则会被分句拆成两半
+      t = t.replace(/(流年|太岁|大运)\s*(?:和|与|跟|、|及|以及|还有)\s*(大运|流年|太岁)/g, '流年大运');
+
       var nots = [];
       var g = null;
       if (/坤造|女命|女性/.test(t)) g = '女';
@@ -1357,12 +1564,18 @@ function buildShunLabel(shun, gender, nianGan) {
         one.raw = raw;
         if (nots.length) one.not = nots;
         if (g) one.gender = g;
+        if (anchors.year) one.lyYear = anchors.year;
+        if (anchors.age) one.lyAge = anchors.age;
+        if (anchors.step) one.dyStep = anchors.step;
         return one;
       }
       var multi = { ok: true, id: 'and', parts: parts, not: nots, raw: raw,
                label: parts.map(function(x) { return x.label; }).join(' + '),
                detail: parts.map(function(x) { return x.detail; }).join('；') };
       if (g) multi.gender = g;
+      if (anchors.year) multi.lyYear = anchors.year;
+      if (anchors.age) multi.lyAge = anchors.age;
+      if (anchors.step) multi.dyStep = anchors.step;
       return multi;
     }
 
@@ -1375,6 +1588,9 @@ function buildShunLabel(shun, gender, nianGan) {
       '三合局 / 申子辰三合 / 三会方 / 巳午未三会',
       '天干五合 / 官杀混杂 / 食伤生财 / 官印相生 / 地支相冲',
       '七柱天干全无根 / 日干无根 / 天干全部有根（通根口径）',
+      '日干在流年中有根 / 在大运中有根 / 两处都有根',
+      '2028年流年日干有根 · 32岁那年有根 · 第3步大运日干有根',
+      '日支藏干本气在流年透出（藏干透到流年/大运天干）',
       '缺木 / 一个金都没有 / 地支无水（五行分布）',
       '多特征用 + 连：申子辰三合 + 官杀混杂',
       '加「不冲」排除相冲'
@@ -1399,6 +1615,8 @@ function buildShunLabel(shun, gender, nianGan) {
                    test: rootTest(spec) };
         case 'wx':
           return { label: spec.label || '五行分布', mode: 'first', test: wxCountTest(spec) };
+        case 'touc':
+          return { label: spec.label || '藏干透流年', mode: 'first', test: touExtTest(spec) };
         case 'stems':
           return { label: spec.label, mode: 'first', test: stemsTest(spec.set) };
         case 'branches':
@@ -1448,17 +1666,47 @@ function buildShunLabel(shun, gender, nianGan) {
       return P;
     }
 
+    // 判据树里是否要用到命局之外的柱子（决定扫描时要不要每次完整排盘拿大运）
+    function needsExt(spec) {
+      var out = { ly: false, dy: false };
+      function walk(s) {
+        if (!s || typeof s !== 'object') return;
+        if (s.id === 'and') {
+          for (var i = 0; i < (s.parts || []).length; i++) walk(s.parts[i]);
+          return;
+        }
+        var where = null;
+        if (s.id === 'root') where = s.where;
+        else if (s.id === 'touc') where = s.to === 'dayun' ? 'dayun' : s.to === 'both' ? 'both' : 'liunian';
+        if (where !== 'liunian' && where !== 'dayun' && where !== 'both') return;
+        if (where !== 'dayun') out.ly = true;
+        if (where !== 'liunian') out.dy = true;
+      }
+      walk(spec);
+      return out;
+    }
+
     function compile(spec) {
       var P = compileCore(spec);
       if (P && spec && spec.not && spec.not.length) P = applyNot(P, spec.not);
+      if (P) {
+        P.anchors = { year: spec && spec.lyYear, age: spec && spec.lyAge, step: spec && spec.dyStep };
+        P.needs = needsExt(spec);
+      }
       return P;
+    }
+
+    function buildCtx(full, P) {
+      var ctx = ctxOf(full);
+      if (P && P.needs && (P.needs.ly || P.needs.dy)) ctx.ext = extOf(full, P.anchors);
+      return ctx;
     }
 
     function verify(y, m, d, h, gender, P) {
       var full;
       try { full = paipan('', gender, y, m, d, h, 0); } catch (e) { return null; }
       if (!full || !full.ri || !full.nian) return null;
-      var r = P.test(ctxOf(full));
+      var r = P.test(buildCtx(full, P));
       return r ? { score: r.score, evidence: r.evidence, data: full } : null;
     }
 
@@ -1493,6 +1741,7 @@ function buildShunLabel(shun, gender, nianGan) {
       if (variant) hk = (hk + variant * 7919) % 99991;
       var startOff = hk % span;
       var tried = 0, best = null;
+      var needExt = !!(P.needs && (P.needs.ly || P.needs.dy));
       var mOff = (hk >> 3) % 12, dOff = (hk >> 5) % 28, hOff = (hk >> 7) % 12;
       for (var yi = 0; yi < span; yi++) {
         var y = sY + ((startOff + yi) % span);
@@ -1510,20 +1759,29 @@ function buildShunLabel(shun, gender, nianGan) {
               var hi = (hOff + hi0) % 12;
               var h = hi * 2;
               var hp = hourPillar(riGan, h);
-              var ctx = ctxOf7([base.nian, base.yue, base.ri, hp],
-                [taiYuan(base.yue.gan, base.yue.zhi),
-                 mingGong(base.yue.zhi, hp.zhi, base.nian.gan),
-                 shenGong(base.yue.zhi, hp.zhi, base.nian.gan)]);
+              var ctx, full = null;
+              if (needExt) {
+                // 流年/大运随出生时刻变（起运精确到小时），这次走完整排盘
+                full = paipan('', gender, y, mo, d, h, 0);
+                ctx = buildCtx(full, P);
+              } else {
+                ctx = ctxOf7([base.nian, base.yue, base.ri, hp],
+                  [taiYuan(base.yue.gan, base.yue.zhi),
+                   mingGong(base.yue.zhi, hp.zhi, base.nian.gan),
+                   shenGong(base.yue.zhi, hp.zhi, base.nian.gan)]);
+              }
               tried++;
               var r = P.test(ctx);
               if (!r) continue;
               if (P.mode !== 'max') {
-                var v = verify(y, mo, d, h, gender, P);
+                var v = needExt ? { score: r.score, evidence: r.evidence, data: full }
+                                : verify(y, mo, d, h, gender, P);
                 if (v) return pack(y, mo, d, h, gender, v, P, tried);
                 continue;
               }
               if (best && r.score <= best.score) continue;
-              var v2 = verify(y, mo, d, h, gender, P);
+              var v2 = needExt ? { score: r.score, evidence: r.evidence, data: full }
+                               : verify(y, mo, d, h, gender, P);
               if (v2 && v2.score >= r.score) {
                 best = { y: y, m: mo, d: d, h: h, score: v2.score, evidence: v2.evidence, data: v2.data };
               }
@@ -1564,6 +1822,10 @@ function buildShunLabel(shun, gender, nianGan) {
       { text: '七柱天干全无根', label: '七柱天干全无根' },
       { text: '日干无根', label: '日干无根' },
       { text: '天干全部有根', label: '天干全部有根' },
+      { text: '日干在流年中有根', label: '日干在流年有根' },
+      { text: '日干在大运中有根', label: '日干在大运有根' },
+      { text: '日干在流年大运中都有根', label: '日干在流年大运都有根' },
+      { text: '日支藏干本气在流年透出', label: '日支本气透流年' },
       { text: '七柱缺金', label: '七柱缺金' },
       { text: '一个木都没有', label: '四柱缺木' },
       { text: '申子辰三合 + 官杀混杂', label: '三合 + 官杀混杂' }
@@ -1571,7 +1833,7 @@ function buildShunLabel(shun, gender, nianGan) {
 
     return {
       ss: ss, parse: parse, compile: compile, scan: scan, matchAt: matchAt,
-      ctxOf: ctxOf, ctxOf7: ctxOf7, PATTERNS: PATTERNS, HELP: HELP,
+      ctxOf: ctxOf, ctxOf7: ctxOf7, extOf: extOf, PATTERNS: PATTERNS, HELP: HELP,
       norm: norm, suggest: suggest, splitClauses: splitClauses,
       describe: function(spec) { var P = compile(spec); return P ? P.label : ''; }
     };
