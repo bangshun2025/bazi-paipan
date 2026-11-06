@@ -697,15 +697,181 @@ function toggleGenHelp() {
   el.style.display = 'block';
 }
 
+// ============================================================
+// v0.99.0 造盘 · AI 理解自然语言
+// 规则解析器（ALGO.GEN.parse）认不出的说法，交给用户自配的 LLM 翻成同一套可执行条件；
+// 判定与扫描仍在本地（GEN.compile/scan）—— 模型只做翻译，不算命、不产出盘面数据。
+// ============================================================
+var genAiSpec = null;
+var genAiBusy = false;
+
+function genAiCfg() {
+  try {
+    if (window.RENDER_AI && RENDER_AI.cfgGet) {
+      var c = RENDER_AI.cfgGet();
+      if (c && c.apiKey && c.baseUrl && c.model) return c;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function genAiSystemPrompt() {
+  return [
+    '你是「八字造盘」的条件解析器：把用户的一句中文翻成 JSON 条件，只输出 JSON，不解释。',
+    '输出格式：{"summary":"你理解到的一句话","spec":{...}}；如果这个要求用下列条件表达不了，输出 {"unsupported":"为什么算不了，并给一个能做的替代说法"}。',
+    '',
+    '柱位 pos：0=年 1=月 2=日 3=时 4=胎元 5=命宫 6=身宫；null 或省略=不限。',
+    'scope：four=只看四柱；seven=七柱（四柱＋胎元/命宫/身宫）。',
+    '',
+    '可用条件（id 必填）：',
+    '{"id":"root","mode":"none|any|all|count","scope":"four|seven","pos":null,"min":1}  通根',
+    '  有根＝天干五行出现在地支藏干里（本气/中气/余气同五行都算）。none=全部无根，all=每一个都有根，any=至少一个有根，count=有根的天干数≥min。',
+    '{"id":"tou","n":2,"exact":false,"pos":null}  地支藏干透到天干，n=透出个数下限，exact=正好这么多个',
+    '{"id":"toumax"}  一支藏干透出最多（极值）',
+    '{"id":"quan","pos":null}  某柱藏干全部透干',
+    '{"id":"shishen","targets":["七杀"],"n":1,"exact":false,"pos":null}  天干十神',
+    '  十神取值：比肩 劫财 食神 伤官 偏财 正财 七杀 正官 枭神 正印',
+    '{"id":"wx","wxs":["木"],"where":"any","mode":"none","scope":"four"}  五行分布；'
+      + 'where 取 any/gan/zhi/cang，mode 取 none（一处都没有）或 count（至少 min 个，配 min）',
+    '{"id":"stems","set":["甲","丙"]}  天干点名，{"id":"branches","set":["子","辰"]}  地支点名',
+    '{"id":"brtou","br":"寅","gans":["甲","丙","戊"]}  指定地支的藏干透出',
+    '{"id":"sanhe","sets":[{"zhi":["申","子","辰"],"wx":"水"}]}  三合局（省略 sets 表示任意三合）',
+    '{"id":"sanhui"}  三会方；{"id":"wuhe"}  天干五合；{"id":"guansha"}  官杀混杂',
+    '{"id":"shishang"}  食伤生财；{"id":"guanyin"}  官印相生；{"id":"liuchong"}  地支相冲',
+    '{"id":"and","parts":[{...},{...}]}  多个条件同时成立',
+    '最外层还可以带 "not":["liuchong"] 表示排除地支相冲。',
+    '',
+    '例子：',
+    '「七柱天干全盘无根」→ {"summary":"七柱含胎元命宫身宫，七个天干都没有根","spec":{"id":"root","mode":"none","scope":"seven"}}',
+    '「日主无根而且地支见子」→ {"summary":"日干无根且地支有子","spec":{"id":"and","parts":[{"id":"root","mode":"none","pos":2},{"id":"branches","set":["子"]}]}}',
+    '「月柱七杀，且不要相冲」→ {"summary":"月干是七杀，排除地支相冲","spec":{"id":"shishen","targets":["七杀"],"n":1,"pos":1,"not":["liuchong"]}}',
+    '「八字里一个木都没有」→ {"summary":"四柱天干地支里没有木","spec":{"id":"wx","wxs":["木"],"where":"any","mode":"none"}}',
+    '「寅透甲丙戊」→ {"summary":"寅的藏干甲丙戊都透到天干","spec":{"id":"brtou","br":"寅","gans":["甲","丙","戊"]}}',
+    '「婚姻好不好」→ {"unsupported":"吉凶评价算不出来，只能按结构找盘，例如「官杀混杂」或「日支被冲」"}',
+    '',
+    '只输出 JSON。不要编造字段。把握不准时用最接近的可用条件，并在 summary 里写明你的理解。'
+  ].join('\n');
+}
+
+function genAiExtractJson(text) {
+  var s = String(text || '');
+  var l = s.indexOf('{'), r = s.lastIndexOf('}');
+  if (l < 0 || r <= l) return null;
+  try { return JSON.parse(s.slice(l, r + 1)); } catch (e) { return null; }
+}
+
+function genAiNormalize(spec) {
+  if (!spec || typeof spec !== 'object') return null;
+  if (spec.id === 'tou' && !(spec.n >= 1)) spec.n = 1;
+  if (spec.id === 'shishen') {
+    if (!spec.targets && spec.target) spec.targets = [spec.target];
+    if (!spec.targets || !spec.targets.length) return null;
+    if (!(spec.n >= 1)) spec.n = 1;
+  }
+  if (spec.id === 'root') {
+    spec.mode = spec.mode || 'none';
+    spec.scope = spec.scope === 'seven' ? 'seven' : 'four';
+    if (spec.mode === 'count' && !(spec.min >= 1)) spec.min = 1;
+  }
+  if (spec.id === 'and') {
+    if (!spec.parts || !spec.parts.length) return null;
+    for (var i = 0; i < spec.parts.length; i++) {
+      var p = genAiNormalize(spec.parts[i]);
+      if (!p) return null;
+      spec.parts[i] = p;
+    }
+  }
+  return spec;
+}
+
+function genAiParse() {
+  if (genAiBusy) return;
+  var inp = document.getElementById('genInput');
+  var out = document.getElementById('genPreview');
+  if (!inp || !out) return;
+  var text = String(inp.value || '').trim();
+  if (!text) return;
+  var cfg = genAiCfg();
+  if (!cfg) {
+    out.textContent = '⚙ 造盘的 AI 理解要先用你的 AI 接口：填一次 API Key（只存本机）。';
+    out.style.color = 'var(--c-red)';
+    if (window.RENDER_AI && RENDER_AI.aiOpenSettings) {
+      RENDER_AI.aiOpenSettings('造盘的 AI 理解要调用你的 AI 接口：填一次 API Key 即可（只存本机浏览器）');
+    }
+    return;
+  }
+  genAiBusy = true;
+  out.textContent = '🤖 AI 正在理解：「' + text + '」…';
+  out.style.color = '';
+  var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var to = setTimeout(function() { if (ac) ac.abort(); }, 75000);
+  fetch(String(cfg.baseUrl).replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    signal: ac ? ac.signal : undefined,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+    body: JSON.stringify({
+      model: cfg.model,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: genAiSystemPrompt() },
+        { role: 'user', content: '用户请求：' + text }
+      ]
+    })
+  }).then(function(r) {
+    if (!r.ok) {
+      return r.text().then(function(t) {
+        throw new Error('AI 接口 ' + r.status + '：' + String(t).slice(0, 120));
+      });
+    }
+    return r.json();
+  }).then(function(j) {
+    clearTimeout(to);
+    var content = (j && j.choices && j.choices[0] && j.choices[0].message)
+      ? j.choices[0].message.content : '';
+    var obj = genAiExtractJson(content);
+    if (!obj) throw new Error('AI 返回的不是 JSON，换个说法再试');
+    if (obj.unsupported) {
+      genAiSpec = null;
+      out.textContent = '🤖 AI 说这句算不了：' + obj.unsupported;
+      out.style.color = 'var(--c-red)';
+      return;
+    }
+    var spec = genAiNormalize(obj.spec);
+    if (!spec) throw new Error('AI 没给出可执行的条件');
+    var P = (window.ALGO && ALGO.GEN) ? ALGO.GEN.compile(spec) : null;
+    if (!P) throw new Error('AI 给的条件暂时算不了（条件缺字段）');
+    spec.raw = text;
+    spec.ok = true;
+    spec.ai = true;
+    spec.label = P.label;
+    spec.aiSummary = String(obj.summary || '');
+    spec.detail = (spec.aiSummary ? spec.aiSummary + ' · ' : '') + 'AI 翻成 ' + spec.id + ' 条件，本地算';
+    genAiSpec = spec;
+    genPreview();
+  }).catch(function(err) {
+    clearTimeout(to);
+    var m = (err && err.name === 'AbortError') ? '请求超时（75 秒）'
+      : (err && err.message ? err.message : '未知错误');
+    genAiSpec = null;
+    out.textContent = '⚠ AI 理解失败：' + m;
+    out.style.color = 'var(--c-red)';
+  }).then(function() {
+    genAiBusy = false;
+  });
+}
+
 function genPreview() {
   var inp = document.getElementById('genInput');
   var out = document.getElementById('genPreview');
   if (!inp || !out) return null;
-  if (inp.value !== genPreviewText) { genPreviewText = inp.value; genVariant = 0; }
+  if (inp.value !== genPreviewText) { genPreviewText = inp.value; genVariant = 0; genAiSpec = null; }
   var r = (window.ALGO && ALGO.GEN)
     ? ALGO.GEN.parse(inp.value)
     : { ok: false, detail: '造盘引擎未加载' };
-  out.textContent = r.ok ? ('✅ 识别：' + r.label + ' — ' + r.detail) : ('⚠ ' + (r.detail || '未识别'));
+  if (!r.ok && genAiSpec && genAiSpec.raw === inp.value) r = genAiSpec;
+  out.textContent = r.ok
+    ? ((r.ai ? '🤖 AI 理解：' : '✅ 识别：') + r.label + ' — ' + r.detail)
+    : ('⚠ ' + (r.detail || '未识别'));
   out.style.color = r.ok ? '' : 'var(--c-red)';
   var sg = document.getElementById('genSuggest');
   if (sg) {
@@ -717,7 +883,10 @@ function genPreview() {
       for (var i = 0; i < list.length; i++) {
         html += '<button type="button" class="gen-sg" onclick="APP.genPick(\'' + list[i] + '\')">' + list[i] + '</button>';
       }
-      sg.innerHTML = html ? ('<span class="gen-sg-label">说的是不是：</span>' + html) : '';
+      var hasAi = !!(genAiCfg());
+      var aiBtn = '<button type="button" class="gen-sg gen-sg-ai" onclick="APP.genAiParse()">'
+        + (hasAi ? '🤖 让 AI 理解这句话' : '🤖 让 AI 理解（先配 API Key）') + '</button>';
+      sg.innerHTML = (html ? ('<span class="gen-sg-label">说的是不是：</span>' + html) : '') + aiBtn;
     }
   }
   return r;
@@ -7272,6 +7441,80 @@ function captureScreenshot() {
     }
   })();
 
+  // === v0.99.0 通根判据 + AI 理解 ===
+  (function() {
+    var sec = 'v0.99 通根/AI';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '通根判据 · AI 理解（v0.99.0）' });
+
+      // 自然语言 → root 条件
+      var r1 = G.parse('七柱天干全盘无根');
+      tests.push(eq(sec + ' 01: 「七柱天干全盘无根」→ root/none', r1.id + '/' + r1.mode, 'root/none'));
+      tests.push(eq(sec + ' 02: 「七柱」口径含三垣', r1.scope, 'seven'));
+      tests.push(eq(sec + ' 03: 标签点明七柱', r1.label, '七柱天干全无根'));
+      tests.push(eq(sec + ' 04: 「天干无根」默认四柱', G.parse('天干无根').scope, 'four'));
+      tests.push(eq(sec + ' 05: 「日主无根」限定日干', G.parse('日主无根').pos, 2));
+      tests.push(eq(sec + ' 06: 「天干全部有根」→ all', G.parse('天干全部有根').mode, 'all'));
+      tests.push(eq(sec + ' 07: 「天干有根」→ any（至少一处）', G.parse('天干有根').mode, 'any'));
+      var rc = G.parse('七柱天干有根 3 个');
+      tests.push(eq(sec + ' 08: 「有根 3 个」→ count/min=3', rc.mode + '/' + rc.min, 'count/3'));
+      tests.push(eq(sec + ' 09: 兼容繁体「無根」', G.parse('七柱天干全盤無根').ok, true));
+
+      // 判据正确性：2000-01-01 寅时 = 己卯 丙子 戊午 甲寅（七柱 丁卯 丁卯 丁卯）
+      var ch = ALGO.paipan('', '男', 2000, 1, 1, 3, 0);
+      tests.push(eq(sec + ' 10: 七柱 ctx 含胎元/命宫/身宫',
+        G.ctxOf(ch).br7.join(''), '卯子午寅卯卯卯'));
+      tests.push(eq(sec + ' 11: 七柱无根不成立于有根之盘',
+        G.matchAt('七柱天干全盘无根', 2000, 1, 1, 3, '男').ok, false));
+      tests.push(eq(sec + ' 12: 同盘天干全部有根命中',
+        G.matchAt('天干全部有根', 2000, 1, 1, 3, '男').ok, true));
+      tests.push(eq(sec + ' 13: 同盘日干（戊）有根，不满足日干无根',
+        G.matchAt('日干无根', 2000, 1, 1, 3, '男').ok, false));
+      var rAny = G.matchAt('天干有根', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 14: 有根证据点名藏干', !!(rAny.ok && rAny.evidence.indexOf('藏') >= 0), true));
+
+      // 扫描：七柱全无根在真实时间轴上是可成立的，且证据与复核一致
+      var sc = G.scan(G.parse('七柱天干全盘无根'), { gender: '男', startYear: 1960, endYear: 2026 });
+      tests.push(eq(sec + ' 15: 七柱无根能扫出真实盘', sc.ok, true));
+      tests.push(eq(sec + ' 16: 扫描结果复核仍命中',
+        sc.ok ? G.matchAt('七柱天干全盘无根', sc.y, sc.m, sc.d, sc.h, sc.gender).ok : false, true));
+      tests.push(eq(sec + ' 17: 证据写明「全无根」并列出七柱天干',
+        !!(sc.ok && sc.evidence.indexOf('全无根') >= 0 && sc.evidence.indexOf('天干') >= 0), true));
+
+      // AI 理解：只翻译、本地编译校验
+      tests.push(eq(sec + ' 18: AI 提示词含通根口径与七柱',
+        !!(genAiSystemPrompt().indexOf('"id":"root"') >= 0 && genAiSystemPrompt().indexOf('seven') >= 0), true));
+      tests.push(eq(sec + ' 19: AI 提示词含本例示范',
+        genAiSystemPrompt().indexOf('七柱天干全盘无根') >= 0, true));
+      var nj = genAiExtractJson('```json\n{"summary":"x","spec":{"id":"root","mode":"none"}}\n```');
+      tests.push(eq(sec + ' 20: 从代码块里抠出 JSON', nj && nj.spec.id, 'root'));
+      var nz = genAiNormalize({ id: 'root', mode: 'none' });
+      tests.push(eq(sec + ' 21: 归一化补默认 scope=four', nz.scope, 'four'));
+      var nz2 = genAiNormalize({ id: 'shishen', target: '七杀' });
+      tests.push(eq(sec + ' 22: 归一化 target→targets 且 n=1', nz2.targets.join('/') + '/' + nz2.n, '七杀/1'));
+      tests.push(eq(sec + ' 23: AI 给的条件要过本地编译',
+        !!(ALGO.GEN.compile(genAiNormalize({ id: 'root', mode: 'none', scope: 'seven' })) &&
+           !ALGO.GEN.compile({ id: 'not-a-real-id' })), true));
+      tests.push(eq(sec + ' 24: AI 入口已接线', typeof genAiParse === 'function', true));
+
+      // 五行分布：缺木 / 一个金都没有
+      var w1 = G.parse('一个木都没有');
+      tests.push(eq(sec + ' 25: 「一个木都没有」→ wx/none', w1.id + '/' + w1.mode + '/' + w1.wxs[0], 'wx/none/木'));
+      tests.push(eq(sec + ' 26: 「缺木」默认四柱整体', G.parse('缺木').where + '/' + G.parse('缺木').scope, 'any/four'));
+      tests.push(eq(sec + ' 27: 「七柱缺金」→ seven', G.parse('七柱缺金').scope, 'seven'));
+      tests.push(eq(sec + ' 28: 「天干缺水」限定天干', G.parse('天干缺水').where, 'gan'));
+      tests.push(eq(sec + ' 29: 五行判据能过编译', !!G.compile(G.parse('一个木都没有')), true));
+      tests.push(eq(sec + ' 30: 同盘（木×3）不满足全盘缺木',
+        G.matchAt('一个木都没有', 2000, 1, 1, 3, '男').ok, false));
+      tests.push(eq(sec + ' 31: AI 提示词含五行分布',
+        !!(genAiSystemPrompt().indexOf('"id":"wx"') >= 0 &&
+           genAiSystemPrompt().indexOf('一个木都没有') >= 0), true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');
@@ -7439,6 +7682,7 @@ window.__testAppend = function(t) {
     hideGenChart: hideGenChart,
     genPick: genPick,
     genPreview: genPreview,
+    genAiParse: genAiParse,
     genReroll: genReroll,
     toggleGenHelp: toggleGenHelp,
     runGenChart: runGenChart,

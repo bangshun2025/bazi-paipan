@@ -729,6 +729,8 @@ function buildShunLabel(shun, gender, nianGan) {
     var SHENG = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
     var KE = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
     var POS = ['年','月','日','时'];
+    // 七柱 = 四柱 + 三垣（胎元/命宫/身宫），索引与 pos 参数一致
+    var POS7 = ['年','月','日','时','胎元','命宫','身宫'];
     var CN_NUM = { 1:'一', 2:'两', 3:'三', 4:'四' };
 
     var HE5 = [
@@ -765,12 +767,27 @@ function buildShunLabel(shun, gender, nianGan) {
     }
 
     function ctxOf(data) {
-      var st = [data.nian.gan, data.yue.gan, data.ri.gan, data.shi.gan];
-      var br = [data.nian.zhi, data.yue.zhi, data.ri.zhi, data.shi.zhi];
-      var riGan = data.ri.gan;
-      var list = [];
-      for (var i = 0; i < 4; i++) list.push(ss(riGan, st[i]));
-      return { st: st, br: br, riGan: riGan, ss: list };
+      var four = [data.nian, data.yue, data.ri, data.shi];
+      var yuan = [data.tai, data.ming, data.shen];
+      if (!yuan[0] || !yuan[0].gan) {
+        yuan = [taiYuan(data.yue.gan, data.yue.zhi),
+                mingGong(data.yue.zhi, data.shi.zhi, data.nian.gan),
+                shenGong(data.yue.zhi, data.shi.zhi, data.nian.gan)];
+      }
+      return ctxOf7(four, yuan);
+    }
+
+    // four/yuan 都是 {gan,zhi}；st/br/ss 保持四柱（老判据只看四柱），
+    // st7/br7/ss7 含三垣，供「七柱」「全盘」口径使用
+    function ctxOf7(four, yuan) {
+      var all = four.concat(yuan);
+      var st = [], br = [];
+      for (var i = 0; i < all.length; i++) { st.push(all[i].gan); br.push(all[i].zhi); }
+      var riGan = four[2].gan;
+      var ssAll = [];
+      for (var j = 0; j < st.length; j++) ssAll.push(ss(riGan, st[j]));
+      return { st: st.slice(0, 4), br: br.slice(0, 4), ss: ssAll.slice(0, 4),
+               st7: st, br7: br, ss7: ssAll, riGan: riGan };
     }
 
     // ---------- 判据：返回 { evidence, score } 或 null ----------
@@ -909,6 +926,91 @@ function buildShunLabel(shun, gender, nianGan) {
       };
     }
 
+    // 通根口径：天干五行在地支藏干中出现即算有根（本气/中气/余气同五行都算，一个地支算一处）
+    function rootPlaces(ctx, i, n) {
+      var wx = WU_XING[ctx.st7[i]];
+      var out = [];
+      for (var j = 0; j < n; j++) {
+        var cg = CANG_GAN[ctx.br7[j]] || [];
+        for (var k = 0; k < cg.length; k++) {
+          if (WU_XING[cg[k]] === wx) { out.push({ j: j, gan: cg[k] }); break; }
+        }
+      }
+      return out;
+    }
+
+    function rootTest(spec) {
+      var mode = spec.mode || 'none';
+      var n = spec.scope === 'seven' ? 7 : 4;
+      var scopeTxt = n === 7 ? '七柱' : '四柱';
+      return function(ctx) {
+        var idx = [];
+        if (spec.pos != null) idx.push(spec.pos);
+        else for (var i = 0; i < n; i++) idx.push(i);
+        var rooted = [], bare = [];
+        for (var q = 0; q < idx.length; q++) {
+          var rp = rootPlaces(ctx, idx[q], n);
+          if (rp.length) rooted.push({ i: idx[q], rp: rp }); else bare.push(idx[q]);
+        }
+        var fmt = function(x) {
+          return POS7[x.i] + '干' + ctx.st7[x.i] + '得' +
+            x.rp.map(function(p) { return POS7[p.j] + '支' + ctx.br7[p.j] + '藏' + p.gan; }).join('、') + '为根';
+        };
+        var stemsTxt = idx.map(function(i2) { return ctx.st7[i2]; }).join('');
+        if (mode === 'none') {
+          if (rooted.length) return null;
+          return { evidence: scopeTxt + '天干' + stemsTxt + ' 全无根（' + scopeTxt +
+                   '地支藏干里没有同五行）', score: idx.length };
+        }
+        if (mode === 'all') {
+          if (bare.length) return null;
+          return { evidence: scopeTxt + '天干全部有根（' + rooted.map(fmt).join('；') + '）',
+                   score: rooted.length };
+        }
+        var min = parseInt(spec.min, 10) || 1;
+        if (mode === 'count' && rooted.length < min) return null;
+        if (!rooted.length) return null;
+        return { evidence: '天干有根 ' + rooted.length + ' 个（' + rooted.map(fmt).join('；') + '）',
+                 score: rooted.length };
+      };
+    }
+
+    function wxCountTest(spec) {
+      var scopeN = spec.scope === 'seven' ? 7 : 4;
+      var where = spec.where || 'any';
+      var wxs = (spec.wxs && spec.wxs.length) ? spec.wxs : ['木','火','土','金','水'];
+      var scopeTxt = scopeN === 7 ? '七柱' : '四柱';
+      return function(ctx) {
+        var hits = [];
+        for (var w = 0; w < wxs.length; w++) {
+          var wx = wxs[w], num = 0;
+          if (where === 'gan' || where === 'any') {
+            for (var i = 0; i < scopeN; i++) if (WU_XING[ctx.st7[i]] === wx) num++;
+          }
+          if (where === 'zhi' || where === 'any') {
+            for (var j = 0; j < scopeN; j++) if (WU_XING[ctx.br7[j]] === wx) num++;
+          }
+          if (where === 'cang') {
+            for (var k = 0; k < scopeN; k++) {
+              var cg = CANG_GAN[ctx.br7[k]] || [];
+              for (var m = 0; m < cg.length; m++) if (WU_XING[cg[m]] === wx) num++;
+            }
+          }
+          hits.push({ wx: wx, n: num });
+        }
+        var whereTxt = where === 'gan' ? '天干' : where === 'zhi' ? '地支' : where === 'cang' ? '地支藏干' : '天干地支';
+        var listTxt = hits.map(function(h) { return h.wx + '×' + h.n; }).join('、');
+        if (spec.mode === 'none') {
+          for (var q = 0; q < hits.length; q++) if (hits[q].n) return null;
+          return { evidence: scopeTxt + whereTxt + '里没有' + wxs.join('、') + '（' + listTxt + '）',
+                   score: wxs.length };
+        }
+        var min = parseInt(spec.min, 10) || 1;
+        for (var p = 0; p < hits.length; p++) if (hits[p].n < min) return null;
+        return { evidence: scopeTxt + whereTxt + '（' + listTxt + '）', score: min };
+      };
+    }
+
     function stemsTest(set) {
       return function(ctx) {
         var posTxt = [];
@@ -970,7 +1072,7 @@ function buildShunLabel(shun, gender, nianGan) {
       '沖':'冲','會':'会','時':'时','見':'见','雜':'杂','這':'这','裡':'里','雙':'双',
       '單':'单','條':'条','祿':'禄','絕':'绝','歲':'岁','運':'运','與':'与','還':'还',
       '號':'号','樣':'样','種':'种','發':'发','點':'点','開':'开','關':'关','後':'后',
-      '數':'数','顆':'颗','幹':'干','支':'支' };
+      '數':'数','顆':'颗','幹':'干','支':'支','無':'无','盤':'盘','氣':'气','麼':'么','嗎':'吗' };
     var POS_CHAR = { '年':0, '月':1, '日':2, '时':3 };
 
     function norm(s) {
@@ -1069,6 +1171,47 @@ function buildShunLabel(shun, gender, nianGan) {
       var n = cnt(t);
       var pos = posOf(t);
       var exact = isExact(t);
+
+      // 通根 / 无根（整盘 或 指定柱位）
+      var negRoot = /无根|没根|没有根|不带根|全无根|根都没有|根都无|无根气|根气全无/.test(t);
+      var posRoot = !negRoot && /有根|通根|扎根|得根|根气/.test(t);
+      if (negRoot || posRoot) {
+        var rScope = /七柱|三垣|胎元|命宫|身宫/.test(t) ? 'seven' : 'four';
+        var rPos = pos && pos.part !== '支' ? pos.i : null;
+        if (rPos == null && /日主|日元/.test(t)) rPos = 2;
+        var rn = cnt(t);
+        var rMode = negRoot ? 'none' : (rn ? 'count' : (/全部|都|全|皆|个个|每|各/.test(t) ? 'all' : 'any'));
+        var rScopeTxt = rScope === 'seven' ? '七柱' : '四柱';
+        var rTgt = rPos != null ? POS7[rPos] + '干' : rScopeTxt + '天干';
+        var rLabel = negRoot ? (rTgt + '全无根')
+          : rMode === 'all' ? (rTgt + '全部有根')
+          : rMode === 'count' ? (rTgt + '有根 ' + rn + ' 个')
+          : (rTgt + '有根');
+        var rDetail = negRoot
+          ? (rTgt + '的五行，在' + rScopeTxt + '地支藏干里一处都找不到同五行')
+          : rMode === 'all' ? (rTgt + '每一干都能在地支藏干里找到同五行（逐个通根）')
+          : rMode === 'count' ? (rTgt + '中至少 ' + rn + ' 个天干在地支藏干里有同五行')
+          : (rTgt + '中至少一个天干在地支藏干里有同五行');
+        if (rScope === 'seven') rDetail += '（七柱＝四柱＋胎元/命宫/身宫）';
+        return { ok: true, id: 'root', mode: rMode, scope: rScope, pos: rPos,
+                 min: rn || 1, label: rLabel, raw: t, detail: rDetail };
+      }
+
+      // 五行分布（缺木 / 一个金都没有 / 地支无水）
+      var wxMiss = t.match(/(?:缺|无|沒|没|没有|不带|不见|一个都?没有|全无)(金|木|水|火|土)/)
+                || t.match(/(金|木|水|火|土)(?:都没有|都无|全无|缺|一个都没有)/);
+      if (wxMiss && !/根|透|合|冲|刑|害|局|神|星|财|官|印|食|伤|比|劫|杀|枭|刃/.test(t.replace(wxMiss[0], ''))) {
+        var wxChar = wxMiss[1];
+        var wWhere = /藏干/.test(t) ? 'cang' : /天干/.test(t) ? 'gan' : /地支/.test(t) ? 'zhi' : 'any';
+        var wScope = /七柱|三垣|胎元|命宫|身宫/.test(t) ? 'seven' : 'four';
+        var wScopeTxt = wScope === 'seven' ? '七柱' : '四柱';
+        var wWhereTxt = wWhere === 'gan' ? '天干' : wWhere === 'zhi' ? '地支'
+                      : wWhere === 'cang' ? '地支藏干' : '天干地支';
+        return { ok: true, id: 'wx', wxs: [wxChar], where: wWhere, mode: 'none',
+                 scope: wScope, label: wScopeTxt + wWhereTxt + '缺' + wxChar, raw: t,
+                 detail: wScopeTxt + wWhereTxt + '里找不到' + wxChar
+                        + (wScope === 'seven' ? '（七柱＝四柱＋胎元/命宫/身宫）' : '') };
+      }
 
       if (/全透|一柱全透|藏干全现/.test(t)) {
         return { ok: true, id: 'quan', n: 'all', label: '一柱全透', raw: t,
@@ -1231,6 +1374,8 @@ function buildShunLabel(shun, gender, nianGan) {
       '寅透甲丙戊 / 天干见甲丙 / 地支见子辰（点名干支）',
       '三合局 / 申子辰三合 / 三会方 / 巳午未三会',
       '天干五合 / 官杀混杂 / 食伤生财 / 官印相生 / 地支相冲',
+      '七柱天干全无根 / 日干无根 / 天干全部有根（通根口径）',
+      '缺木 / 一个金都没有 / 地支无水（五行分布）',
       '多特征用 + 连：申子辰三合 + 官杀混杂',
       '加「不冲」排除相冲'
     ];
@@ -1248,6 +1393,12 @@ function buildShunLabel(shun, gender, nianGan) {
         case 'shishen':
           return { label: spec.label, mode: 'first',
                    test: shishenTest(spec.targets || [spec.target], n, spec.pos, spec.exact) };
+        case 'root':
+          return { label: spec.label || (spec.mode === 'none' ? '天干无根' : '天干有根'),
+                   mode: spec.mode === 'count' ? 'max' : 'first',
+                   test: rootTest(spec) };
+        case 'wx':
+          return { label: spec.label || '五行分布', mode: 'first', test: wxCountTest(spec) };
         case 'stems':
           return { label: spec.label, mode: 'first', test: stemsTest(spec.set) };
         case 'branches':
@@ -1359,12 +1510,10 @@ function buildShunLabel(shun, gender, nianGan) {
               var hi = (hOff + hi0) % 12;
               var h = hi * 2;
               var hp = hourPillar(riGan, h);
-              var ctx = {
-                st: [base.nian.gan, base.yue.gan, riGan, hp.gan],
-                br: [base.nian.zhi, base.yue.zhi, base.ri.zhi, hp.zhi],
-                riGan: riGan, ss: null
-              };
-              ctx.ss = [ss(riGan, ctx.st[0]), ss(riGan, ctx.st[1]), ss(riGan, ctx.st[2]), ss(riGan, ctx.st[3])];
+              var ctx = ctxOf7([base.nian, base.yue, base.ri, hp],
+                [taiYuan(base.yue.gan, base.yue.zhi),
+                 mingGong(base.yue.zhi, hp.zhi, base.nian.gan),
+                 shenGong(base.yue.zhi, hp.zhi, base.nian.gan)]);
               tried++;
               var r = P.test(ctx);
               if (!r) continue;
@@ -1412,13 +1561,19 @@ function buildShunLabel(shun, gender, nianGan) {
       { text: '食伤生财', label: '食伤生财' },
       { text: '官印相生', label: '官印相生' },
       { text: '地支相冲', label: '地支相冲' },
+      { text: '七柱天干全无根', label: '七柱天干全无根' },
+      { text: '日干无根', label: '日干无根' },
+      { text: '天干全部有根', label: '天干全部有根' },
+      { text: '七柱缺金', label: '七柱缺金' },
+      { text: '一个木都没有', label: '四柱缺木' },
       { text: '申子辰三合 + 官杀混杂', label: '三合 + 官杀混杂' }
     ];
 
     return {
       ss: ss, parse: parse, compile: compile, scan: scan, matchAt: matchAt,
-      ctxOf: ctxOf, PATTERNS: PATTERNS, HELP: HELP,
-      norm: norm, suggest: suggest, splitClauses: splitClauses
+      ctxOf: ctxOf, ctxOf7: ctxOf7, PATTERNS: PATTERNS, HELP: HELP,
+      norm: norm, suggest: suggest, splitClauses: splitClauses,
+      describe: function(spec) { var P = compile(spec); return P ? P.label : ''; }
     };
   })();
 
