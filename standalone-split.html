@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.96.0 | 2026-11-05 -->
+<!-- 八字排盘 ·  从真版 v0.98.0 | 2026-11-07 -->
+<!-- v0.98.0: 示例盘 + 听懂更多 —— ①造盘结果存进独立示例盘（localStorage bz_gen_examples，与档案 bz_archives_v2 完全隔离）：造盘即自动存入、同特征+四柱+性别去重置顶、上限 60 条、顶部角标计数、点一条按年月日时现算整盘重开（不存快照）、单条删除与清空、横幅「⭐ 转存档案」才进档案；②解析归一化（全角转半角、常见繁体转简体）+ 柱位（月柱七杀/时干正官）+ 精确计数（正好两个）+ 十神组（官杀透两干）+ 点名干支（寅透甲丙戊/天干见甲丙/地支见子辰）+ 五行认局（三合水局→申子辰）+ 多特征组合（顿号/且/和 → and，命中同时满足）+ 否定（不冲）+ 性别口令；认不出给 3 条候选不硬猜；scan 加 variant 支持 🎲 换一张（同句同 variant 稳定）。-->
+<!-- v0.97.0: 特征造盘 —— 一句话描述干支结构（一根透多干/一柱全透/七杀透两头/三合/三会/天干五合/官杀混杂/食伤生财/官印相生/地支相冲/透出最多极值），按真实出生时刻扫描命中盘：一日一发 paipan 取三柱 + 五鼠遁补十二时辰 + 命中后完整复核；起点按描述散列（同句结果稳定、不同特征散落年代范围），跳过未出生日期；只渲染不写档案，横幅回显证据（哪一柱藏几干透几干），正常排盘自动收起 -->
 <!-- v0.96.0: AI 搜索「三垣×十神」组合修复 —— ①柱位/目标柱指向胎元/命宫/身宫而 scope 缺省时自动升七柱（此前四柱集里无该柱恒 false 静默空结果，pillar/shishen/nayin/interact/pair 五处）②十神 where 新增 cang=藏干任一（含本气中余气，如丑藏辛）③十神 scope=dayun 修复（日主恒从四柱取，此前大运序列找日柱得空恒 false）④十神别名补 偏印/枭印→枭神、杀→七杀 ⑤条件面板十神补范围参数、纳音补柱位+范围 ⑥SYSTEM_PROMPT 补三垣点名教学/藏干十神/合并称谓拆解/4 条示例（胎元七杀 or 端到端/命宫藏正印/大运透七杀/身宫干支）；main.js 新增 22 条断言 -->
 <!-- v0.95.0: 分析记录阅读模式 —— 「分析记录」角上加「阅读/编辑」切换，阅读态把纯文本智能排版（md 标题/编号行/问答标签/列表/粗体，连续空行规整统一段距，15.5px·2.05 行距）；编辑态行距 1.7→2.0、字号 14→14.5px；粘贴自动规整（压空行、清行尾空白）；阅读偏好记忆跨会话 -->
 <!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
@@ -145,7 +147,39 @@
   .ai-dialog .btn-ok:hover { background:var(--c-red); }
   .ai-dialog .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
   .ai-dialog .btn-cancel:hover { background:var(--c-line); }
-  .ai-dialog .parse-result { font-size:12px; color:var(--c-gray); margin-top:8px; min-height:18px; }
+  .ai-dialog .gen-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+  .ai-dialog .gen-chip { font-size:12px; padding:3px 9px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .ai-dialog .gen-chip:hover { border-color:var(--c-red); color:var(--c-red); }
+  .ai-dialog .gen-opts { display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:12px; color:var(--c-gray); margin-top:10px; }
+  .ai-dialog .gen-opts input[type=number] { width:70px; }
+  #genBanner { display:none; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; padding:8px 12px; border:1px dashed var(--c-red); border-radius:3px; background:rgba(180,40,40,.05); font-size:13px; font-family:var(--font-body); color:var(--c-ink); }
+  #genBanner .gen-badge { font-size:11px; padding:2px 7px; border-radius:10px; background:var(--c-red); color:#fff; letter-spacing:.05em; white-space:nowrap; }
+  #genBanner .gen-ev { color:var(--c-ink); }
+  #genBanner .gen-meta { color:var(--c-gray); font-size:12px; }
+  #genBanner .gen-close { margin-left:auto; border:none; background:transparent; color:var(--c-gray); cursor:pointer; font-size:13px; }
+  .ai-dialog .gen-suggest { display:flex; flex-wrap:wrap; gap:6px; margin:-4px 0 8px; font-size:12px; }
+  .ai-dialog .gen-sg-label { color:var(--c-gray); align-self:center; }
+  .ai-dialog .gen-sg { font-size:12px; padding:2px 8px; border:1px dashed var(--c-line); border-radius:12px; background:transparent; color:var(--c-ink); cursor:pointer; font-family:var(--font-body); }
+  .ai-dialog .gen-sg:hover { border-color:var(--c-red); color:var(--c-red); }
+  .ai-dialog .gen-help { display:none; margin:0 0 8px; padding:8px 10px; border:1px dashed var(--c-line); border-radius:4px; font-size:12px; color:var(--c-ink); line-height:1.75; text-align:left; }
+  .ai-dialog .gen-link { border:none; background:transparent; color:var(--c-gray); font-size:12px; cursor:pointer; text-decoration:underline; padding:0; font-family:var(--font-body); }
+  .ai-dialog .gen-lib-num { font-size:11px; color:var(--c-red); margin-left:2px; }
+  #genBanner .gen-saved { font-size:11px; color:var(--c-red); border:1px solid var(--c-red); border-radius:10px; padding:1px 7px; white-space:nowrap; }
+  #genBanner .gen-act { font-size:12px; padding:2px 8px; border:1px solid var(--c-line); border-radius:3px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; font-family:var(--font-body); }
+  #genBanner .gen-act:hover { border-color:var(--c-red); color:var(--c-red); }
+  .gen-lib-dialog { max-width:640px; }
+  .gen-lib-list { max-height:420px; overflow-y:auto; margin:8px 0; text-align:left; border:1px solid var(--c-line); border-radius:4px; }
+  .gen-lib-empty { padding:22px 12px; text-align:center; color:var(--c-gray); font-size:13px; }
+  .gen-lib-item { display:flex; align-items:flex-start; gap:8px; padding:9px 10px; border-bottom:1px solid var(--c-line); }
+  .gen-lib-item:last-child { border-bottom:none; }
+  .gen-lib-item:hover { background:rgba(180,40,40,.04); }
+  .gen-lib-main { flex:1; cursor:pointer; min-width:0; }
+  .gen-lib-head { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:13px; }
+  .gen-lib-gz { font-family:var(--font-display); letter-spacing:.1em; }
+  .gen-lib-ev { font-size:12px; color:var(--c-ink); margin-top:2px; }
+  .gen-lib-meta { font-size:11px; color:var(--c-gray); margin-top:3px; }
+  .gen-lib-del { border:none; background:transparent; color:var(--c-gray); cursor:pointer; font-size:12px; padding:2px 4px; }
+  .gen-lib-del:hover { color:var(--c-red); }
 
   /* 双胞胎对比：三栏布局 — 盘式+大宝 | 小宝 | 大运流年 */
   .twin-wrap { display:block; overflow-x:hidden; }
@@ -1210,6 +1244,8 @@
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
       <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
+      <button class="btn-ai" onclick="APP.showGenChart()" title="按干支特征生成示例命盘">🧩 造盘</button>
+      <button class="btn-ai" onclick="APP.showGenLib()" title="示例盘：造盘结果都存在这里，不进档案">📚 示例盘<span class="gen-lib-num" id="genLibNum"></span></button>
       <button class="btn btn-privacy" id="btnSaveCloud" onclick="window.RECORDS.saveCurrentPaipan()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">💾 保存云端</button>
       <button class="btn btn-privacy" id="btnMultiDL" onclick="RENDER.toggleMultiDL()" title="多选模式：勾选两个大运与其底下的多个流年（流年只能是所选大运底下的，取消大运时其流年一并清除）；流月（≤4）只能挂已勾流年、流日（≤4）只能挂已勾流月，取消上层时下层联动清除；时柱右=早大运、身宫右=晚大运，按起始年升序排列" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☰ 多选岁运</button>
       <button class="btn btn-privacy" id="btnMyRecords" onclick="window.RECORDS.openRecordsPanel()" style="padding:5px 12px;background:var(--c-paper);color:var(--c-ink);border:1px solid var(--c-line);border-radius:2px;cursor:pointer;font-size:13px;letter-spacing:.05em;font-family:var(--font-display);">☁️ 我的排盘</button>
@@ -1232,6 +1268,42 @@
     </div>
   </div>
 
+  <!-- ===== v0.97.0 特征造盘弹窗 ===== -->
+  <div class="ai-overlay" id="genOverlay">
+    <div class="ai-dialog">
+      <h3>🧩 特征造盘</h3>
+      <div class="hint">用一句话描述想看的干支结构，按真实出生时刻扫出一个符合的命盘示例<br>例：一根透多干 / 七杀正好两个 / 月柱七杀 / 寅透甲丙戊 / 申子辰三合 + 官杀混杂</div>
+      <div class="gen-chips" id="genChips"></div>
+      <textarea id="genInput" placeholder="例如：一根透多干" oninput="APP.genPreview()"></textarea>
+      <div class="gen-suggest" id="genSuggest"></div>
+      <div class="gen-help" id="genHelp"></div>
+      <div class="gen-opts">
+        <label>性别 <select id="genGender"><option value="男" selected>男</option><option value="女">女</option></select></label>
+        <span>年代 <input type="number" id="genStart" value="1960" min="1000" max="2100"> — <input type="number" id="genEnd" value="2026" min="1000" max="2100"></span>
+        <button type="button" class="gen-link" onclick="APP.toggleGenHelp()">？都能听懂什么</button>
+      </div>
+      <div class="parse-result" id="genPreview"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="APP.hideGenChart()">取消</button>
+        <button class="btn-cancel" onclick="APP.genReroll()" title="同一特征换一张">🎲 换一张</button>
+        <button class="btn-ok" onclick="APP.runGenChart()">生成示例</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.98.0 示例盘（造盘结果的存档，不进档案） ===== -->
+  <div class="ai-overlay" id="genLibOverlay">
+    <div class="ai-dialog gen-lib-dialog">
+      <h3>📚 示例盘</h3>
+      <div class="hint">造盘生成的示例都自动存在这里，不进档案；点一条即可重开，随时可删</div>
+      <div class="gen-lib-list" id="genLibList"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="APP.genLibClear()">清空</button>
+        <button class="btn-ok" onclick="APP.hideGenLib()">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 回收站弹窗 ===== -->
   <div class="ai-overlay" id="trashOverlay">
     <div class="ai-dialog">
@@ -1243,6 +1315,8 @@
       </div>
     </div>
   </div>
+  <!-- ===== v0.97.0 造盘特征横幅（示例盘证据，不写档案） ===== -->
+  <div id="genBanner"></div>
   <div id="output"><div class="loading">输入出生时间，点击「排盘」</div></div>
 
   <!-- ===== v0.37.0 盘面对比 ===== -->

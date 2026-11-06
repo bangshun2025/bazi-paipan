@@ -620,6 +620,355 @@ document.addEventListener('click', function(e) {
   if (e.target.id === 'aiOverlay') hideAiInput();
 });
 
+// ============================================================
+// v0.98.0 特征造盘 — 一句话描述干支结构，扫真实出生时刻生成示例盘
+// 造盘结果存进「示例盘」（独立 localStorage key），不进正式档案：
+// 不动 autoSaveArchive / saveLastChart，避免污染真实库；要入档得手动点「转存档案」
+// ============================================================
+var genLastText = '';
+var genPreviewText = '';
+var genVariant = 0;
+var genCurrent = null;
+
+var GEN_LIB_KEY = 'bz_gen_examples';
+var GEN_LIB_MAX = 60;
+
+function genNeedLogin() {
+  if (window.AUTH && AUTH.isLoggedIn && !AUTH.isLoggedIn() && !/[\?&]test=1(&|$)/.test(location.search)) {
+    AUTH.requireLogin();
+    return true;
+  }
+  return false;
+}
+
+function genGz(data) {
+  if (!data) return '';
+  return [data.nian, data.yue, data.ri, data.shi].map(function(p) { return p.gan + p.zhi; }).join(' ');
+}
+
+function showGenChart() {
+  var ov = document.getElementById('genOverlay');
+  if (!ov) return;
+  ov.classList.add('show');
+  var chips = document.getElementById('genChips');
+  if (chips && !chips.childNodes.length && window.ALGO && ALGO.GEN) {
+    for (var i = 0; i < ALGO.GEN.PATTERNS.length; i++) {
+      (function(p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'gen-chip';
+        b.textContent = p.label;
+        b.title = p.text;
+        b.onclick = function() { genPick(p.text); };
+        chips.appendChild(b);
+      })(ALGO.GEN.PATTERNS[i]);
+    }
+  }
+  var inp = document.getElementById('genInput');
+  if (inp) inp.value = genLastText || '一根透多干';
+  genPreviewText = '';
+  genPreview();
+  genLibRefreshCount();
+  setTimeout(function() { if (inp) inp.focus(); }, 100);
+}
+
+function hideGenChart() {
+  var ov = document.getElementById('genOverlay');
+  if (ov) ov.classList.remove('show');
+  var help = document.getElementById('genHelp');
+  if (help) help.style.display = 'none';
+}
+
+function genPick(text) {
+  var inp = document.getElementById('genInput');
+  if (inp) inp.value = text;
+  genVariant = 0;
+  genPreview();
+}
+
+function toggleGenHelp() {
+  var el = document.getElementById('genHelp');
+  if (!el) return;
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  var list = (window.ALGO && ALGO.GEN && ALGO.GEN.HELP) ? ALGO.GEN.HELP : [];
+  var html = '';
+  for (var i = 0; i < list.length; i++) html += '<div class="gen-help-line">· ' + list[i] + '</div>';
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+function genPreview() {
+  var inp = document.getElementById('genInput');
+  var out = document.getElementById('genPreview');
+  if (!inp || !out) return null;
+  if (inp.value !== genPreviewText) { genPreviewText = inp.value; genVariant = 0; }
+  var r = (window.ALGO && ALGO.GEN)
+    ? ALGO.GEN.parse(inp.value)
+    : { ok: false, detail: '造盘引擎未加载' };
+  out.textContent = r.ok ? ('✅ 识别：' + r.label + ' — ' + r.detail) : ('⚠ ' + (r.detail || '未识别'));
+  out.style.color = r.ok ? '' : 'var(--c-red)';
+  var sg = document.getElementById('genSuggest');
+  if (sg) {
+    if (r.ok) {
+      sg.innerHTML = '';
+    } else {
+      var list = (r.suggest && r.suggest.length) ? r.suggest : [];
+      var html = '';
+      for (var i = 0; i < list.length; i++) {
+        html += '<button type="button" class="gen-sg" onclick="APP.genPick(\'' + list[i] + '\')">' + list[i] + '</button>';
+      }
+      sg.innerHTML = html ? ('<span class="gen-sg-label">说的是不是：</span>' + html) : '';
+    }
+  }
+  return r;
+}
+
+function runGenChart() {
+  var spec = genPreview();
+  if (!spec || !spec.ok) return;
+  if (genNeedLogin()) return;
+  var gEl = document.getElementById('genGender');
+  var sEl = document.getElementById('genStart');
+  var eEl = document.getElementById('genEnd');
+  var out = document.getElementById('genPreview');
+  if (!out) return;
+  if (spec.gender && gEl) gEl.value = spec.gender;
+  out.textContent = '⏳ 正在扫描真实出生时刻…';
+  out.style.color = '';
+  var variant = genVariant;
+  // 让「扫描中」先落屏，再跑同步扫描（60 年量级 0.1–0.25s）
+  setTimeout(function() {
+    var t0 = Date.now();
+    var res = ALGO.GEN.scan(spec, {
+      gender: (spec.gender || (gEl ? gEl.value : '男')),
+      startYear: sEl ? sEl.value : 1960,
+      endYear: eEl ? eEl.value : 2026,
+      variant: variant
+    });
+    var cost = Date.now() - t0;
+    if (!res.ok) {
+      out.textContent = '⚠ ' + res.reason + '（已试 ' + res.tried + ' 个出生时刻，' + cost + 'ms）';
+      out.style.color = 'var(--c-red)';
+      return;
+    }
+    var inp = document.getElementById('genInput');
+    genLastText = inp ? inp.value : spec.raw;
+    hideGenChart();
+    applyGenChart(res, cost, false, genLastText);
+  }, 30);
+}
+
+function genReroll() {
+  genVariant++;
+  runGenChart();
+}
+
+function applyGenChart(res, cost, fromLib, text) {
+  var name = '示例·' + res.label;
+  var setv = function(id, v) {
+    var el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  // 回填表单：盘面与输入一致，随时点「排盘」可复现
+  setv('inName', name);
+  setv('inNickname', '');
+  setv('inYiming', '');
+  setv('inGender', res.gender);
+  setv('inYear', res.y);
+  setv('inMonth', res.m);
+  setv('inDay', res.d);
+  setv('inHour', res.h);
+  setv('inMin', 0);
+  setv('inTwin', '0');
+  if (APP.calendarType !== 'solar') APP.toggleCalendar('solar', true);
+  var useSolar = document.getElementById('useSolar');
+  if (useSolar && useSolar.checked) { useSolar.checked = false; APP.toggleSolar(); }
+
+  var data = res.data;
+  data.name = name;
+  data.displayName = name;
+  data.trueSolar = null;
+  data.julian = null;
+  data.lng = null;
+  data.renYuan = ALGO.renYuanSiLing(res.y, res.m, res.d, res.h, 0);
+
+  ALGO.clearTaiji();
+  var output = document.getElementById('output');
+  if (!output) return;
+  output.innerHTML = '';
+  RENDER.renderChart(data);
+  APP.setCurrentBaziResult(RENDER.extractBaziFromPaipan(data));
+  if (typeof updateGongWeiTags === 'function') updateGongWeiTags();
+
+  var item = null;
+  if (!fromLib) item = genLibAdd(res, text || '');
+  genCurrent = { res: res, id: item ? item.id : (res.libId || null) };
+  renderGenBanner(res, cost, item ? item.id : null, !!fromLib);
+  genLibRefreshCount();
+  return genCurrent;
+}
+
+function renderGenBanner(res, cost, savedId, isReopen) {
+  var el = document.getElementById('genBanner');
+  if (!el) return;
+  var gz = genGz(res.data);
+  var date = res.y + '-' + ALGO.pad(res.m) + '-' + ALGO.pad(res.d) + ' ' + ALGO.pad(res.h) + ':00';
+  var costTxt = isReopen ? '重开示例' : ('扫 ' + res.tried + ' 个出生时刻/' + cost + 'ms');
+  el.innerHTML = '<span class="gen-badge">示例盘</span>'
+    + '<b>' + res.label + '</b>'
+    + '<span class="gen-ev">' + res.evidence + '</span>'
+    + '<span class="gen-meta">' + date + ' · ' + res.gender + '命 · ' + gz + ' · ' + costTxt + '</span>'
+    + '<span class="gen-saved" id="genSaved">' + (savedId ? '✓ 已存示例盘 · 未进档案' : '示例盘 · 未进档案') + '</span>'
+    + '<button class="gen-act" onclick="APP.showGenLib()">📚 示例盘</button>'
+    + '<button class="gen-act" onclick="APP.genToArchive()">⭐ 转存档案</button>'
+    + '<button class="gen-close" onclick="APP.hideGenBanner()" title="收起">✕</button>';
+  el.style.display = 'flex';
+}
+
+function hideGenBanner() {
+  var el = document.getElementById('genBanner');
+  if (!el) return;
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+// ---------- 示例盘（造盘结果的独立存档，不进正式档案） ----------
+function genLibRead() {
+  try {
+    var a = JSON.parse(localStorage.getItem(GEN_LIB_KEY) || '[]');
+    if (!Array.isArray(a)) return [];
+    return a.filter(function(x) { return x && x.y && x.label; });
+  } catch (e) { return []; }
+}
+
+function genLibWrite(arr) {
+  try { localStorage.setItem(GEN_LIB_KEY, JSON.stringify(arr.slice(0, GEN_LIB_MAX))); } catch (e) {}
+  genLibRefreshCount();
+}
+
+function genLibRefreshCount() {
+  var n = genLibRead().length;
+  var el = document.getElementById('genLibNum');
+  if (el) el.textContent = n ? String(n) : '';
+  return n;
+}
+
+function genLibAdd(res, text) {
+  var arr = genLibRead();
+  var item = {
+    id: 'g' + Date.now() + Math.floor(Math.random() * 900 + 100),
+    text: String(text || ''),
+    label: res.label,
+    gender: res.gender,
+    y: res.y, m: res.m, d: res.d, h: res.h,
+    tried: res.tried || 0,
+    evidence: res.evidence || '',
+    pillars: genGz(res.data),
+    createdAt: Date.now()
+  };
+  var key = item.label + '|' + item.pillars + '|' + item.gender;
+  var kept = [];
+  for (var i = 0; i < arr.length; i++) {
+    var k = arr[i].label + '|' + arr[i].pillars + '|' + arr[i].gender;
+    if (k === key) { item.id = arr[i].id; continue; }
+    kept.push(arr[i]);
+  }
+  kept.unshift(item);
+  genLibWrite(kept);
+  return item;
+}
+
+function genTimeTxt(ts) {
+  var d = new Date(ts);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+         String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function showGenLib() {
+  var ov = document.getElementById('genLibOverlay');
+  if (!ov) return;
+  renderGenLib();
+  ov.classList.add('show');
+}
+
+function hideGenLib() {
+  var ov = document.getElementById('genLibOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
+function renderGenLib() {
+  var box = document.getElementById('genLibList');
+  if (!box) return;
+  var arr = genLibRead();
+  if (!arr.length) {
+    box.innerHTML = '<div class="gen-lib-empty">示例盘还是空的。点「🧩 造盘」生成一张，会自动存到这里（不进档案）。</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < arr.length; i++) {
+    var it = arr[i];
+    html += '<div class="gen-lib-item">'
+      + '<div class="gen-lib-main" onclick="APP.genLibOpen(\'' + it.id + '\')">'
+      + '<div class="gen-lib-head"><b>' + escHtml(it.label) + '</b>'
+      + '<span class="gen-lib-gz">' + escHtml(it.pillars) + '</span></div>'
+      + '<div class="gen-lib-ev">' + escHtml(it.evidence) + '</div>'
+      + '<div class="gen-lib-meta">' + it.y + '-' + ALGO.pad(it.m) + '-' + ALGO.pad(it.d) + ' '
+      + ALGO.pad(it.h) + ':00 · ' + it.gender + '命 · 存于 ' + genTimeTxt(it.createdAt) + '</div>'
+      + '</div>'
+      + '<button class="gen-lib-del" title="从示例盘删除" onclick="event.stopPropagation();APP.genLibDel(\'' + it.id + '\')">✕</button>'
+      + '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function genLibOpen(id) {
+  var arr = genLibRead(), it = null;
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) it = arr[i];
+  if (!it) return;
+  var data = ALGO.paipan('', it.gender, it.y, it.m, it.d, it.h, 0);
+  if (!data) { alert('这张示例盘打不开了'); return; }
+  hideGenLib();
+  var res = {
+    ok: true, y: it.y, m: it.m, d: it.d, h: it.h, mi: 0, gender: it.gender,
+    data: data, evidence: it.evidence, label: it.label, tried: it.tried, libId: it.id
+  };
+  applyGenChart(res, 0, true, it.text);
+}
+
+function genLibDel(id) {
+  var arr = genLibRead(), kept = [];
+  for (var i = 0; i < arr.length; i++) if (arr[i].id !== id) kept.push(arr[i]);
+  genLibWrite(kept);
+  if (genCurrent && genCurrent.id === id) {
+    var el = document.getElementById('genSaved');
+    if (el) el.textContent = '示例盘 · 未进档案';
+    genCurrent.id = null;
+  }
+  renderGenLib();
+}
+
+function genLibClear() {
+  if (!genLibRead().length) return;
+  if (!confirm('清空示例盘？只会删掉示例，不影响档案。')) return;
+  genLibWrite([]);
+  genCurrent && (genCurrent.id = null);
+  renderGenLib();
+}
+
+function genToArchive() {
+  if (!genCurrent) return;
+  if (genNeedLogin()) return;
+  ARCHIVE.saveArchive();
+  var el = document.getElementById('genSaved');
+  if (el) el.textContent = '✓ 已转存档案';
+}
+
+// 点击遮罩关闭造盘 / 示例盘弹窗
+document.addEventListener('click', function(e) {
+  if (!e.target) return;
+  if (e.target.id === 'genOverlay') hideGenChart();
+  if (e.target.id === 'genLibOverlay') hideGenLib();
+});
 
 // ============================================================
 // v0.23.0 盘面截图 — #output 一键导出 PNG 长图
@@ -6733,6 +7082,196 @@ function captureScreenshot() {
     }
   })();
 
+  // === v0.97.0 特征造盘 ===
+  (function() {
+    var sec = 'v0.97 造盘';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '特征造盘（v0.97.0）' });
+      tests.push(eq(sec + ' 01: 引擎挂载 parse/scan/matchAt', !!(G && typeof G.parse === 'function' && typeof G.scan === 'function' && typeof G.matchAt === 'function'), true));
+
+      var p1 = G.parse('一根透多干');
+      tests.push(eq(sec + ' 02: 「一根透多干」→ tou', p1.id, 'tou'));
+      tests.push(eq(sec + ' 03: 「多」= ≥2', p1.n, 2));
+      tests.push(eq(sec + ' 04: 「一根透三干」→ n=3', G.parse('一根透三干').n, 3));
+      tests.push(eq(sec + ' 05: 「一柱全透」→ quan', G.parse('一柱全透').id, 'quan'));
+      tests.push(eq(sec + ' 06: 「一根透最多」→ toumax', G.parse('一根透最多').id, 'toumax'));
+      var p7 = G.parse('七杀透两头');
+      tests.push(eq(sec + ' 07: 「七杀透两头」→ shishen/七杀', p7.id + '/' + p7.target, 'shishen/七杀'));
+      tests.push(eq(sec + ' 08: 「两头」→ n=2', p7.n, 2));
+      tests.push(eq(sec + ' 09: 「七杀透干」→ n=1', G.parse('七杀透干').n, 1));
+      tests.push(eq(sec + ' 10: 「申子辰三合」→ sanhe', G.parse('申子辰三合').id, 'sanhe'));
+      tests.push(eq(sec + ' 11: 「三会方」→ sanhui', G.parse('三会方').id, 'sanhui'));
+      tests.push(eq(sec + ' 12: 「天干五合」→ wuhe', G.parse('天干五合').id, 'wuhe'));
+      tests.push(eq(sec + ' 13: 「官杀混杂」→ guansha', G.parse('官杀混杂').id, 'guansha'));
+      tests.push(eq(sec + ' 14: 「食伤生财」→ shishang', G.parse('食伤生财').id, 'shishang'));
+      tests.push(eq(sec + ' 15: 「官印相生」→ guanyin', G.parse('官印相生').id, 'guanyin'));
+      tests.push(eq(sec + ' 16: 「地支相冲」→ liuchong', G.parse('地支相冲').id, 'liuchong'));
+      tests.push(eq(sec + ' 17: 无法识别不硬猜', G.parse('随便写点什么').ok, false));
+
+      // 正向 fixture：2000-01-01 寅时 = 己卯 丙子 戊午 甲寅（寅藏甲丙戊，三透）
+      var pos = G.matchAt('一根透三干', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 18: 寅藏甲丙戊三透命中', pos.ok, true));
+      tests.push(eq(sec + ' 19: 证据点名地支与「三透」', !!(pos.ok && pos.evidence.indexOf('寅') >= 0 && pos.evidence.indexOf('三透') >= 0), true));
+      // 反向 fixture：1982-10-18 05:01 壬戌 庚戌 甲戌 丁卯（戌藏戊辛丁仅透丁）
+      tests.push(eq(sec + ' 20: 反向盘不满足≥2透', G.matchAt('一根透多干', 1982, 10, 18, 5, '男').ok, false));
+      tests.push(eq(sec + ' 21: 同盘七杀透干命中', G.matchAt('七杀透干', 1982, 10, 18, 5, '男').ok, true));
+      tests.push(eq(sec + ' 22: 同盘七杀透两头不命中', G.matchAt('七杀透两头', 1982, 10, 18, 5, '男').ok, false));
+
+      // 扫描：命中盘必须能复核，且带完整排盘（大运/起运）
+      var sc = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 2000, endYear: 2000 });
+      tests.push(eq(sec + ' 23: 2000 年扫出三透示例', sc.ok, true));
+      var scRe = sc.ok ? G.matchAt('一根透三干', sc.y, sc.m, sc.d, sc.h, sc.gender) : { ok: false };
+      tests.push(eq(sec + ' 24: 扫描结果复核仍命中', scRe.ok, true));
+      tests.push(eq(sec + ' 25: 结果带完整排盘', !!(sc.ok && sc.data && sc.data.daYun && sc.data.daYun.length > 0 && sc.data.qiYun), true));
+      tests.push(eq(sec + ' 26: 不造未出生日期的盘', sc.ok ? (new Date(sc.y, sc.m - 1, sc.d) <= new Date()) : false, true));
+
+      // 立春：造盘必须走 paipan，2000-01-01 仍是己卯年（裸拼会误成庚辰）
+      var lc = ALGO.paipan('', '男', 2000, 1, 1, 3, 0);
+      tests.push(eq(sec + ' 27: 造盘日在立春前不换年', lc.nian.gan + lc.nian.zhi, '己卯'));
+
+      // 十神口径与主引擎一致，且不受当前太极点改写
+      var savedT = ALGO.getTaiji();
+      ALGO.clearTaiji();
+      var pairs = [['甲','辛'],['甲','庚'],['丙','壬'],['癸','乙'],['壬','丁'],['庚','戊']];
+      var sameSS = true;
+      for (var pi = 0; pi < pairs.length; pi++) {
+        if (G.ss(pairs[pi][0], pairs[pi][1]) !== ALGO.shiShen(pairs[pi][0], pairs[pi][1], false)) sameSS = false;
+      }
+      tests.push(eq(sec + ' 28: 十神口径与主引擎一致', sameSS, true));
+      ALGO.setTaiji('丙', '年', 'gan');
+      var isoSS = G.ss('甲', '辛') === '正官' && ALGO.shiShen('甲', '辛', false) !== '正官';
+      tests.push(eq(sec + ' 29: 太极点开启时判据不漂移', isoSS, true));
+      if (savedT && savedT.active) ALGO.setTaiji(savedT.gan, savedT.col, savedT.kind); else ALGO.clearTaiji();
+
+      // UI 接线
+      tests.push(eq(sec + ' 30: 造盘入口与弹窗齐备', !!(document.querySelector('[onclick="APP.showGenChart()"]') && document.getElementById('genOverlay') && document.getElementById('genPreview') && document.getElementById('genBanner')), true));
+      tests.push(eq(sec + ' 31: 生成示例/取消按钮接线', !!(document.querySelector('[onclick="APP.runGenChart()"]') && document.querySelector('[onclick="APP.hideGenChart()"]')), true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
+  // === v0.98.0 示例盘 + 描述解析增强 ===
+  (function() {
+    var sec = 'v0.98 示例盘';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '示例盘 · 听懂更多（v0.98.0）' });
+
+      // 归一化与容错
+      tests.push(eq(sec + ' 01: 繁体归一「兩殺透兩頭」', G.parse('兩殺透兩頭').label, '七杀透两干'));
+      tests.push(eq(sec + ' 02: 全角与空格容错', G.parse('Ａ：一根透多干　').id, 'tou'));
+
+      // 柱位限定
+      tests.push(eq(sec + ' 03: 「月柱七杀」限定月柱', G.parse('月柱七杀').pos, 1));
+      tests.push(eq(sec + ' 04: 「时干正官」限定时干', G.parse('时干正官').pos, 3));
+
+      // 精确计数
+      tests.push(eq(sec + ' 05: 「正好两个」= 精确计数', G.parse('七杀正好两个').exact, true));
+      tests.push(eq(sec + ' 06: 无「正好」= ≥N', G.parse('七杀透两头').exact, false));
+
+      // 十神组
+      tests.push(eq(sec + ' 07: 「官杀透两干」= 正官+七杀', G.parse('官杀透两干').targets.join('/'), '正官/七杀'));
+      tests.push(eq(sec + ' 08: 财星/印星/比劫/食伤 组名',
+        [G.parse('财星透两头').label, G.parse('印星透两头').label,
+         G.parse('比劫透两头').label, G.parse('食伤透两头').label].join('|'),
+        '财星透两干|印星透两干|比劫透两干|食伤透两干'));
+
+      // 点名干支
+      var bt = G.parse('寅透甲丙戊');
+      tests.push(eq(sec + ' 09: 「寅透甲丙戊」点名藏干', bt.id + '/' + bt.br + '/' + bt.gans.join(''), 'brtou/寅/甲丙戊'));
+      tests.push(eq(sec + ' 10: 「天干见甲丙」点名天干', G.parse('天干见甲丙').set.join(''), '甲丙'));
+      tests.push(eq(sec + ' 11: 「地支见子辰」点名地支', G.parse('地支见子辰').set.join(''), '子辰'));
+
+      // 五行认局
+      tests.push(eq(sec + ' 12: 「三合水局」认成申子辰', G.parse('三合水局').sets[0].zhi.join(''), '申子辰'));
+      tests.push(eq(sec + ' 13: 「巳午未三会」认成火方', G.parse('巳午未三会').sets[0].wx, '火'));
+
+      // 多特征组合 / 否定 / 性别
+      var cmb = G.parse('三合水局、七杀透两头');
+      tests.push(eq(sec + ' 14: 顿号连接 = 组合特征', cmb.id + '/' + cmb.parts.length, 'and/2'));
+      tests.push(eq(sec + ' 15: 「不冲」作排除条件', G.parse('官杀混杂且不冲').not.join(''), 'liuchong'));
+      tests.push(eq(sec + ' 16: 「坤造」认性别', G.parse('坤造 七杀透两头').gender, '女'));
+
+      // 认不出时不硬猜，给建议
+      var bad = G.parse('不清楚');
+      tests.push(eq(sec + ' 17: 认不出给建议而非硬猜', bad.ok + '/' + (bad.suggest.length > 0), 'false/true'));
+      tests.push(eq(sec + ' 18: 可听懂清单齐备', G.HELP.length >= 8, true));
+
+      // 组合特征真能扫出来，证据两段都在，且能复核
+      var sad = G.scan(G.parse('申子辰三合 + 官杀混杂'), { gender: '男', startYear: 1995, endYear: 2005 });
+      tests.push(eq(sec + ' 19: 组合特征扫出命中盘', sad.ok, true));
+      tests.push(eq(sec + ' 20: 组合盘两段证据都在',
+        !!(sad.ok && sad.evidence.indexOf('三合') >= 0 && sad.evidence.indexOf('官杀混杂') >= 0), true));
+      tests.push(eq(sec + ' 21: 组合盘复核仍命中',
+        sad.ok ? G.matchAt('申子辰三合 + 官杀混杂', sad.y, sad.m, sad.d, sad.h, sad.gender).ok : false, true));
+
+      // 精确计数扫描
+      var sex = G.scan(G.parse('七杀正好两个'), { gender: '男', startYear: 1990, endYear: 2015 });
+      tests.push(eq(sec + ' 22: 「正好两个」结果就是 ×2', !!(sex.ok && sex.evidence.indexOf('×2') >= 0), true));
+
+      // 换一张 vs 稳定
+      var v0 = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 0 });
+      var v1 = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 1 });
+      var v0b = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 0 });
+      tests.push(eq(sec + ' 23: 换一张得到不同盘',
+        !!(v0.ok && v1.ok && (v0.y + '-' + v0.m + '-' + v0.d + '-' + v0.h) !==
+           (v1.y + '-' + v1.m + '-' + v1.d + '-' + v1.h)), true));
+      tests.push(eq(sec + ' 24: 同一描述同一 variant 结果稳定',
+        !!(v0.ok && v0b.ok && v0.y === v0b.y && v0.m === v0b.m && v0.d === v0b.d && v0.h === v0b.h), true));
+
+      // 示例盘：独立存档、去重、删除、不写正式档案
+      var libBak = null, archBak = null;
+      try { libBak = localStorage.getItem(GEN_LIB_KEY); } catch (e) {}
+      try { archBak = localStorage.getItem('bz_archives_v2'); } catch (e) {}
+      try {
+        localStorage.removeItem(GEN_LIB_KEY);
+        var fakeData = {
+          nian: { gan: '甲', zhi: '辰' }, yue: { gan: '辛', zhi: '未' },
+          ri: { gan: '乙', zhi: '亥' }, shi: { gan: '辛', zhi: '巳' }
+        };
+        var fake = { label: '七杀透两干', gender: '男', y: 2024, m: 7, d: 10, h: 10,
+                     tried: 20, evidence: '天干七杀×2', data: fakeData };
+        var it1 = genLibAdd(fake, '七杀透两头');
+        tests.push(eq(sec + ' 25: 生成即写入示例盘', genLibRead().length, 1));
+        tests.push(eq(sec + ' 26: 示例盘条目带四柱', genLibRead()[0].pillars, '甲辰 辛未 乙亥 辛巳'));
+        genLibAdd(fake, '七杀透两头');
+        tests.push(eq(sec + ' 27: 同特征同四柱去重', genLibRead().length, 1));
+        tests.push(eq(sec + ' 28: 去重时复用原 id', genLibRead()[0].id, it1.id));
+        genLibAdd({ label: '申子辰三合水局', gender: '女', y: 2000, m: 5, d: 26, h: 0,
+                    tried: 3, evidence: '地支申子辰三合', data: fakeData }, '申子辰三合');
+        tests.push(eq(sec + ' 29: 新示例排在最前', genLibRead()[0].label, '申子辰三合水局'));
+        tests.push(eq(sec + ' 30: 示例盘不写正式档案',
+          (function() { try { return localStorage.getItem('bz_archives_v2'); } catch (e) { return 'ERR'; } })(), archBak));
+        genLibDel(it1.id);
+        tests.push(eq(sec + ' 31: 删除指定示例', genLibRead().length, 1));
+        genLibWrite([]);
+        tests.push(eq(sec + ' 32: 清空示例盘', genLibRead().length, 0));
+        tests.push(eq(sec + ' 33: 计数与条目同步', genLibRefreshCount(), 0));
+      } finally {
+        try {
+          if (libBak === null) localStorage.removeItem(GEN_LIB_KEY);
+          else localStorage.setItem(GEN_LIB_KEY, libBak);
+        } catch (e) {}
+      }
+
+      // UI 接线
+      tests.push(eq(sec + ' 34: 示例盘入口/弹窗/列表齐备',
+        !!(document.querySelector('[onclick="APP.showGenLib()"]') &&
+           document.getElementById('genLibOverlay') && document.getElementById('genLibList')), true));
+      tests.push(eq(sec + ' 35: 换一张/建议/可听懂清单接线',
+        !!(document.querySelector('[onclick="APP.genReroll()"]') &&
+           document.getElementById('genSuggest') &&
+           document.querySelector('[onclick="APP.toggleGenHelp()"]')), true));
+      tests.push(eq(sec + ' 36: 横幅带转存档案按钮',
+        typeof genToArchive === 'function' && typeof genLibOpen === 'function' &&
+        typeof genLibRefreshCount === 'function', true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');
@@ -6896,6 +7435,22 @@ window.__testAppend = function(t) {
     TIME_MOD: TIME_MOD,
     parseNaturalInput: parseNaturalInput,
     doAiParse: doAiParse,
+    showGenChart: showGenChart,
+    hideGenChart: hideGenChart,
+    genPick: genPick,
+    genPreview: genPreview,
+    genReroll: genReroll,
+    toggleGenHelp: toggleGenHelp,
+    runGenChart: runGenChart,
+    applyGenChart: applyGenChart,
+    hideGenBanner: hideGenBanner,
+    showGenLib: showGenLib,
+    hideGenLib: hideGenLib,
+    genLibOpen: genLibOpen,
+    genLibDel: genLibDel,
+    genLibClear: genLibClear,
+    genLibRefreshCount: genLibRefreshCount,
+    genToArchive: genToArchive,
     doPaipan: doPaipan,
     // v0.23.1 getter：实时反映日历模式（值快照会导致农历模式误判走公历分支）
     get calendarType() { return calendarType; },

@@ -5203,6 +5203,8 @@ function injectCurDaYunLiuNian(data) {
 
 // ============ 入口 ============
 function doPaipan() {
+  // v0.97.0 造盘横幅只属于上一张示例盘，正常排盘即收起
+  if (window.APP && typeof APP.hideGenBanner === 'function') APP.hideGenBanner();
   const name = document.getElementById('inName').value || '未命名';
   // v0.19.0 隐私模式：构造显示名（data.name 保持真名不动，仅显示层替换）
   const displayName = ARCHIVE.getDisplayName({

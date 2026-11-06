@@ -720,6 +720,708 @@ function buildShunLabel(shun, gender, nianGan) {
 }
 
 
+  // ============================================================
+  // v0.97.0 特征造盘 — 描述一个干支结构特征，扫真实出生时刻找个命盘示例
+  // 判据只读四柱干支，十神自算（不走 shiShen，避免被当前太极点改写）
+  // ============================================================
+  var GEN = (function() {
+    var YANG = '甲丙戊庚壬';
+    var SHENG = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+    var KE = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+    var POS = ['年','月','日','时'];
+    var CN_NUM = { 1:'一', 2:'两', 3:'三', 4:'四' };
+
+    var HE5 = [
+      { a:'甲', b:'己', wx:'土' }, { a:'乙', b:'庚', wx:'金' }, { a:'丙', b:'辛', wx:'水' },
+      { a:'丁', b:'壬', wx:'木' }, { a:'戊', b:'癸', wx:'火' }
+    ];
+    var SANHE = [
+      { zhi:['申','子','辰'], wx:'水' }, { zhi:['亥','卯','未'], wx:'木' },
+      { zhi:['寅','午','戌'], wx:'火' }, { zhi:['巳','酉','丑'], wx:'金' }
+    ];
+    var SANHUI = [
+      { zhi:['寅','卯','辰'], wx:'木' }, { zhi:['巳','午','未'], wx:'火' },
+      { zhi:['申','酉','戌'], wx:'金' }, { zhi:['亥','子','丑'], wx:'水' }
+    ];
+    var CHONG = [['子','午'],['丑','未'],['寅','申'],['卯','酉'],['辰','戌'],['巳','亥']];
+    var TG_ALIAS = [
+      ['七杀','七杀'],['偏官','七杀'],['正官','正官'],['官星','正官'],
+      ['伤官','伤官'],['食神','食神'],['偏印','枭神'],['枭神','枭神'],['枭印','枭神'],
+      ['正印','正印'],['印星','正印'],['偏财','偏财'],['正财','正财'],
+      ['比肩','比肩'],['劫财','劫财'],['杀','七杀'],['官','正官']
+    ];
+
+    function ss(riGan, gan) {
+      if (riGan === gan) return '比肩';
+      var dw = WU_XING[riGan], tw = WU_XING[gan];
+      if (!dw || !tw) return '?';
+      var same = (YANG.indexOf(riGan) >= 0) === (YANG.indexOf(gan) >= 0);
+      if (dw === tw) return same ? '比肩' : '劫财';
+      if (SHENG[dw] === tw) return same ? '食神' : '伤官';
+      if (SHENG[tw] === dw) return same ? '枭神' : '正印';
+      if (KE[dw] === tw) return same ? '偏财' : '正财';
+      if (KE[tw] === dw) return same ? '七杀' : '正官';
+      return '?';
+    }
+
+    function ctxOf(data) {
+      var st = [data.nian.gan, data.yue.gan, data.ri.gan, data.shi.gan];
+      var br = [data.nian.zhi, data.yue.zhi, data.ri.zhi, data.shi.zhi];
+      var riGan = data.ri.gan;
+      var list = [];
+      for (var i = 0; i < 4; i++) list.push(ss(riGan, st[i]));
+      return { st: st, br: br, riGan: riGan, ss: list };
+    }
+
+    // ---------- 判据：返回 { evidence, score } 或 null ----------
+    function touTest(min, pos, exact) {
+      return function(ctx) {
+        var best = null;
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          var cg = CANG_GAN[ctx.br[i]] || [];
+          var hit = [];
+          for (var j = 0; j < cg.length; j++) {
+            if (ctx.st.indexOf(cg[j]) >= 0 && hit.indexOf(cg[j]) < 0) hit.push(cg[j]);
+          }
+          if (hit.length >= min && (!best || hit.length > best.hit.length)) {
+            best = { i: i, cg: cg, hit: hit };
+          }
+        }
+        if (!best) return null;
+        if (exact && best.hit.length !== min) return null;
+        return {
+          evidence: POS[best.i] + '支' + ctx.br[best.i] + '藏' + best.cg.join('') +
+                    '，天干见' + best.hit.join('、') + ' → ' + (CN_NUM[best.hit.length] || best.hit.length) + '透',
+          score: best.hit.length
+        };
+      };
+    }
+
+    function quanTest(pos) {
+      return function(ctx) {
+        var best = null;
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          var cg = CANG_GAN[ctx.br[i]] || [];
+          if (cg.length < 2) continue;
+          var all = true;
+          for (var j = 0; j < cg.length; j++) {
+            if (ctx.st.indexOf(cg[j]) < 0) { all = false; break; }
+          }
+          if (all && (!best || cg.length > best.cg.length)) best = { i: i, cg: cg };
+        }
+        if (!best) return null;
+        return {
+          evidence: POS[best.i] + '支' + ctx.br[best.i] + '藏' + best.cg.join('') +
+                    '，' + best.cg.length + ' 颗藏干全部透干',
+          score: best.cg.length
+        };
+      };
+    }
+
+    function shishenTest(targets, min, pos, exact) {
+      return function(ctx) {
+        var hit = [];
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          if (targets.indexOf(ctx.ss[i]) >= 0) hit.push(POS[i] + '干' + ctx.st[i]);
+        }
+        if (exact ? hit.length !== min : hit.length < min) return null;
+        var nm = targets.length > 1 ? targets.join('/') : targets[0];
+        return { evidence: '天干' + nm + '×' + hit.length + '（' + hit.join('、') + '）', score: hit.length };
+      };
+    }
+
+    var FANGWEI = { '木':'东方', '火':'南方', '金':'西方', '水':'北方' };
+
+    function tripleTest(groups, kind) {
+      return function(ctx) {
+        var g = pickGroup(groups, ctx);
+        if (!g) return null;
+        var posTxt = [];
+        for (var i = 0; i < g.zhi.length; i++) {
+          posTxt.push(POS[ctx.br.indexOf(g.zhi[i])] + '支' + g.zhi[i]);
+        }
+        var tail = kind === 'hui' ? ('会' + FANGWEI[g.wx] + g.wx) : ('合' + g.wx + '局');
+        return {
+          evidence: '地支' + g.zhi.join('') + '三' + tail + '（' + posTxt.join('、') + '）',
+          score: g.zhi.length
+        };
+      };
+    }
+
+    function pickGroup(groups, ctx) {
+      for (var i = 0; i < groups.length; i++) {
+        var ok = true;
+        for (var j = 0; j < groups[i].zhi.length; j++) {
+          if (ctx.br.indexOf(groups[i].zhi[j]) < 0) { ok = false; break; }
+        }
+        if (ok) return groups[i];
+      }
+      return null;
+    }
+
+    function wuheTest() {
+      return function(ctx) {
+        for (var p = 0; p < HE5.length; p++) {
+          var ia = ctx.st.indexOf(HE5[p].a), ib = ctx.st.indexOf(HE5[p].b);
+          if (ia >= 0 && ib >= 0) {
+            return {
+              evidence: '天干' + HE5[p].a + HE5[p].b + '合' + HE5[p].wx +
+                        '（' + POS[ia] + '干' + HE5[p].a + '、' + POS[ib] + '干' + HE5[p].b + '）',
+              score: 1
+            };
+          }
+        }
+        return null;
+      };
+    }
+
+    function duoTest(setA, setB, label) {
+      return function(ctx) {
+        var hitA = [], hitB = [];
+        for (var i = 0; i < 4; i++) {
+          if (setA.indexOf(ctx.ss[i]) >= 0) hitA.push(POS[i] + '干' + ctx.st[i]);
+          if (setB.indexOf(ctx.ss[i]) >= 0) hitB.push(POS[i] + '干' + ctx.st[i]);
+        }
+        if (!hitA.length || !hitB.length) return null;
+        return {
+          evidence: label + '：' + hitA.join('、') + ' ＋ ' + hitB.join('、'),
+          score: hitA.length + hitB.length
+        };
+      };
+    }
+
+    function chongTest() {
+      return function(ctx) {
+        for (var p = 0; p < CHONG.length; p++) {
+          var ia = ctx.br.indexOf(CHONG[p][0]), ib = ctx.br.indexOf(CHONG[p][1]);
+          if (ia >= 0 && ib >= 0) {
+            return {
+              evidence: '地支' + CHONG[p][0] + CHONG[p][1] + '相冲（' +
+                        POS[ia] + '支' + CHONG[p][0] + '、' + POS[ib] + '支' + CHONG[p][1] + '）',
+              score: 1
+            };
+          }
+        }
+        return null;
+      };
+    }
+
+    function stemsTest(set) {
+      return function(ctx) {
+        var posTxt = [];
+        for (var i = 0; i < set.length; i++) {
+          var k = ctx.st.indexOf(set[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '干' + set[i]);
+        }
+        return { evidence: '天干见' + set.join('、') + '（' + posTxt.join('、') + '）', score: set.length };
+      };
+    }
+
+    function branchesTest(set) {
+      return function(ctx) {
+        var posTxt = [];
+        for (var i = 0; i < set.length; i++) {
+          var k = ctx.br.indexOf(set[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '支' + set[i]);
+        }
+        return { evidence: '地支见' + set.join('、') + '（' + posTxt.join('、') + '）', score: set.length };
+      };
+    }
+
+    function brtouTest(br, gans, pos) {
+      return function(ctx) {
+        var bi = ctx.br.indexOf(br);
+        if (bi < 0) return null;
+        if (pos != null && bi !== pos) return null;
+        var cg = CANG_GAN[br] || [];
+        var posTxt = [];
+        for (var i = 0; i < gans.length; i++) {
+          if (cg.indexOf(gans[i]) < 0) return null;
+          var k = ctx.st.indexOf(gans[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '干' + gans[i]);
+        }
+        return { evidence: '地支' + br + '藏' + cg.join('') + '，透' + gans.join('、') +
+                          '（' + posTxt.join('、') + '）', score: gans.length };
+      };
+    }
+
+    function andTest(subs) {
+      return function(ctx) {
+        var ev = [], score = 0;
+        for (var i = 0; i < subs.length; i++) {
+          var r = subs[i].test(ctx);
+          if (!r) return null;
+          ev.push(r.evidence);
+          score += r.score;
+        }
+        return { evidence: ev.join(' ＋ '), score: score };
+      };
+    }
+
+    // ---------- 描述 → 规格 ----------
+    // 归一化：全角转半角、常见繁体转简体、去空白，让「兩」「時」「傷官」照样听懂
+    var FAN_JIAN = { '兩':'两','個':'个','幹':'干','殺':'杀','梟':'枭','傷':'伤','財':'财',
+      '沖':'冲','會':'会','時':'时','見':'见','雜':'杂','這':'这','裡':'里','雙':'双',
+      '單':'单','條':'条','祿':'禄','絕':'绝','歲':'岁','運':'运','與':'与','還':'还',
+      '號':'号','樣':'样','種':'种','發':'发','點':'点','開':'开','關':'关','後':'后',
+      '數':'数','顆':'颗','幹':'干','支':'支' };
+    var POS_CHAR = { '年':0, '月':1, '日':2, '时':3 };
+
+    function norm(s) {
+      var t = String(s == null ? '' : s);
+      t = t.replace(/[\uFF01-\uFF5E]/g, function(ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      });
+      t = t.replace(/[\u4e00-\u9fa5]/g, function(ch) { return FAN_JIAN[ch] || ch; });
+      return t.replace(/[\s\u3000]+/g, '');
+    }
+
+    function cnt(t) {
+      var m = t.match(/([2-9])/);
+      if (m) return parseInt(m[1], 10);
+      if (t.indexOf('四') >= 0) return 4;
+      if (t.indexOf('三') >= 0) return 3;
+      if (/[两二双]/.test(t)) return 2;
+      if (t.indexOf('多') >= 0) return 2;
+      return null;
+    }
+
+    // 柱位限定：时支 / 月干 / 月柱
+    function posOf(t) {
+      var m = t.match(/([年月日时])(柱|干|支)/);
+      return m ? { i: POS_CHAR[m[1]], part: m[2] } : null;
+    }
+
+    function isExact(t) { return /正好|恰好|刚好|仅仅|仅有|只有|不多不少|正好有/.test(t); }
+
+    var TG_ALIAS = [
+      ['七杀','七杀'],['偏官','七杀'],['正官','正官'],['官星','正官'],
+      ['伤官','伤官'],['食神','食神'],['偏印','枭神'],['枭神','枭神'],['枭印','枭神'],
+      ['正印','正印'],['印星','正印'],['印绶','正印'],['偏财','偏财'],['正财','正财'],
+      ['财星','正财'],['比肩','比肩'],['劫财','劫财'],['杀','七杀'],['官','正官'],
+      ['印','正印'],['财','正财'],['食','食神'],['比','比肩'],['劫','劫财'],['枭','枭神']
+    ];
+
+    // 十神组：食伤 / 财星 / 印星 / 官杀 / 比劫
+    var TG_SETS = [
+      ['比肩劫财', ['比肩','劫财']], ['劫财比肩', ['比肩','劫财']], ['比劫', ['比肩','劫财']],
+      ['食神伤官', ['食神','伤官']], ['伤官食神', ['食神','伤官']], ['食伤', ['食神','伤官']],
+      ['正财偏财', ['正财','偏财']], ['偏财正财', ['正财','偏财']], ['财星', ['正财','偏财']],
+      ['正印枭神', ['正印','枭神']], ['枭神正印', ['正印','枭神']], ['印星', ['正印','枭神']],
+      ['印绶', ['正印','枭神']],
+      ['正官七杀', ['正官','七杀']], ['七杀正官', ['正官','七杀']],
+      ['官杀', ['正官','七杀']], ['官煞', ['正官','七杀']]
+    ];
+
+    var SET_NAME = { '比肩劫财':'比劫','劫财比肩':'比劫','比劫':'比劫',
+      '食神伤官':'食伤','伤官食神':'食伤','食伤':'食伤',
+      '正财偏财':'财星','偏财正财':'财星','财星':'财星',
+      '正印枭神':'印星','枭神正印':'印星','印星':'印星','印绶':'印星',
+      '正官七杀':'官杀','七杀正官':'官杀','官杀':'官杀','官煞':'官杀' };
+
+    function tgOf(t) {
+      for (var i = 0; i < TG_ALIAS.length; i++) {
+        if (t.indexOf(TG_ALIAS[i][0]) >= 0) return TG_ALIAS[i][1];
+      }
+      return null;
+    }
+
+    function targetsOf(t) {
+      for (var i = 0; i < TG_SETS.length; i++) {
+        if (t.indexOf(TG_SETS[i][0]) >= 0) {
+          return { list: TG_SETS[i][1], name: SET_NAME[TG_SETS[i][0]] || TG_SETS[i][0] };
+        }
+      }
+      var tg = tgOf(t);
+      return tg ? { list: [tg], name: tg } : null;
+    }
+
+    // 「三合水局」「三会木局」按五行认局
+    function groupByWx(groups, t) {
+      var m = t.match(/([水木火金])/);
+      if (!m) return [];
+      for (var i = 0; i < groups.length; i++) if (groups[i].wx === m[1]) return [groups[i]];
+      return [];
+    }
+
+    function wantedSets(t, groups) {
+      var out = [];
+      for (var i = 0; i < groups.length; i++) {
+        var all = true;
+        for (var j = 0; j < groups[i].zhi.length; j++) {
+          if (t.indexOf(groups[i].zhi[j]) < 0) { all = false; break; }
+        }
+        if (all) out.push(groups[i]);
+      }
+      return out;
+    }
+
+    function labelTou(n) { return n >= 3 ? '一根透' + CN_NUM[n] + '干' : '一根透多干'; }
+
+    // 单句解析：认不出返回 null，绝不硬猜
+    function parseClause(t) {
+      var n = cnt(t);
+      var pos = posOf(t);
+      var exact = isExact(t);
+
+      if (/全透|一柱全透|藏干全现/.test(t)) {
+        return { ok: true, id: 'quan', n: 'all', label: '一柱全透', raw: t,
+                 pos: pos ? pos.i : null,
+                 detail: '某个地支的藏干（≥2 颗）全部出现在四柱天干' };
+      }
+      if (/透.{0,4}最多|最多.{0,4}透|极值|最强|最猛/.test(t)) {
+        return { ok: true, id: 'toumax', n: 1, label: '一根透最多干', raw: t,
+                 detail: '在范围内找「一支藏干透出最多」的命盘（极值）' };
+      }
+      if (/官杀混杂|官煞混杂|官杀混|官杀两见|官杀同透/.test(t)) {
+        return { ok: true, id: 'guansha', label: '官杀混杂', raw: t,
+                 detail: '正官与七杀同时出现在四柱天干' };
+      }
+      if (/食伤生财|伤官生财|食神生财/.test(t)) {
+        return { ok: true, id: 'shishang', label: '食伤生财', raw: t,
+                 detail: '食神/伤官与财星同时透干' };
+      }
+      if (/官印相生|杀印相生|煞印相生|印绶相生/.test(t)) {
+        return { ok: true, id: 'guanyin', label: '官印相生', raw: t,
+                 detail: '官杀与印星同时透干' };
+      }
+      if (t.indexOf('三合') >= 0) {
+        var hs = wantedSets(t, SANHE);
+        if (!hs.length) hs = groupByWx(SANHE, t);
+        return { ok: true, id: 'sanhe', sets: hs, raw: t,
+                 label: hs.length ? hs[0].zhi.join('') + '三合' + hs[0].wx + '局' : '三合局',
+                 detail: '四柱地支凑齐 ' + (hs.length ? hs[0].zhi.join('') : '申子辰/亥卯未/寅午戌/巳酉丑') };
+      }
+      if (t.indexOf('三会') >= 0) {
+        var hu = wantedSets(t, SANHUI);
+        if (!hu.length) hu = groupByWx(SANHUI, t);
+        return { ok: true, id: 'sanhui', sets: hu, raw: t,
+                 label: hu.length ? hu[0].zhi.join('') + '三会' + hu[0].wx + '方' : '三会方',
+                 detail: '四柱地支凑齐 ' + (hu.length ? hu[0].zhi.join('') : '寅卯辰/巳午未/申酉戌/亥子丑') };
+      }
+      if (/五合|天干.{0,2}合/.test(t)) {
+        return { ok: true, id: 'wuhe', label: '天干五合', raw: t,
+                 detail: '天干出现甲己/乙庚/丙辛/丁壬/戊癸之一' };
+      }
+      if (/相冲|六冲|对冲/.test(t) || (t.indexOf('冲') >= 0 && t.indexOf('透') < 0)) {
+        return { ok: true, id: 'liuchong', label: '地支相冲', raw: t,
+                 detail: '四柱地支中出现一组六冲' };
+      }
+
+      // 点名干支：天干见甲丙 / 地支见子辰 / 寅透甲丙戊
+      var mStem = t.match(/天干(?:中|上|里|内)?(?:见|有|含|出现|是|透出)([甲乙丙丁戊己庚辛壬癸]{2,4})/);
+      if (mStem) {
+        return { ok: true, id: 'stems', set: mStem[1].split(''), label: '天干见' + mStem[1], raw: t,
+                 detail: '四柱天干中同时出现 ' + mStem[1].split('').join('、') };
+      }
+      var mBr = t.match(/地支(?:中|上|里|内)?(?:见|有|含|出现|是)([子丑寅卯辰巳午未申酉戌亥]{2,4})/);
+      if (mBr) {
+        return { ok: true, id: 'branches', set: mBr[1].split(''), label: '地支见' + mBr[1], raw: t,
+                 detail: '四柱地支中同时出现 ' + mBr[1].split('').join('、') };
+      }
+      var mBT = t.match(/([子丑寅卯辰巳午未申酉戌亥])(?:支|中|里|的藏干|藏干)?(?:藏)?透(?:出)?([甲乙丙丁戊己庚辛壬癸]{1,4})/);
+      if (mBT) {
+        return { ok: true, id: 'brtou', br: mBT[1], gans: mBT[2].split(''),
+                 pos: pos ? pos.i : null,
+                 label: mBT[1] + '透' + mBT[2], raw: t,
+                 detail: '地支' + mBT[1] + '的藏干 ' + mBT[2].split('').join('、') + ' 全部透到四柱天干' };
+      }
+
+      var targets = targetsOf(t);
+      if (targets && (/透|双|两|见|干|多|出现|有/.test(t) || (pos && pos.part !== '支'))) {
+        var sn = n == null ? 1 : Math.min(4, n);
+        var nm = targets.name;
+        var at = (pos && pos.part !== '支')
+          ? (POS[pos.i] + (pos.part === '柱' ? '柱' : '干'))
+          : '';
+        var lab = at ? (at + nm + (n != null && sn > 1 ? '×' + sn : ''))
+                     : (nm + '透' + (sn > 1 ? CN_NUM[sn] + '干' : '干'));
+        return { ok: true, id: 'shishen', targets: targets.list, target: targets.list[0], n: sn,
+                 exact: exact, pos: pos ? pos.i : null, raw: t, label: lab,
+                 detail: at ? (at + '天干' + nm + '×' + sn)
+                           : ('四柱天干中' + nm + (exact ? '正好' : '') + '出现 ' +
+                              (exact ? '=' : '≥') + sn + ' 次') };
+      }
+      if (t.indexOf('透') >= 0 || t.indexOf('藏干') >= 0) {
+        var tn = n == null ? 2 : Math.min(3, Math.max(1, n === 'all' ? 3 : n));
+        return { ok: true, id: 'tou', n: tn, pos: pos ? pos.i : null, exact: exact, raw: t,
+                 label: labelTou(tn),
+                 detail: '某个地支的藏干中 ' + (exact ? '正好' : '≥') + tn + ' 颗同时透到四柱天干' };
+      }
+      return null;
+    }
+
+    // 多特征用 + 、 ， 且 和 同时 连接；「不冲」作排除条件
+    function splitClauses(t) {
+      var out = t.split(/[+、,;，；]|并且|而且|同时|以及|还有|且|又|和|跟/);
+      var res = [];
+      for (var i = 0; i < out.length; i++) if (out[i]) res.push(out[i]);
+      return res;
+    }
+
+    function suggest(t) {
+      var table = [
+        [/全透/, '一柱全透'], [/冲/, '地支相冲'], [/合/, '申子辰三合'], [/会/, '三会方'],
+        [/混杂/, '官杀混杂'], [/生财/, '食伤生财'], [/官印|杀印/, '官印相生'],
+        [/官/, '正官透两头'], [/杀|煞/, '七杀透两头'], [/印/, '印星透两头'],
+        [/财/, '财星透两头'], [/食|伤/, '食神透两头'], [/比|劫/, '比肩透两头'],
+        [/透|藏干/, '一根透多干'], [/多/, '一根透最多']
+      ];
+      var out = [];
+      for (var i = 0; i < table.length; i++) {
+        if (table[i][0].test(t) && out.indexOf(table[i][1]) < 0) out.push(table[i][1]);
+      }
+      if (!out.length) {
+        out = ['一根透多干', '七杀透两头', '申子辰三合'];
+      } else if (out.length === 1) {
+        out.push('一根透多干');
+      }
+      return out.slice(0, 3);
+    }
+
+    function parse(text) {
+      var raw = String(text == null ? '' : text);
+      var t = norm(raw);
+      if (!t) return { ok: false, id: '', detail: '请输入要生成的特征', raw: raw, suggest: [] };
+      var nots = [];
+      var g = null;
+      if (/坤造|女命|女性/.test(t)) g = '女';
+      else if (/乾造|男命|男性/.test(t)) g = '男';
+      if (g) t = t.replace(/坤造|乾造|女命|男命|女性|男性/g, '');
+      if (/不冲|无冲|没有冲|不喜冲|不见冲/.test(t)) {
+        nots.push('liuchong');
+        t = t.replace(/不冲|无冲|没有冲|不喜冲|不见冲/g, '');
+      }
+      var clauses = splitClauses(t);
+      var parts = [];
+      for (var i = 0; i < clauses.length; i++) {
+        var p = parseClause(clauses[i]);
+        if (p) parts.push(p);
+      }
+      if (!parts.length) {
+        var sg = suggest(clauses[0] || t);
+        return { ok: false, id: '', raw: raw, suggest: sg,
+                 detail: '没认出这个说法' + (sg.length ? '，是不是想说「' + sg[0] + '」' : '') };
+      }
+      if (parts.length === 1) {
+        var one = parts[0];
+        one.raw = raw;
+        if (nots.length) one.not = nots;
+        if (g) one.gender = g;
+        return one;
+      }
+      var multi = { ok: true, id: 'and', parts: parts, not: nots, raw: raw,
+               label: parts.map(function(x) { return x.label; }).join(' + '),
+               detail: parts.map(function(x) { return x.detail; }).join('；') };
+      if (g) multi.gender = g;
+      return multi;
+    }
+
+    var HELP = [
+      '一根透多干 / 一根透三干',
+      '一柱全透 · 一根透最多',
+      '七杀透两头 / 官杀透两干 / 七杀正好两个',
+      '月柱七杀 / 时干正官（限定柱位）',
+      '寅透甲丙戊 / 天干见甲丙 / 地支见子辰（点名干支）',
+      '三合局 / 申子辰三合 / 三会方 / 巳午未三会',
+      '天干五合 / 官杀混杂 / 食伤生财 / 官印相生 / 地支相冲',
+      '多特征用 + 连：申子辰三合 + 官杀混杂',
+      '加「不冲」排除相冲'
+    ];
+
+    // ---------- 规格 → 可执行判据 ----------
+    function compileCore(spec) {
+      var n = spec.n;
+      switch (spec.id) {
+        case 'tou':
+          return { label: labelTou(n), mode: 'first', test: touTest(n, spec.pos, spec.exact) };
+        case 'toumax':
+          return { label: '一根透最多干', mode: 'max', test: touTest(1) };
+        case 'quan':
+          return { label: '一柱全透', mode: 'max', test: quanTest(spec.pos) };
+        case 'shishen':
+          return { label: spec.label, mode: 'first',
+                   test: shishenTest(spec.targets || [spec.target], n, spec.pos, spec.exact) };
+        case 'stems':
+          return { label: spec.label, mode: 'first', test: stemsTest(spec.set) };
+        case 'branches':
+          return { label: spec.label, mode: 'first', test: branchesTest(spec.set) };
+        case 'brtou':
+          return { label: spec.label, mode: 'first', test: brtouTest(spec.br, spec.gans, spec.pos) };
+        case 'sanhe':
+          return { label: spec.label || '三合局', mode: 'first',
+                   test: tripleTest(spec.sets && spec.sets.length ? spec.sets : SANHE, 'he') };
+        case 'sanhui':
+          return { label: spec.label || '三会方', mode: 'first',
+                   test: tripleTest(spec.sets && spec.sets.length ? spec.sets : SANHUI, 'hui') };
+        case 'wuhe':
+          return { label: '天干五合', mode: 'first', test: wuheTest() };
+        case 'guansha':
+          return { label: '官杀混杂', mode: 'first', test: duoTest(['正官'], ['七杀'], '官杀混杂') };
+        case 'shishang':
+          return { label: '食伤生财', mode: 'first', test: duoTest(['食神','伤官'], ['正财','偏财'], '食伤生财') };
+        case 'guanyin':
+          return { label: '官印相生', mode: 'first', test: duoTest(['正官','七杀'], ['正印','枭神'], '官印相生') };
+        case 'liuchong':
+          return { label: '地支相冲', mode: 'first', test: chongTest() };
+        case 'and':
+          var subs = [];
+          for (var si = 0; si < spec.parts.length; si++) {
+            var c = compile(spec.parts[si]);
+            if (!c) return null;
+            subs.push(c);
+          }
+          var hasMax = false;
+          for (var mi = 0; mi < subs.length; mi++) if (subs[mi].mode === 'max') hasMax = true;
+          return { label: spec.label, mode: hasMax ? 'max' : 'first', test: andTest(subs) };
+        default:
+          return null;
+      }
+    }
+
+    function applyNot(P, nots) {
+      for (var i = 0; i < nots.length; i++) {
+        if (nots[i] === 'liuchong') {
+          P.test = (function(base, ct) {
+            return function(ctx) { return ct(ctx) ? null : base(ctx); };
+          })(P.test, chongTest());
+          P.label += '（不冲）';
+        }
+      }
+      return P;
+    }
+
+    function compile(spec) {
+      var P = compileCore(spec);
+      if (P && spec && spec.not && spec.not.length) P = applyNot(P, spec.not);
+      return P;
+    }
+
+    function verify(y, m, d, h, gender, P) {
+      var full;
+      try { full = paipan('', gender, y, m, d, h, 0); } catch (e) { return null; }
+      if (!full || !full.ri || !full.nian) return null;
+      var r = P.test(ctxOf(full));
+      return r ? { score: r.score, evidence: r.evidence, data: full } : null;
+    }
+
+    function pack(y, m, d, h, gender, v, P, tried) {
+      return {
+        ok: true, y: y, m: m, d: d, h: h, mi: 0, gender: gender,
+        data: v.data, evidence: v.evidence, score: v.score,
+        label: P.label, tried: tried
+      };
+    }
+
+    // opt: { gender, startYear, endYear, name }
+    function scan(spec, opt) {
+      opt = opt || {};
+      var P = compile(spec);
+      if (!P) return { ok: false, tried: 0, label: '', reason: '特征无法编译' };
+      var gender = opt.gender === '女' ? '女' : '男';
+      var sY = parseInt(opt.startYear, 10), eY = parseInt(opt.endYear, 10);
+      if (!(sY >= 1000)) sY = 1960;
+      if (!(eY >= 1000)) eY = 2026;
+      sY = Math.max(1000, sY); eY = Math.min(2100, eY);
+      if (eY < sY) { var sw = sY; sY = eY; eY = sw; }
+
+      // 起点由描述文本散列决定（同一句话结果稳定，不同特征散落在整个年代范围里，
+      // 避免每次都给同一天）；从起点年向后扫，越过年尾再回到起点年前。
+      var today = new Date();
+      var todayKey = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+      var span = eY - sY + 1;
+      var hk = 0, key = String(spec.raw || spec.id || '');
+      for (var ki = 0; ki < key.length; ki++) hk = (hk * 131 + key.charCodeAt(ki)) % 99991;
+      var variant = parseInt(opt.variant, 10) || 0;
+      if (variant) hk = (hk + variant * 7919) % 99991;
+      var startOff = hk % span;
+      var tried = 0, best = null;
+      var mOff = (hk >> 3) % 12, dOff = (hk >> 5) % 28, hOff = (hk >> 7) % 12;
+      for (var yi = 0; yi < span; yi++) {
+        var y = sY + ((startOff + yi) % span);
+        for (var mi = 0; mi < 12; mi++) {
+          var mo = ((mOff + mi) % 12) + 1;
+          var last = new Date(y, mo, 0).getDate();
+          for (var di = 0; di < last; di++) {
+            var d = ((dOff + di) % last) + 1;
+            if (y * 10000 + mo * 100 + d > todayKey) continue; // 不造未出生日期的盘
+            // 一日一次完整排盘拿到年/月/日三柱（立春、节气换月由 paipan 内部处理），
+            // 时柱按时辰用五鼠遁补，命中后再用完整 paipan 复核边界日
+            var base = paipan('', gender, y, mo, d, 0, 0);
+            var riGan = base.ri.gan;
+            for (var hi0 = 0; hi0 < 12; hi0++) {
+              var hi = (hOff + hi0) % 12;
+              var h = hi * 2;
+              var hp = hourPillar(riGan, h);
+              var ctx = {
+                st: [base.nian.gan, base.yue.gan, riGan, hp.gan],
+                br: [base.nian.zhi, base.yue.zhi, base.ri.zhi, hp.zhi],
+                riGan: riGan, ss: null
+              };
+              ctx.ss = [ss(riGan, ctx.st[0]), ss(riGan, ctx.st[1]), ss(riGan, ctx.st[2]), ss(riGan, ctx.st[3])];
+              tried++;
+              var r = P.test(ctx);
+              if (!r) continue;
+              if (P.mode !== 'max') {
+                var v = verify(y, mo, d, h, gender, P);
+                if (v) return pack(y, mo, d, h, gender, v, P, tried);
+                continue;
+              }
+              if (best && r.score <= best.score) continue;
+              var v2 = verify(y, mo, d, h, gender, P);
+              if (v2 && v2.score >= r.score) {
+                best = { y: y, m: mo, d: d, h: h, score: v2.score, evidence: v2.evidence, data: v2.data };
+              }
+            }
+          }
+        }
+      }
+      if (best) return pack(best.y, best.m, best.d, best.h, gender, best, P, tried);
+      return { ok: false, tried: tried, label: P.label, reason: '该范围内没有找到符合条件的命盘' };
+    }
+
+    function matchAt(spec, y, m, d, h, gender) {
+      var s = typeof spec === 'string' ? parse(spec) : spec;
+      if (!s || !s.ok) return { ok: false };
+      var P = compile(s);
+      if (!P) return { ok: false };
+      var v = verify(y, m, d, h, gender === '女' ? '女' : '男', P);
+      return v ? { ok: true, evidence: v.evidence, score: v.score, label: P.label } : { ok: false };
+    }
+
+    var PATTERNS = [
+      { text: '一根透多干', label: '一根透多干' },
+      { text: '一根透三干', label: '一根透三干' },
+      { text: '一柱全透', label: '一柱全透' },
+      { text: '一根透最多', label: '一根透最多（极值）' },
+      { text: '七杀透两头', label: '七杀透两头' },
+      { text: '正官透两头', label: '正官透两头' },
+      { text: '七杀正好两个', label: '七杀正好两个' },
+      { text: '月柱七杀', label: '月柱七杀' },
+      { text: '寅透甲丙戊', label: '寅透甲丙戊' },
+      { text: '申子辰三合', label: '申子辰三合' },
+      { text: '三会方', label: '三会方' },
+      { text: '天干五合', label: '天干五合' },
+      { text: '官杀混杂', label: '官杀混杂' },
+      { text: '食伤生财', label: '食伤生财' },
+      { text: '官印相生', label: '官印相生' },
+      { text: '地支相冲', label: '地支相冲' },
+      { text: '申子辰三合 + 官杀混杂', label: '三合 + 官杀混杂' }
+    ];
+
+    return {
+      ss: ss, parse: parse, compile: compile, scan: scan, matchAt: matchAt,
+      ctxOf: ctxOf, PATTERNS: PATTERNS, HELP: HELP,
+      norm: norm, suggest: suggest, splitClauses: splitClauses
+    };
+  })();
+
   // ===== 挂载到全局命名空间 =====
   window.ALGO = {
     monthDays: monthDays,
@@ -766,6 +1468,7 @@ function buildShunLabel(shun, gender, nianGan) {
     REN_YUAN: REN_YUAN,
     renYuanSiLing: renYuanSiLing,
     paipan: paipan,
+    GEN: GEN,
     fmtDate: fmtDate,
     pad: pad,
     buildShunLabel: buildShunLabel,

@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.96.0 | 2026-11-05 -->
+<!-- 八字排盘 ·  从真版 v0.98.0 | 2026-11-07 -->
+<!-- v0.98.0: 示例盘 + 听懂更多 —— ①造盘结果存进独立示例盘（localStorage bz_gen_examples，与档案 bz_archives_v2 完全隔离）：造盘即自动存入、同特征+四柱+性别去重置顶、上限 60 条、顶部角标计数、点一条按年月日时现算整盘重开（不存快照）、单条删除与清空、横幅「⭐ 转存档案」才进档案；②解析归一化（全角转半角、常见繁体转简体）+ 柱位（月柱七杀/时干正官）+ 精确计数（正好两个）+ 十神组（官杀透两干）+ 点名干支（寅透甲丙戊/天干见甲丙/地支见子辰）+ 五行认局（三合水局→申子辰）+ 多特征组合（顿号/且/和 → and，命中同时满足）+ 否定（不冲）+ 性别口令；认不出给 3 条候选不硬猜；scan 加 variant 支持 🎲 换一张（同句同 variant 稳定）。-->
+<!-- v0.97.0: 特征造盘 —— 一句话描述干支结构（一根透多干/一柱全透/七杀透两头/三合/三会/天干五合/官杀混杂/食伤生财/官印相生/地支相冲/透出最多极值），按真实出生时刻扫描命中盘：一日一发 paipan 取三柱 + 五鼠遁补十二时辰 + 命中后完整复核；起点按描述散列（同句结果稳定、不同特征散落年代范围），跳过未出生日期；只渲染不写档案，横幅回显证据（哪一柱藏几干透几干），正常排盘自动收起 -->
 <!-- v0.96.0: AI 搜索「三垣×十神」组合修复 —— ①柱位/目标柱指向胎元/命宫/身宫而 scope 缺省时自动升七柱（此前四柱集里无该柱恒 false 静默空结果，pillar/shishen/nayin/interact/pair 五处）②十神 where 新增 cang=藏干任一（含本气中余气，如丑藏辛）③十神 scope=dayun 修复（日主恒从四柱取，此前大运序列找日柱得空恒 false）④十神别名补 偏印/枭印→枭神、杀→七杀 ⑤条件面板十神补范围参数、纳音补柱位+范围 ⑥SYSTEM_PROMPT 补三垣点名教学/藏干十神/合并称谓拆解/4 条示例（胎元七杀 or 端到端/命宫藏正印/大运透七杀/身宫干支）；main.js 新增 22 条断言 -->
 <!-- v0.95.0: 分析记录阅读模式 —— 「分析记录」角上加「阅读/编辑」切换，阅读态把纯文本智能排版（md 标题/编号行/问答标签/列表/粗体，连续空行规整统一段距，15.5px·2.05 行距）；编辑态行距 1.7→2.0、字号 14→14.5px；粘贴自动规整（压空行、清行尾空白）；阅读偏好记忆跨会话 -->
 <!-- v0.89.0: AI 搜索升级为全局检索 —— 七柱（四柱+三垣）scope、三会/三合局、起运/大运/流年与命局柱关系（冲/合/同支/三合/三会）、分析记录与录音转录全文检索；提示词新增术语表与能力边界，无法表达的条件返回 unsupported 并在状态条明示，不再静默降级 -->
@@ -143,7 +145,39 @@
   .ai-dialog .btn-ok:hover { background:var(--c-red); }
   .ai-dialog .btn-cancel { background:transparent; color:var(--c-gray); border:1px solid var(--c-line); }
   .ai-dialog .btn-cancel:hover { background:var(--c-line); }
-  .ai-dialog .parse-result { font-size:12px; color:var(--c-gray); margin-top:8px; min-height:18px; }
+  .ai-dialog .gen-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+  .ai-dialog .gen-chip { font-size:12px; padding:3px 9px; border:1px solid var(--c-line); border-radius:12px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .ai-dialog .gen-chip:hover { border-color:var(--c-red); color:var(--c-red); }
+  .ai-dialog .gen-opts { display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:12px; color:var(--c-gray); margin-top:10px; }
+  .ai-dialog .gen-opts input[type=number] { width:70px; }
+  #genBanner { display:none; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; padding:8px 12px; border:1px dashed var(--c-red); border-radius:3px; background:rgba(180,40,40,.05); font-size:13px; font-family:var(--font-body); color:var(--c-ink); }
+  #genBanner .gen-badge { font-size:11px; padding:2px 7px; border-radius:10px; background:var(--c-red); color:#fff; letter-spacing:.05em; white-space:nowrap; }
+  #genBanner .gen-ev { color:var(--c-ink); }
+  #genBanner .gen-meta { color:var(--c-gray); font-size:12px; }
+  #genBanner .gen-close { margin-left:auto; border:none; background:transparent; color:var(--c-gray); cursor:pointer; font-size:13px; }
+  .ai-dialog .gen-suggest { display:flex; flex-wrap:wrap; gap:6px; margin:-4px 0 8px; font-size:12px; }
+  .ai-dialog .gen-sg-label { color:var(--c-gray); align-self:center; }
+  .ai-dialog .gen-sg { font-size:12px; padding:2px 8px; border:1px dashed var(--c-line); border-radius:12px; background:transparent; color:var(--c-ink); cursor:pointer; font-family:var(--font-body); }
+  .ai-dialog .gen-sg:hover { border-color:var(--c-red); color:var(--c-red); }
+  .ai-dialog .gen-help { display:none; margin:0 0 8px; padding:8px 10px; border:1px dashed var(--c-line); border-radius:4px; font-size:12px; color:var(--c-ink); line-height:1.75; text-align:left; }
+  .ai-dialog .gen-link { border:none; background:transparent; color:var(--c-gray); font-size:12px; cursor:pointer; text-decoration:underline; padding:0; font-family:var(--font-body); }
+  .ai-dialog .gen-lib-num { font-size:11px; color:var(--c-red); margin-left:2px; }
+  #genBanner .gen-saved { font-size:11px; color:var(--c-red); border:1px solid var(--c-red); border-radius:10px; padding:1px 7px; white-space:nowrap; }
+  #genBanner .gen-act { font-size:12px; padding:2px 8px; border:1px solid var(--c-line); border-radius:3px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; font-family:var(--font-body); }
+  #genBanner .gen-act:hover { border-color:var(--c-red); color:var(--c-red); }
+  .gen-lib-dialog { max-width:640px; }
+  .gen-lib-list { max-height:420px; overflow-y:auto; margin:8px 0; text-align:left; border:1px solid var(--c-line); border-radius:4px; }
+  .gen-lib-empty { padding:22px 12px; text-align:center; color:var(--c-gray); font-size:13px; }
+  .gen-lib-item { display:flex; align-items:flex-start; gap:8px; padding:9px 10px; border-bottom:1px solid var(--c-line); }
+  .gen-lib-item:last-child { border-bottom:none; }
+  .gen-lib-item:hover { background:rgba(180,40,40,.04); }
+  .gen-lib-main { flex:1; cursor:pointer; min-width:0; }
+  .gen-lib-head { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:13px; }
+  .gen-lib-gz { font-family:var(--font-display); letter-spacing:.1em; }
+  .gen-lib-ev { font-size:12px; color:var(--c-ink); margin-top:2px; }
+  .gen-lib-meta { font-size:11px; color:var(--c-gray); margin-top:3px; }
+  .gen-lib-del { border:none; background:transparent; color:var(--c-gray); cursor:pointer; font-size:12px; padding:2px 4px; }
+  .gen-lib-del:hover { color:var(--c-red); }
 
   /* 双胞胎对比：三栏布局 — 盘式+大宝 | 小宝 | 大运流年 */
   .twin-wrap { display:block; overflow-x:hidden; }
@@ -1229,6 +1263,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       <button class="btn-arch" onclick="ARCHIVE.showTrash()" title="回收站">♻️</button>
       <label style="margin-left:8px;">双胞</label><select id="inTwin"><option value="0">无</option><option value="1">同性</option><option value="2">龙凤</option></select>
       <button class="btn-ai" onclick="APP.showAiInput()">🤖 AI录入</button>
+      <button class="btn-ai" onclick="APP.showGenChart()" title="按干支特征生成示例命盘">🧩 造盘</button>
+      <button class="btn-ai" onclick="APP.showGenLib()" title="示例盘：造盘结果都存在这里，不进档案">📚 示例盘<span class="gen-lib-num" id="genLibNum"></span></button>
     </div>
   </div>
 
@@ -1246,6 +1282,42 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
     </div>
   </div>
 
+  <!-- ===== v0.97.0 特征造盘弹窗 ===== -->
+  <div class="ai-overlay" id="genOverlay">
+    <div class="ai-dialog">
+      <h3>🧩 特征造盘</h3>
+      <div class="hint">用一句话描述想看的干支结构，按真实出生时刻扫出一个符合的命盘示例<br>例：一根透多干 / 七杀正好两个 / 月柱七杀 / 寅透甲丙戊 / 申子辰三合 + 官杀混杂</div>
+      <div class="gen-chips" id="genChips"></div>
+      <textarea id="genInput" placeholder="例如：一根透多干" oninput="APP.genPreview()"></textarea>
+      <div class="gen-suggest" id="genSuggest"></div>
+      <div class="gen-help" id="genHelp"></div>
+      <div class="gen-opts">
+        <label>性别 <select id="genGender"><option value="男" selected>男</option><option value="女">女</option></select></label>
+        <span>年代 <input type="number" id="genStart" value="1960" min="1000" max="2100"> — <input type="number" id="genEnd" value="2026" min="1000" max="2100"></span>
+        <button type="button" class="gen-link" onclick="APP.toggleGenHelp()">？都能听懂什么</button>
+      </div>
+      <div class="parse-result" id="genPreview"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="APP.hideGenChart()">取消</button>
+        <button class="btn-cancel" onclick="APP.genReroll()" title="同一特征换一张">🎲 换一张</button>
+        <button class="btn-ok" onclick="APP.runGenChart()">生成示例</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== v0.98.0 示例盘（造盘结果的存档，不进档案） ===== -->
+  <div class="ai-overlay" id="genLibOverlay">
+    <div class="ai-dialog gen-lib-dialog">
+      <h3>📚 示例盘</h3>
+      <div class="hint">造盘生成的示例都自动存在这里，不进档案；点一条即可重开，随时可删</div>
+      <div class="gen-lib-list" id="genLibList"></div>
+      <div class="ai-btns">
+        <button class="btn-cancel" onclick="APP.genLibClear()">清空</button>
+        <button class="btn-ok" onclick="APP.hideGenLib()">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 回收站弹窗 ===== -->
   <div class="ai-overlay" id="trashOverlay">
     <div class="ai-dialog">
@@ -1257,6 +1329,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       </div>
     </div>
   </div>
+  <!-- ===== v0.97.0 造盘特征横幅（示例盘证据，不写档案） ===== -->
+  <div id="genBanner"></div>
   <div id="output"><div class="loading">输入出生时间，点击「排盘」</div></div>
 
   <!-- ===== v0.37.0 盘面对比 ===== -->
@@ -5484,6 +5558,708 @@ function buildShunLabel(shun, gender, nianGan) {
 }
 
 
+  // ============================================================
+  // v0.97.0 特征造盘 — 描述一个干支结构特征，扫真实出生时刻找个命盘示例
+  // 判据只读四柱干支，十神自算（不走 shiShen，避免被当前太极点改写）
+  // ============================================================
+  var GEN = (function() {
+    var YANG = '甲丙戊庚壬';
+    var SHENG = { '木':'火','火':'土','土':'金','金':'水','水':'木' };
+    var KE = { '木':'土','土':'水','水':'火','火':'金','金':'木' };
+    var POS = ['年','月','日','时'];
+    var CN_NUM = { 1:'一', 2:'两', 3:'三', 4:'四' };
+
+    var HE5 = [
+      { a:'甲', b:'己', wx:'土' }, { a:'乙', b:'庚', wx:'金' }, { a:'丙', b:'辛', wx:'水' },
+      { a:'丁', b:'壬', wx:'木' }, { a:'戊', b:'癸', wx:'火' }
+    ];
+    var SANHE = [
+      { zhi:['申','子','辰'], wx:'水' }, { zhi:['亥','卯','未'], wx:'木' },
+      { zhi:['寅','午','戌'], wx:'火' }, { zhi:['巳','酉','丑'], wx:'金' }
+    ];
+    var SANHUI = [
+      { zhi:['寅','卯','辰'], wx:'木' }, { zhi:['巳','午','未'], wx:'火' },
+      { zhi:['申','酉','戌'], wx:'金' }, { zhi:['亥','子','丑'], wx:'水' }
+    ];
+    var CHONG = [['子','午'],['丑','未'],['寅','申'],['卯','酉'],['辰','戌'],['巳','亥']];
+    var TG_ALIAS = [
+      ['七杀','七杀'],['偏官','七杀'],['正官','正官'],['官星','正官'],
+      ['伤官','伤官'],['食神','食神'],['偏印','枭神'],['枭神','枭神'],['枭印','枭神'],
+      ['正印','正印'],['印星','正印'],['偏财','偏财'],['正财','正财'],
+      ['比肩','比肩'],['劫财','劫财'],['杀','七杀'],['官','正官']
+    ];
+
+    function ss(riGan, gan) {
+      if (riGan === gan) return '比肩';
+      var dw = WU_XING[riGan], tw = WU_XING[gan];
+      if (!dw || !tw) return '?';
+      var same = (YANG.indexOf(riGan) >= 0) === (YANG.indexOf(gan) >= 0);
+      if (dw === tw) return same ? '比肩' : '劫财';
+      if (SHENG[dw] === tw) return same ? '食神' : '伤官';
+      if (SHENG[tw] === dw) return same ? '枭神' : '正印';
+      if (KE[dw] === tw) return same ? '偏财' : '正财';
+      if (KE[tw] === dw) return same ? '七杀' : '正官';
+      return '?';
+    }
+
+    function ctxOf(data) {
+      var st = [data.nian.gan, data.yue.gan, data.ri.gan, data.shi.gan];
+      var br = [data.nian.zhi, data.yue.zhi, data.ri.zhi, data.shi.zhi];
+      var riGan = data.ri.gan;
+      var list = [];
+      for (var i = 0; i < 4; i++) list.push(ss(riGan, st[i]));
+      return { st: st, br: br, riGan: riGan, ss: list };
+    }
+
+    // ---------- 判据：返回 { evidence, score } 或 null ----------
+    function touTest(min, pos, exact) {
+      return function(ctx) {
+        var best = null;
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          var cg = CANG_GAN[ctx.br[i]] || [];
+          var hit = [];
+          for (var j = 0; j < cg.length; j++) {
+            if (ctx.st.indexOf(cg[j]) >= 0 && hit.indexOf(cg[j]) < 0) hit.push(cg[j]);
+          }
+          if (hit.length >= min && (!best || hit.length > best.hit.length)) {
+            best = { i: i, cg: cg, hit: hit };
+          }
+        }
+        if (!best) return null;
+        if (exact && best.hit.length !== min) return null;
+        return {
+          evidence: POS[best.i] + '支' + ctx.br[best.i] + '藏' + best.cg.join('') +
+                    '，天干见' + best.hit.join('、') + ' → ' + (CN_NUM[best.hit.length] || best.hit.length) + '透',
+          score: best.hit.length
+        };
+      };
+    }
+
+    function quanTest(pos) {
+      return function(ctx) {
+        var best = null;
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          var cg = CANG_GAN[ctx.br[i]] || [];
+          if (cg.length < 2) continue;
+          var all = true;
+          for (var j = 0; j < cg.length; j++) {
+            if (ctx.st.indexOf(cg[j]) < 0) { all = false; break; }
+          }
+          if (all && (!best || cg.length > best.cg.length)) best = { i: i, cg: cg };
+        }
+        if (!best) return null;
+        return {
+          evidence: POS[best.i] + '支' + ctx.br[best.i] + '藏' + best.cg.join('') +
+                    '，' + best.cg.length + ' 颗藏干全部透干',
+          score: best.cg.length
+        };
+      };
+    }
+
+    function shishenTest(targets, min, pos, exact) {
+      return function(ctx) {
+        var hit = [];
+        for (var i = 0; i < 4; i++) {
+          if (pos != null && i !== pos) continue;
+          if (targets.indexOf(ctx.ss[i]) >= 0) hit.push(POS[i] + '干' + ctx.st[i]);
+        }
+        if (exact ? hit.length !== min : hit.length < min) return null;
+        var nm = targets.length > 1 ? targets.join('/') : targets[0];
+        return { evidence: '天干' + nm + '×' + hit.length + '（' + hit.join('、') + '）', score: hit.length };
+      };
+    }
+
+    var FANGWEI = { '木':'东方', '火':'南方', '金':'西方', '水':'北方' };
+
+    function tripleTest(groups, kind) {
+      return function(ctx) {
+        var g = pickGroup(groups, ctx);
+        if (!g) return null;
+        var posTxt = [];
+        for (var i = 0; i < g.zhi.length; i++) {
+          posTxt.push(POS[ctx.br.indexOf(g.zhi[i])] + '支' + g.zhi[i]);
+        }
+        var tail = kind === 'hui' ? ('会' + FANGWEI[g.wx] + g.wx) : ('合' + g.wx + '局');
+        return {
+          evidence: '地支' + g.zhi.join('') + '三' + tail + '（' + posTxt.join('、') + '）',
+          score: g.zhi.length
+        };
+      };
+    }
+
+    function pickGroup(groups, ctx) {
+      for (var i = 0; i < groups.length; i++) {
+        var ok = true;
+        for (var j = 0; j < groups[i].zhi.length; j++) {
+          if (ctx.br.indexOf(groups[i].zhi[j]) < 0) { ok = false; break; }
+        }
+        if (ok) return groups[i];
+      }
+      return null;
+    }
+
+    function wuheTest() {
+      return function(ctx) {
+        for (var p = 0; p < HE5.length; p++) {
+          var ia = ctx.st.indexOf(HE5[p].a), ib = ctx.st.indexOf(HE5[p].b);
+          if (ia >= 0 && ib >= 0) {
+            return {
+              evidence: '天干' + HE5[p].a + HE5[p].b + '合' + HE5[p].wx +
+                        '（' + POS[ia] + '干' + HE5[p].a + '、' + POS[ib] + '干' + HE5[p].b + '）',
+              score: 1
+            };
+          }
+        }
+        return null;
+      };
+    }
+
+    function duoTest(setA, setB, label) {
+      return function(ctx) {
+        var hitA = [], hitB = [];
+        for (var i = 0; i < 4; i++) {
+          if (setA.indexOf(ctx.ss[i]) >= 0) hitA.push(POS[i] + '干' + ctx.st[i]);
+          if (setB.indexOf(ctx.ss[i]) >= 0) hitB.push(POS[i] + '干' + ctx.st[i]);
+        }
+        if (!hitA.length || !hitB.length) return null;
+        return {
+          evidence: label + '：' + hitA.join('、') + ' ＋ ' + hitB.join('、'),
+          score: hitA.length + hitB.length
+        };
+      };
+    }
+
+    function chongTest() {
+      return function(ctx) {
+        for (var p = 0; p < CHONG.length; p++) {
+          var ia = ctx.br.indexOf(CHONG[p][0]), ib = ctx.br.indexOf(CHONG[p][1]);
+          if (ia >= 0 && ib >= 0) {
+            return {
+              evidence: '地支' + CHONG[p][0] + CHONG[p][1] + '相冲（' +
+                        POS[ia] + '支' + CHONG[p][0] + '、' + POS[ib] + '支' + CHONG[p][1] + '）',
+              score: 1
+            };
+          }
+        }
+        return null;
+      };
+    }
+
+    function stemsTest(set) {
+      return function(ctx) {
+        var posTxt = [];
+        for (var i = 0; i < set.length; i++) {
+          var k = ctx.st.indexOf(set[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '干' + set[i]);
+        }
+        return { evidence: '天干见' + set.join('、') + '（' + posTxt.join('、') + '）', score: set.length };
+      };
+    }
+
+    function branchesTest(set) {
+      return function(ctx) {
+        var posTxt = [];
+        for (var i = 0; i < set.length; i++) {
+          var k = ctx.br.indexOf(set[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '支' + set[i]);
+        }
+        return { evidence: '地支见' + set.join('、') + '（' + posTxt.join('、') + '）', score: set.length };
+      };
+    }
+
+    function brtouTest(br, gans, pos) {
+      return function(ctx) {
+        var bi = ctx.br.indexOf(br);
+        if (bi < 0) return null;
+        if (pos != null && bi !== pos) return null;
+        var cg = CANG_GAN[br] || [];
+        var posTxt = [];
+        for (var i = 0; i < gans.length; i++) {
+          if (cg.indexOf(gans[i]) < 0) return null;
+          var k = ctx.st.indexOf(gans[i]);
+          if (k < 0) return null;
+          posTxt.push(POS[k] + '干' + gans[i]);
+        }
+        return { evidence: '地支' + br + '藏' + cg.join('') + '，透' + gans.join('、') +
+                          '（' + posTxt.join('、') + '）', score: gans.length };
+      };
+    }
+
+    function andTest(subs) {
+      return function(ctx) {
+        var ev = [], score = 0;
+        for (var i = 0; i < subs.length; i++) {
+          var r = subs[i].test(ctx);
+          if (!r) return null;
+          ev.push(r.evidence);
+          score += r.score;
+        }
+        return { evidence: ev.join(' ＋ '), score: score };
+      };
+    }
+
+    // ---------- 描述 → 规格 ----------
+    // 归一化：全角转半角、常见繁体转简体、去空白，让「兩」「時」「傷官」照样听懂
+    var FAN_JIAN = { '兩':'两','個':'个','幹':'干','殺':'杀','梟':'枭','傷':'伤','財':'财',
+      '沖':'冲','會':'会','時':'时','見':'见','雜':'杂','這':'这','裡':'里','雙':'双',
+      '單':'单','條':'条','祿':'禄','絕':'绝','歲':'岁','運':'运','與':'与','還':'还',
+      '號':'号','樣':'样','種':'种','發':'发','點':'点','開':'开','關':'关','後':'后',
+      '數':'数','顆':'颗','幹':'干','支':'支' };
+    var POS_CHAR = { '年':0, '月':1, '日':2, '时':3 };
+
+    function norm(s) {
+      var t = String(s == null ? '' : s);
+      t = t.replace(/[\uFF01-\uFF5E]/g, function(ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      });
+      t = t.replace(/[\u4e00-\u9fa5]/g, function(ch) { return FAN_JIAN[ch] || ch; });
+      return t.replace(/[\s\u3000]+/g, '');
+    }
+
+    function cnt(t) {
+      var m = t.match(/([2-9])/);
+      if (m) return parseInt(m[1], 10);
+      if (t.indexOf('四') >= 0) return 4;
+      if (t.indexOf('三') >= 0) return 3;
+      if (/[两二双]/.test(t)) return 2;
+      if (t.indexOf('多') >= 0) return 2;
+      return null;
+    }
+
+    // 柱位限定：时支 / 月干 / 月柱
+    function posOf(t) {
+      var m = t.match(/([年月日时])(柱|干|支)/);
+      return m ? { i: POS_CHAR[m[1]], part: m[2] } : null;
+    }
+
+    function isExact(t) { return /正好|恰好|刚好|仅仅|仅有|只有|不多不少|正好有/.test(t); }
+
+    var TG_ALIAS = [
+      ['七杀','七杀'],['偏官','七杀'],['正官','正官'],['官星','正官'],
+      ['伤官','伤官'],['食神','食神'],['偏印','枭神'],['枭神','枭神'],['枭印','枭神'],
+      ['正印','正印'],['印星','正印'],['印绶','正印'],['偏财','偏财'],['正财','正财'],
+      ['财星','正财'],['比肩','比肩'],['劫财','劫财'],['杀','七杀'],['官','正官'],
+      ['印','正印'],['财','正财'],['食','食神'],['比','比肩'],['劫','劫财'],['枭','枭神']
+    ];
+
+    // 十神组：食伤 / 财星 / 印星 / 官杀 / 比劫
+    var TG_SETS = [
+      ['比肩劫财', ['比肩','劫财']], ['劫财比肩', ['比肩','劫财']], ['比劫', ['比肩','劫财']],
+      ['食神伤官', ['食神','伤官']], ['伤官食神', ['食神','伤官']], ['食伤', ['食神','伤官']],
+      ['正财偏财', ['正财','偏财']], ['偏财正财', ['正财','偏财']], ['财星', ['正财','偏财']],
+      ['正印枭神', ['正印','枭神']], ['枭神正印', ['正印','枭神']], ['印星', ['正印','枭神']],
+      ['印绶', ['正印','枭神']],
+      ['正官七杀', ['正官','七杀']], ['七杀正官', ['正官','七杀']],
+      ['官杀', ['正官','七杀']], ['官煞', ['正官','七杀']]
+    ];
+
+    var SET_NAME = { '比肩劫财':'比劫','劫财比肩':'比劫','比劫':'比劫',
+      '食神伤官':'食伤','伤官食神':'食伤','食伤':'食伤',
+      '正财偏财':'财星','偏财正财':'财星','财星':'财星',
+      '正印枭神':'印星','枭神正印':'印星','印星':'印星','印绶':'印星',
+      '正官七杀':'官杀','七杀正官':'官杀','官杀':'官杀','官煞':'官杀' };
+
+    function tgOf(t) {
+      for (var i = 0; i < TG_ALIAS.length; i++) {
+        if (t.indexOf(TG_ALIAS[i][0]) >= 0) return TG_ALIAS[i][1];
+      }
+      return null;
+    }
+
+    function targetsOf(t) {
+      for (var i = 0; i < TG_SETS.length; i++) {
+        if (t.indexOf(TG_SETS[i][0]) >= 0) {
+          return { list: TG_SETS[i][1], name: SET_NAME[TG_SETS[i][0]] || TG_SETS[i][0] };
+        }
+      }
+      var tg = tgOf(t);
+      return tg ? { list: [tg], name: tg } : null;
+    }
+
+    // 「三合水局」「三会木局」按五行认局
+    function groupByWx(groups, t) {
+      var m = t.match(/([水木火金])/);
+      if (!m) return [];
+      for (var i = 0; i < groups.length; i++) if (groups[i].wx === m[1]) return [groups[i]];
+      return [];
+    }
+
+    function wantedSets(t, groups) {
+      var out = [];
+      for (var i = 0; i < groups.length; i++) {
+        var all = true;
+        for (var j = 0; j < groups[i].zhi.length; j++) {
+          if (t.indexOf(groups[i].zhi[j]) < 0) { all = false; break; }
+        }
+        if (all) out.push(groups[i]);
+      }
+      return out;
+    }
+
+    function labelTou(n) { return n >= 3 ? '一根透' + CN_NUM[n] + '干' : '一根透多干'; }
+
+    // 单句解析：认不出返回 null，绝不硬猜
+    function parseClause(t) {
+      var n = cnt(t);
+      var pos = posOf(t);
+      var exact = isExact(t);
+
+      if (/全透|一柱全透|藏干全现/.test(t)) {
+        return { ok: true, id: 'quan', n: 'all', label: '一柱全透', raw: t,
+                 pos: pos ? pos.i : null,
+                 detail: '某个地支的藏干（≥2 颗）全部出现在四柱天干' };
+      }
+      if (/透.{0,4}最多|最多.{0,4}透|极值|最强|最猛/.test(t)) {
+        return { ok: true, id: 'toumax', n: 1, label: '一根透最多干', raw: t,
+                 detail: '在范围内找「一支藏干透出最多」的命盘（极值）' };
+      }
+      if (/官杀混杂|官煞混杂|官杀混|官杀两见|官杀同透/.test(t)) {
+        return { ok: true, id: 'guansha', label: '官杀混杂', raw: t,
+                 detail: '正官与七杀同时出现在四柱天干' };
+      }
+      if (/食伤生财|伤官生财|食神生财/.test(t)) {
+        return { ok: true, id: 'shishang', label: '食伤生财', raw: t,
+                 detail: '食神/伤官与财星同时透干' };
+      }
+      if (/官印相生|杀印相生|煞印相生|印绶相生/.test(t)) {
+        return { ok: true, id: 'guanyin', label: '官印相生', raw: t,
+                 detail: '官杀与印星同时透干' };
+      }
+      if (t.indexOf('三合') >= 0) {
+        var hs = wantedSets(t, SANHE);
+        if (!hs.length) hs = groupByWx(SANHE, t);
+        return { ok: true, id: 'sanhe', sets: hs, raw: t,
+                 label: hs.length ? hs[0].zhi.join('') + '三合' + hs[0].wx + '局' : '三合局',
+                 detail: '四柱地支凑齐 ' + (hs.length ? hs[0].zhi.join('') : '申子辰/亥卯未/寅午戌/巳酉丑') };
+      }
+      if (t.indexOf('三会') >= 0) {
+        var hu = wantedSets(t, SANHUI);
+        if (!hu.length) hu = groupByWx(SANHUI, t);
+        return { ok: true, id: 'sanhui', sets: hu, raw: t,
+                 label: hu.length ? hu[0].zhi.join('') + '三会' + hu[0].wx + '方' : '三会方',
+                 detail: '四柱地支凑齐 ' + (hu.length ? hu[0].zhi.join('') : '寅卯辰/巳午未/申酉戌/亥子丑') };
+      }
+      if (/五合|天干.{0,2}合/.test(t)) {
+        return { ok: true, id: 'wuhe', label: '天干五合', raw: t,
+                 detail: '天干出现甲己/乙庚/丙辛/丁壬/戊癸之一' };
+      }
+      if (/相冲|六冲|对冲/.test(t) || (t.indexOf('冲') >= 0 && t.indexOf('透') < 0)) {
+        return { ok: true, id: 'liuchong', label: '地支相冲', raw: t,
+                 detail: '四柱地支中出现一组六冲' };
+      }
+
+      // 点名干支：天干见甲丙 / 地支见子辰 / 寅透甲丙戊
+      var mStem = t.match(/天干(?:中|上|里|内)?(?:见|有|含|出现|是|透出)([甲乙丙丁戊己庚辛壬癸]{2,4})/);
+      if (mStem) {
+        return { ok: true, id: 'stems', set: mStem[1].split(''), label: '天干见' + mStem[1], raw: t,
+                 detail: '四柱天干中同时出现 ' + mStem[1].split('').join('、') };
+      }
+      var mBr = t.match(/地支(?:中|上|里|内)?(?:见|有|含|出现|是)([子丑寅卯辰巳午未申酉戌亥]{2,4})/);
+      if (mBr) {
+        return { ok: true, id: 'branches', set: mBr[1].split(''), label: '地支见' + mBr[1], raw: t,
+                 detail: '四柱地支中同时出现 ' + mBr[1].split('').join('、') };
+      }
+      var mBT = t.match(/([子丑寅卯辰巳午未申酉戌亥])(?:支|中|里|的藏干|藏干)?(?:藏)?透(?:出)?([甲乙丙丁戊己庚辛壬癸]{1,4})/);
+      if (mBT) {
+        return { ok: true, id: 'brtou', br: mBT[1], gans: mBT[2].split(''),
+                 pos: pos ? pos.i : null,
+                 label: mBT[1] + '透' + mBT[2], raw: t,
+                 detail: '地支' + mBT[1] + '的藏干 ' + mBT[2].split('').join('、') + ' 全部透到四柱天干' };
+      }
+
+      var targets = targetsOf(t);
+      if (targets && (/透|双|两|见|干|多|出现|有/.test(t) || (pos && pos.part !== '支'))) {
+        var sn = n == null ? 1 : Math.min(4, n);
+        var nm = targets.name;
+        var at = (pos && pos.part !== '支')
+          ? (POS[pos.i] + (pos.part === '柱' ? '柱' : '干'))
+          : '';
+        var lab = at ? (at + nm + (n != null && sn > 1 ? '×' + sn : ''))
+                     : (nm + '透' + (sn > 1 ? CN_NUM[sn] + '干' : '干'));
+        return { ok: true, id: 'shishen', targets: targets.list, target: targets.list[0], n: sn,
+                 exact: exact, pos: pos ? pos.i : null, raw: t, label: lab,
+                 detail: at ? (at + '天干' + nm + '×' + sn)
+                           : ('四柱天干中' + nm + (exact ? '正好' : '') + '出现 ' +
+                              (exact ? '=' : '≥') + sn + ' 次') };
+      }
+      if (t.indexOf('透') >= 0 || t.indexOf('藏干') >= 0) {
+        var tn = n == null ? 2 : Math.min(3, Math.max(1, n === 'all' ? 3 : n));
+        return { ok: true, id: 'tou', n: tn, pos: pos ? pos.i : null, exact: exact, raw: t,
+                 label: labelTou(tn),
+                 detail: '某个地支的藏干中 ' + (exact ? '正好' : '≥') + tn + ' 颗同时透到四柱天干' };
+      }
+      return null;
+    }
+
+    // 多特征用 + 、 ， 且 和 同时 连接；「不冲」作排除条件
+    function splitClauses(t) {
+      var out = t.split(/[+、,;，；]|并且|而且|同时|以及|还有|且|又|和|跟/);
+      var res = [];
+      for (var i = 0; i < out.length; i++) if (out[i]) res.push(out[i]);
+      return res;
+    }
+
+    function suggest(t) {
+      var table = [
+        [/全透/, '一柱全透'], [/冲/, '地支相冲'], [/合/, '申子辰三合'], [/会/, '三会方'],
+        [/混杂/, '官杀混杂'], [/生财/, '食伤生财'], [/官印|杀印/, '官印相生'],
+        [/官/, '正官透两头'], [/杀|煞/, '七杀透两头'], [/印/, '印星透两头'],
+        [/财/, '财星透两头'], [/食|伤/, '食神透两头'], [/比|劫/, '比肩透两头'],
+        [/透|藏干/, '一根透多干'], [/多/, '一根透最多']
+      ];
+      var out = [];
+      for (var i = 0; i < table.length; i++) {
+        if (table[i][0].test(t) && out.indexOf(table[i][1]) < 0) out.push(table[i][1]);
+      }
+      if (!out.length) {
+        out = ['一根透多干', '七杀透两头', '申子辰三合'];
+      } else if (out.length === 1) {
+        out.push('一根透多干');
+      }
+      return out.slice(0, 3);
+    }
+
+    function parse(text) {
+      var raw = String(text == null ? '' : text);
+      var t = norm(raw);
+      if (!t) return { ok: false, id: '', detail: '请输入要生成的特征', raw: raw, suggest: [] };
+      var nots = [];
+      var g = null;
+      if (/坤造|女命|女性/.test(t)) g = '女';
+      else if (/乾造|男命|男性/.test(t)) g = '男';
+      if (g) t = t.replace(/坤造|乾造|女命|男命|女性|男性/g, '');
+      if (/不冲|无冲|没有冲|不喜冲|不见冲/.test(t)) {
+        nots.push('liuchong');
+        t = t.replace(/不冲|无冲|没有冲|不喜冲|不见冲/g, '');
+      }
+      var clauses = splitClauses(t);
+      var parts = [];
+      for (var i = 0; i < clauses.length; i++) {
+        var p = parseClause(clauses[i]);
+        if (p) parts.push(p);
+      }
+      if (!parts.length) {
+        var sg = suggest(clauses[0] || t);
+        return { ok: false, id: '', raw: raw, suggest: sg,
+                 detail: '没认出这个说法' + (sg.length ? '，是不是想说「' + sg[0] + '」' : '') };
+      }
+      if (parts.length === 1) {
+        var one = parts[0];
+        one.raw = raw;
+        if (nots.length) one.not = nots;
+        if (g) one.gender = g;
+        return one;
+      }
+      var multi = { ok: true, id: 'and', parts: parts, not: nots, raw: raw,
+               label: parts.map(function(x) { return x.label; }).join(' + '),
+               detail: parts.map(function(x) { return x.detail; }).join('；') };
+      if (g) multi.gender = g;
+      return multi;
+    }
+
+    var HELP = [
+      '一根透多干 / 一根透三干',
+      '一柱全透 · 一根透最多',
+      '七杀透两头 / 官杀透两干 / 七杀正好两个',
+      '月柱七杀 / 时干正官（限定柱位）',
+      '寅透甲丙戊 / 天干见甲丙 / 地支见子辰（点名干支）',
+      '三合局 / 申子辰三合 / 三会方 / 巳午未三会',
+      '天干五合 / 官杀混杂 / 食伤生财 / 官印相生 / 地支相冲',
+      '多特征用 + 连：申子辰三合 + 官杀混杂',
+      '加「不冲」排除相冲'
+    ];
+
+    // ---------- 规格 → 可执行判据 ----------
+    function compileCore(spec) {
+      var n = spec.n;
+      switch (spec.id) {
+        case 'tou':
+          return { label: labelTou(n), mode: 'first', test: touTest(n, spec.pos, spec.exact) };
+        case 'toumax':
+          return { label: '一根透最多干', mode: 'max', test: touTest(1) };
+        case 'quan':
+          return { label: '一柱全透', mode: 'max', test: quanTest(spec.pos) };
+        case 'shishen':
+          return { label: spec.label, mode: 'first',
+                   test: shishenTest(spec.targets || [spec.target], n, spec.pos, spec.exact) };
+        case 'stems':
+          return { label: spec.label, mode: 'first', test: stemsTest(spec.set) };
+        case 'branches':
+          return { label: spec.label, mode: 'first', test: branchesTest(spec.set) };
+        case 'brtou':
+          return { label: spec.label, mode: 'first', test: brtouTest(spec.br, spec.gans, spec.pos) };
+        case 'sanhe':
+          return { label: spec.label || '三合局', mode: 'first',
+                   test: tripleTest(spec.sets && spec.sets.length ? spec.sets : SANHE, 'he') };
+        case 'sanhui':
+          return { label: spec.label || '三会方', mode: 'first',
+                   test: tripleTest(spec.sets && spec.sets.length ? spec.sets : SANHUI, 'hui') };
+        case 'wuhe':
+          return { label: '天干五合', mode: 'first', test: wuheTest() };
+        case 'guansha':
+          return { label: '官杀混杂', mode: 'first', test: duoTest(['正官'], ['七杀'], '官杀混杂') };
+        case 'shishang':
+          return { label: '食伤生财', mode: 'first', test: duoTest(['食神','伤官'], ['正财','偏财'], '食伤生财') };
+        case 'guanyin':
+          return { label: '官印相生', mode: 'first', test: duoTest(['正官','七杀'], ['正印','枭神'], '官印相生') };
+        case 'liuchong':
+          return { label: '地支相冲', mode: 'first', test: chongTest() };
+        case 'and':
+          var subs = [];
+          for (var si = 0; si < spec.parts.length; si++) {
+            var c = compile(spec.parts[si]);
+            if (!c) return null;
+            subs.push(c);
+          }
+          var hasMax = false;
+          for (var mi = 0; mi < subs.length; mi++) if (subs[mi].mode === 'max') hasMax = true;
+          return { label: spec.label, mode: hasMax ? 'max' : 'first', test: andTest(subs) };
+        default:
+          return null;
+      }
+    }
+
+    function applyNot(P, nots) {
+      for (var i = 0; i < nots.length; i++) {
+        if (nots[i] === 'liuchong') {
+          P.test = (function(base, ct) {
+            return function(ctx) { return ct(ctx) ? null : base(ctx); };
+          })(P.test, chongTest());
+          P.label += '（不冲）';
+        }
+      }
+      return P;
+    }
+
+    function compile(spec) {
+      var P = compileCore(spec);
+      if (P && spec && spec.not && spec.not.length) P = applyNot(P, spec.not);
+      return P;
+    }
+
+    function verify(y, m, d, h, gender, P) {
+      var full;
+      try { full = paipan('', gender, y, m, d, h, 0); } catch (e) { return null; }
+      if (!full || !full.ri || !full.nian) return null;
+      var r = P.test(ctxOf(full));
+      return r ? { score: r.score, evidence: r.evidence, data: full } : null;
+    }
+
+    function pack(y, m, d, h, gender, v, P, tried) {
+      return {
+        ok: true, y: y, m: m, d: d, h: h, mi: 0, gender: gender,
+        data: v.data, evidence: v.evidence, score: v.score,
+        label: P.label, tried: tried
+      };
+    }
+
+    // opt: { gender, startYear, endYear, name }
+    function scan(spec, opt) {
+      opt = opt || {};
+      var P = compile(spec);
+      if (!P) return { ok: false, tried: 0, label: '', reason: '特征无法编译' };
+      var gender = opt.gender === '女' ? '女' : '男';
+      var sY = parseInt(opt.startYear, 10), eY = parseInt(opt.endYear, 10);
+      if (!(sY >= 1000)) sY = 1960;
+      if (!(eY >= 1000)) eY = 2026;
+      sY = Math.max(1000, sY); eY = Math.min(2100, eY);
+      if (eY < sY) { var sw = sY; sY = eY; eY = sw; }
+
+      // 起点由描述文本散列决定（同一句话结果稳定，不同特征散落在整个年代范围里，
+      // 避免每次都给同一天）；从起点年向后扫，越过年尾再回到起点年前。
+      var today = new Date();
+      var todayKey = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+      var span = eY - sY + 1;
+      var hk = 0, key = String(spec.raw || spec.id || '');
+      for (var ki = 0; ki < key.length; ki++) hk = (hk * 131 + key.charCodeAt(ki)) % 99991;
+      var variant = parseInt(opt.variant, 10) || 0;
+      if (variant) hk = (hk + variant * 7919) % 99991;
+      var startOff = hk % span;
+      var tried = 0, best = null;
+      var mOff = (hk >> 3) % 12, dOff = (hk >> 5) % 28, hOff = (hk >> 7) % 12;
+      for (var yi = 0; yi < span; yi++) {
+        var y = sY + ((startOff + yi) % span);
+        for (var mi = 0; mi < 12; mi++) {
+          var mo = ((mOff + mi) % 12) + 1;
+          var last = new Date(y, mo, 0).getDate();
+          for (var di = 0; di < last; di++) {
+            var d = ((dOff + di) % last) + 1;
+            if (y * 10000 + mo * 100 + d > todayKey) continue; // 不造未出生日期的盘
+            // 一日一次完整排盘拿到年/月/日三柱（立春、节气换月由 paipan 内部处理），
+            // 时柱按时辰用五鼠遁补，命中后再用完整 paipan 复核边界日
+            var base = paipan('', gender, y, mo, d, 0, 0);
+            var riGan = base.ri.gan;
+            for (var hi0 = 0; hi0 < 12; hi0++) {
+              var hi = (hOff + hi0) % 12;
+              var h = hi * 2;
+              var hp = hourPillar(riGan, h);
+              var ctx = {
+                st: [base.nian.gan, base.yue.gan, riGan, hp.gan],
+                br: [base.nian.zhi, base.yue.zhi, base.ri.zhi, hp.zhi],
+                riGan: riGan, ss: null
+              };
+              ctx.ss = [ss(riGan, ctx.st[0]), ss(riGan, ctx.st[1]), ss(riGan, ctx.st[2]), ss(riGan, ctx.st[3])];
+              tried++;
+              var r = P.test(ctx);
+              if (!r) continue;
+              if (P.mode !== 'max') {
+                var v = verify(y, mo, d, h, gender, P);
+                if (v) return pack(y, mo, d, h, gender, v, P, tried);
+                continue;
+              }
+              if (best && r.score <= best.score) continue;
+              var v2 = verify(y, mo, d, h, gender, P);
+              if (v2 && v2.score >= r.score) {
+                best = { y: y, m: mo, d: d, h: h, score: v2.score, evidence: v2.evidence, data: v2.data };
+              }
+            }
+          }
+        }
+      }
+      if (best) return pack(best.y, best.m, best.d, best.h, gender, best, P, tried);
+      return { ok: false, tried: tried, label: P.label, reason: '该范围内没有找到符合条件的命盘' };
+    }
+
+    function matchAt(spec, y, m, d, h, gender) {
+      var s = typeof spec === 'string' ? parse(spec) : spec;
+      if (!s || !s.ok) return { ok: false };
+      var P = compile(s);
+      if (!P) return { ok: false };
+      var v = verify(y, m, d, h, gender === '女' ? '女' : '男', P);
+      return v ? { ok: true, evidence: v.evidence, score: v.score, label: P.label } : { ok: false };
+    }
+
+    var PATTERNS = [
+      { text: '一根透多干', label: '一根透多干' },
+      { text: '一根透三干', label: '一根透三干' },
+      { text: '一柱全透', label: '一柱全透' },
+      { text: '一根透最多', label: '一根透最多（极值）' },
+      { text: '七杀透两头', label: '七杀透两头' },
+      { text: '正官透两头', label: '正官透两头' },
+      { text: '七杀正好两个', label: '七杀正好两个' },
+      { text: '月柱七杀', label: '月柱七杀' },
+      { text: '寅透甲丙戊', label: '寅透甲丙戊' },
+      { text: '申子辰三合', label: '申子辰三合' },
+      { text: '三会方', label: '三会方' },
+      { text: '天干五合', label: '天干五合' },
+      { text: '官杀混杂', label: '官杀混杂' },
+      { text: '食伤生财', label: '食伤生财' },
+      { text: '官印相生', label: '官印相生' },
+      { text: '地支相冲', label: '地支相冲' },
+      { text: '申子辰三合 + 官杀混杂', label: '三合 + 官杀混杂' }
+    ];
+
+    return {
+      ss: ss, parse: parse, compile: compile, scan: scan, matchAt: matchAt,
+      ctxOf: ctxOf, PATTERNS: PATTERNS, HELP: HELP,
+      norm: norm, suggest: suggest, splitClauses: splitClauses
+    };
+  })();
+
   // ===== 挂载到全局命名空间 =====
   window.ALGO = {
     monthDays: monthDays,
@@ -5530,6 +6306,7 @@ function buildShunLabel(shun, gender, nianGan) {
     REN_YUAN: REN_YUAN,
     renYuanSiLing: renYuanSiLing,
     paipan: paipan,
+    GEN: GEN,
     fmtDate: fmtDate,
     pad: pad,
     buildShunLabel: buildShunLabel,
@@ -16544,6 +17321,8 @@ function injectCurDaYunLiuNian(data) {
 
 // ============ 入口 ============
 function doPaipan() {
+  // v0.97.0 造盘横幅只属于上一张示例盘，正常排盘即收起
+  if (window.APP && typeof APP.hideGenBanner === 'function') APP.hideGenBanner();
   const name = document.getElementById('inName').value || '未命名';
   // v0.19.0 隐私模式：构造显示名（data.name 保持真名不动，仅显示层替换）
   const displayName = ARCHIVE.getDisplayName({
@@ -20094,6 +20873,355 @@ document.addEventListener('click', function(e) {
   if (e.target.id === 'aiOverlay') hideAiInput();
 });
 
+// ============================================================
+// v0.98.0 特征造盘 — 一句话描述干支结构，扫真实出生时刻生成示例盘
+// 造盘结果存进「示例盘」（独立 localStorage key），不进正式档案：
+// 不动 autoSaveArchive / saveLastChart，避免污染真实库；要入档得手动点「转存档案」
+// ============================================================
+var genLastText = '';
+var genPreviewText = '';
+var genVariant = 0;
+var genCurrent = null;
+
+var GEN_LIB_KEY = 'bz_gen_examples';
+var GEN_LIB_MAX = 60;
+
+function genNeedLogin() {
+  if (window.AUTH && AUTH.isLoggedIn && !AUTH.isLoggedIn() && !/[\?&]test=1(&|$)/.test(location.search)) {
+    AUTH.requireLogin();
+    return true;
+  }
+  return false;
+}
+
+function genGz(data) {
+  if (!data) return '';
+  return [data.nian, data.yue, data.ri, data.shi].map(function(p) { return p.gan + p.zhi; }).join(' ');
+}
+
+function showGenChart() {
+  var ov = document.getElementById('genOverlay');
+  if (!ov) return;
+  ov.classList.add('show');
+  var chips = document.getElementById('genChips');
+  if (chips && !chips.childNodes.length && window.ALGO && ALGO.GEN) {
+    for (var i = 0; i < ALGO.GEN.PATTERNS.length; i++) {
+      (function(p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'gen-chip';
+        b.textContent = p.label;
+        b.title = p.text;
+        b.onclick = function() { genPick(p.text); };
+        chips.appendChild(b);
+      })(ALGO.GEN.PATTERNS[i]);
+    }
+  }
+  var inp = document.getElementById('genInput');
+  if (inp) inp.value = genLastText || '一根透多干';
+  genPreviewText = '';
+  genPreview();
+  genLibRefreshCount();
+  setTimeout(function() { if (inp) inp.focus(); }, 100);
+}
+
+function hideGenChart() {
+  var ov = document.getElementById('genOverlay');
+  if (ov) ov.classList.remove('show');
+  var help = document.getElementById('genHelp');
+  if (help) help.style.display = 'none';
+}
+
+function genPick(text) {
+  var inp = document.getElementById('genInput');
+  if (inp) inp.value = text;
+  genVariant = 0;
+  genPreview();
+}
+
+function toggleGenHelp() {
+  var el = document.getElementById('genHelp');
+  if (!el) return;
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  var list = (window.ALGO && ALGO.GEN && ALGO.GEN.HELP) ? ALGO.GEN.HELP : [];
+  var html = '';
+  for (var i = 0; i < list.length; i++) html += '<div class="gen-help-line">· ' + list[i] + '</div>';
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+function genPreview() {
+  var inp = document.getElementById('genInput');
+  var out = document.getElementById('genPreview');
+  if (!inp || !out) return null;
+  if (inp.value !== genPreviewText) { genPreviewText = inp.value; genVariant = 0; }
+  var r = (window.ALGO && ALGO.GEN)
+    ? ALGO.GEN.parse(inp.value)
+    : { ok: false, detail: '造盘引擎未加载' };
+  out.textContent = r.ok ? ('✅ 识别：' + r.label + ' — ' + r.detail) : ('⚠ ' + (r.detail || '未识别'));
+  out.style.color = r.ok ? '' : 'var(--c-red)';
+  var sg = document.getElementById('genSuggest');
+  if (sg) {
+    if (r.ok) {
+      sg.innerHTML = '';
+    } else {
+      var list = (r.suggest && r.suggest.length) ? r.suggest : [];
+      var html = '';
+      for (var i = 0; i < list.length; i++) {
+        html += '<button type="button" class="gen-sg" onclick="APP.genPick(\'' + list[i] + '\')">' + list[i] + '</button>';
+      }
+      sg.innerHTML = html ? ('<span class="gen-sg-label">说的是不是：</span>' + html) : '';
+    }
+  }
+  return r;
+}
+
+function runGenChart() {
+  var spec = genPreview();
+  if (!spec || !spec.ok) return;
+  if (genNeedLogin()) return;
+  var gEl = document.getElementById('genGender');
+  var sEl = document.getElementById('genStart');
+  var eEl = document.getElementById('genEnd');
+  var out = document.getElementById('genPreview');
+  if (!out) return;
+  if (spec.gender && gEl) gEl.value = spec.gender;
+  out.textContent = '⏳ 正在扫描真实出生时刻…';
+  out.style.color = '';
+  var variant = genVariant;
+  // 让「扫描中」先落屏，再跑同步扫描（60 年量级 0.1–0.25s）
+  setTimeout(function() {
+    var t0 = Date.now();
+    var res = ALGO.GEN.scan(spec, {
+      gender: (spec.gender || (gEl ? gEl.value : '男')),
+      startYear: sEl ? sEl.value : 1960,
+      endYear: eEl ? eEl.value : 2026,
+      variant: variant
+    });
+    var cost = Date.now() - t0;
+    if (!res.ok) {
+      out.textContent = '⚠ ' + res.reason + '（已试 ' + res.tried + ' 个出生时刻，' + cost + 'ms）';
+      out.style.color = 'var(--c-red)';
+      return;
+    }
+    var inp = document.getElementById('genInput');
+    genLastText = inp ? inp.value : spec.raw;
+    hideGenChart();
+    applyGenChart(res, cost, false, genLastText);
+  }, 30);
+}
+
+function genReroll() {
+  genVariant++;
+  runGenChart();
+}
+
+function applyGenChart(res, cost, fromLib, text) {
+  var name = '示例·' + res.label;
+  var setv = function(id, v) {
+    var el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  // 回填表单：盘面与输入一致，随时点「排盘」可复现
+  setv('inName', name);
+  setv('inNickname', '');
+  setv('inYiming', '');
+  setv('inGender', res.gender);
+  setv('inYear', res.y);
+  setv('inMonth', res.m);
+  setv('inDay', res.d);
+  setv('inHour', res.h);
+  setv('inMin', 0);
+  setv('inTwin', '0');
+  if (APP.calendarType !== 'solar') APP.toggleCalendar('solar', true);
+  var useSolar = document.getElementById('useSolar');
+  if (useSolar && useSolar.checked) { useSolar.checked = false; APP.toggleSolar(); }
+
+  var data = res.data;
+  data.name = name;
+  data.displayName = name;
+  data.trueSolar = null;
+  data.julian = null;
+  data.lng = null;
+  data.renYuan = ALGO.renYuanSiLing(res.y, res.m, res.d, res.h, 0);
+
+  ALGO.clearTaiji();
+  var output = document.getElementById('output');
+  if (!output) return;
+  output.innerHTML = '';
+  RENDER.renderChart(data);
+  APP.setCurrentBaziResult(RENDER.extractBaziFromPaipan(data));
+  if (typeof updateGongWeiTags === 'function') updateGongWeiTags();
+
+  var item = null;
+  if (!fromLib) item = genLibAdd(res, text || '');
+  genCurrent = { res: res, id: item ? item.id : (res.libId || null) };
+  renderGenBanner(res, cost, item ? item.id : null, !!fromLib);
+  genLibRefreshCount();
+  return genCurrent;
+}
+
+function renderGenBanner(res, cost, savedId, isReopen) {
+  var el = document.getElementById('genBanner');
+  if (!el) return;
+  var gz = genGz(res.data);
+  var date = res.y + '-' + ALGO.pad(res.m) + '-' + ALGO.pad(res.d) + ' ' + ALGO.pad(res.h) + ':00';
+  var costTxt = isReopen ? '重开示例' : ('扫 ' + res.tried + ' 个出生时刻/' + cost + 'ms');
+  el.innerHTML = '<span class="gen-badge">示例盘</span>'
+    + '<b>' + res.label + '</b>'
+    + '<span class="gen-ev">' + res.evidence + '</span>'
+    + '<span class="gen-meta">' + date + ' · ' + res.gender + '命 · ' + gz + ' · ' + costTxt + '</span>'
+    + '<span class="gen-saved" id="genSaved">' + (savedId ? '✓ 已存示例盘 · 未进档案' : '示例盘 · 未进档案') + '</span>'
+    + '<button class="gen-act" onclick="APP.showGenLib()">📚 示例盘</button>'
+    + '<button class="gen-act" onclick="APP.genToArchive()">⭐ 转存档案</button>'
+    + '<button class="gen-close" onclick="APP.hideGenBanner()" title="收起">✕</button>';
+  el.style.display = 'flex';
+}
+
+function hideGenBanner() {
+  var el = document.getElementById('genBanner');
+  if (!el) return;
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+// ---------- 示例盘（造盘结果的独立存档，不进正式档案） ----------
+function genLibRead() {
+  try {
+    var a = JSON.parse(localStorage.getItem(GEN_LIB_KEY) || '[]');
+    if (!Array.isArray(a)) return [];
+    return a.filter(function(x) { return x && x.y && x.label; });
+  } catch (e) { return []; }
+}
+
+function genLibWrite(arr) {
+  try { localStorage.setItem(GEN_LIB_KEY, JSON.stringify(arr.slice(0, GEN_LIB_MAX))); } catch (e) {}
+  genLibRefreshCount();
+}
+
+function genLibRefreshCount() {
+  var n = genLibRead().length;
+  var el = document.getElementById('genLibNum');
+  if (el) el.textContent = n ? String(n) : '';
+  return n;
+}
+
+function genLibAdd(res, text) {
+  var arr = genLibRead();
+  var item = {
+    id: 'g' + Date.now() + Math.floor(Math.random() * 900 + 100),
+    text: String(text || ''),
+    label: res.label,
+    gender: res.gender,
+    y: res.y, m: res.m, d: res.d, h: res.h,
+    tried: res.tried || 0,
+    evidence: res.evidence || '',
+    pillars: genGz(res.data),
+    createdAt: Date.now()
+  };
+  var key = item.label + '|' + item.pillars + '|' + item.gender;
+  var kept = [];
+  for (var i = 0; i < arr.length; i++) {
+    var k = arr[i].label + '|' + arr[i].pillars + '|' + arr[i].gender;
+    if (k === key) { item.id = arr[i].id; continue; }
+    kept.push(arr[i]);
+  }
+  kept.unshift(item);
+  genLibWrite(kept);
+  return item;
+}
+
+function genTimeTxt(ts) {
+  var d = new Date(ts);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+         String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function showGenLib() {
+  var ov = document.getElementById('genLibOverlay');
+  if (!ov) return;
+  renderGenLib();
+  ov.classList.add('show');
+}
+
+function hideGenLib() {
+  var ov = document.getElementById('genLibOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
+function renderGenLib() {
+  var box = document.getElementById('genLibList');
+  if (!box) return;
+  var arr = genLibRead();
+  if (!arr.length) {
+    box.innerHTML = '<div class="gen-lib-empty">示例盘还是空的。点「🧩 造盘」生成一张，会自动存到这里（不进档案）。</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < arr.length; i++) {
+    var it = arr[i];
+    html += '<div class="gen-lib-item">'
+      + '<div class="gen-lib-main" onclick="APP.genLibOpen(\'' + it.id + '\')">'
+      + '<div class="gen-lib-head"><b>' + escHtml(it.label) + '</b>'
+      + '<span class="gen-lib-gz">' + escHtml(it.pillars) + '</span></div>'
+      + '<div class="gen-lib-ev">' + escHtml(it.evidence) + '</div>'
+      + '<div class="gen-lib-meta">' + it.y + '-' + ALGO.pad(it.m) + '-' + ALGO.pad(it.d) + ' '
+      + ALGO.pad(it.h) + ':00 · ' + it.gender + '命 · 存于 ' + genTimeTxt(it.createdAt) + '</div>'
+      + '</div>'
+      + '<button class="gen-lib-del" title="从示例盘删除" onclick="event.stopPropagation();APP.genLibDel(\'' + it.id + '\')">✕</button>'
+      + '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function genLibOpen(id) {
+  var arr = genLibRead(), it = null;
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) it = arr[i];
+  if (!it) return;
+  var data = ALGO.paipan('', it.gender, it.y, it.m, it.d, it.h, 0);
+  if (!data) { alert('这张示例盘打不开了'); return; }
+  hideGenLib();
+  var res = {
+    ok: true, y: it.y, m: it.m, d: it.d, h: it.h, mi: 0, gender: it.gender,
+    data: data, evidence: it.evidence, label: it.label, tried: it.tried, libId: it.id
+  };
+  applyGenChart(res, 0, true, it.text);
+}
+
+function genLibDel(id) {
+  var arr = genLibRead(), kept = [];
+  for (var i = 0; i < arr.length; i++) if (arr[i].id !== id) kept.push(arr[i]);
+  genLibWrite(kept);
+  if (genCurrent && genCurrent.id === id) {
+    var el = document.getElementById('genSaved');
+    if (el) el.textContent = '示例盘 · 未进档案';
+    genCurrent.id = null;
+  }
+  renderGenLib();
+}
+
+function genLibClear() {
+  if (!genLibRead().length) return;
+  if (!confirm('清空示例盘？只会删掉示例，不影响档案。')) return;
+  genLibWrite([]);
+  genCurrent && (genCurrent.id = null);
+  renderGenLib();
+}
+
+function genToArchive() {
+  if (!genCurrent) return;
+  if (genNeedLogin()) return;
+  ARCHIVE.saveArchive();
+  var el = document.getElementById('genSaved');
+  if (el) el.textContent = '✓ 已转存档案';
+}
+
+// 点击遮罩关闭造盘 / 示例盘弹窗
+document.addEventListener('click', function(e) {
+  if (!e.target) return;
+  if (e.target.id === 'genOverlay') hideGenChart();
+  if (e.target.id === 'genLibOverlay') hideGenLib();
+});
 
 // ============================================================
 // v0.23.0 盘面截图 — #output 一键导出 PNG 长图
@@ -26207,6 +27335,196 @@ function captureScreenshot() {
     }
   })();
 
+  // === v0.97.0 特征造盘 ===
+  (function() {
+    var sec = 'v0.97 造盘';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '特征造盘（v0.97.0）' });
+      tests.push(eq(sec + ' 01: 引擎挂载 parse/scan/matchAt', !!(G && typeof G.parse === 'function' && typeof G.scan === 'function' && typeof G.matchAt === 'function'), true));
+
+      var p1 = G.parse('一根透多干');
+      tests.push(eq(sec + ' 02: 「一根透多干」→ tou', p1.id, 'tou'));
+      tests.push(eq(sec + ' 03: 「多」= ≥2', p1.n, 2));
+      tests.push(eq(sec + ' 04: 「一根透三干」→ n=3', G.parse('一根透三干').n, 3));
+      tests.push(eq(sec + ' 05: 「一柱全透」→ quan', G.parse('一柱全透').id, 'quan'));
+      tests.push(eq(sec + ' 06: 「一根透最多」→ toumax', G.parse('一根透最多').id, 'toumax'));
+      var p7 = G.parse('七杀透两头');
+      tests.push(eq(sec + ' 07: 「七杀透两头」→ shishen/七杀', p7.id + '/' + p7.target, 'shishen/七杀'));
+      tests.push(eq(sec + ' 08: 「两头」→ n=2', p7.n, 2));
+      tests.push(eq(sec + ' 09: 「七杀透干」→ n=1', G.parse('七杀透干').n, 1));
+      tests.push(eq(sec + ' 10: 「申子辰三合」→ sanhe', G.parse('申子辰三合').id, 'sanhe'));
+      tests.push(eq(sec + ' 11: 「三会方」→ sanhui', G.parse('三会方').id, 'sanhui'));
+      tests.push(eq(sec + ' 12: 「天干五合」→ wuhe', G.parse('天干五合').id, 'wuhe'));
+      tests.push(eq(sec + ' 13: 「官杀混杂」→ guansha', G.parse('官杀混杂').id, 'guansha'));
+      tests.push(eq(sec + ' 14: 「食伤生财」→ shishang', G.parse('食伤生财').id, 'shishang'));
+      tests.push(eq(sec + ' 15: 「官印相生」→ guanyin', G.parse('官印相生').id, 'guanyin'));
+      tests.push(eq(sec + ' 16: 「地支相冲」→ liuchong', G.parse('地支相冲').id, 'liuchong'));
+      tests.push(eq(sec + ' 17: 无法识别不硬猜', G.parse('随便写点什么').ok, false));
+
+      // 正向 fixture：2000-01-01 寅时 = 己卯 丙子 戊午 甲寅（寅藏甲丙戊，三透）
+      var pos = G.matchAt('一根透三干', 2000, 1, 1, 3, '男');
+      tests.push(eq(sec + ' 18: 寅藏甲丙戊三透命中', pos.ok, true));
+      tests.push(eq(sec + ' 19: 证据点名地支与「三透」', !!(pos.ok && pos.evidence.indexOf('寅') >= 0 && pos.evidence.indexOf('三透') >= 0), true));
+      // 反向 fixture：1982-10-18 05:01 壬戌 庚戌 甲戌 丁卯（戌藏戊辛丁仅透丁）
+      tests.push(eq(sec + ' 20: 反向盘不满足≥2透', G.matchAt('一根透多干', 1982, 10, 18, 5, '男').ok, false));
+      tests.push(eq(sec + ' 21: 同盘七杀透干命中', G.matchAt('七杀透干', 1982, 10, 18, 5, '男').ok, true));
+      tests.push(eq(sec + ' 22: 同盘七杀透两头不命中', G.matchAt('七杀透两头', 1982, 10, 18, 5, '男').ok, false));
+
+      // 扫描：命中盘必须能复核，且带完整排盘（大运/起运）
+      var sc = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 2000, endYear: 2000 });
+      tests.push(eq(sec + ' 23: 2000 年扫出三透示例', sc.ok, true));
+      var scRe = sc.ok ? G.matchAt('一根透三干', sc.y, sc.m, sc.d, sc.h, sc.gender) : { ok: false };
+      tests.push(eq(sec + ' 24: 扫描结果复核仍命中', scRe.ok, true));
+      tests.push(eq(sec + ' 25: 结果带完整排盘', !!(sc.ok && sc.data && sc.data.daYun && sc.data.daYun.length > 0 && sc.data.qiYun), true));
+      tests.push(eq(sec + ' 26: 不造未出生日期的盘', sc.ok ? (new Date(sc.y, sc.m - 1, sc.d) <= new Date()) : false, true));
+
+      // 立春：造盘必须走 paipan，2000-01-01 仍是己卯年（裸拼会误成庚辰）
+      var lc = ALGO.paipan('', '男', 2000, 1, 1, 3, 0);
+      tests.push(eq(sec + ' 27: 造盘日在立春前不换年', lc.nian.gan + lc.nian.zhi, '己卯'));
+
+      // 十神口径与主引擎一致，且不受当前太极点改写
+      var savedT = ALGO.getTaiji();
+      ALGO.clearTaiji();
+      var pairs = [['甲','辛'],['甲','庚'],['丙','壬'],['癸','乙'],['壬','丁'],['庚','戊']];
+      var sameSS = true;
+      for (var pi = 0; pi < pairs.length; pi++) {
+        if (G.ss(pairs[pi][0], pairs[pi][1]) !== ALGO.shiShen(pairs[pi][0], pairs[pi][1], false)) sameSS = false;
+      }
+      tests.push(eq(sec + ' 28: 十神口径与主引擎一致', sameSS, true));
+      ALGO.setTaiji('丙', '年', 'gan');
+      var isoSS = G.ss('甲', '辛') === '正官' && ALGO.shiShen('甲', '辛', false) !== '正官';
+      tests.push(eq(sec + ' 29: 太极点开启时判据不漂移', isoSS, true));
+      if (savedT && savedT.active) ALGO.setTaiji(savedT.gan, savedT.col, savedT.kind); else ALGO.clearTaiji();
+
+      // UI 接线
+      tests.push(eq(sec + ' 30: 造盘入口与弹窗齐备', !!(document.querySelector('[onclick="APP.showGenChart()"]') && document.getElementById('genOverlay') && document.getElementById('genPreview') && document.getElementById('genBanner')), true));
+      tests.push(eq(sec + ' 31: 生成示例/取消按钮接线', !!(document.querySelector('[onclick="APP.runGenChart()"]') && document.querySelector('[onclick="APP.hideGenChart()"]')), true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
+  // === v0.98.0 示例盘 + 描述解析增强 ===
+  (function() {
+    var sec = 'v0.98 示例盘';
+    try {
+      var G = window.ALGO && ALGO.GEN;
+      tests.push({ section: '示例盘 · 听懂更多（v0.98.0）' });
+
+      // 归一化与容错
+      tests.push(eq(sec + ' 01: 繁体归一「兩殺透兩頭」', G.parse('兩殺透兩頭').label, '七杀透两干'));
+      tests.push(eq(sec + ' 02: 全角与空格容错', G.parse('Ａ：一根透多干　').id, 'tou'));
+
+      // 柱位限定
+      tests.push(eq(sec + ' 03: 「月柱七杀」限定月柱', G.parse('月柱七杀').pos, 1));
+      tests.push(eq(sec + ' 04: 「时干正官」限定时干', G.parse('时干正官').pos, 3));
+
+      // 精确计数
+      tests.push(eq(sec + ' 05: 「正好两个」= 精确计数', G.parse('七杀正好两个').exact, true));
+      tests.push(eq(sec + ' 06: 无「正好」= ≥N', G.parse('七杀透两头').exact, false));
+
+      // 十神组
+      tests.push(eq(sec + ' 07: 「官杀透两干」= 正官+七杀', G.parse('官杀透两干').targets.join('/'), '正官/七杀'));
+      tests.push(eq(sec + ' 08: 财星/印星/比劫/食伤 组名',
+        [G.parse('财星透两头').label, G.parse('印星透两头').label,
+         G.parse('比劫透两头').label, G.parse('食伤透两头').label].join('|'),
+        '财星透两干|印星透两干|比劫透两干|食伤透两干'));
+
+      // 点名干支
+      var bt = G.parse('寅透甲丙戊');
+      tests.push(eq(sec + ' 09: 「寅透甲丙戊」点名藏干', bt.id + '/' + bt.br + '/' + bt.gans.join(''), 'brtou/寅/甲丙戊'));
+      tests.push(eq(sec + ' 10: 「天干见甲丙」点名天干', G.parse('天干见甲丙').set.join(''), '甲丙'));
+      tests.push(eq(sec + ' 11: 「地支见子辰」点名地支', G.parse('地支见子辰').set.join(''), '子辰'));
+
+      // 五行认局
+      tests.push(eq(sec + ' 12: 「三合水局」认成申子辰', G.parse('三合水局').sets[0].zhi.join(''), '申子辰'));
+      tests.push(eq(sec + ' 13: 「巳午未三会」认成火方', G.parse('巳午未三会').sets[0].wx, '火'));
+
+      // 多特征组合 / 否定 / 性别
+      var cmb = G.parse('三合水局、七杀透两头');
+      tests.push(eq(sec + ' 14: 顿号连接 = 组合特征', cmb.id + '/' + cmb.parts.length, 'and/2'));
+      tests.push(eq(sec + ' 15: 「不冲」作排除条件', G.parse('官杀混杂且不冲').not.join(''), 'liuchong'));
+      tests.push(eq(sec + ' 16: 「坤造」认性别', G.parse('坤造 七杀透两头').gender, '女'));
+
+      // 认不出时不硬猜，给建议
+      var bad = G.parse('不清楚');
+      tests.push(eq(sec + ' 17: 认不出给建议而非硬猜', bad.ok + '/' + (bad.suggest.length > 0), 'false/true'));
+      tests.push(eq(sec + ' 18: 可听懂清单齐备', G.HELP.length >= 8, true));
+
+      // 组合特征真能扫出来，证据两段都在，且能复核
+      var sad = G.scan(G.parse('申子辰三合 + 官杀混杂'), { gender: '男', startYear: 1995, endYear: 2005 });
+      tests.push(eq(sec + ' 19: 组合特征扫出命中盘', sad.ok, true));
+      tests.push(eq(sec + ' 20: 组合盘两段证据都在',
+        !!(sad.ok && sad.evidence.indexOf('三合') >= 0 && sad.evidence.indexOf('官杀混杂') >= 0), true));
+      tests.push(eq(sec + ' 21: 组合盘复核仍命中',
+        sad.ok ? G.matchAt('申子辰三合 + 官杀混杂', sad.y, sad.m, sad.d, sad.h, sad.gender).ok : false, true));
+
+      // 精确计数扫描
+      var sex = G.scan(G.parse('七杀正好两个'), { gender: '男', startYear: 1990, endYear: 2015 });
+      tests.push(eq(sec + ' 22: 「正好两个」结果就是 ×2', !!(sex.ok && sex.evidence.indexOf('×2') >= 0), true));
+
+      // 换一张 vs 稳定
+      var v0 = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 0 });
+      var v1 = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 1 });
+      var v0b = G.scan(G.parse('一根透三干'), { gender: '男', startYear: 1960, endYear: 2026, variant: 0 });
+      tests.push(eq(sec + ' 23: 换一张得到不同盘',
+        !!(v0.ok && v1.ok && (v0.y + '-' + v0.m + '-' + v0.d + '-' + v0.h) !==
+           (v1.y + '-' + v1.m + '-' + v1.d + '-' + v1.h)), true));
+      tests.push(eq(sec + ' 24: 同一描述同一 variant 结果稳定',
+        !!(v0.ok && v0b.ok && v0.y === v0b.y && v0.m === v0b.m && v0.d === v0b.d && v0.h === v0b.h), true));
+
+      // 示例盘：独立存档、去重、删除、不写正式档案
+      var libBak = null, archBak = null;
+      try { libBak = localStorage.getItem(GEN_LIB_KEY); } catch (e) {}
+      try { archBak = localStorage.getItem('bz_archives_v2'); } catch (e) {}
+      try {
+        localStorage.removeItem(GEN_LIB_KEY);
+        var fakeData = {
+          nian: { gan: '甲', zhi: '辰' }, yue: { gan: '辛', zhi: '未' },
+          ri: { gan: '乙', zhi: '亥' }, shi: { gan: '辛', zhi: '巳' }
+        };
+        var fake = { label: '七杀透两干', gender: '男', y: 2024, m: 7, d: 10, h: 10,
+                     tried: 20, evidence: '天干七杀×2', data: fakeData };
+        var it1 = genLibAdd(fake, '七杀透两头');
+        tests.push(eq(sec + ' 25: 生成即写入示例盘', genLibRead().length, 1));
+        tests.push(eq(sec + ' 26: 示例盘条目带四柱', genLibRead()[0].pillars, '甲辰 辛未 乙亥 辛巳'));
+        genLibAdd(fake, '七杀透两头');
+        tests.push(eq(sec + ' 27: 同特征同四柱去重', genLibRead().length, 1));
+        tests.push(eq(sec + ' 28: 去重时复用原 id', genLibRead()[0].id, it1.id));
+        genLibAdd({ label: '申子辰三合水局', gender: '女', y: 2000, m: 5, d: 26, h: 0,
+                    tried: 3, evidence: '地支申子辰三合', data: fakeData }, '申子辰三合');
+        tests.push(eq(sec + ' 29: 新示例排在最前', genLibRead()[0].label, '申子辰三合水局'));
+        tests.push(eq(sec + ' 30: 示例盘不写正式档案',
+          (function() { try { return localStorage.getItem('bz_archives_v2'); } catch (e) { return 'ERR'; } })(), archBak));
+        genLibDel(it1.id);
+        tests.push(eq(sec + ' 31: 删除指定示例', genLibRead().length, 1));
+        genLibWrite([]);
+        tests.push(eq(sec + ' 32: 清空示例盘', genLibRead().length, 0));
+        tests.push(eq(sec + ' 33: 计数与条目同步', genLibRefreshCount(), 0));
+      } finally {
+        try {
+          if (libBak === null) localStorage.removeItem(GEN_LIB_KEY);
+          else localStorage.setItem(GEN_LIB_KEY, libBak);
+        } catch (e) {}
+      }
+
+      // UI 接线
+      tests.push(eq(sec + ' 34: 示例盘入口/弹窗/列表齐备',
+        !!(document.querySelector('[onclick="APP.showGenLib()"]') &&
+           document.getElementById('genLibOverlay') && document.getElementById('genLibList')), true));
+      tests.push(eq(sec + ' 35: 换一张/建议/可听懂清单接线',
+        !!(document.querySelector('[onclick="APP.genReroll()"]') &&
+           document.getElementById('genSuggest') &&
+           document.querySelector('[onclick="APP.toggleGenHelp()"]')), true));
+      tests.push(eq(sec + ' 36: 横幅带转存档案按钮',
+        typeof genToArchive === 'function' && typeof genLibOpen === 'function' &&
+        typeof genLibRefreshCount === 'function', true));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');
@@ -26370,6 +27688,22 @@ window.__testAppend = function(t) {
     TIME_MOD: TIME_MOD,
     parseNaturalInput: parseNaturalInput,
     doAiParse: doAiParse,
+    showGenChart: showGenChart,
+    hideGenChart: hideGenChart,
+    genPick: genPick,
+    genPreview: genPreview,
+    genReroll: genReroll,
+    toggleGenHelp: toggleGenHelp,
+    runGenChart: runGenChart,
+    applyGenChart: applyGenChart,
+    hideGenBanner: hideGenBanner,
+    showGenLib: showGenLib,
+    hideGenLib: hideGenLib,
+    genLibOpen: genLibOpen,
+    genLibDel: genLibDel,
+    genLibClear: genLibClear,
+    genLibRefreshCount: genLibRefreshCount,
+    genToArchive: genToArchive,
     doPaipan: doPaipan,
     // v0.23.1 getter：实时反映日历模式（值快照会导致农历模式误判走公历分支）
     get calendarType() { return calendarType; },
