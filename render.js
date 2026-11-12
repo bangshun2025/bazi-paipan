@@ -1101,7 +1101,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话">✦ Agent</button></div>
     </div>`;
   const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
@@ -8129,5 +8129,442 @@ function cmpSetState(entries) {
       _aiEditing = null; afterEdit(); return true; },
     debugCondDel: function(p) { var r = removePath(p); if (r) afterEdit(); return r; },
     debugCondReset: function() { if (!_aiOrig) return false; _aiQuery = JSON.parse(JSON.stringify(_aiOrig)); _aiWarn = collectUnsupported(_aiQuery); aiApply(); renderPanel(); return true; }
+  };
+})();
+
+// ============================================================
+// v0.100.2 ✦ Agent 对话：主盘顶栏「✦ Agent」开右侧抽屉与 AI 交流。
+// 上下文三源：① 盘面信息（syncChartMd 口径：四柱/藏干/十神/要位/起运/大运 + 分析记录全维度 + 近年流年）
+// ② 录音稿（IndexedDB bz_rec_audio 当前盘指纹下全部纪要）③ 档案卡片库（全档案一行一摘要，四柱现算）。
+// API 复用「AI 搜索」配置（RENDER_AI.cfgGet，OpenAI 兼容 /chat/completions 流式）；key 只存本机 localStorage。
+// ============================================================
+(function() {
+  'use strict';
+  var LS_CONV = 'bz_agent_conv_';
+  var REC_KEY_PFX = 'bz_rec_audio_';
+  var DIM_MARK = '§';
+  var CLIP_CAP = 6000, ARCH_MAX = 40, ARCH_NOTE_PRE = 80, HIST_MAX = 12, MSG_KEEP = 80;
+  var STARTERS = ['讲讲这个盘的格局与做功', '当下大运流年有什么要注意', '结合录音稿总结这个案例', '档案库里有哪些类似的盘'];
+  var CHAT = { open: false, msgs: [], busy: false, ac: null };
+
+  function dataNow() {
+    // 部分路径（如开档/恢复）只把数据挂在容器上，window._paipanData 不一定有值
+    var out = document.getElementById('output');
+    if (out && out._paipanData) return out._paipanData;
+    return window._paipanData || null;
+  }
+  function fpOf(d) { return [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|'); }
+  function archOf(d) { return { name: d.name || '未命名', gender: d.gender || '男', year: d.y, month: d.m, day: d.d, hour: d.h, min: d.mi, calendarType: 'solar' }; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+  function convKeyOf(d) { return LS_CONV + fpOf(d || dataNow() || { name: '', gender: '', y: '', m: '', d: '', h: '', mi: '' }); }
+
+  // —— 上下文：盘面 ——
+  function liunianLine() {
+    var y0 = new Date().getFullYear(), parts = [];
+    for (var y = y0 - 1; y <= y0 + 5; y++) {
+      var gz = (window.ALGO && ALGO.liuNianJZ) ? ALGO.liuNianJZ(y) : null;
+      if (gz && gz[0]) parts.push(y + '年' + gz[0] + gz[1]);
+    }
+    return parts.join('、');
+  }
+  function notesOf(d) {
+    var a = archOf(d), main = '', dims = [];
+    var list = (window.RENDER && RENDER.dimList) ? RENDER.dimList() : ['分析记录'];
+    for (var i = 0; i < list.length; i++) {
+      var dim = list[i], seg = (dim === '分析记录') ? '' : (DIM_MARK + dim + '|'), txt = '';
+      try {
+        var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, seg) : null;
+        txt = k ? (localStorage.getItem(k) || '') : '';
+      } catch (e) { txt = ''; }
+      if (String(txt).trim()) {
+        if (dim === '分析记录') main = txt; else dims.push([dim, txt]);
+      }
+    }
+    return { main: main, dims: dims };
+  }
+  function clipsOfKey(key) {
+    return new Promise(function(res) {
+      var out = [];
+      try {
+        var rq = indexedDB.open('bz_rec_audio', 1);
+        rq.onupgradeneeded = function() {
+          var db0 = rq.result;
+          if (!db0.objectStoreNames.contains('clips')) {
+            var st0 = db0.createObjectStore('clips', { keyPath: 'id' });
+            st0.createIndex('key', 'key', { unique: false });
+          }
+        };
+        rq.onsuccess = function() {
+          var db = rq.result;
+          try {
+            var rq2 = db.transaction('clips', 'readonly').objectStore('clips').index('key').getAll(key);
+            rq2.onsuccess = function() {
+              out = (rq2.result || []).sort(function(a, b) { return a.ts - b.ts; });
+              try { db.close(); } catch (e1) {}
+              res(out);
+            };
+            rq2.onerror = function() { try { db.close(); } catch (e2) {} res(out); };
+          } catch (e3) { try { db.close(); } catch (e4) {} res(out); }
+        };
+        rq.onerror = function() { res(out); };
+      } catch (e5) { res(out); }
+    });
+  }
+  function fmtDur(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + '分' + (sec % 60 < 10 ? '0' : '') + (sec % 60) + '秒'; }
+  function clipMdOf(cl) {
+    var L = [], t = String(((cl.transcript && (cl.transcript.text || cl.transcript.raw)) || '')).trim();
+    if (t.length > CLIP_CAP) t = t.slice(0, CLIP_CAP) + '…（截断）';
+    L.push('### ' + (cl.name || new Date(cl.ts || 0).toLocaleString()) + '（' + fmtDur(cl.dur) + '）');
+    L.push(t || '（未转录）');
+    if (cl.notes && cl.notes.length) {
+      var ns = [];
+      for (var i = 0; i < cl.notes.length; i++) if (cl.notes[i] && cl.notes[i].text) ns.push('- ' + cl.notes[i].text);
+      if (ns.length) L.push('追加笔记：\n' + ns.join('\n'));
+    }
+    return L.join('\n');
+  }
+  function archLineMd(a) {
+    var gz = '—';
+    try {
+      var p = (window.ALGO && ALGO.paipan) ? ALGO.paipan(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0) : null;
+      if (p) gz = p.nian.gan + p.nian.zhi + ' ' + p.yue.gan + p.yue.zhi + ' ' + p.ri.gan + p.ri.zhi + ' ' + p.shi.gan + p.shi.zhi;
+    } catch (e) {}
+    var noteLen = 0, preview = '';
+    try {
+      var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, '') : null;
+      if (k) {
+        var v = localStorage.getItem(k) || '';
+        noteLen = v.trim().length;
+        preview = v.trim().slice(0, ARCH_NOTE_PRE).replace(/\s*\n\s*/g, ' ');
+      }
+    } catch (e2) {}
+    return '- ' + (a.name || '未命名') + '（' + (a.gender || '') + '，' + a.year + '-' + a.month + '-' + a.day
+      + ' ' + (a.hour || 0) + ':' + (a.min || 0) + '）四柱 ' + gz
+      + (noteLen ? ' · 记录 ' + noteLen + ' 字' : '')
+      + (preview ? '\n  记录摘引：' + preview : '');
+  }
+  function buildContext(d) {
+    d = d || dataNow();
+    if (!d) return Promise.resolve(null);
+    var a = archOf(d), nt = notesOf(d), stats = { recChars: 0, clips: 0, archs: 0 };
+    stats.recChars += String(nt.main).trim().length;
+    for (var i = 0; i < nt.dims.length; i++) stats.recChars += String(nt.dims[i][1]).trim().length;
+    var chartMd = '';
+    try { chartMd = (window.ARCHIVE && ARCHIVE.syncChartMd) ? ARCHIVE.syncChartMd(a, nt.main, nt.dims) : ''; } catch (e) { chartMd = ''; }
+    var md = '【盘面信息】\n' + (chartMd || '（排盘数据暂缺）');
+    var ln = liunianLine();
+    if (ln) md += '\n## 近年流年\n' + ln + '\n';
+    return clipsOfKey(REC_KEY_PFX + fpOf(d)).then(function(clips) {
+      stats.clips = clips.length;
+      if (clips.length) {
+        var seg = ['【录音稿】'];
+        for (var j = 0; j < clips.length; j++) seg.push(clipMdOf(clips[j]));
+        md += '\n' + seg.join('\n\n');
+      } else {
+        md += '\n【录音稿】（该盘暂无录音稿）';
+      }
+      var archs = [];
+      try { archs = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : []; } catch (e2) {}
+      stats.archs = archs.length;
+      var lib = ['【档案卡片库】本机档案库共 ' + archs.length + ' 份：'];
+      var n = Math.min(archs.length, ARCH_MAX);
+      for (var x = 0; x < n; x++) lib.push(archLineMd(archs[x]));
+      if (archs.length > n) lib.push('（另有 ' + (archs.length - n) + ' 份略）');
+      md += '\n' + lib.join('\n');
+      return { md: md, stats: stats };
+    });
+  }
+
+  // —— 对话 ——
+  var SYS_BASE = '你是八字排盘工作台里的分析搭档「✦ Agent」。用户正在看一个命盘，随消息附上三段资料：'
+    + '【盘面信息】（四柱/藏干/十神/要位/起运大运/近年流年，含该盘分析记录全维度）、'
+    + '【录音稿】（该盘名下的录音纪要，可能没有）、'
+    + '【档案卡片库】（本机全部档案的一行摘要）。\n'
+    + '规则：1) 只依据资料作答，资料里没有的直说没有，绝不编造干支或案例；'
+    + '2) 谈结构必须落到具体干支（哪一柱、什么十神、什么刑冲合害）；'
+    + '3) 提到别的案例要报姓名；'
+    + '4) 结论先行，分点简短，用中文回答。';
+  function sysPrompt() { return SYS_BASE; }
+  function loadConv() {
+    try { var v = JSON.parse(localStorage.getItem(convKeyOf())); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function saveConv() {
+    try { localStorage.setItem(convKeyOf(), JSON.stringify(CHAT.msgs.slice(-MSG_KEEP))); } catch (e) {}
+  }
+  function clearConv() {
+    CHAT.msgs = [];
+    try { localStorage.removeItem(convKeyOf()); } catch (e) {}
+    draw();
+  }
+  function msgsForApi() {
+    var arr = [];
+    for (var i = 0; i < CHAT.msgs.length; i++) {
+      var m = CHAT.msgs[i];
+      if (m.err) continue;
+      if (m.who === 'me' && m.text) arr.push({ role: 'user', content: m.text });
+      else if (m.who === 'agent' && m.text) arr.push({ role: 'assistant', content: m.text });
+    }
+    return arr.slice(-HIST_MAX);
+  }
+  function setBusy(v) {
+    CHAT.busy = v;
+    var b = document.getElementById('bzAgentSend');
+    if (b) {
+      b.textContent = v ? '停止' : '发送';
+      b.classList.toggle('stop', v);
+    }
+    var inp = document.getElementById('bzAgentInput');
+    if (inp) inp.disabled = v;
+  }
+  function agentMdHtml(t) {
+    var s = esc(t);
+    s = s.replace(/^#{1,6}\s*(.+)$/gm, '<b class="bz-ag-h">$1</b>');
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    return s;
+  }
+  function emptyHtml() {
+    var h = '<div class="bz-ag-empty"><b>✦ Agent</b><br>只依据本机资料回答：盘面信息（含分析记录）、录音稿、档案卡片库。<div class="bz-ag-starters">';
+    for (var i = 0; i < STARTERS.length; i++) h += '<button type="button" class="bz-ag-starter" data-q="' + escAttr(STARTERS[i]) + '">' + esc(STARTERS[i]) + '</button>';
+    return h + '</div></div>';
+  }
+  function draw() {
+    var el = document.getElementById('bzAgentMsgs');
+    if (!el) return;
+    if (!CHAT.msgs.length) {
+      el.innerHTML = emptyHtml();
+      el.scrollTop = 0;
+      return;
+    }
+    var h = '';
+    for (var i = 0; i < CHAT.msgs.length; i++) {
+      var m = CHAT.msgs[i];
+      if (m.who === 'me') {
+        h += '<div class="bz-ag-row me" data-i="' + i + '"><div class="bz-ag-bubble">' + esc(m.text) + '</div></div>';
+      } else if (m.err) {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-err">⚠ ' + esc(m.err)
+          + (m.q ? ' <button type="button" class="bz-ag-retry" data-q="' + escAttr(m.q) + '">重试</button>' : '') + '</div></div>';
+      } else {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-body">' + agentMdHtml(m.text)
+          + (CHAT.busy && i === CHAT.msgs.length - 1 ? '<span class="bz-ag-caret"></span>' : '') + '</div></div>';
+      }
+    }
+    el.innerHTML = h;
+    el.scrollTop = el.scrollHeight;
+  }
+  var _tickPending = false;
+  function streamTick(m) {
+    if (_tickPending) return;
+    _tickPending = true;
+    var step = function() {
+      _tickPending = false;
+      if (!CHAT.busy) return;
+      var el = document.getElementById('bzAgentMsgs');
+      if (!el) return;
+      var idx = CHAT.msgs.indexOf(m);
+      var bubble = idx >= 0 ? el.querySelector('[data-i="' + idx + '"] .bz-ag-body') : null;
+      var pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+      if (bubble) bubble.innerHTML = agentMdHtml(m.text) + '<span class="bz-ag-caret"></span>';
+      if (pinned) el.scrollTop = el.scrollHeight;
+    };
+    if (window.requestAnimationFrame) requestAnimationFrame(step); else setTimeout(step, 16);
+  }
+  function send(text) {
+    if (CHAT.busy) return;
+    text = String(text == null ? '' : text).trim();
+    if (!text) return;
+    if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
+    var cfg = (window.RENDER_AI && RENDER_AI.cfgGet) ? RENDER_AI.cfgGet() : {};
+    if (!(cfg.apiKey && cfg.baseUrl && cfg.model)) {
+      CHAT.msgs.push({ who: 'agent', err: '先配置 AI 接口（填一次 Key 即可，只存在本机）', q: text });
+      draw();
+      if (window.RENDER_AI && RENDER_AI.aiOpenSettings) RENDER_AI.aiOpenSettings('✦ Agent 与 AI 搜索共用这套接口配置');
+      return;
+    }
+    CHAT.msgs.push({ who: 'me', text: text });
+    var m = { who: 'agent', text: '' };
+    CHAT.msgs.push(m);
+    saveConv();
+    draw();
+    setBusy(true);
+    var ac = new AbortController();
+    CHAT.ac = ac;
+    buildContext().then(function(ctx) {
+      var body = {
+        model: cfg.model,
+        temperature: 0.4,
+        stream: true,
+        messages: [{ role: 'system', content: sysPrompt() + '\n\n' + (ctx ? ctx.md : '（资料暂缺）') }].concat(msgsForApi())
+      };
+      return fetch(String(cfg.baseUrl).replace(/\/+$/, '') + '/chat/completions', {
+        method: 'POST',
+        signal: ac.signal,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+        body: JSON.stringify(body)
+      }).then(function(r) {
+        if (!r.ok) return r.json().then(function(j) { throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status)); });
+        var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+        function pump() {
+          return reader.read().then(function(res) {
+            if (res.done) return;
+            buf += dec.decode(res.value, { stream: true });
+            var ls = buf.split('\n'); buf = ls.pop();
+            for (var i = 0; i < ls.length; i++) {
+              var ln = ls[i].trim();
+              if (ln.slice(0, 5) !== 'data:') continue;
+              var dt = ln.slice(5).trim();
+              if (dt === '[DONE]') continue;
+              try {
+                var j2 = JSON.parse(dt);
+                var d2 = j2.choices && j2.choices[0] && (j2.choices[0].delta || j2.choices[0].message);
+                if (d2 && d2.content) { m.text += d2.content; streamTick(m); }
+              } catch (e) {}
+            }
+            return pump();
+          });
+        }
+        return pump();
+      });
+    }).then(function() {
+      if (!m.text) m.text = '（模型无输出，可重试）';
+      setBusy(false); CHAT.ac = null; saveConv(); draw();
+    }).catch(function(e) {
+      var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
+      if (aborted) {
+        if (m.text) m.text += '\n（已停止）';
+        else CHAT.msgs.splice(CHAT.msgs.indexOf(m), 1);
+      } else {
+        m.err = (e && e.message) ? e.message : String(e);
+        m.q = text;
+      }
+      setBusy(false); CHAT.ac = null; saveConv(); draw();
+    });
+  }
+  function stop() { if (CHAT.ac) { try { CHAT.ac.abort(); } catch (e) {} } }
+
+  // —— 抽屉 ——
+  var CSS = ''
+    + '.bz-ag-drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:var(--c-paper,#f5f0e8);border-left:1.5px solid var(--c-line,#e0d8c8);box-shadow:-8px 0 32px rgba(0,0,0,.14);transform:translateX(103%);transition:transform .28s cubic-bezier(.22,.9,.3,1);z-index:9800;display:flex;flex-direction:column;}'
+    + '.bz-ag-drawer.open{transform:translateX(0);}'
+    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
+    + '.bz-ag-logo{font-weight:700;font-size:14px;color:var(--c-ink,#2c2416);white-space:nowrap;}'
+    + '.bz-ag-ctx{font-size:11.5px;color:var(--c-gray,#8b7e6a);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.bz-ag-ic{border:1px solid var(--c-line,#e0d8c8);background:transparent;color:var(--c-gray,#8b7e6a);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;white-space:nowrap;}'
+    + '.bz-ag-ic:hover{color:var(--c-ink,#2c2416);border-color:var(--c-gray,#8b7e6a);}'
+    + '.bz-ag-msgs{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px;}'
+    + '.bz-ag-row.ag{align-self:flex-start;max-width:100%;}'
+    + '.bz-ag-row.ag .bz-ag-body{font-size:13.5px;line-height:1.75;color:var(--c-ink,#2c2416);white-space:pre-wrap;word-break:break-word;}'
+    + '.bz-ag-row.me{align-self:flex-end;max-width:85%;}'
+    + '.bz-ag-row.me .bz-ag-bubble{background:rgba(138,109,59,.13);border-radius:10px 10px 2px 10px;padding:8px 12px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--c-ink,#2c2416);}'
+    + '.bz-ag-h{display:block;margin:6px 0 2px;}'
+    + '.bz-ag-body code,.bz-ag-bubble code{background:rgba(0,0,0,.06);padding:0 4px;border-radius:4px;font-size:12.5px;}'
+    + '.bz-ag-caret{display:inline-block;width:7px;height:14px;background:var(--c-gray,#8b7e6a);vertical-align:-2px;margin-left:2px;animation:bzAgCaret 1s steps(2) infinite;}'
+    + '@keyframes bzAgCaret{0%{opacity:1}50%{opacity:0}100%{opacity:1}}'
+    + '.bz-ag-err{font-size:12.5px;color:var(--c-red,#b5343a);background:rgba(181,52,58,.07);border-radius:8px;padding:8px 12px;line-height:1.6;}'
+    + '.bz-ag-retry{border:1px solid var(--c-red,#b5343a);background:transparent;color:var(--c-red,#b5343a);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;margin-left:6px;}'
+    + '.bz-ag-empty{text-align:center;color:var(--c-gray,#8b7e6a);font-size:13px;margin:auto 0;padding:20px 10px;line-height:1.8;}'
+    + '.bz-ag-empty b{color:var(--c-ink,#2c2416);font-size:15px;}'
+    + '.bz-ag-starters{display:flex;flex-direction:column;gap:8px;margin-top:14px;}'
+    + '.bz-ag-starter{border:1px solid var(--c-line,#e0d8c8);background:rgba(255,255,255,.55);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--c-ink,#2c2416);cursor:pointer;text-align:left;font-family:inherit;}'
+    + '.bz-ag-starter:hover{border-color:var(--c-gray,#8b7e6a);background:#fff;}'
+    + '.bz-ag-inputbar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--c-line,#e0d8c8);}'
+    + '#bzAgentInput{flex:1;resize:none;border:1px solid var(--c-line,#e0d8c8);border-radius:8px;background:#fff;color:var(--c-ink,#2c2416);font-size:13.5px;line-height:1.5;padding:8px 10px;max-height:120px;min-height:38px;font-family:inherit;box-sizing:border-box;}'
+    + '#bzAgentInput:focus{outline:none;border-color:var(--c-gray,#8b7e6a);}'
+    + '#bzAgentInput:disabled{background:rgba(0,0,0,.04);}'
+    + '.bz-ag-send{border:none;background:var(--c-ink,#2c2416);color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap;}'
+    + '.bz-ag-send.stop{background:var(--c-red,#b5343a);}'
+    + '.bz-ag-send:disabled{opacity:.5;cursor:default;}';
+  function ensureDom() {
+    if (document.getElementById('bzAgentDrawer')) return;
+    var st = document.createElement('style');
+    st.id = 'bzAgentStyle';
+    st.textContent = CSS;
+    document.head.appendChild(st);
+    var dr = document.createElement('div');
+    dr.id = 'bzAgentDrawer';
+    dr.className = 'bz-ag-drawer';
+    dr.innerHTML = '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
+      + '<button type="button" class="bz-ag-ic" id="bzAgentClear" title="清空本盘会话">清空</button>'
+      + '<button type="button" class="bz-ag-ic" id="bzAgentClose" title="关闭（Esc）">✕</button></div>'
+      + '<div class="bz-ag-msgs" id="bzAgentMsgs"></div>'
+      + '<div class="bz-ag-inputbar"><textarea id="bzAgentInput" rows="1" placeholder="问盘面、录音稿、档案库…（Enter 发送 · Shift+Enter 换行）"></textarea>'
+      + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>';
+    document.body.appendChild(dr);
+    document.getElementById('bzAgentClose').onclick = close;
+    document.getElementById('bzAgentClear').onclick = clearConv;
+    var inp = document.getElementById('bzAgentInput');
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send(inp.value);
+        inp.value = '';
+        inp.style.height = 'auto';
+      }
+    });
+    inp.addEventListener('input', function() {
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(120, inp.scrollHeight) + 'px';
+    });
+    document.getElementById('bzAgentSend').onclick = function() {
+      if (CHAT.busy) stop(); else {
+        send(inp.value);
+        inp.value = '';
+        inp.style.height = 'auto';
+        inp.focus();
+      }
+    };
+    var msgs = document.getElementById('bzAgentMsgs');
+    msgs.addEventListener('click', function(e) {
+      var t = e.target;
+      if (t.classList && t.classList.contains('bz-ag-starter')) { send(t.getAttribute('data-q')); return; }
+      if (t.classList && t.classList.contains('bz-ag-retry')) { send(t.getAttribute('data-q')); }
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && CHAT.open) close();
+    });
+  }
+  function fillCtx() {
+    var el = document.getElementById('bzAgentCtx');
+    if (!el) return;
+    el.textContent = '上下文：读取中…';
+    buildContext().then(function(ctx) {
+      if (!el.isConnected) return;
+      if (!ctx) { el.textContent = '上下文：无盘面'; return; }
+      el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份';
+    }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
+  }
+  function open() {
+    if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
+    ensureDom();
+    CHAT.open = true;
+    document.getElementById('bzAgentDrawer').classList.add('open');
+    CHAT.msgs = loadConv();
+    draw();
+    fillCtx();
+    var inp = document.getElementById('bzAgentInput');
+    if (inp && !CHAT.busy) inp.focus();
+  }
+  function close() {
+    CHAT.open = false;
+    var dr = document.getElementById('bzAgentDrawer');
+    if (dr) dr.classList.remove('open');
+  }
+  function toggle() { if (CHAT.open) close(); else open(); }
+
+  window.AGENT = {
+    open: open,
+    close: close,
+    toggle: toggle,
+    send: send,
+    stop: stop,
+    clear: clearConv,
+    buildContext: buildContext,
+    debugMd: agentMdHtml,
+    debugSys: sysPrompt,
+    debugStarters: function() { return STARTERS.slice(); },
+    debugConvSave: function(msgs) { CHAT.msgs = msgs || []; saveConv(); },
+    debugConvLoad: loadConv,
+    debugState: CHAT
   };
 })();

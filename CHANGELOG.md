@@ -1,3 +1,15 @@
+## v0.100.2（2026-11-12）
+`index.html` ≡ `standalone.html`：`d3456377206c969c757c1df3f299c2eb`（2,146,823 B）；`standalone-split.html`：`1f5423525cc5418f25e0391f0d193d00`（157,671 B）
+
+✦ Agent 对话：主盘顶栏一点即开，三源资料（盘面+分析记录、录音稿、档案卡片库）喂给模型，流式回复，会话按盘记忆
+
+- **入口与抽屉**：顶栏「✦ Agent」→ 右侧滑出 430px 抽屉（docked 不遮盘面，transform .28s 缓动，Esc/✕ 关）。头部上下文 chips 实时显示三源规模（盘面+记录 n 字 · 录音稿 n 条 · 档案库 m 份）+ 清空按钮；空态给 4 个快捷问题一点即问
+- **三源上下文**（`AGENT.buildContext`）：① `ARCHIVE.syncChartMd` 的盘面+分析记录全文 + 近年流年（今年-1～+5，`ALGO.liuNianJZ`）；② IndexedDB 录音稿（每条含时长与纪要，单条截 6000 字）；③ 档案卡片库逐份一行摘要（上限 40）。系统提示词要求：只依据资料、干支落点、结论先行
+- **对话体验**：me 右气泡 / agent 左气泡，Markdown 行内渲染（先 HTML 转义防 XSS）；流式输出 rAF 节流 + 光标动画 + 贴底自动滚；发送中按钮变「停止」（AbortController 真中断）、输入禁用；完成后光标移除（rAF 补刀竞态已修：`streamTick` 在非 busy 时跳过重绘）
+- **会话记忆**：按盘指纹存 `bz_agent_conv_<fp>`（上限 80 条），换盘自动切会话，清空即删键；API 走 `bz_ai_cfg`（与 AI 搜索共用，URL 尾拼 `/chat/completions`，temperature 0.4，历史窗口 12 条）；未配 Key 给错误气泡并引导设置；失败气泡可重试
+- **数据源修复**：`dataNow()` 双源取盘——部分路径（开档/恢复）只把数据挂 `#output._paipanData`，`window._paipanData` 为空，单源会误判「无盘」
+- **回归**：main.js 新增 15 条断言（AGT 段：挂载、三源、XSS 转义、四柱/大运/分析记录/流年/录音稿/档案入上下文、会话持久与清空、抽屉开关），官方口径 **2097 条全绿**（2082+15）；另加端到端真实 UI 实测（CDP headless，fetch 桩三段流）：17/17 通过——chips 三源统计、发送瞬间 busy、流式全文逐字正确、光标移除、请求体含 system+四柱+流年+问题+模型且尾拼 `/chat/completions`、会话落盘 2 条、清空回归空态、Esc 关抽屉、现场还原；六门禁 6/6
+
 ## v0.100.1（2026-11-12）
 `index.html` ≡ `standalone.html`：`2540c6f9da677f45cc707b1793c4af58`（2,118,100 B）；`standalone-split.html`：`1f5423525cc5418f25e0391f0d193d00`（157,671 B）
 

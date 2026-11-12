@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.1 | 2026-11-12 -->
+<!-- 八字排盘 ·  从真版 v0.100.2 | 2026-11-12 -->
+<!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏「✦ Agent」一点即开右侧抽屉（430px docked 不遮盘面，Esc/✕ 关）。三源资料自动进上下文：①盘面+分析记录+近年流年（今年-1~+5）②IndexedDB 录音稿（单条截 6000 字）③档案卡片库逐份摘要（上限 40）。流式回复 rAF 节流+光标动画+贴底自动滚，发送中按钮变「停止」（AbortController），Markdown 行内渲染先转义防 XSS，会话按盘指纹存 bz_agent_conv_<fp>（上限 80 条）清空即删，未配 Key 引导设置，失败气泡可重试。附带修复：dataNow() 双源取盘（开档/恢复路径只挂 #output._paipanData，单源误判无盘）；streamTick 非 busy 跳过重绘（流结束 rAF 补刀会把光标画回去） -->
 <!-- v0.100.1: 删重复档案时分析记录随唯一幸存者迁移 —— 修复「删除重复档案后分析记录消失」：删除档案（回收站）时在剩余档案中找唯一幸存者（同公历生日+时辰，姓名或性别至少一项相同；命中多个不迁移），把被删档案全部 bz_rec_notes_* 键（含 twin 双胞胎段与 §维度段）迁到幸存者指纹下，幸存键非空时保留旧键不覆盖；录音键同步迁移。此前孤儿回收 migrateOrphanRecNotes 按 姓名+性别 匹配，性别录错/翻转的孤儿键永远无法回捞（新善案例）。
 <!-- v0.98.0: 示例盘 + 听懂更多 —— ①造盘结果存进独立示例盘（localStorage bz_gen_examples，与档案 bz_archives_v2 完全隔离）：造盘即自动存入、同特征+四柱+性别去重置顶、上限 60 条、顶部角标计数、点一条按年月日时现算整盘重开（不存快照）、单条删除与清空、横幅「⭐ 转存档案」才进档案；②解析归一化（全角转半角、常见繁体转简体）+ 柱位（月柱七杀/时干正官）+ 精确计数（正好两个）+ 十神组（官杀透两干）+ 点名干支（寅透甲丙戊/天干见甲丙/地支见子辰）+ 五行认局（三合水局→申子辰）+ 多特征组合（顿号/且/和 → and，命中同时满足）+ 否定（不冲）+ 性别口令；认不出给 3 条候选不硬猜；scan 加 variant 支持 🎲 换一张（同句同 variant 稳定）。-->
 <!-- v0.97.0: 特征造盘 —— 一句话描述干支结构（一根透多干/一柱全透/七杀透两头/三合/三会/天干五合/官杀混杂/食伤生财/官印相生/地支相冲/透出最多极值），按真实出生时刻扫描命中盘：一日一发 paipan 取三柱 + 五鼠遁补十二时辰 + 命中后完整复核；起点按描述散列（同句结果稳定、不同特征散落年代范围），跳过未出生日期；只渲染不写档案，横幅回显证据（哪一柱藏几干透几干），正常排盘自动收起 -->
@@ -13697,7 +13698,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话">✦ Agent</button></div>
     </div>`;
   const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
@@ -20725,6 +20726,443 @@ function cmpSetState(entries) {
       _aiEditing = null; afterEdit(); return true; },
     debugCondDel: function(p) { var r = removePath(p); if (r) afterEdit(); return r; },
     debugCondReset: function() { if (!_aiOrig) return false; _aiQuery = JSON.parse(JSON.stringify(_aiOrig)); _aiWarn = collectUnsupported(_aiQuery); aiApply(); renderPanel(); return true; }
+  };
+})();
+
+// ============================================================
+// v0.100.2 ✦ Agent 对话：主盘顶栏「✦ Agent」开右侧抽屉与 AI 交流。
+// 上下文三源：① 盘面信息（syncChartMd 口径：四柱/藏干/十神/要位/起运/大运 + 分析记录全维度 + 近年流年）
+// ② 录音稿（IndexedDB bz_rec_audio 当前盘指纹下全部纪要）③ 档案卡片库（全档案一行一摘要，四柱现算）。
+// API 复用「AI 搜索」配置（RENDER_AI.cfgGet，OpenAI 兼容 /chat/completions 流式）；key 只存本机 localStorage。
+// ============================================================
+(function() {
+  'use strict';
+  var LS_CONV = 'bz_agent_conv_';
+  var REC_KEY_PFX = 'bz_rec_audio_';
+  var DIM_MARK = '§';
+  var CLIP_CAP = 6000, ARCH_MAX = 40, ARCH_NOTE_PRE = 80, HIST_MAX = 12, MSG_KEEP = 80;
+  var STARTERS = ['讲讲这个盘的格局与做功', '当下大运流年有什么要注意', '结合录音稿总结这个案例', '档案库里有哪些类似的盘'];
+  var CHAT = { open: false, msgs: [], busy: false, ac: null };
+
+  function dataNow() {
+    // 部分路径（如开档/恢复）只把数据挂在容器上，window._paipanData 不一定有值
+    var out = document.getElementById('output');
+    if (out && out._paipanData) return out._paipanData;
+    return window._paipanData || null;
+  }
+  function fpOf(d) { return [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|'); }
+  function archOf(d) { return { name: d.name || '未命名', gender: d.gender || '男', year: d.y, month: d.m, day: d.d, hour: d.h, min: d.mi, calendarType: 'solar' }; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+  function convKeyOf(d) { return LS_CONV + fpOf(d || dataNow() || { name: '', gender: '', y: '', m: '', d: '', h: '', mi: '' }); }
+
+  // —— 上下文：盘面 ——
+  function liunianLine() {
+    var y0 = new Date().getFullYear(), parts = [];
+    for (var y = y0 - 1; y <= y0 + 5; y++) {
+      var gz = (window.ALGO && ALGO.liuNianJZ) ? ALGO.liuNianJZ(y) : null;
+      if (gz && gz[0]) parts.push(y + '年' + gz[0] + gz[1]);
+    }
+    return parts.join('、');
+  }
+  function notesOf(d) {
+    var a = archOf(d), main = '', dims = [];
+    var list = (window.RENDER && RENDER.dimList) ? RENDER.dimList() : ['分析记录'];
+    for (var i = 0; i < list.length; i++) {
+      var dim = list[i], seg = (dim === '分析记录') ? '' : (DIM_MARK + dim + '|'), txt = '';
+      try {
+        var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, seg) : null;
+        txt = k ? (localStorage.getItem(k) || '') : '';
+      } catch (e) { txt = ''; }
+      if (String(txt).trim()) {
+        if (dim === '分析记录') main = txt; else dims.push([dim, txt]);
+      }
+    }
+    return { main: main, dims: dims };
+  }
+  function clipsOfKey(key) {
+    return new Promise(function(res) {
+      var out = [];
+      try {
+        var rq = indexedDB.open('bz_rec_audio', 1);
+        rq.onupgradeneeded = function() {
+          var db0 = rq.result;
+          if (!db0.objectStoreNames.contains('clips')) {
+            var st0 = db0.createObjectStore('clips', { keyPath: 'id' });
+            st0.createIndex('key', 'key', { unique: false });
+          }
+        };
+        rq.onsuccess = function() {
+          var db = rq.result;
+          try {
+            var rq2 = db.transaction('clips', 'readonly').objectStore('clips').index('key').getAll(key);
+            rq2.onsuccess = function() {
+              out = (rq2.result || []).sort(function(a, b) { return a.ts - b.ts; });
+              try { db.close(); } catch (e1) {}
+              res(out);
+            };
+            rq2.onerror = function() { try { db.close(); } catch (e2) {} res(out); };
+          } catch (e3) { try { db.close(); } catch (e4) {} res(out); }
+        };
+        rq.onerror = function() { res(out); };
+      } catch (e5) { res(out); }
+    });
+  }
+  function fmtDur(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + '分' + (sec % 60 < 10 ? '0' : '') + (sec % 60) + '秒'; }
+  function clipMdOf(cl) {
+    var L = [], t = String(((cl.transcript && (cl.transcript.text || cl.transcript.raw)) || '')).trim();
+    if (t.length > CLIP_CAP) t = t.slice(0, CLIP_CAP) + '…（截断）';
+    L.push('### ' + (cl.name || new Date(cl.ts || 0).toLocaleString()) + '（' + fmtDur(cl.dur) + '）');
+    L.push(t || '（未转录）');
+    if (cl.notes && cl.notes.length) {
+      var ns = [];
+      for (var i = 0; i < cl.notes.length; i++) if (cl.notes[i] && cl.notes[i].text) ns.push('- ' + cl.notes[i].text);
+      if (ns.length) L.push('追加笔记：\n' + ns.join('\n'));
+    }
+    return L.join('\n');
+  }
+  function archLineMd(a) {
+    var gz = '—';
+    try {
+      var p = (window.ALGO && ALGO.paipan) ? ALGO.paipan(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0) : null;
+      if (p) gz = p.nian.gan + p.nian.zhi + ' ' + p.yue.gan + p.yue.zhi + ' ' + p.ri.gan + p.ri.zhi + ' ' + p.shi.gan + p.shi.zhi;
+    } catch (e) {}
+    var noteLen = 0, preview = '';
+    try {
+      var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, '') : null;
+      if (k) {
+        var v = localStorage.getItem(k) || '';
+        noteLen = v.trim().length;
+        preview = v.trim().slice(0, ARCH_NOTE_PRE).replace(/\s*\n\s*/g, ' ');
+      }
+    } catch (e2) {}
+    return '- ' + (a.name || '未命名') + '（' + (a.gender || '') + '，' + a.year + '-' + a.month + '-' + a.day
+      + ' ' + (a.hour || 0) + ':' + (a.min || 0) + '）四柱 ' + gz
+      + (noteLen ? ' · 记录 ' + noteLen + ' 字' : '')
+      + (preview ? '\n  记录摘引：' + preview : '');
+  }
+  function buildContext(d) {
+    d = d || dataNow();
+    if (!d) return Promise.resolve(null);
+    var a = archOf(d), nt = notesOf(d), stats = { recChars: 0, clips: 0, archs: 0 };
+    stats.recChars += String(nt.main).trim().length;
+    for (var i = 0; i < nt.dims.length; i++) stats.recChars += String(nt.dims[i][1]).trim().length;
+    var chartMd = '';
+    try { chartMd = (window.ARCHIVE && ARCHIVE.syncChartMd) ? ARCHIVE.syncChartMd(a, nt.main, nt.dims) : ''; } catch (e) { chartMd = ''; }
+    var md = '【盘面信息】\n' + (chartMd || '（排盘数据暂缺）');
+    var ln = liunianLine();
+    if (ln) md += '\n## 近年流年\n' + ln + '\n';
+    return clipsOfKey(REC_KEY_PFX + fpOf(d)).then(function(clips) {
+      stats.clips = clips.length;
+      if (clips.length) {
+        var seg = ['【录音稿】'];
+        for (var j = 0; j < clips.length; j++) seg.push(clipMdOf(clips[j]));
+        md += '\n' + seg.join('\n\n');
+      } else {
+        md += '\n【录音稿】（该盘暂无录音稿）';
+      }
+      var archs = [];
+      try { archs = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : []; } catch (e2) {}
+      stats.archs = archs.length;
+      var lib = ['【档案卡片库】本机档案库共 ' + archs.length + ' 份：'];
+      var n = Math.min(archs.length, ARCH_MAX);
+      for (var x = 0; x < n; x++) lib.push(archLineMd(archs[x]));
+      if (archs.length > n) lib.push('（另有 ' + (archs.length - n) + ' 份略）');
+      md += '\n' + lib.join('\n');
+      return { md: md, stats: stats };
+    });
+  }
+
+  // —— 对话 ——
+  var SYS_BASE = '你是八字排盘工作台里的分析搭档「✦ Agent」。用户正在看一个命盘，随消息附上三段资料：'
+    + '【盘面信息】（四柱/藏干/十神/要位/起运大运/近年流年，含该盘分析记录全维度）、'
+    + '【录音稿】（该盘名下的录音纪要，可能没有）、'
+    + '【档案卡片库】（本机全部档案的一行摘要）。\n'
+    + '规则：1) 只依据资料作答，资料里没有的直说没有，绝不编造干支或案例；'
+    + '2) 谈结构必须落到具体干支（哪一柱、什么十神、什么刑冲合害）；'
+    + '3) 提到别的案例要报姓名；'
+    + '4) 结论先行，分点简短，用中文回答。';
+  function sysPrompt() { return SYS_BASE; }
+  function loadConv() {
+    try { var v = JSON.parse(localStorage.getItem(convKeyOf())); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function saveConv() {
+    try { localStorage.setItem(convKeyOf(), JSON.stringify(CHAT.msgs.slice(-MSG_KEEP))); } catch (e) {}
+  }
+  function clearConv() {
+    CHAT.msgs = [];
+    try { localStorage.removeItem(convKeyOf()); } catch (e) {}
+    draw();
+  }
+  function msgsForApi() {
+    var arr = [];
+    for (var i = 0; i < CHAT.msgs.length; i++) {
+      var m = CHAT.msgs[i];
+      if (m.err) continue;
+      if (m.who === 'me' && m.text) arr.push({ role: 'user', content: m.text });
+      else if (m.who === 'agent' && m.text) arr.push({ role: 'assistant', content: m.text });
+    }
+    return arr.slice(-HIST_MAX);
+  }
+  function setBusy(v) {
+    CHAT.busy = v;
+    var b = document.getElementById('bzAgentSend');
+    if (b) {
+      b.textContent = v ? '停止' : '发送';
+      b.classList.toggle('stop', v);
+    }
+    var inp = document.getElementById('bzAgentInput');
+    if (inp) inp.disabled = v;
+  }
+  function agentMdHtml(t) {
+    var s = esc(t);
+    s = s.replace(/^#{1,6}\s*(.+)$/gm, '<b class="bz-ag-h">$1</b>');
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    return s;
+  }
+  function emptyHtml() {
+    var h = '<div class="bz-ag-empty"><b>✦ Agent</b><br>只依据本机资料回答：盘面信息（含分析记录）、录音稿、档案卡片库。<div class="bz-ag-starters">';
+    for (var i = 0; i < STARTERS.length; i++) h += '<button type="button" class="bz-ag-starter" data-q="' + escAttr(STARTERS[i]) + '">' + esc(STARTERS[i]) + '</button>';
+    return h + '</div></div>';
+  }
+  function draw() {
+    var el = document.getElementById('bzAgentMsgs');
+    if (!el) return;
+    if (!CHAT.msgs.length) {
+      el.innerHTML = emptyHtml();
+      el.scrollTop = 0;
+      return;
+    }
+    var h = '';
+    for (var i = 0; i < CHAT.msgs.length; i++) {
+      var m = CHAT.msgs[i];
+      if (m.who === 'me') {
+        h += '<div class="bz-ag-row me" data-i="' + i + '"><div class="bz-ag-bubble">' + esc(m.text) + '</div></div>';
+      } else if (m.err) {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-err">⚠ ' + esc(m.err)
+          + (m.q ? ' <button type="button" class="bz-ag-retry" data-q="' + escAttr(m.q) + '">重试</button>' : '') + '</div></div>';
+      } else {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-body">' + agentMdHtml(m.text)
+          + (CHAT.busy && i === CHAT.msgs.length - 1 ? '<span class="bz-ag-caret"></span>' : '') + '</div></div>';
+      }
+    }
+    el.innerHTML = h;
+    el.scrollTop = el.scrollHeight;
+  }
+  var _tickPending = false;
+  function streamTick(m) {
+    if (_tickPending) return;
+    _tickPending = true;
+    var step = function() {
+      _tickPending = false;
+      if (!CHAT.busy) return;
+      var el = document.getElementById('bzAgentMsgs');
+      if (!el) return;
+      var idx = CHAT.msgs.indexOf(m);
+      var bubble = idx >= 0 ? el.querySelector('[data-i="' + idx + '"] .bz-ag-body') : null;
+      var pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+      if (bubble) bubble.innerHTML = agentMdHtml(m.text) + '<span class="bz-ag-caret"></span>';
+      if (pinned) el.scrollTop = el.scrollHeight;
+    };
+    if (window.requestAnimationFrame) requestAnimationFrame(step); else setTimeout(step, 16);
+  }
+  function send(text) {
+    if (CHAT.busy) return;
+    text = String(text == null ? '' : text).trim();
+    if (!text) return;
+    if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
+    var cfg = (window.RENDER_AI && RENDER_AI.cfgGet) ? RENDER_AI.cfgGet() : {};
+    if (!(cfg.apiKey && cfg.baseUrl && cfg.model)) {
+      CHAT.msgs.push({ who: 'agent', err: '先配置 AI 接口（填一次 Key 即可，只存在本机）', q: text });
+      draw();
+      if (window.RENDER_AI && RENDER_AI.aiOpenSettings) RENDER_AI.aiOpenSettings('✦ Agent 与 AI 搜索共用这套接口配置');
+      return;
+    }
+    CHAT.msgs.push({ who: 'me', text: text });
+    var m = { who: 'agent', text: '' };
+    CHAT.msgs.push(m);
+    saveConv();
+    draw();
+    setBusy(true);
+    var ac = new AbortController();
+    CHAT.ac = ac;
+    buildContext().then(function(ctx) {
+      var body = {
+        model: cfg.model,
+        temperature: 0.4,
+        stream: true,
+        messages: [{ role: 'system', content: sysPrompt() + '\n\n' + (ctx ? ctx.md : '（资料暂缺）') }].concat(msgsForApi())
+      };
+      return fetch(String(cfg.baseUrl).replace(/\/+$/, '') + '/chat/completions', {
+        method: 'POST',
+        signal: ac.signal,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+        body: JSON.stringify(body)
+      }).then(function(r) {
+        if (!r.ok) return r.json().then(function(j) { throw new Error((j && (j.error && j.error.message || j.message)) || ('HTTP ' + r.status)); });
+        var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+        function pump() {
+          return reader.read().then(function(res) {
+            if (res.done) return;
+            buf += dec.decode(res.value, { stream: true });
+            var ls = buf.split('\n'); buf = ls.pop();
+            for (var i = 0; i < ls.length; i++) {
+              var ln = ls[i].trim();
+              if (ln.slice(0, 5) !== 'data:') continue;
+              var dt = ln.slice(5).trim();
+              if (dt === '[DONE]') continue;
+              try {
+                var j2 = JSON.parse(dt);
+                var d2 = j2.choices && j2.choices[0] && (j2.choices[0].delta || j2.choices[0].message);
+                if (d2 && d2.content) { m.text += d2.content; streamTick(m); }
+              } catch (e) {}
+            }
+            return pump();
+          });
+        }
+        return pump();
+      });
+    }).then(function() {
+      if (!m.text) m.text = '（模型无输出，可重试）';
+      setBusy(false); CHAT.ac = null; saveConv(); draw();
+    }).catch(function(e) {
+      var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
+      if (aborted) {
+        if (m.text) m.text += '\n（已停止）';
+        else CHAT.msgs.splice(CHAT.msgs.indexOf(m), 1);
+      } else {
+        m.err = (e && e.message) ? e.message : String(e);
+        m.q = text;
+      }
+      setBusy(false); CHAT.ac = null; saveConv(); draw();
+    });
+  }
+  function stop() { if (CHAT.ac) { try { CHAT.ac.abort(); } catch (e) {} } }
+
+  // —— 抽屉 ——
+  var CSS = ''
+    + '.bz-ag-drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:var(--c-paper,#f5f0e8);border-left:1.5px solid var(--c-line,#e0d8c8);box-shadow:-8px 0 32px rgba(0,0,0,.14);transform:translateX(103%);transition:transform .28s cubic-bezier(.22,.9,.3,1);z-index:9800;display:flex;flex-direction:column;}'
+    + '.bz-ag-drawer.open{transform:translateX(0);}'
+    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
+    + '.bz-ag-logo{font-weight:700;font-size:14px;color:var(--c-ink,#2c2416);white-space:nowrap;}'
+    + '.bz-ag-ctx{font-size:11.5px;color:var(--c-gray,#8b7e6a);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.bz-ag-ic{border:1px solid var(--c-line,#e0d8c8);background:transparent;color:var(--c-gray,#8b7e6a);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;white-space:nowrap;}'
+    + '.bz-ag-ic:hover{color:var(--c-ink,#2c2416);border-color:var(--c-gray,#8b7e6a);}'
+    + '.bz-ag-msgs{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px;}'
+    + '.bz-ag-row.ag{align-self:flex-start;max-width:100%;}'
+    + '.bz-ag-row.ag .bz-ag-body{font-size:13.5px;line-height:1.75;color:var(--c-ink,#2c2416);white-space:pre-wrap;word-break:break-word;}'
+    + '.bz-ag-row.me{align-self:flex-end;max-width:85%;}'
+    + '.bz-ag-row.me .bz-ag-bubble{background:rgba(138,109,59,.13);border-radius:10px 10px 2px 10px;padding:8px 12px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--c-ink,#2c2416);}'
+    + '.bz-ag-h{display:block;margin:6px 0 2px;}'
+    + '.bz-ag-body code,.bz-ag-bubble code{background:rgba(0,0,0,.06);padding:0 4px;border-radius:4px;font-size:12.5px;}'
+    + '.bz-ag-caret{display:inline-block;width:7px;height:14px;background:var(--c-gray,#8b7e6a);vertical-align:-2px;margin-left:2px;animation:bzAgCaret 1s steps(2) infinite;}'
+    + '@keyframes bzAgCaret{0%{opacity:1}50%{opacity:0}100%{opacity:1}}'
+    + '.bz-ag-err{font-size:12.5px;color:var(--c-red,#b5343a);background:rgba(181,52,58,.07);border-radius:8px;padding:8px 12px;line-height:1.6;}'
+    + '.bz-ag-retry{border:1px solid var(--c-red,#b5343a);background:transparent;color:var(--c-red,#b5343a);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;margin-left:6px;}'
+    + '.bz-ag-empty{text-align:center;color:var(--c-gray,#8b7e6a);font-size:13px;margin:auto 0;padding:20px 10px;line-height:1.8;}'
+    + '.bz-ag-empty b{color:var(--c-ink,#2c2416);font-size:15px;}'
+    + '.bz-ag-starters{display:flex;flex-direction:column;gap:8px;margin-top:14px;}'
+    + '.bz-ag-starter{border:1px solid var(--c-line,#e0d8c8);background:rgba(255,255,255,.55);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--c-ink,#2c2416);cursor:pointer;text-align:left;font-family:inherit;}'
+    + '.bz-ag-starter:hover{border-color:var(--c-gray,#8b7e6a);background:#fff;}'
+    + '.bz-ag-inputbar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--c-line,#e0d8c8);}'
+    + '#bzAgentInput{flex:1;resize:none;border:1px solid var(--c-line,#e0d8c8);border-radius:8px;background:#fff;color:var(--c-ink,#2c2416);font-size:13.5px;line-height:1.5;padding:8px 10px;max-height:120px;min-height:38px;font-family:inherit;box-sizing:border-box;}'
+    + '#bzAgentInput:focus{outline:none;border-color:var(--c-gray,#8b7e6a);}'
+    + '#bzAgentInput:disabled{background:rgba(0,0,0,.04);}'
+    + '.bz-ag-send{border:none;background:var(--c-ink,#2c2416);color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap;}'
+    + '.bz-ag-send.stop{background:var(--c-red,#b5343a);}'
+    + '.bz-ag-send:disabled{opacity:.5;cursor:default;}';
+  function ensureDom() {
+    if (document.getElementById('bzAgentDrawer')) return;
+    var st = document.createElement('style');
+    st.id = 'bzAgentStyle';
+    st.textContent = CSS;
+    document.head.appendChild(st);
+    var dr = document.createElement('div');
+    dr.id = 'bzAgentDrawer';
+    dr.className = 'bz-ag-drawer';
+    dr.innerHTML = '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
+      + '<button type="button" class="bz-ag-ic" id="bzAgentClear" title="清空本盘会话">清空</button>'
+      + '<button type="button" class="bz-ag-ic" id="bzAgentClose" title="关闭（Esc）">✕</button></div>'
+      + '<div class="bz-ag-msgs" id="bzAgentMsgs"></div>'
+      + '<div class="bz-ag-inputbar"><textarea id="bzAgentInput" rows="1" placeholder="问盘面、录音稿、档案库…（Enter 发送 · Shift+Enter 换行）"></textarea>'
+      + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>';
+    document.body.appendChild(dr);
+    document.getElementById('bzAgentClose').onclick = close;
+    document.getElementById('bzAgentClear').onclick = clearConv;
+    var inp = document.getElementById('bzAgentInput');
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send(inp.value);
+        inp.value = '';
+        inp.style.height = 'auto';
+      }
+    });
+    inp.addEventListener('input', function() {
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(120, inp.scrollHeight) + 'px';
+    });
+    document.getElementById('bzAgentSend').onclick = function() {
+      if (CHAT.busy) stop(); else {
+        send(inp.value);
+        inp.value = '';
+        inp.style.height = 'auto';
+        inp.focus();
+      }
+    };
+    var msgs = document.getElementById('bzAgentMsgs');
+    msgs.addEventListener('click', function(e) {
+      var t = e.target;
+      if (t.classList && t.classList.contains('bz-ag-starter')) { send(t.getAttribute('data-q')); return; }
+      if (t.classList && t.classList.contains('bz-ag-retry')) { send(t.getAttribute('data-q')); }
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && CHAT.open) close();
+    });
+  }
+  function fillCtx() {
+    var el = document.getElementById('bzAgentCtx');
+    if (!el) return;
+    el.textContent = '上下文：读取中…';
+    buildContext().then(function(ctx) {
+      if (!el.isConnected) return;
+      if (!ctx) { el.textContent = '上下文：无盘面'; return; }
+      el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份';
+    }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
+  }
+  function open() {
+    if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
+    ensureDom();
+    CHAT.open = true;
+    document.getElementById('bzAgentDrawer').classList.add('open');
+    CHAT.msgs = loadConv();
+    draw();
+    fillCtx();
+    var inp = document.getElementById('bzAgentInput');
+    if (inp && !CHAT.busy) inp.focus();
+  }
+  function close() {
+    CHAT.open = false;
+    var dr = document.getElementById('bzAgentDrawer');
+    if (dr) dr.classList.remove('open');
+  }
+  function toggle() { if (CHAT.open) close(); else open(); }
+
+  window.AGENT = {
+    open: open,
+    close: close,
+    toggle: toggle,
+    send: send,
+    stop: stop,
+    clear: clearConv,
+    buildContext: buildContext,
+    debugMd: agentMdHtml,
+    debugSys: sysPrompt,
+    debugStarters: function() { return STARTERS.slice(); },
+    debugConvSave: function(msgs) { CHAT.msgs = msgs || []; saveConv(); },
+    debugConvLoad: loadConv,
+    debugState: CHAT
   };
 })();
 </script></script></script></script></script>
@@ -28555,9 +28993,88 @@ window.__testAppend = function(t) {
       push({ ok: c1 === 0 && c2 === 1 && c3 === 0, label: 'AUD 现场: IndexedDB 测试录音清理', detail: c1 + '/' + c2 + '/' + c3 });
     } catch (e) {
       push({ ok: false, label: 'AUD 异常', detail: e && e.message ? e.message : String(e) });
+    } finally {
+      window.__bzTestAudDone = true;
     }
   })();
 
+  // ===== v0.100.2 ✦ Agent 对话：上下文三源 / 会话持久 / 抽屉开合 / 转义（IndexedDB 异步，经 __testAppend 统计） =====
+  (async function() {
+    var push = function(t) { if (window.__testAppend) window.__testAppend(t); };
+    var R = window.RENDER, A = window.AGENT;
+    var dg = { name: 'Agent测试盘', gender: '男', y: 1982, m: 10, d: 18, h: 5, mi: 0 };
+    var fpG = [dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi].join('|');
+    var clipKeyG = 'bz_rec_audio_' + fpG;
+    var noteKeyG = null, clipIdG = null, tstG = null;
+    try {
+      // AUD 段同样改写 _paipanData 且异步收尾，必须等它还原后再接管，否则会话键指纹错位
+      for (var wG = 0; wG < 120 && !window.__bzTestAudDone; wG++) await new Promise(function(r) { setTimeout(r, 100); });
+      var oldPdG = window._paipanData;
+      if (!A || !A.open || !A.buildContext || !A.send || !A.debugMd || !A.debugSys) {
+        push({ ok: false, label: 'AGT 前置: AGENT 模块挂载', detail: '缺失' });
+        return;
+      }
+      push({ ok: true, label: 'AGT T01: AGENT 模块挂载（open/close/send/buildContext/debugMd）' });
+      window._paipanData = dg;
+
+      var sys = A.debugSys();
+      push({ ok: sys.indexOf('盘面信息') >= 0 && sys.indexOf('录音稿') >= 0 && sys.indexOf('档案卡片库') >= 0, label: 'AGT T02: 系统提示含三源标记' });
+
+      var md = A.debugMd('<img src=x onerror=1>**粗**`码`\n# 标题');
+      push({ ok: md.indexOf('<img') < 0 && md.indexOf('&lt;img') >= 0 && md.indexOf('<b>粗</b>') >= 0 && md.indexOf('<code>码</code>') >= 0, label: 'AGT T03: HTML 先转义再行内 md（防 XSS）', detail: md.slice(0, 32) });
+
+      var archG = { name: dg.name, gender: dg.gender, year: dg.y, month: dg.m, day: dg.d, hour: dg.h, min: dg.mi };
+      noteKeyG = ARCHIVE.recNotesKeyFor(archG, '');
+      localStorage.setItem(noteKeyG, 'AGT记录标记：甲木日主做功。');
+      var tsG = Date.now();
+      clipIdG = clipKeyG + '|' + tsG;
+      await R.recAudioPut({ id: clipIdG, key: clipKeyG, name: 'AGT录音 10-12 08:30', ts: tsG, dur: 65, mime: 'audio/webm', transcript: { text: '## 要点\nAGT录音标记词' } });
+
+      var ctx = await A.buildContext(dg);
+      push({ ok: !!ctx && ctx.md.indexOf('## 四柱') >= 0 && ctx.md.indexOf('## 大运') >= 0, label: 'AGT T04: 上下文·盘面段（四柱+大运）' });
+      push({ ok: !!ctx && ctx.md.indexOf('AGT记录标记：甲木日主做功') >= 0, label: 'AGT T05: 上下文·分析记录并入盘面段' });
+      push({ ok: !!ctx && ctx.md.indexOf('## 近年流年') >= 0, label: 'AGT T06: 上下文·近年流年' });
+      push({ ok: !!ctx && ctx.md.indexOf('【录音稿】') >= 0 && ctx.md.indexOf('AGT录音标记词') >= 0 && ctx.md.indexOf('1分05秒') >= 0, label: 'AGT T07: 上下文·录音稿段（纪要+时长）' });
+      push({ ok: !!ctx && ctx.stats.clips === 1, label: 'AGT T08: stats.clips = 1', detail: ctx ? String(ctx.stats.clips) : '无' });
+      push({ ok: !!ctx && ctx.md.indexOf('【档案卡片库】') >= 0 && typeof (ctx && ctx.stats.archs) === 'number', label: 'AGT T09: 上下文·档案卡片库段', detail: ctx ? ('档案 ' + ctx.stats.archs + ' 份') : '' });
+
+      var convKeyG = 'bz_agent_conv_' + fpG;
+      A.debugConvSave([{ who: 'me', text: 'AGT持久1' }, { who: 'agent', text: 'AGT持久2' }]);
+      var rawG = localStorage.getItem(convKeyG);
+      var backG = A.debugConvLoad();
+      push({ ok: !!rawG && backG.length === 2 && backG[0].text === 'AGT持久1', label: 'AGT T10: 会话按盘指纹持久化 + 回读' });
+      A.clear();
+      push({ ok: localStorage.getItem(convKeyG) === null, label: 'AGT T11: 清空会话删除存储键' });
+
+      A.open();
+      var drG = document.getElementById('bzAgentDrawer');
+      push({ ok: !!drG && drG.classList.contains('open') && !!document.getElementById('bzAgentInput') && !!document.getElementById('bzAgentMsgs'), label: 'AGT T12: 抽屉打开（drawer/input/msgs 就位）' });
+      var starterG = document.querySelector('.bz-ag-starter');
+      push({ ok: !!starterG && starterG.getAttribute('data-q') === A.debugStarters()[0], label: 'AGT T13: 空态快捷问题就位' });
+      A.close();
+      push({ ok: !!drG && !drG.classList.contains('open'), label: 'AGT T14: 抽屉关闭' });
+
+      tstG = document.createElement('div');
+      tstG.id = 'tst-agent';
+      tstG.style.display = 'none';
+      document.body.appendChild(tstG);
+      var pdG2 = paipan(dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi);
+      RENDER.renderChart(pdG2, undefined, 'tst-agent');
+      var agBtnG = tstG.querySelector('.agent-trigger');
+      push({ ok: !!agBtnG && (agBtnG.getAttribute('onclick') || '').indexOf('AGENT.toggle') >= 0, label: 'AGT T15: 主盘顶栏「✦ Agent」按钮接线' });
+    } catch (e) {
+      push({ ok: false, label: 'AGT 异常', detail: e && e.message ? e.message : String(e) });
+    }
+    try {
+      A.clear();
+      A.close();
+      window._paipanData = oldPdG;
+      if (tstG && tstG.parentNode) tstG.parentNode.removeChild(tstG);
+      if (clipKeyG && R && R.recAudioClearKey) await R.recAudioClearKey(clipKeyG);
+      if (noteKeyG) localStorage.removeItem(noteKeyG);
+    } catch (e2) {}
+    window.__bzTestAgtDone = true;
+  })();
 
   // ===== 挂载到全局命名空间 =====
   window.APP = {

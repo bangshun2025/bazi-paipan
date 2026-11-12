@@ -7824,9 +7824,88 @@ window.__testAppend = function(t) {
       push({ ok: c1 === 0 && c2 === 1 && c3 === 0, label: 'AUD 现场: IndexedDB 测试录音清理', detail: c1 + '/' + c2 + '/' + c3 });
     } catch (e) {
       push({ ok: false, label: 'AUD 异常', detail: e && e.message ? e.message : String(e) });
+    } finally {
+      window.__bzTestAudDone = true;
     }
   })();
 
+  // ===== v0.100.2 ✦ Agent 对话：上下文三源 / 会话持久 / 抽屉开合 / 转义（IndexedDB 异步，经 __testAppend 统计） =====
+  (async function() {
+    var push = function(t) { if (window.__testAppend) window.__testAppend(t); };
+    var R = window.RENDER, A = window.AGENT;
+    var dg = { name: 'Agent测试盘', gender: '男', y: 1982, m: 10, d: 18, h: 5, mi: 0 };
+    var fpG = [dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi].join('|');
+    var clipKeyG = 'bz_rec_audio_' + fpG;
+    var noteKeyG = null, clipIdG = null, tstG = null;
+    try {
+      // AUD 段同样改写 _paipanData 且异步收尾，必须等它还原后再接管，否则会话键指纹错位
+      for (var wG = 0; wG < 120 && !window.__bzTestAudDone; wG++) await new Promise(function(r) { setTimeout(r, 100); });
+      var oldPdG = window._paipanData;
+      if (!A || !A.open || !A.buildContext || !A.send || !A.debugMd || !A.debugSys) {
+        push({ ok: false, label: 'AGT 前置: AGENT 模块挂载', detail: '缺失' });
+        return;
+      }
+      push({ ok: true, label: 'AGT T01: AGENT 模块挂载（open/close/send/buildContext/debugMd）' });
+      window._paipanData = dg;
+
+      var sys = A.debugSys();
+      push({ ok: sys.indexOf('盘面信息') >= 0 && sys.indexOf('录音稿') >= 0 && sys.indexOf('档案卡片库') >= 0, label: 'AGT T02: 系统提示含三源标记' });
+
+      var md = A.debugMd('<img src=x onerror=1>**粗**`码`\n# 标题');
+      push({ ok: md.indexOf('<img') < 0 && md.indexOf('&lt;img') >= 0 && md.indexOf('<b>粗</b>') >= 0 && md.indexOf('<code>码</code>') >= 0, label: 'AGT T03: HTML 先转义再行内 md（防 XSS）', detail: md.slice(0, 32) });
+
+      var archG = { name: dg.name, gender: dg.gender, year: dg.y, month: dg.m, day: dg.d, hour: dg.h, min: dg.mi };
+      noteKeyG = ARCHIVE.recNotesKeyFor(archG, '');
+      localStorage.setItem(noteKeyG, 'AGT记录标记：甲木日主做功。');
+      var tsG = Date.now();
+      clipIdG = clipKeyG + '|' + tsG;
+      await R.recAudioPut({ id: clipIdG, key: clipKeyG, name: 'AGT录音 10-12 08:30', ts: tsG, dur: 65, mime: 'audio/webm', transcript: { text: '## 要点\nAGT录音标记词' } });
+
+      var ctx = await A.buildContext(dg);
+      push({ ok: !!ctx && ctx.md.indexOf('## 四柱') >= 0 && ctx.md.indexOf('## 大运') >= 0, label: 'AGT T04: 上下文·盘面段（四柱+大运）' });
+      push({ ok: !!ctx && ctx.md.indexOf('AGT记录标记：甲木日主做功') >= 0, label: 'AGT T05: 上下文·分析记录并入盘面段' });
+      push({ ok: !!ctx && ctx.md.indexOf('## 近年流年') >= 0, label: 'AGT T06: 上下文·近年流年' });
+      push({ ok: !!ctx && ctx.md.indexOf('【录音稿】') >= 0 && ctx.md.indexOf('AGT录音标记词') >= 0 && ctx.md.indexOf('1分05秒') >= 0, label: 'AGT T07: 上下文·录音稿段（纪要+时长）' });
+      push({ ok: !!ctx && ctx.stats.clips === 1, label: 'AGT T08: stats.clips = 1', detail: ctx ? String(ctx.stats.clips) : '无' });
+      push({ ok: !!ctx && ctx.md.indexOf('【档案卡片库】') >= 0 && typeof (ctx && ctx.stats.archs) === 'number', label: 'AGT T09: 上下文·档案卡片库段', detail: ctx ? ('档案 ' + ctx.stats.archs + ' 份') : '' });
+
+      var convKeyG = 'bz_agent_conv_' + fpG;
+      A.debugConvSave([{ who: 'me', text: 'AGT持久1' }, { who: 'agent', text: 'AGT持久2' }]);
+      var rawG = localStorage.getItem(convKeyG);
+      var backG = A.debugConvLoad();
+      push({ ok: !!rawG && backG.length === 2 && backG[0].text === 'AGT持久1', label: 'AGT T10: 会话按盘指纹持久化 + 回读' });
+      A.clear();
+      push({ ok: localStorage.getItem(convKeyG) === null, label: 'AGT T11: 清空会话删除存储键' });
+
+      A.open();
+      var drG = document.getElementById('bzAgentDrawer');
+      push({ ok: !!drG && drG.classList.contains('open') && !!document.getElementById('bzAgentInput') && !!document.getElementById('bzAgentMsgs'), label: 'AGT T12: 抽屉打开（drawer/input/msgs 就位）' });
+      var starterG = document.querySelector('.bz-ag-starter');
+      push({ ok: !!starterG && starterG.getAttribute('data-q') === A.debugStarters()[0], label: 'AGT T13: 空态快捷问题就位' });
+      A.close();
+      push({ ok: !!drG && !drG.classList.contains('open'), label: 'AGT T14: 抽屉关闭' });
+
+      tstG = document.createElement('div');
+      tstG.id = 'tst-agent';
+      tstG.style.display = 'none';
+      document.body.appendChild(tstG);
+      var pdG2 = paipan(dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi);
+      RENDER.renderChart(pdG2, undefined, 'tst-agent');
+      var agBtnG = tstG.querySelector('.agent-trigger');
+      push({ ok: !!agBtnG && (agBtnG.getAttribute('onclick') || '').indexOf('AGENT.toggle') >= 0, label: 'AGT T15: 主盘顶栏「✦ Agent」按钮接线' });
+    } catch (e) {
+      push({ ok: false, label: 'AGT 异常', detail: e && e.message ? e.message : String(e) });
+    }
+    try {
+      A.clear();
+      A.close();
+      window._paipanData = oldPdG;
+      if (tstG && tstG.parentNode) tstG.parentNode.removeChild(tstG);
+      if (clipKeyG && R && R.recAudioClearKey) await R.recAudioClearKey(clipKeyG);
+      if (noteKeyG) localStorage.removeItem(noteKeyG);
+    } catch (e2) {}
+    window.__bzTestAgtDone = true;
+  })();
 
   // ===== 挂载到全局命名空间 =====
   window.APP = {
