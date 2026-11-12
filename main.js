@@ -7841,6 +7841,10 @@ window.__testAppend = function(t) {
       // AUD 段同样改写 _paipanData 且异步收尾，必须等它还原后再接管，否则会话键指纹错位
       for (var wG = 0; wG < 120 && !window.__bzTestAudDone; wG++) await new Promise(function(r) { setTimeout(r, 100); });
       var oldPdG = window._paipanData;
+      var outElG = document.getElementById('output');
+      var oldOutPdG = outElG ? outElG._paipanData : undefined;
+      window._paipanData = dg;
+      if (outElG) outElG._paipanData = dg;
       if (!A || !A.open || !A.buildContext || !A.send || !A.debugMd || !A.debugSys) {
         push({ ok: false, label: 'AGT 前置: AGENT 模块挂载', detail: '缺失' });
         return;
@@ -7900,6 +7904,7 @@ window.__testAppend = function(t) {
       A.clear();
       A.close();
       window._paipanData = oldPdG;
+      if (outElG) outElG._paipanData = oldOutPdG;
       if (tstG && tstG.parentNode) tstG.parentNode.removeChild(tstG);
       if (clipKeyG && R && R.recAudioClearKey) await R.recAudioClearKey(clipKeyG);
       if (noteKeyG) localStorage.removeItem(noteKeyG);

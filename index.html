@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.2 | 2026-11-12 -->
+<!-- 八字排盘 ·  从真版 v0.100.3 | 2026-11-13 -->
+<!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位（线上 ?test=1 出现第 6 条失败）。修复后 AGT 15 条全绿，回归回到既有 5 条环境失败口径。功能与 v0.100.2 相同。 -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏「✦ Agent」一点即开右侧抽屉（430px docked 不遮盘面，Esc/✕ 关）。三源资料自动进上下文：①盘面+分析记录+近年流年（今年-1~+5）②IndexedDB 录音稿（单条截 6000 字）③档案卡片库逐份摘要（上限 40）。流式回复 rAF 节流+光标动画+贴底自动滚，发送中按钮变「停止」（AbortController），Markdown 行内渲染先转义防 XSS，会话按盘指纹存 bz_agent_conv_<fp>（上限 80 条）清空即删，未配 Key 引导设置，失败气泡可重试。附带修复：dataNow() 双源取盘（开档/恢复路径只挂 #output._paipanData，单源误判无盘）；streamTick 非 busy 跳过重绘（流结束 rAF 补刀会把光标画回去） -->
 <!-- v0.100.1: 删重复档案时分析记录随唯一幸存者迁移 —— 修复「删除重复档案后分析记录消失」：删除档案（回收站）时在剩余档案中找唯一幸存者（同公历生日+时辰，姓名或性别至少一项相同；命中多个不迁移），把被删档案全部 bz_rec_notes_* 键（含 twin 双胞胎段与 §维度段）迁到幸存者指纹下，幸存键非空时保留旧键不覆盖；录音键同步迁移。此前孤儿回收 migrateOrphanRecNotes 按 姓名+性别 匹配，性别录错/翻转的孤儿键永远无法回捞（新善案例）。
 <!-- v0.98.0: 示例盘 + 听懂更多 —— ①造盘结果存进独立示例盘（localStorage bz_gen_examples，与档案 bz_archives_v2 完全隔离）：造盘即自动存入、同特征+四柱+性别去重置顶、上限 60 条、顶部角标计数、点一条按年月日时现算整盘重开（不存快照）、单条删除与清空、横幅「⭐ 转存档案」才进档案；②解析归一化（全角转半角、常见繁体转简体）+ 柱位（月柱七杀/时干正官）+ 精确计数（正好两个）+ 十神组（官杀透两干）+ 点名干支（寅透甲丙戊/天干见甲丙/地支见子辰）+ 五行认局（三合水局→申子辰）+ 多特征组合（顿号/且/和 → and，命中同时满足）+ 否定（不冲）+ 性别口令；认不出给 3 条候选不硬猜；scan 加 variant 支持 🎲 换一张（同句同 variant 稳定）。-->
@@ -29010,6 +29011,10 @@ window.__testAppend = function(t) {
       // AUD 段同样改写 _paipanData 且异步收尾，必须等它还原后再接管，否则会话键指纹错位
       for (var wG = 0; wG < 120 && !window.__bzTestAudDone; wG++) await new Promise(function(r) { setTimeout(r, 100); });
       var oldPdG = window._paipanData;
+      var outElG = document.getElementById('output');
+      var oldOutPdG = outElG ? outElG._paipanData : undefined;
+      window._paipanData = dg;
+      if (outElG) outElG._paipanData = dg;
       if (!A || !A.open || !A.buildContext || !A.send || !A.debugMd || !A.debugSys) {
         push({ ok: false, label: 'AGT 前置: AGENT 模块挂载', detail: '缺失' });
         return;
@@ -29069,6 +29074,7 @@ window.__testAppend = function(t) {
       A.clear();
       A.close();
       window._paipanData = oldPdG;
+      if (outElG) outElG._paipanData = oldOutPdG;
       if (tstG && tstG.parentNode) tstG.parentNode.removeChild(tstG);
       if (clipKeyG && R && R.recAudioClearKey) await R.recAudioClearKey(clipKeyG);
       if (noteKeyG) localStorage.removeItem(noteKeyG);

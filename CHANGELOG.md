@@ -1,3 +1,13 @@
+## v0.100.3（2026-11-13）
+`index.html` ≡ `standalone.html`：`c75e6a9a47be26f32daeba1da170d79e`；`standalone-split.html`：`1f5423525cc5418f25e0391f0d193d00`（157,671 B）
+
+热修：AGT T10 测试隔离缺陷（功能代码零改动）
+
+- **现象**：v0.100.2 发版核验时，线上 `?test=1` 出现第 6 条失败「AGT T10: 会话按盘指纹持久化 + 回读」（既有环境失败口径为 5 条），本地 file:// 同样必现
+- **根因**：AGT 测试段只接管 `window._paipanData`，未接管 `#output` 容器挂载点；`dataNow()` 容器优先，AUD 段先渲染过盘后容器有值，`AGENT.debugConvSave` 的会话键指纹取到容器旧盘，与测试计算的 `fpG` 错位
+- **修复**：AGT 段接管时容器同步接管（`outElG._paipanData = dg`），收尾按原值还原
+- **回归**：AGT 15 条全绿；总口径回到既有 5 条环境失败（LKM Y05/Y07、FLK Z03/Z04、GA17），headless 与 file:// 双环境一致
+
 ## v0.100.2（2026-11-12）
 `index.html` ≡ `standalone.html`：`d3456377206c969c757c1df3f299c2eb`（2,146,823 B）；`standalone-split.html`：`1f5423525cc5418f25e0391f0d193d00`（157,671 B）
 
