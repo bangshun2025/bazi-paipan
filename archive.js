@@ -568,6 +568,9 @@ function moveToTrash(idx) {
   saveTrash(trash);
   archives.splice(idx, 1);
   saveArchives(archives);
+  // v0.100.1 删重复档案时分析记录随唯一幸存者迁移，避免变孤儿（旧回收逻辑按 name+gender 匹配，性别翻转场景覆盖不到）
+  var survivor = findUniqueSurvivorArchive(a, archives);
+  if (survivor) migrateAllNotesToSurvivor(a, survivor);
   refreshArchiveModalIfOpen();
 }
 
@@ -808,6 +811,62 @@ function migrateRecNotesKeys(oldA, newA) {
     try { localStorage.setItem(nk, ov); localStorage.removeItem(ok); } catch (e) {}
   }
 }
+function parseRecNotesKey(key) {
+  if (typeof key !== 'string' || key.indexOf('bz_rec_notes_') !== 0) return null;
+  var rest = key.slice('bz_rec_notes_'.length);
+  var suffix = '';
+  if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
+  var dim = '';
+  if (rest.charAt(0) === '§') {
+    var cut = rest.indexOf('|');
+    if (cut < 1) return null;
+    dim = rest.slice(0, cut + 1);
+    rest = rest.slice(cut + 1);
+  }
+  var parts = rest.split('|');
+  if (parts.length !== 7) return null;
+  return { suffix: suffix, dim: dim, fp: parts.join('|') };
+}
+
+// v0.100.1 删除档案时找唯一幸存者：同公历生日+时辰，姓名或性别至少一项相同；
+// 命中多个视为不可判定（重名/多胞胎），不迁移
+function findUniqueSurvivorArchive(del, archives) {
+  var s = archiveSolarYmd(del);
+  if (!s) return null;
+  var dh = +del.hour || 0, dmi = +del.min || 0, dn = del.name || '', dg = del.gender || '';
+  var hits = [];
+  for (var i = 0; i < archives.length; i++) {
+    var a = archives[i];
+    var as = archiveSolarYmd(a);
+    if (!as || as.y !== s.y || as.m !== s.m || as.d !== s.d) continue;
+    if ((+a.hour || 0) !== dh || (+a.min || 0) !== dmi) continue;
+    if ((a.name || '') === dn || (a.gender || '') === dg) hits.push(a);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
+// v0.100.1 被删档案的全部记录键（含 twin/维度段）迁移到幸存者；幸存键非空时保留旧键不覆盖
+function migrateAllNotesToSurvivor(del, survivor) {
+  var ok = recNotesKeyFor(del, '');
+  var nk0 = recNotesKeyFor(survivor, '');
+  if (!ok || !nk0 || ok === nk0) return;
+  var dfp = ok.slice('bz_rec_notes_'.length);
+  var sfp = nk0.slice('bz_rec_notes_'.length);
+  var keys = [];
+  try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+  for (var k = 0; k < keys.length; k++) {
+    var key = keys[k];
+    var p = parseRecNotesKey(key);
+    if (!p || p.fp !== dfp) continue;
+    var nk = 'bz_rec_notes_' + p.suffix + p.dim + sfp;
+    var ov = null, nv = null;
+    try { ov = localStorage.getItem(key); nv = localStorage.getItem(nk); } catch (e) {}
+    if (ov == null || (nv != null && nv !== '')) continue;
+    try { localStorage.setItem(nk, ov); localStorage.removeItem(key); } catch (e) {}
+  }
+  migrateRecAudioKeys(del, survivor);
+}
+
 function migrateOrphanRecNotes() {
   var archives = getArchives();
   var keys = [];

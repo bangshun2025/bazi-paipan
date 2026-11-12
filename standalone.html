@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.0 | 2026-11-07 -->
-<!-- v0.100.0: 流年与大运入判据 —— ①通根判据加 where：日干在流年中有根 / 在大运中有根 / 两处都有根，看的是这根天干的五行在那根外部柱的地支藏干里有没有同五行；②新判据 touc：某柱藏干透到流年/大运天干（「日支藏干本气在流年透出」＝日支本气藏干就是流年天干），可选 本气/中气/余气/任一；③锚点：流年缺省取今年，可写「2028年流年」指定公历年或「32岁」指定虚岁；大运缺省取流年当年所行那一步，可写「第3步大运」；④扫到盘面时证据逐字回显（流年2026 丙午（午藏丁己，见丁）→ 有根），未起运时大运口径判据不成立、不硬猜。 -->
+<!-- 八字排盘 ·  从真版 v0.100.1 | 2026-11-12 -->
+<!-- v0.100.1: 删重复档案时分析记录随唯一幸存者迁移 —— 修复「删除重复档案后分析记录消失」：删除档案（回收站）时在剩余档案中找唯一幸存者（同公历生日+时辰，姓名或性别至少一项相同；命中多个不迁移），把被删档案全部 bz_rec_notes_* 键（含 twin 双胞胎段与 §维度段）迁到幸存者指纹下，幸存键非空时保留旧键不覆盖；录音键同步迁移。此前孤儿回收 migrateOrphanRecNotes 按 姓名+性别 匹配，性别录错/翻转的孤儿键永远无法回捞（新善案例）。
 <!-- v0.98.0: 示例盘 + 听懂更多 —— ①造盘结果存进独立示例盘（localStorage bz_gen_examples，与档案 bz_archives_v2 完全隔离）：造盘即自动存入、同特征+四柱+性别去重置顶、上限 60 条、顶部角标计数、点一条按年月日时现算整盘重开（不存快照）、单条删除与清空、横幅「⭐ 转存档案」才进档案；②解析归一化（全角转半角、常见繁体转简体）+ 柱位（月柱七杀/时干正官）+ 精确计数（正好两个）+ 十神组（官杀透两干）+ 点名干支（寅透甲丙戊/天干见甲丙/地支见子辰）+ 五行认局（三合水局→申子辰）+ 多特征组合（顿号/且/和 → and，命中同时满足）+ 否定（不冲）+ 性别口令；认不出给 3 条候选不硬猜；scan 加 variant 支持 🎲 换一张（同句同 variant 稳定）。-->
 <!-- v0.97.0: 特征造盘 —— 一句话描述干支结构（一根透多干/一柱全透/七杀透两头/三合/三会/天干五合/官杀混杂/食伤生财/官印相生/地支相冲/透出最多极值），按真实出生时刻扫描命中盘：一日一发 paipan 取三柱 + 五鼠遁补十二时辰 + 命中后完整复核；起点按描述散列（同句结果稳定、不同特征散落年代范围），跳过未出生日期；只渲染不写档案，横幅回显证据（哪一柱藏几干透几干），正常排盘自动收起 -->
 <!-- v0.96.0: AI 搜索「三垣×十神」组合修复 —— ①柱位/目标柱指向胎元/命宫/身宫而 scope 缺省时自动升七柱（此前四柱集里无该柱恒 false 静默空结果，pillar/shishen/nayin/interact/pair 五处）②十神 where 新增 cang=藏干任一（含本气中余气，如丑藏辛）③十神 scope=dayun 修复（日主恒从四柱取，此前大运序列找日柱得空恒 false）④十神别名补 偏印/枭印→枭神、杀→七杀 ⑤条件面板十神补范围参数、纳音补柱位+范围 ⑥SYSTEM_PROMPT 补三垣点名教学/藏干十神/合并称谓拆解/4 条示例（胎元七杀 or 端到端/命宫藏正印/大运透七杀/身宫干支）；main.js 新增 22 条断言 -->
@@ -7302,6 +7302,9 @@ function moveToTrash(idx) {
   saveTrash(trash);
   archives.splice(idx, 1);
   saveArchives(archives);
+  // v0.100.1 删重复档案时分析记录随唯一幸存者迁移，避免变孤儿（旧回收逻辑按 name+gender 匹配，性别翻转场景覆盖不到）
+  var survivor = findUniqueSurvivorArchive(a, archives);
+  if (survivor) migrateAllNotesToSurvivor(a, survivor);
   refreshArchiveModalIfOpen();
 }
 
@@ -7542,6 +7545,62 @@ function migrateRecNotesKeys(oldA, newA) {
     try { localStorage.setItem(nk, ov); localStorage.removeItem(ok); } catch (e) {}
   }
 }
+function parseRecNotesKey(key) {
+  if (typeof key !== 'string' || key.indexOf('bz_rec_notes_') !== 0) return null;
+  var rest = key.slice('bz_rec_notes_'.length);
+  var suffix = '';
+  if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
+  var dim = '';
+  if (rest.charAt(0) === '§') {
+    var cut = rest.indexOf('|');
+    if (cut < 1) return null;
+    dim = rest.slice(0, cut + 1);
+    rest = rest.slice(cut + 1);
+  }
+  var parts = rest.split('|');
+  if (parts.length !== 7) return null;
+  return { suffix: suffix, dim: dim, fp: parts.join('|') };
+}
+
+// v0.100.1 删除档案时找唯一幸存者：同公历生日+时辰，姓名或性别至少一项相同；
+// 命中多个视为不可判定（重名/多胞胎），不迁移
+function findUniqueSurvivorArchive(del, archives) {
+  var s = archiveSolarYmd(del);
+  if (!s) return null;
+  var dh = +del.hour || 0, dmi = +del.min || 0, dn = del.name || '', dg = del.gender || '';
+  var hits = [];
+  for (var i = 0; i < archives.length; i++) {
+    var a = archives[i];
+    var as = archiveSolarYmd(a);
+    if (!as || as.y !== s.y || as.m !== s.m || as.d !== s.d) continue;
+    if ((+a.hour || 0) !== dh || (+a.min || 0) !== dmi) continue;
+    if ((a.name || '') === dn || (a.gender || '') === dg) hits.push(a);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
+// v0.100.1 被删档案的全部记录键（含 twin/维度段）迁移到幸存者；幸存键非空时保留旧键不覆盖
+function migrateAllNotesToSurvivor(del, survivor) {
+  var ok = recNotesKeyFor(del, '');
+  var nk0 = recNotesKeyFor(survivor, '');
+  if (!ok || !nk0 || ok === nk0) return;
+  var dfp = ok.slice('bz_rec_notes_'.length);
+  var sfp = nk0.slice('bz_rec_notes_'.length);
+  var keys = [];
+  try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+  for (var k = 0; k < keys.length; k++) {
+    var key = keys[k];
+    var p = parseRecNotesKey(key);
+    if (!p || p.fp !== dfp) continue;
+    var nk = 'bz_rec_notes_' + p.suffix + p.dim + sfp;
+    var ov = null, nv = null;
+    try { ov = localStorage.getItem(key); nv = localStorage.getItem(nk); } catch (e) {}
+    if (ov == null || (nv != null && nv !== '')) continue;
+    try { localStorage.setItem(nk, ov); localStorage.removeItem(key); } catch (e) {}
+  }
+  migrateRecAudioKeys(del, survivor);
+}
+
 function migrateOrphanRecNotes() {
   var archives = getArchives();
   var keys = [];
@@ -28275,6 +28334,80 @@ function captureScreenshot() {
       tests.push(eq(sec + ' 31: 大运定语 + 流年判据 → liunian', G.parse('大运日干在流年中有根').where, 'liunian'));
     } catch (e) {
       tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    }
+  })();
+
+  // ===== v0.100.1 删除档案时分析记录随唯一幸存者迁移 =====
+  (function() {
+    tests.push({ section:'删除档案记录迁移(v0.100.1)' });
+    var sec = 'MT';
+    var A = window.ARCHIVE;
+    if (!A || typeof A.moveToTrash !== 'function' || typeof A.saveArchives !== 'function') {
+      tests.push(fail(sec + ' T0: 前置 ARCHIVE.moveToTrash/saveArchives 已挂载', '缺失'));
+      return;
+    }
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    var savedTrash = localStorage.getItem(window.CONST.TRASH_KEY);
+    var savedTomb = localStorage.getItem('bz_archives_tomb');
+    var savedConfirm = window.confirm;
+    var P = 'bz_rec_notes_';
+    var mk = function(id, name, gender) {
+      return { id: id, name: name, gender: gender, year: 1988, month: 3, day: 14, hour: 4, min: 30, prov: '', city: '', dist: '', useSolar: true, calendarType: 'solar', isLeap: false, lunarMonth: null, bazi: null, sanyuan: null, extras: null, gongWeiType: null, createdAt: '2026-01-01', updatedAt: '2026-01-01', isPreset: false };
+    };
+    var idxOf = function(id) {
+      var arr = A.getArchives(), i = -1;
+      for (var x = 0; x < arr.length; x++) if (arr[x].id === id) i = x;
+      return i;
+    };
+    try {
+      window.confirm = function() { return true; };
+
+      A.saveArchives([mk('mt-a', '迁移甲', '男'), mk('mt-b', '迁移甲', '女')]);
+      localStorage.setItem(P + '迁移甲|男|1988|3|14|4|30', '男盘记录内容迁移测试');
+      A.moveToTrash(idxOf('mt-a'));
+      tests.push(eq(sec + ' T1: 删除后同名幸存者(性别不同)继承记录', localStorage.getItem(P + '迁移甲|女|1988|3|14|4|30'), '男盘记录内容迁移测试'));
+      tests.push(eq(sec + ' T2: 迁移后旧键删除', localStorage.getItem(P + '迁移甲|男|1988|3|14|4|30'), null));
+
+      A.saveArchives([mk('mt-c', '迁移乙', '男'), mk('mt-d', '迁移乙', '女')]);
+      localStorage.setItem(P + '迁移乙|男|1988|3|14|4|30', '旧内容');
+      localStorage.setItem(P + '迁移乙|女|1988|3|14|4|30', '新内容更多');
+      A.moveToTrash(idxOf('mt-c'));
+      tests.push(eq(sec + ' T3: 幸存键非空不覆盖', localStorage.getItem(P + '迁移乙|女|1988|3|14|4|30'), '新内容更多'));
+      tests.push(eq(sec + ' T4: 幸存键非空时旧键保留', localStorage.getItem(P + '迁移乙|男|1988|3|14|4|30'), '旧内容'));
+
+      A.saveArchives([mk('mt-e', '迁移丙', '男')]);
+      localStorage.setItem(P + '迁移丙|男|1988|3|14|4|30', '孤儿内容');
+      A.moveToTrash(idxOf('mt-e'));
+      tests.push(eq(sec + ' T5: 无幸存者记录原地不动', localStorage.getItem(P + '迁移丙|男|1988|3|14|4|30'), '孤儿内容'));
+
+      A.saveArchives([mk('mt-f', '迁移丁', '男'), mk('mt-g', '迁移丁', '女')]);
+      localStorage.setItem(P + '迁移丁|男|1988|3|14|4|30', '基础');
+      localStorage.setItem(P + 'twin|迁移丁|男|1988|3|14|4|30', '双胞胎');
+      localStorage.setItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', '维度内容');
+      A.moveToTrash(idxOf('mt-f'));
+      tests.push(eq(sec + ' T6: 主键迁移', localStorage.getItem(P + '迁移丁|女|1988|3|14|4|30'), '基础'));
+      tests.push(eq(sec + ' T7: twin 键迁移', localStorage.getItem(P + 'twin|迁移丁|女|1988|3|14|4|30'), '双胞胎'));
+      tests.push(eq(sec + ' T8: 维度键迁移', localStorage.getItem(P + 'twin|§大运|迁移丁|女|1988|3|14|4|30'), '维度内容'));
+      tests.push(eq(sec + ' T9: 旧 twin/维度键已删',
+        localStorage.getItem(P + 'twin|迁移丁|男|1988|3|14|4|30') === null && localStorage.getItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30') === null, true));
+
+      A.saveArchives([mk('mt-h', '旧名戊', '男'), mk('mt-i', '新名戊', '男')]);
+      localStorage.setItem(P + '旧名戊|男|1988|3|14|4|30', '改名内容');
+      A.moveToTrash(idxOf('mt-h'));
+      tests.push(eq(sec + ' T10: 同性别同盘改名删旧迁移', localStorage.getItem(P + '新名戊|男|1988|3|14|4|30'), '改名内容'));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      window.confirm = savedConfirm;
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      if (savedTrash === null) localStorage.removeItem(window.CONST.TRASH_KEY); else localStorage.setItem(window.CONST.TRASH_KEY, savedTrash);
+      if (savedTomb === null) localStorage.removeItem('bz_archives_tomb'); else localStorage.setItem('bz_archives_tomb', savedTomb);
+      [P + '迁移甲|男|1988|3|14|4|30', P + '迁移甲|女|1988|3|14|4|30', P + '迁移乙|男|1988|3|14|4|30', P + '迁移乙|女|1988|3|14|4|30',
+       P + '迁移丙|男|1988|3|14|4|30', P + '迁移丁|男|1988|3|14|4|30', P + '迁移丁|女|1988|3|14|4|30',
+       P + 'twin|迁移丁|男|1988|3|14|4|30', P + 'twin|迁移丁|女|1988|3|14|4|30',
+       P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', P + 'twin|§大运|迁移丁|女|1988|3|14|4|30',
+       P + '旧名戊|男|1988|3|14|4|30', P + '新名戊|男|1988|3|14|4|30'].forEach(function(k) { localStorage.removeItem(k); });
     }
   })();
 
