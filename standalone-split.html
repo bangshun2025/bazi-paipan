@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.7 | 2026-11-13 -->
+<!-- 八字排盘 ·  从真版 v0.100.8 | 2026-11-13 -->
 <!-- v0.100.4: ✦ Agent 卡片库升级 —— 卡片头带昵称/标签（摘引 80→160 字），同名或同四柱、有记录的重点卡片附「▤ 卡片内容」分析记录全文（单维截 1500 字，总预算 18000 字封顶、至多 12 卡），其余保持一行摘要；上下文条加「全文 N 卡」。断言 +2（AGT T16/T17）。外部模块清单不变：constants/algorithm/archive/gongwei/xingyao/render/main/config/auth/records/gongwei-cloud。 -->
 <!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位。修复后 AGT 15 条全绿。（修复在 main.js，split 版外链同文件自动生效） -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏一点即开右侧抽屉，三源资料（盘面+分析记录、录音稿、档案卡片库）喂模型，流式回复，会话按盘记忆。（split 版同功能，JS 外链） -->
@@ -121,11 +121,11 @@
     --gz-tag-row-bg: rgba(201,169,110,.04);
   }
   * { margin:0;padding:0;box-sizing:border-box; }
-  html { --bz-ag-w:420px; }
-  body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:10px; font-family:var(--font-body); transition:padding-right .3s cubic-bezier(.2,0,0,1); }
-  body.bz-ag-push { padding-right:var(--bz-ag-w); }
+  html { --bz-ag-w:420px; --bz-ag-gap:10px; }
+  body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:var(--bz-ag-gap); font-family:var(--font-body); transition:padding-right .45s cubic-bezier(.2,0,0,1); }
+  body.bz-ag-push { padding-right:calc(var(--bz-ag-w) + var(--bz-ag-gap)); }
   body.bz-ag-drag, body.bz-ag-drag .bz-ag-drawer { transition:none !important; }
-  .page { width:100%; max-width:1680px; background:var(--c-paper); border:1.5px solid var(--c-line); border-radius:2px; padding:14px 16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08); }
+  .page { width:100%; max-width:1680px; min-height:calc(100vh - var(--bz-ag-gap) * 2); background:var(--c-paper); border:1.5px solid var(--c-line); border-radius:2px; padding:14px 16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08); }
 
   /* ===== 输入表单 ===== */
   .input-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--c-line); }

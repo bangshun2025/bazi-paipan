@@ -8512,13 +8512,15 @@ function cmpSetState(entries) {
 
   // —— 抽屉 ——
   var CSS = ''
-    + '.bz-ag-drawer{position:fixed;top:0;right:0;bottom:0;width:min(var(--bz-ag-w,420px),94vw);background:var(--c-paper,#f5f0e8);border-left:1.5px solid var(--c-line,#e0d8c8);box-shadow:-8px 0 32px rgba(0,0,0,.14);transform:translateX(103%);transition:transform .3s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;}'
-    + '.bz-ag-grip{position:absolute;left:-3px;top:0;bottom:0;width:9px;cursor:col-resize;touch-action:none;z-index:3;}'
-    + '.bz-ag-grip:hover,.bz-ag-grip.dragging{background:linear-gradient(90deg,rgba(138,109,59,0),rgba(138,109,59,.3));}'
-    + '@media(max-width:1080px){.bz-ag-grip{display:none;}}'
-    + '@media(prefers-reduced-motion:reduce){.bz-ag-drawer{transition:none;}body{transition:none !important;}}'
+    + '.bz-ag-drawer{position:fixed;top:var(--bz-ag-gap,10px);right:var(--bz-ag-gap,10px);bottom:var(--bz-ag-gap,10px);width:min(var(--bz-ag-w,420px),calc(94vw - 10px));background:var(--c-paper,#f5f0e8);border:1.5px solid var(--c-line,#e0d8c8);border-left:0;border-radius:0 2px 2px 0;box-shadow:inset 1px 0 0 rgba(138,109,59,.17),0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08);transform:translateX(calc(100% + 14px));transition:transform .45s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;overflow:hidden;}'
     + '.bz-ag-drawer.open{transform:translateX(0);}'
-    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
+    + '.bz-ag-inner{flex:1;min-height:0;display:flex;flex-direction:column;opacity:0;transform:translateY(10px);transition:opacity .16s ease-out,transform .16s ease-out;}'
+    + '.bz-ag-drawer.open .bz-ag-inner{opacity:1;transform:none;transition:opacity .26s cubic-bezier(.2,0,0,1) .15s,transform .3s cubic-bezier(.2,0,0,1) .15s;}'
+    + '.bz-ag-grip{position:absolute;left:0;top:0;bottom:0;width:7px;cursor:col-resize;touch-action:none;z-index:3;}'
+    + '.bz-ag-grip:hover,.bz-ag-grip.dragging{background:linear-gradient(90deg,rgba(138,109,59,.26),rgba(138,109,59,0));}'
+    + '@media(max-width:1080px){.bz-ag-grip{display:none;}}'
+    + '@media(prefers-reduced-motion:reduce){.bz-ag-drawer,.bz-ag-inner{transition:none !important;}body{transition:none !important;}}'
+    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
     + '.bz-ag-logo{font-weight:700;font-size:14px;color:var(--c-ink,#2c2416);white-space:nowrap;}'
     + '.bz-ag-ctx{font-size:11.5px;color:var(--c-gray,#8b7e6a);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
     + '.bz-ag-ic{border:1px solid var(--c-line,#e0d8c8);background:transparent;color:var(--c-gray,#8b7e6a);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;white-space:nowrap;}'
@@ -8598,12 +8600,14 @@ function cmpSetState(entries) {
     dr.id = 'bzAgentDrawer';
     dr.className = 'bz-ag-drawer';
     dr.innerHTML = '<div class="bz-ag-grip" id="bzAgentGrip" title="拖动调整侧栏宽度"></div>'
+      + '<div class="bz-ag-inner">'
       + '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClear" title="清空本盘会话">清空</button>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClose" title="关闭（Esc）">✕</button></div>'
       + '<div class="bz-ag-msgs" id="bzAgentMsgs"></div>'
       + '<div class="bz-ag-inputbar"><textarea id="bzAgentInput" rows="1" placeholder="问盘面、录音稿、档案库…（Enter 发送 · Shift+Enter 换行）"></textarea>'
-      + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>';
+      + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>'
+      + '</div>';
     document.body.appendChild(dr);
     bindGrip(dr);
     document.getElementById('bzAgentClose').onclick = close;
