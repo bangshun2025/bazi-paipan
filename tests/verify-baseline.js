@@ -51,10 +51,24 @@ function gen(backupPath) {
   const ALGO = loadAlgo();
   const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
   const entries = backup.archives.map((a) => entryOf(ALGO, a));
-  const known = {苓菲: true, 罗惠: true};
-  for (const e of entries) if (known[e.name]) e.confirmed = true;
+
+  let prev = [];
+  try { prev = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).entries; } catch (e) {}
+  const keyOf = (e) => [e.name, e.gender, e.birth.y, e.birth.m, e.birth.d, e.birth.h, e.birth.mi, e.birth.cal].join('|');
+  const prevConfirmed = new Set(prev.filter((e) => e.confirmed).map(keyOf));
+  const prevKeys = new Set(prev.map(keyOf));
+
+  let added = 0, confirmedN = 0;
+  for (const e of entries) {
+    if (prevConfirmed.has(keyOf(e))) { e.confirmed = true; confirmedN++; }
+    if (!prevKeys.has(keyOf(e))) added++;
+  }
+  let changed = 0;
+  const newKeys = new Set(entries.map(keyOf));
+  for (const k of prevKeys) if (!newKeys.has(k)) changed++;
+
   fs.writeFileSync(BASELINE, JSON.stringify({generatedAt: new Date().toISOString(), source: path.basename(backupPath), entries}, null, 1));
-  console.log('baseline written: ' + BASELINE + ' (' + entries.length + ' archives)');
+  console.log('baseline written: ' + BASELINE + ' (' + entries.length + ' archives, 新增 ' + added + ', 较旧基准变化 ' + changed + ', confirmed ' + confirmedN + ')');
 }
 
 function verify() {

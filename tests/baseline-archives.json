@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-13T05:55:42.533Z",
+ "generatedAt": "2026-11-13T08:01:06.864Z",
  "source": "八字排盘备份-20261113-修复后.json",
  "entries": [
   {
@@ -270,7 +270,7 @@
     "bazi": "甲子 辛未 庚戌 己卯",
     "sanyuan": "壬戌 辛未 乙亥"
    },
-   "confirmed": true
+   "confirmed": false
   },
   {
    "id": 1793430569231,

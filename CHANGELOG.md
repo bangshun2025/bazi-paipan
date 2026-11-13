@@ -8,6 +8,7 @@
 - **第 7 道门禁**：`tests/baseline-archives.json`（181 个真实档案的「生日→四柱/三垣」期望值，confirmed 标记用户人工确认条目）+ `tests/verify-baseline.js`（`--gen <备份.json>` 从备份刷新基准；默认模式逐盘对照，差异退出码 1）+ `check-release.sh` 新增【7/7】，**每次发版强制逐盘校验**，防排盘算法漂移、防生日被改后静默串档
 - **回归**：七门禁全绿，基准盘 **181/181 一致**（苓菲、罗惠两条 confirmed）
 - **边界说明**：门禁锁定「生日→排盘」不漂移；「生日是否与本人相符」靠 confirmed 确认制——确认一批标一批
+- **增量合并（后续新增/修改盘的处理）**：`--gen` 从整份重建改为增量合并——confirmed 按「名字|性别|生日」全键继承（生日一改确认自动失效，防确认标记被改生日绕过）；每次刷新输出「新增 N / 较旧基准变化 N / confirmed N」三个信号，新增盘自动入基准锁定，变化盘发版时逐条向用户裁决「是你改的还是事故」。模拟罗惠改时辰实测：新增 1 + 变化 1 + confirmed 2→1，全部按预期报出
 
 ## v0.100.4（2026-11-13）
 `index.html` ≡ `standalone.html`：`232b89fffd302182eecb4702a8ca2b1d`（2,153,807 B）；`standalone-split.html`：`c19c1669ac2277a118ceca7659325bf8`（158,694 B）；`render.js`：`4803ba92ddfcc6da4781c5442bc3a414`；`main.js`：`82c21fe2be12105922e4589bef7c9a53`；`archive.js`：`b92f989454dc7ce3e6fe7a103d580bce`
