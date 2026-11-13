@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.6 | 2026-11-13 -->
+<!-- 八字排盘 ·  从真版 v0.100.7 | 2026-11-13 -->
 <!-- v0.100.4: ✦ Agent 卡片库升级 —— 卡片头带昵称/标签（摘引 80→160 字），同名或同四柱、有记录的重点卡片附「▤ 卡片内容」分析记录全文（单维截 1500 字，总预算 18000 字封顶、至多 12 卡），其余保持一行摘要；上下文条加「全文 N 卡」。断言 +2（AGT T16/T17）。外部模块清单不变：constants/algorithm/archive/gongwei/xingyao/render/main/config/auth/records/gongwei-cloud。 -->
 <!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位。修复后 AGT 15 条全绿。（修复在 main.js，split 版外链同文件自动生效） -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏一点即开右侧抽屉，三源资料（盘面+分析记录、录音稿、档案卡片库）喂模型，流式回复，会话按盘记忆。（split 版同功能，JS 外链） -->
@@ -121,8 +121,11 @@
     --gz-tag-row-bg: rgba(201,169,110,.04);
   }
   * { margin:0;padding:0;box-sizing:border-box; }
-  body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:12px; font-family:var(--font-body); }
-  .page { width:100%; max-width:1340px; background:var(--c-paper); border:1.5px solid var(--c-line); border-radius:2px; padding:16px 18px 20px; box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08); }
+  html { --bz-ag-w:420px; }
+  body { background:#e8e0d3; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:10px; font-family:var(--font-body); transition:padding-right .3s cubic-bezier(.2,0,0,1); }
+  body.bz-ag-push { padding-right:var(--bz-ag-w); }
+  body.bz-ag-drag, body.bz-ag-drag .bz-ag-drawer { transition:none !important; }
+  .page { width:100%; max-width:1680px; background:var(--c-paper); border:1.5px solid var(--c-line); border-radius:2px; padding:14px 16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08); }
 
   /* ===== 输入表单 ===== */
   .input-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--c-line); }
@@ -442,6 +445,14 @@
 
   .btn-simple { font-family:var(--font-display); font-size:13px; padding:4px 10px; border:1px solid var(--c-line); border-radius:2px; background:var(--c-paper); color:var(--c-ink); cursor:pointer; white-space:nowrap; margin-left:8px; letter-spacing:.08em; }
   .btn-simple.active { background:var(--c-ink); color:var(--c-paper); }
+  @media (max-width:1080px) { body.bz-ag-push { padding-right:10px; } }
+  .agent-trigger { display:inline-flex; align-items:center; gap:6px; padding:4px 12px 4px 9px; border-radius:999px; background:#fff; border:1px solid var(--c-line); color:var(--c-ink); font-size:12.5px; letter-spacing:.04em; line-height:1.5; cursor:pointer; white-space:nowrap; margin-left:8px; transition:border-color .18s,box-shadow .18s,transform .12s,background .18s,color .18s; }
+  .agent-trigger:hover { border-color:#c4b79c; box-shadow:0 1px 3px rgba(0,0,0,.10); }
+  .agent-trigger:active { transform:scale(.97); }
+  .agent-trigger:focus-visible { outline:2px solid #4a86f7; outline-offset:2px; }
+  .agent-trigger .ag-star { font-size:13px; line-height:1; background:linear-gradient(135deg,#4a86f7,#a259ff 52%,#f6655e); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .agent-trigger.on { background:var(--c-ink); border-color:var(--c-ink); color:var(--c-paper); }
+  .agent-trigger.on .ag-star { background:none; -webkit-text-fill-color:var(--c-paper); color:var(--c-paper); }
 
   .wood { color:var(--c-wood); } .fire { color:var(--c-fire); } .earth { color:var(--c-earth); }
   .metal { color:var(--c-metal); } .water { color:var(--c-water); }

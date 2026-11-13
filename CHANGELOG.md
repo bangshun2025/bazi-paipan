@@ -1,3 +1,16 @@
+## Agent 侧栏改挤压式（v0.100.7，2026-11-13）
+
+照 Chrome「问问 Gemini」的交互范式重做 ✦ Agent：打开侧栏时整个版面被推着往左让位，不是浮层遮住内容
+
+- **逆向依据**：Chromium 源码 `chrome/browser/ui/animation` README 写明 side panel 展开时「panel 自己展开 + 包含 toolbar 和内容的区域也一起变化」，即视口真收缩（push），非 transform 浮层；本机 Chrome 实测几何为同一套——关闭时版心右缘 1502，打开 420 侧栏后右缘收到 1092，恰好贴住侧栏左缘，无缝隙无重叠
+- **push 实现**：`html{--bz-ag-w:420px}` 单一宽度变量驱动；抽屉 `position:fixed` 宽度取变量，`body.bz-ag-push{padding-right:var(--bz-ag-w)}` 让 flex 版心自动左移；两条过渡同曲线 `cubic-bezier(.2,0,0,1) 300ms`，抽屉滑入与版心收缩同步发生，不会一前一后
+- **满宽范式**：`body` padding 12→10px、`.page` max-width 1340→1680px、内边距 `16px 18px 20px`→`14px 16px 18px`——1512 视口下版心从 1316 扩到 1492，左右各留 10px，与浏览器满宽观感一致
+- **入口按钮**：改为胶囊（`border-radius:999px`），四角星用 `linear-gradient(135deg,#4a86f7,#a259ff 52%,#f6655e)` 裁切文字上色；hover 描边加深 + 1px 投影、active `scale(.97)`、`focus-visible` 蓝框；打开时反白为墨底纸字
+- **拖拽调宽**：抽屉左缘 9px grip（`cursor:col-resize`），拖动实时改宽度并夹在 320~720px，松手写 `localStorage.bz_ag_w` 下次打开恢复；拖拽期间 `body.bz-ag-drag` 关掉过渡，跟手无延迟
+- **退化与克制**：视口 ≤1080px 时不挤压（`padding-right` 还原 10px）改回 overlay，避免窄屏版心被压成一条；`prefers-reduced-motion` 下两条过渡全部关闭
+- **关闭**：Esc 仍可关；关闭后挤压态、按钮反白同时复位，若焦点原本在抽屉内则还给入口按钮（键盘用户不掉焦点）
+- **回归**：main.js 新增 AGP T01–T10（挤压态/宽度一致/右内边距/左内边距 10px/版心 1680px/按钮反白/胶囊形/关闭复位/焦点回归/宽度夹紧）；本地 `?test=1` **2116 条全绿**；CDP 真实 UI 实测——关闭 pageW 1492→打开 1082（版心右缘 1092 = 抽屉左缘 1092）、拖拽 420→500→620 每步左移量与指针位移一致、松手 `bz_ag_w=620` 落盘、关闭后 pageW 复位 1492 / padding-right 10px
+
 ## 记录防丢加固（v0.100.6，2026-11-13）
 
 自动搬迁记录键之前先留原文，搬迁不再吞内容，备份补齐三类此前裸奔的数据

@@ -7898,6 +7898,46 @@ window.__testAppend = function(t) {
       var agBtnG = tstG.querySelector('.agent-trigger');
       push({ ok: !!agBtnG && (agBtnG.getAttribute('onclick') || '').indexOf('AGENT.toggle') >= 0, label: 'AGT T15: 主盘顶栏「✦ Agent」按钮接线' });
 
+      // v0.100.7 侧栏挤压：开 Agent 压版面（Chrome 侧栏范式），关后复位
+      var oldPdP = window._paipanData;
+      var outP = document.getElementById('output');
+      var pdP = paipan('AGP挤压盘', '男', 1991, 3, 8, 9, 30);
+      window._paipanData = pdP;
+      if (outP) outP._paipanData = pdP;
+      AGENT.open();
+      var drwP = document.getElementById('bzAgentDrawer');
+      var varWG = AGENT.debugWidth();
+      var drwWG = drwP ? drwP.getBoundingClientRect().width : 0;
+      document.body.classList.add('bz-ag-drag');
+      void document.body.offsetHeight;
+      var padLP = parseFloat(getComputedStyle(document.body).paddingLeft) || 0;
+      var padRG = parseFloat(getComputedStyle(document.body).paddingRight) || 0;
+      document.body.classList.remove('bz-ag-drag');
+      var pageElP = document.querySelector('.page');
+      var pageMaxWP = pageElP ? getComputedStyle(pageElP).maxWidth : '';
+      var agTrgP = document.querySelector('.agent-trigger');
+      push({ ok: AGENT.debugPush() === true, label: 'AGP T01: 开 Agent 后 body 进入挤压态' });
+      push({ ok: drwWG > 300 && Math.abs(drwWG - varWG) <= 1, label: 'AGP T02: 抽屉宽度 = CSS 变量 --bz-ag-w', detail: drwWG + ' / ' + varWG });
+      push({ ok: Math.abs(padRG - drwWG) <= 1, label: 'AGP T03: body 右内边距 = 抽屉宽度（版心左移）', detail: padRG + ' / ' + drwWG });
+      push({ ok: Math.abs(padLP - 10) <= 0.5, label: 'AGP T04: 左内边距收窄到 10px', detail: String(padLP) });
+      push({ ok: pageMaxWP === '1680px', label: 'AGP T05: 版心最大宽度放宽到 1680px', detail: pageMaxWP });
+      push({ ok: !!agTrgP && agTrgP.classList.contains('on'), label: 'AGP T06: 打开时入口按钮反白' });
+      push({ ok: !!agTrgP && getComputedStyle(agTrgP).borderRadius === '999px', label: 'AGP T07: 入口按钮为胶囊形', detail: agTrgP ? getComputedStyle(agTrgP).borderRadius : '无' });
+      AGENT.close();
+      push({ ok: AGENT.debugPush() === false && !(agTrgP && agTrgP.classList.contains('on')), label: 'AGP T08: 关闭后挤压态与按钮态同时复位' });
+      push({ ok: document.activeElement === agTrgP, label: 'AGP T09: 关闭后焦点回到入口按钮', detail: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : '无' });
+      var wKeepP = AGENT.debugWidth();
+      AGENT.debugSetWidth(600);
+      var wSetP = AGENT.debugWidth();
+      AGENT.debugSetWidth(9999);
+      var wMaxP = AGENT.debugWidth();
+      AGENT.debugSetWidth(100);
+      var wMinP = AGENT.debugWidth();
+      push({ ok: wSetP === 600 && wMaxP === 720 && wMinP === 320, label: 'AGP T10: 宽度可设且夹在 320~720', detail: [wSetP, wMaxP, wMinP].join(' / ') });
+      AGENT.debugSetWidth(wKeepP || 420);
+      window._paipanData = oldPdP;
+      if (outP) outP._paipanData = oldPdP;
+
       // v0.100.4 卡片库升级：卡头含昵称/标签，重点卡片带记录全文（预算自适应）
       var origArchsG = ARCHIVE.getArchives();
       var cardAG = { nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };

@@ -1101,7 +1101,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话">✦ Agent</button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话"><span class="ag-star">✦</span><span>Agent</span></button></div>
     </div>`;
   const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
@@ -8512,7 +8512,11 @@ function cmpSetState(entries) {
 
   // —— 抽屉 ——
   var CSS = ''
-    + '.bz-ag-drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:var(--c-paper,#f5f0e8);border-left:1.5px solid var(--c-line,#e0d8c8);box-shadow:-8px 0 32px rgba(0,0,0,.14);transform:translateX(103%);transition:transform .28s cubic-bezier(.22,.9,.3,1);z-index:9800;display:flex;flex-direction:column;}'
+    + '.bz-ag-drawer{position:fixed;top:0;right:0;bottom:0;width:min(var(--bz-ag-w,420px),94vw);background:var(--c-paper,#f5f0e8);border-left:1.5px solid var(--c-line,#e0d8c8);box-shadow:-8px 0 32px rgba(0,0,0,.14);transform:translateX(103%);transition:transform .3s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;}'
+    + '.bz-ag-grip{position:absolute;left:-3px;top:0;bottom:0;width:9px;cursor:col-resize;touch-action:none;z-index:3;}'
+    + '.bz-ag-grip:hover,.bz-ag-grip.dragging{background:linear-gradient(90deg,rgba(138,109,59,0),rgba(138,109,59,.3));}'
+    + '@media(max-width:1080px){.bz-ag-grip{display:none;}}'
+    + '@media(prefers-reduced-motion:reduce){.bz-ag-drawer{transition:none;}body{transition:none !important;}}'
     + '.bz-ag-drawer.open{transform:translateX(0);}'
     + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
     + '.bz-ag-logo{font-weight:700;font-size:14px;color:var(--c-ink,#2c2416);white-space:nowrap;}'
@@ -8546,8 +8550,46 @@ function cmpSetState(entries) {
     + '.bz-ag-send{border:none;background:var(--c-ink,#2c2416);color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap;}'
     + '.bz-ag-send.stop{background:var(--c-red,#b5343a);}'
     + '.bz-ag-send:disabled{opacity:.5;cursor:default;}';
+  var AG_W_KEY = 'bz_ag_w', AG_W_DEF = 420, AG_W_MIN = 320, AG_W_MAX = 720;
+  function agSetWidth(w) {
+    w = Math.max(AG_W_MIN, Math.min(AG_W_MAX, Math.round(w)));
+    document.documentElement.style.setProperty('--bz-ag-w', w + 'px');
+    return w;
+  }
+  function agRestoreWidth() {
+    var w = AG_W_DEF;
+    try {
+      var s = parseInt(localStorage.getItem(AG_W_KEY), 10);
+      if (s > 0) w = s;
+    } catch (e) {}
+    return agSetWidth(w);
+  }
+  function bindGrip(dr) {
+    var grip = document.getElementById('bzAgentGrip');
+    if (!grip) return;
+    grip.addEventListener('pointerdown', function(e) {
+      e.preventDefault();
+      var startX = e.clientX, startW = dr.getBoundingClientRect().width;
+      document.body.classList.add('bz-ag-drag');
+      grip.classList.add('dragging');
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      function onMove(ev) { agSetWidth(startW + (startX - ev.clientX)); }
+      function onUp() {
+        document.body.classList.remove('bz-ag-drag');
+        grip.classList.remove('dragging');
+        grip.removeEventListener('pointermove', onMove);
+        grip.removeEventListener('pointerup', onUp);
+        grip.removeEventListener('pointercancel', onUp);
+        try { localStorage.setItem(AG_W_KEY, String(Math.round(dr.getBoundingClientRect().width))); } catch (_) {}
+      }
+      grip.addEventListener('pointermove', onMove);
+      grip.addEventListener('pointerup', onUp);
+      grip.addEventListener('pointercancel', onUp);
+    });
+  }
   function ensureDom() {
     if (document.getElementById('bzAgentDrawer')) return;
+    agRestoreWidth();
     var st = document.createElement('style');
     st.id = 'bzAgentStyle';
     st.textContent = CSS;
@@ -8555,13 +8597,15 @@ function cmpSetState(entries) {
     var dr = document.createElement('div');
     dr.id = 'bzAgentDrawer';
     dr.className = 'bz-ag-drawer';
-    dr.innerHTML = '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
+    dr.innerHTML = '<div class="bz-ag-grip" id="bzAgentGrip" title="拖动调整侧栏宽度"></div>'
+      + '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClear" title="清空本盘会话">清空</button>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClose" title="关闭（Esc）">✕</button></div>'
       + '<div class="bz-ag-msgs" id="bzAgentMsgs"></div>'
       + '<div class="bz-ag-inputbar"><textarea id="bzAgentInput" rows="1" placeholder="问盘面、录音稿、档案库…（Enter 发送 · Shift+Enter 换行）"></textarea>'
       + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>';
     document.body.appendChild(dr);
+    bindGrip(dr);
     document.getElementById('bzAgentClose').onclick = close;
     document.getElementById('bzAgentClear').onclick = clearConv;
     var inp = document.getElementById('bzAgentInput');
@@ -8605,11 +8649,17 @@ function cmpSetState(entries) {
       el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份（全文 ' + (ctx.stats.cardsFull || 0) + ' 卡）';
     }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
   }
+  function syncTrigger(on) {
+    document.body.classList.toggle('bz-ag-push', !!on);
+    var btns = document.querySelectorAll('.agent-trigger');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', !!on);
+  }
   function open() {
     if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
     ensureDom();
     CHAT.open = true;
     document.getElementById('bzAgentDrawer').classList.add('open');
+    syncTrigger(true);
     CHAT.msgs = loadConv();
     draw();
     fillCtx();
@@ -8619,7 +8669,13 @@ function cmpSetState(entries) {
   function close() {
     CHAT.open = false;
     var dr = document.getElementById('bzAgentDrawer');
+    var hadFocus = !!(dr && dr.contains(document.activeElement));
     if (dr) dr.classList.remove('open');
+    syncTrigger(false);
+    if (hadFocus) {
+      var b = document.querySelector('.agent-trigger');
+      if (b) b.focus();
+    }
   }
   function toggle() { if (CHAT.open) close(); else open(); }
 
@@ -8636,6 +8692,9 @@ function cmpSetState(entries) {
     debugStarters: function() { return STARTERS.slice(); },
     debugConvSave: function(msgs) { CHAT.msgs = msgs || []; saveConv(); },
     debugConvLoad: loadConv,
+    debugSetWidth: agSetWidth,
+    debugWidth: function() { return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bz-ag-w'), 10) || 0; },
+    debugPush: function() { return document.body.classList.contains('bz-ag-push'); },
     debugState: CHAT
   };
 })();
