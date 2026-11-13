@@ -7936,6 +7936,23 @@ window.__testAppend = function(t) {
       push({ ok: !!drwCSP && drwCSP.borderLeftWidth === '0px', label: 'AGP T13: 抽屉左缘无边框（版心右边框即分隔线）', detail: drwCSP ? drwCSP.borderLeftWidth : '无' });
       var durP = getComputedStyle(document.body).transitionDuration;
       push({ ok: durP === '0.45s', label: 'AGP T14: 挤压节奏 450ms（Material emphasized）', detail: durP });
+      // v0.100.9 挤压态两列一起压缩：记录区不得越出版心内容右界，主列必须能缩
+      var colsElP = document.querySelector('.body-cols');
+      var recElP = document.querySelector('.record-panel');
+      var colsRectP = colsElP ? colsElP.getBoundingClientRect() : null;
+      var recWasOpenP = recElP ? recElP.classList.contains('open') : false;
+      if (recElP && !recWasOpenP) recElP.classList.add('open');
+      if (recElP) recElP.getBoundingClientRect();
+      var recRectP = recElP ? recElP.getBoundingClientRect() : null;
+      var recFitP = !!colsRectP && !!recRectP && (colsRectP.right - recRectP.right) >= -1.5;
+      push({ ok: recFitP, label: 'AGP T15: 挤压态记录区不越出版心右界（不被抽屉盖住）', detail: (recRectP && colsRectP) ? ('余量=' + (colsRectP.right - recRectP.right).toFixed(1)) : '无记录区' });
+      if (recElP && !recWasOpenP) recElP.classList.remove('open');
+      var mainElP = document.querySelector('.main-col');
+      var mainCSP = mainElP ? getComputedStyle(mainElP) : null;
+      push({ ok: !!mainCSP && mainCSP.flexShrink === '1', label: 'AGP T16: 挤压态主列参与收缩（flex-shrink=1）', detail: mainCSP ? mainCSP.flexShrink : '无主列' });
+      var cwElP = document.querySelector('.chart-wrap');
+      var chartFitP = !cwElP || window.innerWidth < 1400 || cwElP.scrollWidth <= cwElP.clientWidth + 1;
+      push({ ok: chartFitP, label: 'AGP T17: 挤压后排盘表格不出现横向滚动', detail: cwElP ? (cwElP.scrollWidth + ' / ' + cwElP.clientWidth) : '无盘面' });
       AGENT.close();
       push({ ok: AGENT.debugPush() === false && !(agTrgP && agTrgP.classList.contains('on')), label: 'AGP T08: 关闭后挤压态与按钮态同时复位' });
       push({ ok: document.activeElement === agTrgP, label: 'AGP T09: 关闭后焦点回到入口按钮', detail: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : '无' });

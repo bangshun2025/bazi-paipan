@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.8 | 2026-11-13 -->
+<!-- 八字排盘 ·  从真版 v0.100.9 | 2026-11-13 -->
 <!-- v0.100.4: ✦ Agent 卡片库升级 —— 卡片头带昵称/标签（摘引 80→160 字），同名或同四柱、有记录的重点卡片附「▤ 卡片内容」分析记录全文（单维截 1500 字，总预算 18000 字封顶、至多 12 卡），其余保持一行摘要；上下文条加「全文 N 卡」。断言 +2（AGT T16/T17）。外部模块清单不变：constants/algorithm/archive/gongwei/xingyao/render/main/config/auth/records/gongwei-cloud。 -->
 <!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位。修复后 AGT 15 条全绿。（修复在 main.js，split 版外链同文件自动生效） -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏一点即开右侧抽屉，三源资料（盘面+分析记录、录音稿、档案卡片库）喂模型，流式回复，会话按盘记忆。（split 版同功能，JS 外链） -->
@@ -499,6 +499,16 @@
   .hepan-btn-open { background:var(--c-water); color:#fff; border-color:var(--c-water); letter-spacing:.08em; }
   .record-panel { display:none; flex:1 1 auto; min-width:380px; position:sticky; top:12px; border:0.5px solid var(--c-line); background:var(--c-paper); }
   .record-panel.open { display:flex; flex-direction:column; }
+  /* ===== v0.100.9 Agent 挤压态：主列与记录区一起参与压缩，不让任何一块被抽屉盖住 ===== */
+  /* 关闭态 main-col 是 flex:0 0 auto（宽度由内容定），打开抽屉后可用宽少 430px，它一分不让，
+     记录区的 min-width:380px 又是硬地板，两块加起来必然顶出版心。这里把两处硬地板都放开。 */
+  body.bz-ag-push .main-col { flex:0 1 auto; min-width:0; }
+  body.bz-ag-push .record-panel { flex:1 0 300px; min-width:300px; }
+  /* 可用宽 < 996px（主列下限 680 + 缝 16 + 记录 300）时并排已经读不了，改为上下堆叠 */
+  @media (max-width:1470px) {
+    body.bz-ag-push .body-cols { flex-direction:column; align-items:stretch; }
+    body.bz-ag-push .record-panel { width:100%; min-width:0; flex:0 0 auto; position:static; margin-top:14px; }
+  }
   .rec-head { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(201,169,110,.06); border-bottom:0.5px solid var(--c-line); }
   .rec-title { font-family:var(--font-display); font-size:13px; letter-spacing:.08em; color:var(--c-ink); }
   .rec-status { font-size:12px; color:var(--c-red); opacity:0; transition:opacity .2s; }
@@ -765,7 +775,9 @@
   /* ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== */
   .note-overlay { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1200; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .25s ease; }
   .note-overlay.show { opacity:1; pointer-events:auto; }
-  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease; display:flex; flex-direction:column; }
+  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease, right .45s cubic-bezier(.2,0,0,1); display:flex; flex-direction:column; }
+  /* v0.100.9 Agent 打开时让出抽屉宽度，否则 560px 的记录抽屉被 z 更高的 Agent 盖掉右边一大截 */
+  body.bz-ag-push .note-drawer { right:calc(var(--bz-ag-w,420px) + var(--bz-ag-gap,10px)); width:min(560px, calc(94vw - var(--bz-ag-w,420px) - var(--bz-ag-gap,10px))); }
   .note-overlay.show .note-drawer { transform:translateX(0); }
   .note-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--c-line); }
   .note-title { font-family:var(--font-display); font-size:16px; color:var(--c-ink); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

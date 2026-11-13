@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.100.8 | 2026-11-13 -->
+<!-- 八字排盘 ·  从真版 v0.100.9 | 2026-11-13 -->
 <!-- v0.100.4: ✦ Agent 卡片库升级 —— 卡片头带昵称/标签（摘引 80→160 字），同名或同四柱、有记录的重点卡片附「▤ 卡片内容」分析记录全文（单维截 1500 字，总预算 18000 字封顶、至多 12 卡），其余保持一行摘要；上下文条加「全文 N 卡」。断言 +2（AGT T16/T17）。 -->
 <!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位（线上 ?test=1 出现第 6 条失败）。修复后 AGT 15 条全绿，回归回到既有 5 条环境失败口径。功能与 v0.100.2 相同。 -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏「✦ Agent」一点即开右侧抽屉（430px docked 不遮盘面，Esc/✕ 关）。三源资料自动进上下文：①盘面+分析记录+近年流年（今年-1~+5）②IndexedDB 录音稿（单条截 6000 字）③档案卡片库逐份摘要（上限 40）。流式回复 rAF 节流+光标动画+贴底自动滚，发送中按钮变「停止」（AbortController），Markdown 行内渲染先转义防 XSS，会话按盘指纹存 bz_agent_conv_<fp>（上限 80 条）清空即删，未配 Key 引导设置，失败气泡可重试。附带修复：dataNow() 双源取盘（开档/恢复路径只挂 #output._paipanData，单源误判无盘）；streamTick 非 busy 跳过重绘（流结束 rAF 补刀会把光标画回去） -->
@@ -497,6 +497,16 @@
   .hepan-btn-open { background:var(--c-water); color:#fff; border-color:var(--c-water); letter-spacing:.08em; }
   .record-panel { display:none; flex:1 1 auto; min-width:380px; position:sticky; top:12px; border:0.5px solid var(--c-line); background:var(--c-paper); }
   .record-panel.open { display:flex; flex-direction:column; }
+  /* ===== v0.100.9 Agent 挤压态：主列与记录区一起参与压缩，不让任何一块被抽屉盖住 ===== */
+  /* 关闭态 main-col 是 flex:0 0 auto（宽度由内容定），打开抽屉后可用宽少 430px，它一分不让，
+     记录区的 min-width:380px 又是硬地板，两块加起来必然顶出版心。这里把两处硬地板都放开。 */
+  body.bz-ag-push .main-col { flex:0 1 auto; min-width:0; }
+  body.bz-ag-push .record-panel { flex:1 0 300px; min-width:300px; }
+  /* 可用宽 < 996px（主列下限 680 + 缝 16 + 记录 300）时并排已经读不了，改为上下堆叠 */
+  @media (max-width:1470px) {
+    body.bz-ag-push .body-cols { flex-direction:column; align-items:stretch; }
+    body.bz-ag-push .record-panel { width:100%; min-width:0; flex:0 0 auto; position:static; margin-top:14px; }
+  }
   .rec-head { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(201,169,110,.06); border-bottom:0.5px solid var(--c-line); }
   .rec-title { font-family:var(--font-display); font-size:13px; letter-spacing:.08em; color:var(--c-ink); }
   .rec-status { font-size:12px; color:var(--c-red); opacity:0; transition:opacity .2s; }
@@ -766,7 +776,9 @@
   /* ===== v0.43.0 命盘分析记录（右侧滑出抽屉） ===== */
   .note-overlay { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1200; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .25s ease; }
   .note-overlay.show { opacity:1; pointer-events:auto; }
-  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease; display:flex; flex-direction:column; }
+  .note-drawer { position:absolute; top:0; right:0; height:100%; width:min(560px,92vw); background:var(--c-paper); border-left:1px solid var(--c-line); box-shadow:-6px 0 24px rgba(0,0,0,.18); transform:translateX(102%); transition:transform .25s ease, right .45s cubic-bezier(.2,0,0,1); display:flex; flex-direction:column; }
+  /* v0.100.9 Agent 打开时让出抽屉宽度，否则 560px 的记录抽屉被 z 更高的 Agent 盖掉右边一大截 */
+  body.bz-ag-push .note-drawer { right:calc(var(--bz-ag-w,420px) + var(--bz-ag-gap,10px)); width:min(560px, calc(94vw - var(--bz-ag-w,420px) - var(--bz-ag-gap,10px))); }
   .note-overlay.show .note-drawer { transform:translateX(0); }
   .note-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--c-line); }
   .note-title { font-family:var(--font-display); font-size:16px; color:var(--c-ink); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -29288,6 +29300,23 @@ window.__testAppend = function(t) {
       push({ ok: !!drwCSP && drwCSP.borderLeftWidth === '0px', label: 'AGP T13: 抽屉左缘无边框（版心右边框即分隔线）', detail: drwCSP ? drwCSP.borderLeftWidth : '无' });
       var durP = getComputedStyle(document.body).transitionDuration;
       push({ ok: durP === '0.45s', label: 'AGP T14: 挤压节奏 450ms（Material emphasized）', detail: durP });
+      // v0.100.9 挤压态两列一起压缩：记录区不得越出版心内容右界，主列必须能缩
+      var colsElP = document.querySelector('.body-cols');
+      var recElP = document.querySelector('.record-panel');
+      var colsRectP = colsElP ? colsElP.getBoundingClientRect() : null;
+      var recWasOpenP = recElP ? recElP.classList.contains('open') : false;
+      if (recElP && !recWasOpenP) recElP.classList.add('open');
+      if (recElP) recElP.getBoundingClientRect();
+      var recRectP = recElP ? recElP.getBoundingClientRect() : null;
+      var recFitP = !!colsRectP && !!recRectP && (colsRectP.right - recRectP.right) >= -1.5;
+      push({ ok: recFitP, label: 'AGP T15: 挤压态记录区不越出版心右界（不被抽屉盖住）', detail: (recRectP && colsRectP) ? ('余量=' + (colsRectP.right - recRectP.right).toFixed(1)) : '无记录区' });
+      if (recElP && !recWasOpenP) recElP.classList.remove('open');
+      var mainElP = document.querySelector('.main-col');
+      var mainCSP = mainElP ? getComputedStyle(mainElP) : null;
+      push({ ok: !!mainCSP && mainCSP.flexShrink === '1', label: 'AGP T16: 挤压态主列参与收缩（flex-shrink=1）', detail: mainCSP ? mainCSP.flexShrink : '无主列' });
+      var cwElP = document.querySelector('.chart-wrap');
+      var chartFitP = !cwElP || window.innerWidth < 1400 || cwElP.scrollWidth <= cwElP.clientWidth + 1;
+      push({ ok: chartFitP, label: 'AGP T17: 挤压后排盘表格不出现横向滚动', detail: cwElP ? (cwElP.scrollWidth + ' / ' + cwElP.clientWidth) : '无盘面' });
       AGENT.close();
       push({ ok: AGENT.debugPush() === false && !(agTrgP && agTrgP.classList.contains('on')), label: 'AGP T08: 关闭后挤压态与按钮态同时复位' });
       push({ ok: document.activeElement === agTrgP, label: 'AGP T09: 关闭后焦点回到入口按钮', detail: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : '无' });
