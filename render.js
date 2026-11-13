@@ -8512,7 +8512,7 @@ function cmpSetState(entries) {
 
   // —— 抽屉 ——
   var CSS = ''
-    + '.bz-ag-drawer{position:fixed;top:var(--bz-ag-gap,10px);right:0;bottom:0;width:min(var(--bz-ag-w,420px),96vw);background:var(--c-paper,#f5f0e8);border:0;border-left:1.5px solid var(--c-line,#e0d8c8);border-radius:0;box-shadow:none;transform:translateX(calc(100% + 14px));transition:transform .45s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;overflow:hidden;}'
+    + '.bz-ag-drawer{position:fixed;top:var(--bz-ag-gap,10px);right:0;bottom:0;width:min(var(--bz-ag-w,420px),96vw);background:#fbf9f4;border:0;border-left:1px solid rgba(138,109,59,.16);border-radius:0;box-shadow:none;transform:translateX(calc(100% + 14px));transition:transform .45s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;overflow:hidden;}'
     + '.bz-ag-drawer.open{transform:translateX(0);}'
     + '.bz-ag-inner{flex:1;min-height:0;display:flex;flex-direction:column;opacity:0;transform:translateY(10px);transition:opacity .16s ease-out,transform .16s ease-out;}'
     + '.bz-ag-drawer.open .bz-ag-inner{opacity:1;transform:none;transition:opacity .26s cubic-bezier(.2,0,0,1) .15s,transform .3s cubic-bezier(.2,0,0,1) .15s;}'
@@ -8520,9 +8520,12 @@ function cmpSetState(entries) {
     + '.bz-ag-grip:hover,.bz-ag-grip.dragging{background:linear-gradient(90deg,rgba(138,109,59,.26),rgba(138,109,59,0));}'
     + '@media(max-width:1080px){.bz-ag-grip{display:none;}}'
     + '@media(prefers-reduced-motion:reduce){.bz-ag-drawer,.bz-ag-inner{transition:none !important;}body{transition:none !important;}}'
-    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--c-line,#e0d8c8);}'
+    + '.bz-ag-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid rgba(138,109,59,.09);}'
     + '.bz-ag-logo{font-weight:700;font-size:14px;color:var(--c-ink,#2c2416);white-space:nowrap;}'
-    + '.bz-ag-ctx{font-size:11.5px;color:var(--c-gray,#8b7e6a);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.bz-ag-ctx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--c-gray,#8b7e6a);}'
+    + '.bz-ag-share{display:flex;align-items:center;gap:7px;padding:7px 14px;background:rgba(138,109,59,.05);border-bottom:1px solid rgba(138,109,59,.08);}'
+    + '.bz-ag-share-dot{width:6px;height:6px;border-radius:50%;background:#5a8a5e;flex:none;box-shadow:0 0 0 3px rgba(90,138,94,.13);}'
+    + '.bz-ag-head .bz-ag-logo{flex:1;}'
     + '.bz-ag-ic{border:1px solid var(--c-line,#e0d8c8);background:transparent;color:var(--c-gray,#8b7e6a);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;white-space:nowrap;}'
     + '.bz-ag-ic:hover{color:var(--c-ink,#2c2416);border-color:var(--c-gray,#8b7e6a);}'
     + '.bz-ag-msgs{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px;}'
@@ -8540,13 +8543,14 @@ function cmpSetState(entries) {
     + '@keyframes bzAgCaret{0%{opacity:1}50%{opacity:0}100%{opacity:1}}'
     + '.bz-ag-err{font-size:12.5px;color:var(--c-red,#b5343a);background:rgba(181,52,58,.07);border-radius:8px;padding:8px 12px;line-height:1.6;}'
     + '.bz-ag-retry{border:1px solid var(--c-red,#b5343a);background:transparent;color:var(--c-red,#b5343a);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;margin-left:6px;}'
-    + '.bz-ag-empty{text-align:center;color:var(--c-gray,#8b7e6a);font-size:13px;margin:auto 0;padding:20px 10px;line-height:1.8;}'
+    + '.bz-ag-empty{text-align:center;color:var(--c-gray,#8b7e6a);font-size:12.5px;margin:auto 0;padding:20px 14px;line-height:1.75;}'
     + '.bz-ag-empty b{color:var(--c-ink,#2c2416);font-size:15px;}'
     + '.bz-ag-starters{display:flex;flex-direction:column;gap:8px;margin-top:14px;}'
-    + '.bz-ag-starter{border:1px solid var(--c-line,#e0d8c8);background:rgba(255,255,255,.55);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--c-ink,#2c2416);cursor:pointer;text-align:left;font-family:inherit;}'
-    + '.bz-ag-starter:hover{border-color:var(--c-gray,#8b7e6a);background:#fff;}'
-    + '.bz-ag-inputbar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--c-line,#e0d8c8);}'
-    + '#bzAgentInput{flex:1;resize:none;border:1px solid var(--c-line,#e0d8c8);border-radius:8px;background:#fff;color:var(--c-ink,#2c2416);font-size:13.5px;line-height:1.5;padding:8px 10px;max-height:120px;min-height:38px;font-family:inherit;box-sizing:border-box;}'
+    + '.bz-ag-starter{border:1px solid rgba(138,109,59,.14);background:#fff;border-radius:9px;padding:10px 13px;font-size:13px;color:var(--c-ink,#2c2416);cursor:pointer;text-align:left;font-family:inherit;transition:border-color .15s,box-shadow .15s;}'
+    + '.bz-ag-starter:hover{border-color:rgba(138,109,59,.34);box-shadow:0 1px 3px rgba(44,36,22,.06);}'
+    + '.bz-ag-starter:active{background:#fdfcf9;}'
+    + '.bz-ag-inputbar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;border-top:1px solid rgba(138,109,59,.09);}'
+    + '#bzAgentInput{flex:1;resize:none;border:1px solid rgba(138,109,59,.16);border-radius:9px;background:#fff;color:var(--c-ink,#2c2416);font-size:13.5px;line-height:1.5;padding:8px 10px;max-height:120px;min-height:38px;font-family:inherit;box-sizing:border-box;}'
     + '#bzAgentInput:focus{outline:none;border-color:var(--c-gray,#8b7e6a);}'
     + '#bzAgentInput:disabled{background:rgba(0,0,0,.04);}'
     + '.bz-ag-send{border:none;background:var(--c-ink,#2c2416);color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap;}'
@@ -8601,9 +8605,10 @@ function cmpSetState(entries) {
     dr.className = 'bz-ag-drawer';
     dr.innerHTML = '<div class="bz-ag-grip" id="bzAgentGrip" title="拖动调整侧栏宽度"></div>'
       + '<div class="bz-ag-inner">'
-      + '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span><span class="bz-ag-ctx" id="bzAgentCtx">上下文：读取中…</span>'
+      + '<div class="bz-ag-head"><span class="bz-ag-logo">✦ Agent</span>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClear" title="清空本盘会话">清空</button>'
       + '<button type="button" class="bz-ag-ic" id="bzAgentClose" title="关闭（Esc）">✕</button></div>'
+      + '<div class="bz-ag-share"><span class="bz-ag-share-dot"></span><span class="bz-ag-ctx" id="bzAgentCtx">正在读取当前盘…</span></div>'
       + '<div class="bz-ag-msgs" id="bzAgentMsgs"></div>'
       + '<div class="bz-ag-inputbar"><textarea id="bzAgentInput" rows="1" placeholder="问盘面、录音稿、档案库…（Enter 发送 · Shift+Enter 换行）"></textarea>'
       + '<button type="button" id="bzAgentSend" class="bz-ag-send">发送</button></div>'
@@ -8650,7 +8655,7 @@ function cmpSetState(entries) {
     buildContext().then(function(ctx) {
       if (!el.isConnected) return;
       if (!ctx) { el.textContent = '上下文：无盘面'; return; }
-      el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份（全文 ' + (ctx.stats.cardsFull || 0) + ' 卡）';
+      el.textContent = '正在读取 · 盘面 ' + ctx.stats.recChars + ' 字 · 录音 ' + ctx.stats.clips + ' 条 · 档案 ' + ctx.stats.archs + ' 份';
     }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
   }
   function syncTrigger(on) {
