@@ -8336,7 +8336,10 @@ function cmpSetState(entries) {
     try { var v = JSON.parse(localStorage.getItem(convKeyOf())); return Array.isArray(v) ? v : []; } catch (e) { return []; }
   }
   function saveConv() {
-    try { localStorage.setItem(convKeyOf(), JSON.stringify(CHAT.msgs.slice(-MSG_KEEP))); } catch (e) {}
+    try {
+      var arr = CHAT.msgs.slice(-MSG_KEEP).map(function(m) { return { who: m.who, text: m.text, err: m.err, q: m.q }; });
+      localStorage.setItem(convKeyOf(), JSON.stringify(arr));
+    } catch (e) {}
   }
   function clearConv() {
     CHAT.msgs = [];
@@ -8363,6 +8366,8 @@ function cmpSetState(entries) {
     var inp = document.getElementById('bzAgentInput');
     if (inp) inp.disabled = v;
   }
+  var AG_PHASE_TXT = { ctx: '正在读取盘面资料', ask: '正在思考' };
+  function agElapsed(since) { return Math.max(1, Math.round((Date.now() - (since || Date.now())) / 1000)) + ' 秒'; }
   function agentMdHtml(t) {
     var s = esc(t);
     s = s.replace(/^#{1,6}\s*(.+)$/gm, '<b class="bz-ag-h">$1</b>');
@@ -8391,6 +8396,8 @@ function cmpSetState(entries) {
       } else if (m.err) {
         h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-err">⚠ ' + esc(m.err)
           + (m.q ? ' <button type="button" class="bz-ag-retry" data-q="' + escAttr(m.q) + '">重试</button>' : '') + '</div></div>';
+      } else if (m.phase && CHAT.busy) {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-live"><i class="bz-ag-spin"></i><span>' + (AG_PHASE_TXT[m.phase] || '正在处理') + '</span> · <span class="bz-ag-livetime">' + agElapsed(m.at) + '</span></div></div>';
       } else {
         h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-body">' + agentMdHtml(m.text)
           + (CHAT.busy && i === CHAT.msgs.length - 1 ? '<span class="bz-ag-caret"></span>' : '') + '</div></div>';
@@ -8416,6 +8423,16 @@ function cmpSetState(entries) {
     };
     if (window.requestAnimationFrame) requestAnimationFrame(step); else setTimeout(step, 16);
   }
+  setInterval(function() {
+    if (!CHAT.busy) return;
+    var el = document.getElementById('bzAgentMsgs');
+    if (!el) return;
+    var t = el.querySelector('.bz-ag-livetime');
+    if (!t) return;
+    for (var i = CHAT.msgs.length - 1; i >= 0; i--) {
+      if (CHAT.msgs[i].phase) { t.textContent = agElapsed(CHAT.msgs[i].at); return; }
+    }
+  }, 1000);
   function send(text) {
     if (CHAT.busy) return;
     text = String(text == null ? '' : text).trim();
@@ -8429,14 +8446,16 @@ function cmpSetState(entries) {
       return;
     }
     CHAT.msgs.push({ who: 'me', text: text });
-    var m = { who: 'agent', text: '' };
+    var m = { who: 'agent', text: '', phase: 'ctx', at: Date.now() };
     CHAT.msgs.push(m);
+    setBusy(true);
     saveConv();
     draw();
-    setBusy(true);
     var ac = new AbortController();
     CHAT.ac = ac;
     buildContext().then(function(ctx) {
+      m.phase = 'ask';
+      draw();
       var body = {
         model: cfg.model,
         temperature: 0.4,
@@ -8464,7 +8483,7 @@ function cmpSetState(entries) {
               try {
                 var j2 = JSON.parse(dt);
                 var d2 = j2.choices && j2.choices[0] && (j2.choices[0].delta || j2.choices[0].message);
-                if (d2 && d2.content) { m.text += d2.content; streamTick(m); }
+                if (d2 && d2.content) { if (m.phase) { m.phase = null; draw(); } m.text += d2.content; streamTick(m); }
               } catch (e) {}
             }
             return pump();
@@ -8474,8 +8493,10 @@ function cmpSetState(entries) {
       });
     }).then(function() {
       if (!m.text) m.text = '（模型无输出，可重试）';
+      m.phase = null;
       setBusy(false); CHAT.ac = null; saveConv(); draw();
     }).catch(function(e) {
+      m.phase = null;
       var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
       if (aborted) {
         if (m.text) m.text += '\n（已停止）';
@@ -8506,6 +8527,10 @@ function cmpSetState(entries) {
     + '.bz-ag-h{display:block;margin:6px 0 2px;}'
     + '.bz-ag-body code,.bz-ag-bubble code{background:rgba(0,0,0,.06);padding:0 4px;border-radius:4px;font-size:12.5px;}'
     + '.bz-ag-caret{display:inline-block;width:7px;height:14px;background:var(--c-gray,#8b7e6a);vertical-align:-2px;margin-left:2px;animation:bzAgCaret 1s steps(2) infinite;}'
+    + '.bz-ag-live{display:flex;gap:8px;align-items:flex-start;color:var(--c-gray,#8b7e6a);font-style:italic;font-size:13px;padding:2px 2px;}'
+    + '.bz-ag-spin{display:inline-block;flex:none;width:11px;height:11px;margin-top:3px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:bzAgSpin .9s linear infinite;}'
+    + '.bz-ag-livetime{font-variant-numeric:tabular-nums;}'
+    + '@keyframes bzAgSpin{to{transform:rotate(360deg);}}'
     + '@keyframes bzAgCaret{0%{opacity:1}50%{opacity:0}100%{opacity:1}}'
     + '.bz-ag-err{font-size:12.5px;color:var(--c-red,#b5343a);background:rgba(181,52,58,.07);border-radius:8px;padding:8px 12px;line-height:1.6;}'
     + '.bz-ag-retry{border:1px solid var(--c-red,#b5343a);background:transparent;color:var(--c-red,#b5343a);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;margin-left:6px;}'

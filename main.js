@@ -7909,6 +7909,51 @@ window.__testAppend = function(t) {
       var ctx2 = await A.buildContext(dg);
       push({ ok: !!ctx2 && ctx2.md.indexOf('本机档案库共 1 份') >= 0 && ctx2.md.indexOf('「测卡」') >= 0 && ctx2.md.indexOf('标签：AGT标签甲') >= 0, label: 'AGT T16: 卡片头含昵称与标签', detail: ctx2 ? ('archs=' + ctx2.stats.archs) : '' });
       push({ ok: !!ctx2 && ctx2.md.indexOf('▤ 卡片内容') >= 0 && ctx2.md.indexOf('AGT全文标记：七杀格') >= 0 && ctx2.stats.cardsFull >= 1, label: 'AGT T17: 重点卡片带记录全文', detail: ctx2 ? ('cardsFull=' + ctx2.stats.cardsFull) : '' });
+
+      // v0.100.5 状态同步：发送后 live 气泡（复刻邦顺日记图片创作交互），stub fetch 走真实 send 全链路
+      var origFetchG = window.fetch, origCfgG = window.RENDER_AI.cfgGet, origAlertG = window.alert, origPdG = window._paipanData;
+      window.alert = function() {};
+      window._paipanData = pdG2;
+      window.RENDER_AI.cfgGet = function() { return { apiKey: 'AGTKey', baseUrl: 'https://agt.test', model: 'agt-model' }; };
+      var encG = new TextEncoder();
+      window.fetch = function() {
+        return Promise.resolve(new Response(new ReadableStream({
+          start: function(c) {
+            setTimeout(function() {
+              try {
+                c.enqueue(encG.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: 'AGT流式标记' } }] }) + '\n\n'));
+                setTimeout(function() { try { c.enqueue(encG.encode('data: [DONE]\n\n')); c.close(); } catch (e4) {} }, 120);
+              } catch (e3) {}
+            }, 250);
+          }
+        }), { status: 200 }));
+      };
+      A.clear();
+      A.open();
+      A.send('AGT状态测试');
+      var liveG = document.querySelector('#bzAgentMsgs .bz-ag-live');
+      push({ ok: !!liveG && !!liveG.querySelector('.bz-ag-spin') && liveG.textContent.indexOf('正在读取盘面资料') >= 0 && /\d+ 秒/.test(liveG.textContent), label: 'AGT T18: 发送即出 live 气泡（spin+阶段+秒数）', detail: liveG ? liveG.textContent.trim() : '无' });
+      var askG = false;
+      for (var gi = 0; gi < 60 && !askG; gi++) {
+        await new Promise(function(r) { setTimeout(r, 50); });
+        var lg = document.querySelector('#bzAgentMsgs .bz-ag-live');
+        askG = !!lg && lg.textContent.indexOf('正在思考') >= 0;
+      }
+      push({ ok: askG, label: 'AGT T19: 阶段推进（读取资料→正在思考）' });
+      var doneG = false;
+      for (var gj = 0; gj < 80 && !doneG; gj++) {
+        await new Promise(function(r) { setTimeout(r, 50); });
+        var mg = document.getElementById('bzAgentMsgs');
+        doneG = !A.debugState.busy && !!mg && !!mg.querySelector('.bz-ag-body') && mg.textContent.indexOf('AGT流式标记') >= 0 && !mg.querySelector('.bz-ag-live');
+      }
+      push({ ok: doneG, label: 'AGT T20: 完成态清理（live 消失+正文+busy 解除）' });
+      push({ ok: A.debugConvLoad().every(function(x) { return !x.phase; }), label: 'AGT T21: 瞬态字段不落盘' });
+      A.clear();
+      A.close();
+      window.fetch = origFetchG;
+      window.RENDER_AI.cfgGet = origCfgG;
+      window.alert = origAlertG;
+      window._paipanData = origPdG;
     } catch (e) {
       push({ ok: false, label: 'AGT 异常', detail: e && e.message ? e.message : String(e) });
     }

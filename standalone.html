@@ -20937,7 +20937,10 @@ function cmpSetState(entries) {
     try { var v = JSON.parse(localStorage.getItem(convKeyOf())); return Array.isArray(v) ? v : []; } catch (e) { return []; }
   }
   function saveConv() {
-    try { localStorage.setItem(convKeyOf(), JSON.stringify(CHAT.msgs.slice(-MSG_KEEP))); } catch (e) {}
+    try {
+      var arr = CHAT.msgs.slice(-MSG_KEEP).map(function(m) { return { who: m.who, text: m.text, err: m.err, q: m.q }; });
+      localStorage.setItem(convKeyOf(), JSON.stringify(arr));
+    } catch (e) {}
   }
   function clearConv() {
     CHAT.msgs = [];
@@ -20964,6 +20967,8 @@ function cmpSetState(entries) {
     var inp = document.getElementById('bzAgentInput');
     if (inp) inp.disabled = v;
   }
+  var AG_PHASE_TXT = { ctx: '正在读取盘面资料', ask: '正在思考' };
+  function agElapsed(since) { return Math.max(1, Math.round((Date.now() - (since || Date.now())) / 1000)) + ' 秒'; }
   function agentMdHtml(t) {
     var s = esc(t);
     s = s.replace(/^#{1,6}\s*(.+)$/gm, '<b class="bz-ag-h">$1</b>');
@@ -20992,6 +20997,8 @@ function cmpSetState(entries) {
       } else if (m.err) {
         h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-err">⚠ ' + esc(m.err)
           + (m.q ? ' <button type="button" class="bz-ag-retry" data-q="' + escAttr(m.q) + '">重试</button>' : '') + '</div></div>';
+      } else if (m.phase && CHAT.busy) {
+        h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-live"><i class="bz-ag-spin"></i><span>' + (AG_PHASE_TXT[m.phase] || '正在处理') + '</span> · <span class="bz-ag-livetime">' + agElapsed(m.at) + '</span></div></div>';
       } else {
         h += '<div class="bz-ag-row ag" data-i="' + i + '"><div class="bz-ag-body">' + agentMdHtml(m.text)
           + (CHAT.busy && i === CHAT.msgs.length - 1 ? '<span class="bz-ag-caret"></span>' : '') + '</div></div>';
@@ -21017,6 +21024,16 @@ function cmpSetState(entries) {
     };
     if (window.requestAnimationFrame) requestAnimationFrame(step); else setTimeout(step, 16);
   }
+  setInterval(function() {
+    if (!CHAT.busy) return;
+    var el = document.getElementById('bzAgentMsgs');
+    if (!el) return;
+    var t = el.querySelector('.bz-ag-livetime');
+    if (!t) return;
+    for (var i = CHAT.msgs.length - 1; i >= 0; i--) {
+      if (CHAT.msgs[i].phase) { t.textContent = agElapsed(CHAT.msgs[i].at); return; }
+    }
+  }, 1000);
   function send(text) {
     if (CHAT.busy) return;
     text = String(text == null ? '' : text).trim();
@@ -21030,14 +21047,16 @@ function cmpSetState(entries) {
       return;
     }
     CHAT.msgs.push({ who: 'me', text: text });
-    var m = { who: 'agent', text: '' };
+    var m = { who: 'agent', text: '', phase: 'ctx', at: Date.now() };
     CHAT.msgs.push(m);
+    setBusy(true);
     saveConv();
     draw();
-    setBusy(true);
     var ac = new AbortController();
     CHAT.ac = ac;
     buildContext().then(function(ctx) {
+      m.phase = 'ask';
+      draw();
       var body = {
         model: cfg.model,
         temperature: 0.4,
@@ -21065,7 +21084,7 @@ function cmpSetState(entries) {
               try {
                 var j2 = JSON.parse(dt);
                 var d2 = j2.choices && j2.choices[0] && (j2.choices[0].delta || j2.choices[0].message);
-                if (d2 && d2.content) { m.text += d2.content; streamTick(m); }
+                if (d2 && d2.content) { if (m.phase) { m.phase = null; draw(); } m.text += d2.content; streamTick(m); }
               } catch (e) {}
             }
             return pump();
@@ -21075,8 +21094,10 @@ function cmpSetState(entries) {
       });
     }).then(function() {
       if (!m.text) m.text = '（模型无输出，可重试）';
+      m.phase = null;
       setBusy(false); CHAT.ac = null; saveConv(); draw();
     }).catch(function(e) {
+      m.phase = null;
       var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
       if (aborted) {
         if (m.text) m.text += '\n（已停止）';
@@ -21107,6 +21128,10 @@ function cmpSetState(entries) {
     + '.bz-ag-h{display:block;margin:6px 0 2px;}'
     + '.bz-ag-body code,.bz-ag-bubble code{background:rgba(0,0,0,.06);padding:0 4px;border-radius:4px;font-size:12.5px;}'
     + '.bz-ag-caret{display:inline-block;width:7px;height:14px;background:var(--c-gray,#8b7e6a);vertical-align:-2px;margin-left:2px;animation:bzAgCaret 1s steps(2) infinite;}'
+    + '.bz-ag-live{display:flex;gap:8px;align-items:flex-start;color:var(--c-gray,#8b7e6a);font-style:italic;font-size:13px;padding:2px 2px;}'
+    + '.bz-ag-spin{display:inline-block;flex:none;width:11px;height:11px;margin-top:3px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:bzAgSpin .9s linear infinite;}'
+    + '.bz-ag-livetime{font-variant-numeric:tabular-nums;}'
+    + '@keyframes bzAgSpin{to{transform:rotate(360deg);}}'
     + '@keyframes bzAgCaret{0%{opacity:1}50%{opacity:0}100%{opacity:1}}'
     + '.bz-ag-err{font-size:12.5px;color:var(--c-red,#b5343a);background:rgba(181,52,58,.07);border-radius:8px;padding:8px 12px;line-height:1.6;}'
     + '.bz-ag-retry{border:1px solid var(--c-red,#b5343a);background:transparent;color:var(--c-red,#b5343a);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;margin-left:6px;}'
@@ -29128,6 +29153,51 @@ window.__testAppend = function(t) {
       var ctx2 = await A.buildContext(dg);
       push({ ok: !!ctx2 && ctx2.md.indexOf('本机档案库共 1 份') >= 0 && ctx2.md.indexOf('「测卡」') >= 0 && ctx2.md.indexOf('标签：AGT标签甲') >= 0, label: 'AGT T16: 卡片头含昵称与标签', detail: ctx2 ? ('archs=' + ctx2.stats.archs) : '' });
       push({ ok: !!ctx2 && ctx2.md.indexOf('▤ 卡片内容') >= 0 && ctx2.md.indexOf('AGT全文标记：七杀格') >= 0 && ctx2.stats.cardsFull >= 1, label: 'AGT T17: 重点卡片带记录全文', detail: ctx2 ? ('cardsFull=' + ctx2.stats.cardsFull) : '' });
+
+      // v0.100.5 状态同步：发送后 live 气泡（复刻邦顺日记图片创作交互），stub fetch 走真实 send 全链路
+      var origFetchG = window.fetch, origCfgG = window.RENDER_AI.cfgGet, origAlertG = window.alert, origPdG = window._paipanData;
+      window.alert = function() {};
+      window._paipanData = pdG2;
+      window.RENDER_AI.cfgGet = function() { return { apiKey: 'AGTKey', baseUrl: 'https://agt.test', model: 'agt-model' }; };
+      var encG = new TextEncoder();
+      window.fetch = function() {
+        return Promise.resolve(new Response(new ReadableStream({
+          start: function(c) {
+            setTimeout(function() {
+              try {
+                c.enqueue(encG.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: 'AGT流式标记' } }] }) + '\n\n'));
+                setTimeout(function() { try { c.enqueue(encG.encode('data: [DONE]\n\n')); c.close(); } catch (e4) {} }, 120);
+              } catch (e3) {}
+            }, 250);
+          }
+        }), { status: 200 }));
+      };
+      A.clear();
+      A.open();
+      A.send('AGT状态测试');
+      var liveG = document.querySelector('#bzAgentMsgs .bz-ag-live');
+      push({ ok: !!liveG && !!liveG.querySelector('.bz-ag-spin') && liveG.textContent.indexOf('正在读取盘面资料') >= 0 && /\d+ 秒/.test(liveG.textContent), label: 'AGT T18: 发送即出 live 气泡（spin+阶段+秒数）', detail: liveG ? liveG.textContent.trim() : '无' });
+      var askG = false;
+      for (var gi = 0; gi < 60 && !askG; gi++) {
+        await new Promise(function(r) { setTimeout(r, 50); });
+        var lg = document.querySelector('#bzAgentMsgs .bz-ag-live');
+        askG = !!lg && lg.textContent.indexOf('正在思考') >= 0;
+      }
+      push({ ok: askG, label: 'AGT T19: 阶段推进（读取资料→正在思考）' });
+      var doneG = false;
+      for (var gj = 0; gj < 80 && !doneG; gj++) {
+        await new Promise(function(r) { setTimeout(r, 50); });
+        var mg = document.getElementById('bzAgentMsgs');
+        doneG = !A.debugState.busy && !!mg && !!mg.querySelector('.bz-ag-body') && mg.textContent.indexOf('AGT流式标记') >= 0 && !mg.querySelector('.bz-ag-live');
+      }
+      push({ ok: doneG, label: 'AGT T20: 完成态清理（live 消失+正文+busy 解除）' });
+      push({ ok: A.debugConvLoad().every(function(x) { return !x.phase; }), label: 'AGT T21: 瞬态字段不落盘' });
+      A.clear();
+      A.close();
+      window.fetch = origFetchG;
+      window.RENDER_AI.cfgGet = origCfgG;
+      window.alert = origAlertG;
+      window._paipanData = origPdG;
     } catch (e) {
       push({ ok: false, label: 'AGT 异常', detail: e && e.message ? e.message : String(e) });
     }
