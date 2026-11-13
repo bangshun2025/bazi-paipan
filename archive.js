@@ -829,7 +829,9 @@ function parseRecNotesKey(key) {
 }
 
 // v0.100.1 删除档案时找唯一幸存者：同公历生日+时辰，姓名或性别至少一项相同；
-// 命中多个视为不可判定（重名/多胞胎），不迁移
+// 命中多个视为不可判定（重名/多胞胎），不迁移。
+// 条件必须保留 OR：改名（同名不成立）与性别纠正（同性别不成立）都靠它才能搬过去，
+// 收紧成 AND 会让记录变孤儿。误搬风险由 migrateAllNotesToSurvivor 的原文快照兜底
 function findUniqueSurvivorArchive(del, archives) {
   var s = archiveSolarYmd(del);
   if (!s) return null;
@@ -843,6 +845,17 @@ function findUniqueSurvivorArchive(del, archives) {
     if ((a.name || '') === dn || (a.gender || '') === dg) hits.push(a);
   }
   return hits.length === 1 ? hits[0] : null;
+}
+
+// v0.100.6 任何自动改写记录键之前先把原值留一份，出问题能人工找回
+function backupNoteValue(val, label) {
+  if (!val) return;
+  try {
+    var d = new Date();
+    var tag = 'bz_bak_note_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())
+      + '_' + String(label || '').replace(/[|§]/g, '_') + val.length + '字';
+    if (!localStorage.getItem(tag)) localStorage.setItem(tag, val);
+  } catch (e) {}
 }
 
 // v0.100.1 被删档案的全部记录键（含 twin/维度段）迁移到幸存者；幸存键非空时保留旧键不覆盖
@@ -861,7 +874,8 @@ function migrateAllNotesToSurvivor(del, survivor) {
     var nk = 'bz_rec_notes_' + p.suffix + p.dim + sfp;
     var ov = null, nv = null;
     try { ov = localStorage.getItem(key); nv = localStorage.getItem(nk); } catch (e) {}
-    if (ov == null || (nv != null && nv !== '')) continue;
+    if (ov == null || ov === '' || (nv != null && nv !== '')) continue;
+    backupNoteValue(ov, (del.name || '') + (p.dim || ''));
     try { localStorage.setItem(nk, ov); localStorage.removeItem(key); } catch (e) {}
   }
   migrateRecAudioKeys(del, survivor);
@@ -895,8 +909,9 @@ function migrateOrphanRecNotes() {
     if (!nk || nk === key) continue;
     var ov2 = null, nv2 = null;
     try { ov2 = localStorage.getItem(key); nv2 = localStorage.getItem(nk); } catch (e) {}
-    if (ov2 == null) continue;
+    if (!ov2) continue;
     var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
+    backupNoteValue(merged, parts[0] + '迁移');
     try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
   }
   // 二轮：生日/时辰变更（含农历互转）后旧 key 按 7 字段匹配不上任何档案，改按名字+性别回收；
@@ -1631,24 +1646,32 @@ var REC_NOTES_PREFIX = 'bz_rec_notes_';
 var REC_DIM_MARK = '§'; // v0.87.0 维度键段标记：bz_rec_notes_[twin|]§维度名|指纹
 var BACKUP_APP = 'bazi-paipan';
 
-function collectRecNotes() {
+function collectPrefix(prefix) {
   var out = {};
   try {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && k.indexOf(REC_NOTES_PREFIX) === 0) out[k] = localStorage.getItem(k) || '';
+      if (k && k.indexOf(prefix) === 0) out[k] = localStorage.getItem(k) || '';
     }
   } catch (e) {}
   return out;
 }
 
+function collectRecNotes() {
+  return collectPrefix(REC_NOTES_PREFIX);
+}
+
+// v0.100.6 备份补齐三类此前完全没进备份的内容：📝抽屉记录、✦Agent 会话、自动改写前的原值快照
 function buildBackup() {
   return {
     app: BACKUP_APP,
     exportedAt: new Date().toISOString(),
     archives: getArchives(),
     trash: getTrash(),
-    recNotes: collectRecNotes()
+    recNotes: collectRecNotes(),
+    drawerNotes: collectPrefix('bz_note_'),
+    agentConvs: collectPrefix('bz_agent_conv_'),
+    noteBackups: collectPrefix('bz_bak_note_')
   };
 }
 
@@ -1715,7 +1738,7 @@ function pickImportBackup() {
 
 // 合并式导入：档案按 id、记录按键，已存在的一律跳过，绝不覆盖现有内容
 function importBackup(obj) {
-  var res = { addedArchives: 0, skippedArchives: 0, addedNotes: 0, keptNotes: 0, addedTrash: 0 };
+  var res = { addedArchives: 0, skippedArchives: 0, addedNotes: 0, keptNotes: 0, addedTrash: 0, addedExtras: 0 };
   if (!obj || !Array.isArray(obj.archives)) return res;
   var arr = getArchives();
   var ids = {};
@@ -1747,6 +1770,17 @@ function importBackup(obj) {
     if (cur.trim()) { res.keptNotes++; continue; }
     try { localStorage.setItem(k, String(notes[k] == null ? '' : notes[k])); res.addedNotes++; } catch (e) {}
   }
+  var extraBuckets = ['drawerNotes', 'agentConvs', 'noteBackups'];
+  for (var b = 0; b < extraBuckets.length; b++) {
+    var bucket = obj[extraBuckets[b]] || {};
+    for (var ek in bucket) {
+      if (!Object.prototype.hasOwnProperty.call(bucket, ek)) continue;
+      var ec = '';
+      try { ec = localStorage.getItem(ek) || ''; } catch (err) { ec = ''; }
+      if (ec.trim()) continue;
+      try { localStorage.setItem(ek, String(bucket[ek] == null ? '' : bucket[ek])); res.addedExtras++; } catch (err) {}
+    }
+  }
   return res;
 }
 
@@ -1763,11 +1797,11 @@ function onImportFile(input) {
       return;
     }
     var nNotes = obj.recNotes ? Object.keys(obj.recNotes).length : 0;
-    var ok = window.confirm('即将导入备份：\n· 档案 ' + obj.archives.length + ' 条（已存在的跳过）\n· 分析记录 ' + nNotes + ' 条（已有内容的不覆盖）\n\n不会删除或覆盖任何现有内容，是否继续？');
+    var ok = window.confirm('即将导入备份：\n· 档案 ' + obj.archives.length + ' 条（已存在的跳过）\n· 分析记录 ' + nNotes + ' 条（已有内容的不覆盖）\n· 抽屉记录 / Agent 会话 / 原值快照（同规则）\n\n不会删除或覆盖任何现有内容，是否继续？');
     if (!ok) { input.value = ''; return; }
     var r = importBackup(obj);
     if (typeof refreshArchiveModalIfOpen === 'function') refreshArchiveModalIfOpen();
-    var msg = '导入完成：新增档案 ' + r.addedArchives + ' 条（跳过 ' + r.skippedArchives + '），新增记录 ' + r.addedNotes + ' 条（保留 ' + r.keptNotes + '）';
+    var msg = '导入完成：新增档案 ' + r.addedArchives + ' 条（跳过 ' + r.skippedArchives + '），新增记录 ' + r.addedNotes + ' 条（保留 ' + r.keptNotes + '），新增抽屉/会话/快照 ' + r.addedExtras + ' 条';
     setBackupHint(msg);
     alert(msg);
     input.value = '';

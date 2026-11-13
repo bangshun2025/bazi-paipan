@@ -14,6 +14,8 @@
 #      防「显示层对、比较基准错」的 8 小时错位回归）
 #   7. 真实档案基准盘门禁（v0.100.2 新增；tests/baseline-archives.json 锁定
 #      每个档案「生日→四柱/三垣」，防排盘算法漂移、防生日被改后串档）
+#   8. 版本横幅一致性（v0.100.6 新增；ext.yml 的 version 必须出现在三文件
+#      第 2 行横幅里 —— v0.100.5 发版时三处横幅都还写着 v0.100.4，无人发现）
 # 全部通过退出码 0，任一失败退出码 1。
 # ============================================================
 set -u
@@ -30,7 +32,7 @@ trap 'rm -rf "$TMP"' EXIT
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAIL=1; }
 
-echo "【1/7】三文件内联 JS 语法检查（node --check）"
+echo "【1/8】三文件内联 JS 语法检查（node --check）"
 for f in $FILES; do
   [ -f "$f" ] || { fail "缺少文件: $f"; continue; }
   # 提取无 src 的内联 <script> 内容
@@ -48,7 +50,7 @@ PYEOF
   fi
 done
 
-echo "【2/7】index.html vs standalone.html 模块段一致性"
+echo "【2/8】index.html vs standalone.html 模块段一致性"
 if [ -f index.html ] && [ -f standalone.html ]; then
   for m in $MODULES; do
     python3 - "$m" "index.html" "standalone.html" "$TMP/i_$m.js" "$TMP/s_$m.js" <<'PYEOF'
@@ -82,7 +84,7 @@ else
   fail "缺少 index.html 或 standalone.html，跳过六模块对比"
 fi
 
-echo "【3/7】三文件 HTML 关键 id 存在性"
+echo "【3/8】三文件 HTML 关键 id 存在性"
 # 运行时生成的 DOM key（在 render.js/main.js 代码里而非静态 HTML），
 # standalone-split.html 用外部 render.js，故允许在 JS 源码中兜底命中。
 RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger gzShowTaiNian record-panel rec-text rec-trigger bz-zodiac bzRecText bzRecStatus luck-rec-below bzRecZone bzRecZoneDetail rzPane rzNoteInput agent-trigger bzAgentDrawer bzAgentMsgs bzAgentInput bzAgentSend bzAgentCtx bzAgentClear bzAgentClose bz-ag-starter"
@@ -102,7 +104,7 @@ for f in $FILES; do
   done
 done
 
-echo "【4/7】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
+echo "【4/8】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
 for m in gongwei xingyao shishen hepan gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
@@ -149,7 +151,7 @@ PYEOF
   fi
 done
 
-echo "【5/7】外部 JS vs 内联段一致性（5 个核心模块）"
+echo "【5/8】外部 JS vs 内联段一致性（5 个核心模块）"
 if [ ! -f scripts/sync-module-inline.py ]; then
   fail "缺少 scripts/sync-module-inline.py"
 else
@@ -161,7 +163,7 @@ else
   fi
 fi
 
-echo "【6/7】节气边界真值门禁（独立真值源：香港天文台 / JPL DE421）"
+echo "【6/8】节气边界真值门禁（独立真值源：香港天文台 / JPL DE421）"
 if [ ! -f scripts/check-term-truth.js ]; then
   fail "缺少 scripts/check-term-truth.js"
 else
@@ -173,7 +175,7 @@ else
   fi
 fi
 
-echo "【7/7】真实档案基准盘门禁（生日→四柱/三垣逐盘对照）"
+echo "【7/8】真实档案基准盘门禁（生日→四柱/三垣逐盘对照）"
 if [ ! -f tests/baseline-archives.json ]; then
   fail "缺少 tests/baseline-archives.json（用 node tests/verify-baseline.js --gen <备份.json> 生成）"
 else
@@ -183,6 +185,22 @@ else
   else
     fail "基准盘校验失败：$(grep -m3 'FAIL' "$TMP/baseline.log" | tr '\n' ' ')"
   fi
+fi
+
+echo "【8/8】版本横幅一致性（ext.yml 版本 == 三文件第 2 行横幅）"
+V=$(awk -F'"' '/^version:/{print $2; exit}' ext.yml)
+if [ -z "${V}" ]; then
+  fail "ext.yml 读不到 version"
+else
+  banner_bad=0
+  for f in $FILES; do
+    b=$(sed -n '2p' "$f")
+    case "$b" in
+      *"v${V}"*) : ;;
+      *) fail "$f 第 2 行横幅不是 v${V}：$b"; banner_bad=1 ;;
+    esac
+  done
+  [ $banner_bad -eq 0 ] && pass "三文件横幅均为 v${V}（与 ext.yml 一致）"
 fi
 
 echo "----------------------------------------"
