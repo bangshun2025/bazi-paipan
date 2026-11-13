@@ -8512,7 +8512,7 @@ function cmpSetState(entries) {
 
   // —— 抽屉 ——
   var CSS = ''
-    + '.bz-ag-drawer{position:fixed;top:var(--bz-ag-gap,10px);right:var(--bz-ag-gap,10px);bottom:var(--bz-ag-gap,10px);width:min(var(--bz-ag-w,420px),calc(94vw - 10px));background:var(--c-paper,#f5f0e8);border:1.5px solid var(--c-line,#e0d8c8);border-left:0;border-radius:0 2px 2px 0;box-shadow:inset 1px 0 0 rgba(138,109,59,.17),0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.08);transform:translateX(calc(100% + 14px));transition:transform .45s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;overflow:hidden;}'
+    + '.bz-ag-drawer{position:fixed;top:var(--bz-ag-gap,10px);right:0;bottom:0;width:min(var(--bz-ag-w,420px),96vw);background:var(--c-paper,#f5f0e8);border:0;border-left:1.5px solid var(--c-line,#e0d8c8);border-radius:0;box-shadow:none;transform:translateX(calc(100% + 14px));transition:transform .45s cubic-bezier(.2,0,0,1);z-index:9800;display:flex;flex-direction:column;overflow:hidden;}'
     + '.bz-ag-drawer.open{transform:translateX(0);}'
     + '.bz-ag-inner{flex:1;min-height:0;display:flex;flex-direction:column;opacity:0;transform:translateY(10px);transition:opacity .16s ease-out,transform .16s ease-out;}'
     + '.bz-ag-drawer.open .bz-ag-inner{opacity:1;transform:none;transition:opacity .26s cubic-bezier(.2,0,0,1) .15s,transform .3s cubic-bezier(.2,0,0,1) .15s;}'

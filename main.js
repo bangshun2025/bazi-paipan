@@ -7921,19 +7921,19 @@ window.__testAppend = function(t) {
       var agTrgP = document.querySelector('.agent-trigger');
       push({ ok: AGENT.debugPush() === true, label: 'AGP T01: 开 Agent 后 body 进入挤压态' });
       push({ ok: drwWG > 300 && Math.abs(drwWG - varWG) <= 1, label: 'AGP T02: 抽屉宽度 = CSS 变量 --bz-ag-w', detail: drwWG + ' / ' + varWG });
-      push({ ok: Math.abs(padRG - (drwWG + 10)) <= 1, label: 'AGP T03: body 右内边距 = 抽屉宽 + 缝距（版心左移）', detail: padRG + ' / ' + (drwWG + 10) });
+      push({ ok: Math.abs(padRG - drwWG) <= 1, label: 'AGP T03: body 右内边距 = 抽屉宽（版心正好让到位，不留缝）', detail: padRG + ' / ' + drwWG });
       push({ ok: Math.abs(padLP - 10) <= 0.5, label: 'AGP T04: 左内边距收窄到 10px', detail: String(padLP) });
       push({ ok: pageMaxWP === '1680px', label: 'AGP T05: 版心最大宽度放宽到 1680px', detail: pageMaxWP });
       push({ ok: !!agTrgP && agTrgP.classList.contains('on'), label: 'AGP T06: 打开时入口按钮反白' });
       push({ ok: !!agTrgP && getComputedStyle(agTrgP).borderRadius === '999px', label: 'AGP T07: 入口按钮为胶囊形', detail: agTrgP ? getComputedStyle(agTrgP).borderRadius : '无' });
       var vwP = document.documentElement.clientWidth;
-      var seamP = !!drwRectP && drwWG > 300 && Math.abs((vwP - drwRectP.left) - (drwWG + 10)) <= 1;
-      push({ ok: seamP, label: 'AGP T11: 抽屉左缘距视口右 = 宽+10（与版心右缘同位）', detail: drwRectP ? ('rightGap=' + (vwP - drwRectP.left).toFixed(1) + ' / 期望=' + (drwWG + 10).toFixed(1)) : '无' });
+      var seamP = !!drwRectP && drwWG > 300 && Math.abs((vwP - drwRectP.left) - drwWG) <= 1;
+      push({ ok: seamP, label: 'AGP T11: 抽屉左缘距视口右 = 宽（右边贴死窗口）', detail: drwRectP ? ('rightGap=' + (vwP - drwRectP.left).toFixed(1) + ' / 期望=' + drwWG.toFixed(1)) : '无' });
       var vhP = window.innerHeight;
-      var flushP = !!drwRectP && Math.abs(drwRectP.top - 10) <= 1 && Math.abs((vhP - drwRectP.bottom) - 10) <= 1;
-      push({ ok: flushP, label: 'AGP T12: 抽屉上下各留 10px（与版心同边距齐平）', detail: drwRectP ? ('top=' + drwRectP.top.toFixed(1) + ' bottomGap=' + (vhP - drwRectP.bottom).toFixed(1)) : '无' });
+      var flushP = !!drwRectP && Math.abs(drwRectP.top - 10) <= 1 && Math.abs(vhP - drwRectP.bottom) <= 1;
+      push({ ok: flushP, label: 'AGP T12: 抽屉顶与版心齐平、底贴视口（下边不再露缝）', detail: drwRectP ? ('top=' + drwRectP.top.toFixed(1) + ' bottomGap=' + (vhP - drwRectP.bottom).toFixed(1)) : '无' });
       var drwCSP = drwP ? getComputedStyle(drwP) : null;
-      push({ ok: !!drwCSP && drwCSP.borderLeftWidth === '0px', label: 'AGP T13: 抽屉左缘无边框（版心右边框即分隔线）', detail: drwCSP ? drwCSP.borderLeftWidth : '无' });
+      push({ ok: !!drwCSP && parseFloat(drwCSP.borderLeftWidth) >= 1, label: 'AGP T13: 分界改由抽屉左缘一条竖线承担', detail: drwCSP ? drwCSP.borderLeftWidth : '无' });
       var durP = getComputedStyle(document.body).transitionDuration;
       push({ ok: durP === '0.45s', label: 'AGP T14: 挤压节奏 450ms（Material emphasized）', detail: durP });
       // v0.100.9 挤压态两列一起压缩：记录区不得越出版心内容右界，主列必须能缩
@@ -7953,6 +7953,22 @@ window.__testAppend = function(t) {
       var cwElP = document.querySelector('.chart-wrap');
       var chartFitP = !cwElP || window.innerWidth < 1400 || cwElP.scrollWidth <= cwElP.clientWidth + 1;
       push({ ok: chartFitP, label: 'AGP T17: 挤压后排盘表格不出现横向滚动', detail: cwElP ? (cwElP.scrollWidth + ' / ' + cwElP.clientWidth) : '无盘面' });
+      // v0.101.0 与浏览器一体的三条不变量：贴边、去掉浮卡特征、版心与抽屉只隔一条线
+      var drEdgeP = document.getElementById('bzAgentDrawer');
+      var drEdgeR = drEdgeP ? drEdgeP.getBoundingClientRect() : null;
+      var drEdgeS = drEdgeP ? getComputedStyle(drEdgeP) : null;
+      push({ ok: !!drEdgeR && (window.innerWidth - drEdgeR.right) <= 1 && (window.innerHeight - drEdgeR.bottom) <= 1, label: 'AGP T18: 挤压态抽屉贴住视口右缘与下缘', detail: drEdgeR ? ('右缝=' + (window.innerWidth - drEdgeR.right).toFixed(1) + ' 下缝=' + (window.innerHeight - drEdgeR.bottom).toFixed(1)) : '无抽屉' });
+      push({ ok: !!drEdgeS && drEdgeS.boxShadow === 'none' && parseFloat(drEdgeS.borderTopLeftRadius) === 0 && parseFloat(drEdgeS.borderBottomRightRadius) === 0, label: 'AGP T19: 挤压态抽屉不再是浮卡（无投影无圆角）', detail: drEdgeS ? ('shadow=' + drEdgeS.boxShadow + ' r=' + drEdgeS.borderTopLeftRadius + '/' + drEdgeS.borderBottomRightRadius) : '无抽屉' });
+      // 抽屉 fixed 在视口坐标系，版心在文档坐标系：?test=1 时结果面板会把文档撑到 3500+ px，
+      // 版心被 flex 居中推到负坐标，直接比 rect 永远对不上。改用等价的三个量来判定重合。
+      var pgEdgeP = document.querySelector('.page');
+      var pgEdgeS = pgEdgeP ? getComputedStyle(pgEdgeP) : null;
+      var bodyPadRP = parseFloat(getComputedStyle(document.body).paddingRight);
+      var joinSkipP = window.innerWidth <= 1100;
+      var joinP = !!drEdgeR && !!pgEdgeS && Math.abs(bodyPadRP - drwWG) <= 1
+               && parseFloat(pgEdgeS.borderRightWidth) === 0
+               && (window.innerWidth - drEdgeR.right) <= 1;
+      push({ ok: joinSkipP || joinP, label: 'AGP T20: 挤压态版心右缘与抽屉左缘重合（只隔一条线）', detail: (drEdgeR && pgEdgeS) ? ('挤压量=' + bodyPadRP + '/' + drwWG + ' 版心右边框=' + pgEdgeS.borderRightWidth + ' 右缝=' + (window.innerWidth - drEdgeR.right).toFixed(1)) : '无版心' });
       AGENT.close();
       push({ ok: AGENT.debugPush() === false && !(agTrgP && agTrgP.classList.contains('on')), label: 'AGP T08: 关闭后挤压态与按钮态同时复位' });
       push({ ok: document.activeElement === agTrgP, label: 'AGP T09: 关闭后焦点回到入口按钮', detail: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : '无' });
