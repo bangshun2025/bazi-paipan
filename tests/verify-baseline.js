@@ -14,7 +14,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const BASELINE = path.join(__dirname, 'baseline-archives.json');
+const BASELINE = process.env.BASELINE || path.join(__dirname, 'baseline-archives.json');
 
 function loadAlgo() {
   const sandbox = { window: {} };
