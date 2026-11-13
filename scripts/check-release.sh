@@ -12,6 +12,8 @@
 #      修复曾只落内联、外部落后 → 由本步兜底）
 #   6. 节气边界真值门禁（v0.31.0 新增；独立真值源 HKO / JPL DE421，
 #      防「显示层对、比较基准错」的 8 小时错位回归）
+#   7. 真实档案基准盘门禁（v0.100.2 新增；tests/baseline-archives.json 锁定
+#      每个档案「生日→四柱/三垣」，防排盘算法漂移、防生日被改后串档）
 # 全部通过退出码 0，任一失败退出码 1。
 # ============================================================
 set -u
@@ -28,7 +30,7 @@ trap 'rm -rf "$TMP"' EXIT
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAIL=1; }
 
-echo "【1/6】三文件内联 JS 语法检查（node --check）"
+echo "【1/7】三文件内联 JS 语法检查（node --check）"
 for f in $FILES; do
   [ -f "$f" ] || { fail "缺少文件: $f"; continue; }
   # 提取无 src 的内联 <script> 内容
@@ -46,7 +48,7 @@ PYEOF
   fi
 done
 
-echo "【2/6】index.html vs standalone.html 模块段一致性"
+echo "【2/7】index.html vs standalone.html 模块段一致性"
 if [ -f index.html ] && [ -f standalone.html ]; then
   for m in $MODULES; do
     python3 - "$m" "index.html" "standalone.html" "$TMP/i_$m.js" "$TMP/s_$m.js" <<'PYEOF'
@@ -80,7 +82,7 @@ else
   fail "缺少 index.html 或 standalone.html，跳过六模块对比"
 fi
 
-echo "【3/6】三文件 HTML 关键 id 存在性"
+echo "【3/7】三文件 HTML 关键 id 存在性"
 # 运行时生成的 DOM key（在 render.js/main.js 代码里而非静态 HTML），
 # standalone-split.html 用外部 render.js，故允许在 JS 源码中兜底命中。
 RUNTIME_KEYS="jieqi-section jq-gz jq-tsmd jq-tstm xy-trigger gzShowTaiNian record-panel rec-text rec-trigger bz-zodiac bzRecText bzRecStatus luck-rec-below bzRecZone bzRecZoneDetail rzPane rzNoteInput agent-trigger bzAgentDrawer bzAgentMsgs bzAgentInput bzAgentSend bzAgentCtx bzAgentClear bzAgentClose bz-ag-starter"
@@ -100,7 +102,7 @@ for f in $FILES; do
   done
 done
 
-echo "【4/6】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
+echo "【4/7】外部 JS vs 单体版内联段一致性（防模块版改/内联版没改漂移）"
 for m in gongwei xingyao shishen hepan gongwei-cloud config auth records supabase.min; do
   ext="$m.js"
   [ -f "$ext" ] || { fail "缺少外部文件: $ext"; continue; }
@@ -147,7 +149,7 @@ PYEOF
   fi
 done
 
-echo "【5/6】外部 JS vs 内联段一致性（5 个核心模块）"
+echo "【5/7】外部 JS vs 内联段一致性（5 个核心模块）"
 if [ ! -f scripts/sync-module-inline.py ]; then
   fail "缺少 scripts/sync-module-inline.py"
 else
@@ -159,7 +161,7 @@ else
   fi
 fi
 
-echo "【6/6】节气边界真值门禁（独立真值源：香港天文台 / JPL DE421）"
+echo "【6/7】节气边界真值门禁（独立真值源：香港天文台 / JPL DE421）"
 if [ ! -f scripts/check-term-truth.js ]; then
   fail "缺少 scripts/check-term-truth.js"
 else
@@ -168,6 +170,18 @@ else
     pass "节气显示层与 24 个换月边界点全部符合真值"
   else
     fail "节气真值门禁失败：$(grep -m3 '❌' "$TMP/term_truth.log" | tr '\n' ' ')"
+  fi
+fi
+
+echo "【7/7】真实档案基准盘门禁（生日→四柱/三垣逐盘对照）"
+if [ ! -f tests/baseline-archives.json ]; then
+  fail "缺少 tests/baseline-archives.json（用 node tests/verify-baseline.js --gen <备份.json> 生成）"
+else
+  node tests/verify-baseline.js > "$TMP/baseline.log" 2>&1 && rc=0 || rc=$?
+  if [ "${rc:-0}" -eq 0 ]; then
+    pass "$(tail -1 "$TMP/baseline.log")"
+  else
+    fail "基准盘校验失败：$(grep -m3 'FAIL' "$TMP/baseline.log" | tr '\n' ' ')"
   fi
 fi
 
