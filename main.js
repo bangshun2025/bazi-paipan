@@ -7853,7 +7853,7 @@ window.__testAppend = function(t) {
       window._paipanData = dg;
 
       var sys = A.debugSys();
-      push({ ok: sys.indexOf('盘面信息') >= 0 && sys.indexOf('录音稿') >= 0 && sys.indexOf('档案卡片库') >= 0, label: 'AGT T02: 系统提示含三源标记' });
+      push({ ok: sys.indexOf('盘面信息') >= 0 && sys.indexOf('录音稿') >= 0 && sys.indexOf('档案卡片库') >= 0 && sys.indexOf('卡片内容') >= 0, label: 'AGT T02: 系统提示含三源标记（卡片库带全文说明）' });
 
       var md = A.debugMd('<img src=x onerror=1>**粗**`码`\n# 标题');
       push({ ok: md.indexOf('<img') < 0 && md.indexOf('&lt;img') >= 0 && md.indexOf('<b>粗</b>') >= 0 && md.indexOf('<code>码</code>') >= 0, label: 'AGT T03: HTML 先转义再行内 md（防 XSS）', detail: md.slice(0, 32) });
@@ -7897,6 +7897,18 @@ window.__testAppend = function(t) {
       RENDER.renderChart(pdG2, undefined, 'tst-agent');
       var agBtnG = tstG.querySelector('.agent-trigger');
       push({ ok: !!agBtnG && (agBtnG.getAttribute('onclick') || '').indexOf('AGENT.toggle') >= 0, label: 'AGT T15: 主盘顶栏「✦ Agent」按钮接线' });
+
+      // v0.100.4 卡片库升级：卡头含昵称/标签，重点卡片带记录全文（预算自适应）
+      var origArchsG = ARCHIVE.getArchives();
+      var cardAG = { nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };
+      ARCHIVE.saveArchivesRaw([cardAG]);
+      var fullKeyG = ARCHIVE.recNotesKeyFor(cardAG, '');
+      var bigG = 'AGT全文标记：七杀格，用食神制杀。';
+      while (bigG.length < 300) bigG += '大运乙亥，杀印相生，格局清。';
+      localStorage.setItem(fullKeyG, bigG);
+      var ctx2 = await A.buildContext(dg);
+      push({ ok: !!ctx2 && ctx2.md.indexOf('本机档案库共 1 份') >= 0 && ctx2.md.indexOf('「测卡」') >= 0 && ctx2.md.indexOf('标签：AGT标签甲') >= 0, label: 'AGT T16: 卡片头含昵称与标签', detail: ctx2 ? ('archs=' + ctx2.stats.archs) : '' });
+      push({ ok: !!ctx2 && ctx2.md.indexOf('▤ 卡片内容') >= 0 && ctx2.md.indexOf('AGT全文标记：七杀格') >= 0 && ctx2.stats.cardsFull >= 1, label: 'AGT T17: 重点卡片带记录全文', detail: ctx2 ? ('cardsFull=' + ctx2.stats.cardsFull) : '' });
     } catch (e) {
       push({ ok: false, label: 'AGT 异常', detail: e && e.message ? e.message : String(e) });
     }
@@ -7908,8 +7920,40 @@ window.__testAppend = function(t) {
       if (tstG && tstG.parentNode) tstG.parentNode.removeChild(tstG);
       if (clipKeyG && R && R.recAudioClearKey) await R.recAudioClearKey(clipKeyG);
       if (noteKeyG) localStorage.removeItem(noteKeyG);
+      if (fullKeyG) localStorage.removeItem(fullKeyG);
+      if (origArchsG) ARCHIVE.saveArchivesRaw(origArchsG);
     } catch (e2) {}
     window.__bzTestAgtDone = true;
+  })();
+
+  // ===== v0.100.4 档案排盘·对比页联动：对比页开着时从档案点「排盘」，对比页随档案面板一并关闭 =====
+  (async function(){
+    var pushL = function(t) { if (window.__testAppend) window.__testAppend(t); };
+    var A = window.ARCHIVE;
+    var origArchsL = null;
+    try {
+      await new Promise(function(r){ setTimeout(r, 0); }); // AGT 的 finally 里有 await，先让它把真实档案表还原完
+      origArchsL = A.getArchives();
+      var arcL = { nickname: '测联', name: 'AGT联动盘', gender: '男', year: 1988, month: 12, day: 31, hour: 5, min: 0, calendarType: 'solar' };
+      A.saveArchivesRaw([arcL]);
+      pushL({ ok: A.loadFromArchive.toString().indexOf('COMPARE.close') >= 0, label: 'CMP1: loadFromArchive 接线 COMPARE.close' });
+      var ovL = document.getElementById('cmpOverlay');
+      if (ovL) ovL.classList.add('show');
+      A.openArchivePanel();
+      var btnsL = document.querySelectorAll('.archive-modal-row .archive-row-btn');
+      if (btnsL.length) btnsL[btnsL.length - 1].click(); else A.loadFromArchive(0);
+      await new Promise(function(r){ setTimeout(r, 120); });
+      pushL({ ok: !!ovL && !ovL.classList.contains('show'), label: 'CMP2: 档案排盘后对比页已关（新盘不被挡）', detail: ovL ? ('show=' + ovL.classList.contains('show')) : 'no-cmpOverlay' });
+      pushL({ ok: !document.getElementById('archiveOverlay').classList.contains('show'), label: 'CMP3: 档案面板已关' });
+    } catch (e) {
+      pushL({ ok: false, label: 'CMP 异常', detail: e && e.message ? e.message : String(e) });
+    }
+    try {
+      var ovL2 = document.getElementById('cmpOverlay');
+      if (ovL2) ovL2.classList.remove('show');
+      A.closeArchivePanel();
+      if (origArchsL) A.saveArchivesRaw(origArchsL);
+    } catch (e2) {}
   })();
 
   // ===== 挂载到全局命名空间 =====

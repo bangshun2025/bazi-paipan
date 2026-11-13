@@ -1545,6 +1545,8 @@ function loadFromArchive(idx) {
   if (!archives[idx]) return;
   setFormData(archives[idx]);
   closeArchivePanel();
+  // 对比页(z 1000)全屏盖住主界面，不关的话新盘已排出但被挡住，看起来像按钮失灵
+  if (window.COMPARE && typeof COMPARE.isOpen === 'function' && COMPARE.isOpen()) COMPARE.close();
   APP.doPaipan();
   // Scroll to top to see form
   window.scrollTo({ top: 0, behavior: 'smooth' });

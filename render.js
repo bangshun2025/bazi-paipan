@@ -8135,7 +8135,8 @@ function cmpSetState(entries) {
 // ============================================================
 // v0.100.2 ✦ Agent 对话：主盘顶栏「✦ Agent」开右侧抽屉与 AI 交流。
 // 上下文三源：① 盘面信息（syncChartMd 口径：四柱/藏干/十神/要位/起运/大运 + 分析记录全维度 + 近年流年）
-// ② 录音稿（IndexedDB bz_rec_audio 当前盘指纹下全部纪要）③ 档案卡片库（全档案一行一摘要，四柱现算）。
+// ② 录音稿（IndexedDB bz_rec_audio 当前盘指纹下全部纪要）③ 档案卡片库（卡片头含昵称/标签/四柱/摘引，
+// 同名或同四柱、有记录的重点卡片附分析记录全文，总预算封顶自适应，其余一行摘要）。
 // API 复用「AI 搜索」配置（RENDER_AI.cfgGet，OpenAI 兼容 /chat/completions 流式）；key 只存本机 localStorage。
 // ============================================================
 (function() {
@@ -8143,7 +8144,8 @@ function cmpSetState(entries) {
   var LS_CONV = 'bz_agent_conv_';
   var REC_KEY_PFX = 'bz_rec_audio_';
   var DIM_MARK = '§';
-  var CLIP_CAP = 6000, ARCH_MAX = 40, ARCH_NOTE_PRE = 80, HIST_MAX = 12, MSG_KEEP = 80;
+  var CLIP_CAP = 6000, ARCH_MAX = 40, ARCH_NOTE_PRE = 160, HIST_MAX = 12, MSG_KEEP = 80;
+  var CARD_FULL_BUDGET = 18000, CARD_FULL_MAX = 12, CARD_DIM_CAP = 1500;
   var STARTERS = ['讲讲这个盘的格局与做功', '当下大运流年有什么要注意', '结合录音稿总结这个案例', '档案库里有哪些类似的盘'];
   var CHAT = { open: false, msgs: [], busy: false, ac: null };
 
@@ -8168,8 +8170,8 @@ function cmpSetState(entries) {
     }
     return parts.join('、');
   }
-  function notesOf(d) {
-    var a = archOf(d), main = '', dims = [];
+  function dimTextsOf(a) {
+    var main = '', dims = [];
     var list = (window.RENDER && RENDER.dimList) ? RENDER.dimList() : ['分析记录'];
     for (var i = 0; i < list.length; i++) {
       var dim = list[i], seg = (dim === '分析记录') ? '' : (DIM_MARK + dim + '|'), txt = '';
@@ -8177,12 +8179,13 @@ function cmpSetState(entries) {
         var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, seg) : null;
         txt = k ? (localStorage.getItem(k) || '') : '';
       } catch (e) { txt = ''; }
-      if (String(txt).trim()) {
-        if (dim === '分析记录') main = txt; else dims.push([dim, txt]);
-      }
+      txt = String(txt).trim();
+      if (!txt) continue;
+      if (dim === '分析记录') main = txt; else dims.push([dim, txt]);
     }
     return { main: main, dims: dims };
   }
+  function notesOf(d) { return dimTextsOf(archOf(d)); }
   function clipsOfKey(key) {
     return new Promise(function(res) {
       var out = [];
@@ -8224,25 +8227,45 @@ function cmpSetState(entries) {
     }
     return L.join('\n');
   }
-  function archLineMd(a) {
+  function gzOf(a) {
     var gz = '—';
     try {
       var p = (window.ALGO && ALGO.paipan) ? ALGO.paipan(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0) : null;
       if (p) gz = p.nian.gan + p.nian.zhi + ' ' + p.yue.gan + p.yue.zhi + ' ' + p.ri.gan + p.ri.zhi + ' ' + p.shi.gan + p.shi.zhi;
     } catch (e) {}
-    var noteLen = 0, preview = '';
+    return gz;
+  }
+  function tagsOf(a) {
+    try { return (window.ARCHIVE && ARCHIVE.getArchiveTags) ? ARCHIVE.getArchiveTags(a) : []; } catch (e) { return []; }
+  }
+  function mainNoteOf(a) {
     try {
       var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, '') : null;
-      if (k) {
-        var v = localStorage.getItem(k) || '';
-        noteLen = v.trim().length;
-        preview = v.trim().slice(0, ARCH_NOTE_PRE).replace(/\s*\n\s*/g, ' ');
-      }
-    } catch (e2) {}
-    return '- ' + (a.name || '未命名') + '（' + (a.gender || '') + '，' + a.year + '-' + a.month + '-' + a.day
+      var v = k ? (localStorage.getItem(k) || '') : '';
+      return String(v).trim();
+    } catch (e2) { return ''; }
+  }
+  function archHeadMd(a, gz, noteLen, preview) {
+    var tags = tagsOf(a);
+    return '- ' + (a.nickname ? '「' + a.nickname + '」' : '') + (a.name || '未命名') + '（' + (a.gender || '') + '，' + a.year + '-' + a.month + '-' + a.day
       + ' ' + (a.hour || 0) + ':' + (a.min || 0) + '）四柱 ' + gz
+      + (tags.length ? ' · 标签：' + tags.join('、') : '')
       + (noteLen ? ' · 记录 ' + noteLen + ' 字' : '')
       + (preview ? '\n  记录摘引：' + preview : '');
+  }
+  function archLineMd(a, gz) {
+    var note = mainNoteOf(a);
+    return archHeadMd(a, gz, note.length, note.slice(0, ARCH_NOTE_PRE).replace(/\s*\n\s*/g, ' '));
+  }
+  function cardFullMd(a, gz) {
+    var note = mainNoteOf(a);
+    var L = [archHeadMd(a, gz, note.length, note.slice(0, ARCH_NOTE_PRE).replace(/\s*\n\s*/g, ' ')) + '\n  ▤ 卡片内容：'];
+    var nt = dimTextsOf(a);
+    var cut = function(t) { return t.length > CARD_DIM_CAP ? t.slice(0, CARD_DIM_CAP) + '…（截断）' : t; };
+    if (nt.main) L.push('  【分析记录】' + cut(nt.main));
+    for (var i = 0; i < nt.dims.length; i++) L.push('  【' + nt.dims[i][0] + '】' + cut(nt.dims[i][1]));
+    if (!nt.main && !nt.dims.length) L.push('  （无分析记录）');
+    return L.join('\n');
   }
   function buildContext(d) {
     d = d || dataNow();
@@ -8267,10 +8290,33 @@ function cmpSetState(entries) {
       var archs = [];
       try { archs = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : []; } catch (e2) {}
       stats.archs = archs.length;
+      var curP = null, curGz = '';
+      try {
+        curP = (window.ALGO && ALGO.paipan) ? ALGO.paipan(a.name || '', a.gender || '', a.year, a.month, a.day, a.hour, a.min || 0) : null;
+        if (curP) curGz = curP.nian.gan + curP.nian.zhi + ' ' + curP.yue.gan + curP.yue.zhi + ' ' + curP.ri.gan + curP.ri.zhi + ' ' + curP.shi.gan + curP.shi.zhi;
+      } catch (e4) {}
+      var items = [];
+      for (var x = 0; x < archs.length; x++) {
+        var ai = archs[x], gz = gzOf(ai), s = mainNoteOf(ai).length;
+        if (curGz && gz === curGz) s += 100000;
+        if (d.name && (ai.name || '') === d.name) s += 50000;
+        items.push({ a: ai, gz: gz, s: s, idx: x });
+      }
+      items.sort(function(p, q) { return (q.s - p.s) || (p.idx - q.idx); });
       var lib = ['【档案卡片库】本机档案库共 ' + archs.length + ' 份：'];
+      var budget = CARD_FULL_BUDGET, fullN = 0;
       var n = Math.min(archs.length, ARCH_MAX);
-      for (var x = 0; x < n; x++) lib.push(archLineMd(archs[x]));
+      for (x = 0; x < n; x++) {
+        var it = items[x], takeFull = false, fullMd = '';
+        if (fullN < CARD_FULL_MAX && it.s > 0 && budget > 0) {
+          fullMd = cardFullMd(it.a, it.gz);
+          if (fullMd.length <= budget) takeFull = true;
+        }
+        if (takeFull) { lib.push(fullMd); budget -= fullMd.length; fullN++; }
+        else lib.push(archLineMd(it.a, it.gz));
+      }
       if (archs.length > n) lib.push('（另有 ' + (archs.length - n) + ' 份略）');
+      stats.cardsFull = fullN;
       md += '\n' + lib.join('\n');
       return { md: md, stats: stats };
     });
@@ -8280,7 +8326,7 @@ function cmpSetState(entries) {
   var SYS_BASE = '你是八字排盘工作台里的分析搭档「✦ Agent」。用户正在看一个命盘，随消息附上三段资料：'
     + '【盘面信息】（四柱/藏干/十神/要位/起运大运/近年流年，含该盘分析记录全维度）、'
     + '【录音稿】（该盘名下的录音纪要，可能没有）、'
-    + '【档案卡片库】（本机全部档案的一行摘要）。\n'
+    + '【档案卡片库】（本机全部档案的卡片：昵称/标签/四柱/记录摘引，重点卡片附「▤ 卡片内容」记录全文）。\n'
     + '规则：1) 只依据资料作答，资料里没有的直说没有，绝不编造干支或案例；'
     + '2) 谈结构必须落到具体干支（哪一柱、什么十神、什么刑冲合害）；'
     + '3) 提到别的案例要报姓名；'
@@ -8531,7 +8577,7 @@ function cmpSetState(entries) {
     buildContext().then(function(ctx) {
       if (!el.isConnected) return;
       if (!ctx) { el.textContent = '上下文：无盘面'; return; }
-      el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份';
+      el.textContent = '盘面+记录 ' + ctx.stats.recChars + ' 字 · 录音稿 ' + ctx.stats.clips + ' 条 · 档案库 ' + ctx.stats.archs + ' 份（全文 ' + (ctx.stats.cardsFull || 0) + ' 卡）';
     }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
   }
   function open() {
