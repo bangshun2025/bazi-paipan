@@ -1101,7 +1101,7 @@ function renderChart(data, twin, targetId, opts) {
   const topBarHtml = opts.noTopBar ? '' : `
     <div class="top-bar">
       <div class="person-info"><b>${data.displayName || data.name}</b><span class="sex-tag">${gender === '男' ? '乾造' : '坤造'}</span><span class="meta">${gender} · ${y}年${m}月${d}日 ${pad(h)}:${pad(mi)}</span>${tstTag}${jlTag}${ryTag}${shunLabel}</div>
-      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话"><span class="ag-star">✦</span><span>Agent</span></button></div>
+      <div style="display:flex;align-items:baseline;gap:8px;"><span class="cmp-level-wrap"><button class="btn-simple active" onclick="RENDER.toggleLevel(event)" title="简分级别（点击展开设置）">简分：少</button><div class="cmp-level-pop" onclick="event.stopPropagation()"></div></span><button class="btn-simple xy-trigger" onclick="XINGYAO.openSettings()" title="星曜设置">星曜</button>${renderGongWeiPanel()}${GAN.renderPanel()}${SSH.renderPanel()}${flowControlsHTML()}<div class="person-info meta bz-zodiac">${nian.gan}${nian.zhi}年生 · 属${shengXiao} ${nowYearCn}</div><button class="btn-simple rec-trigger${isRecOn() ? ' active' : ''}" onclick="RENDER.toggleRecMode()" title="记录八字分析：运流区移至左下，记录区写入即保存">分析记录</button><button class="btn-simple chart-md-trigger" onclick="ARCHIVE.openChartMd()" title="在本地同步目录里打开该命盘最新的「盘面-姓名.md」">📄 档案md</button><button class="btn-simple agent-trigger" onclick="AGENT.toggle()" title="✦ Agent：依据盘面信息、分析记录、录音稿与档案卡片库对话"><span class="ag-star">✦</span><span>Agent</span></button><button class="btn-simple ai-set-trigger" onclick="RENDER_AI.aiOpenSettings()" title="AI 设置（全局）：接口、模型选择、参考文件夹">⚙ AI 设置</button></div>
     </div>`;
   const sshOn = !!(sshSel.length || ganSel.length);
   const recOn = !opts.luckBelow && isRecOn();
@@ -6758,7 +6758,7 @@ function cmpSetState(entries) {
     try { var c = JSON.parse(localStorage.getItem(LS_AI)); return (c && typeof c === 'object') ? c : {}; } catch (e) { return {}; }
   }
   function cfgSet(cfg) { try { localStorage.setItem(LS_AI, JSON.stringify(cfg || {})); return true; } catch (e) { return false; } }
-  function cfgReady() { var c = cfgGet(); return !!(c.apiKey && c.baseUrl && c.model); }
+  function cfgReady() { var c = cfgGet(); return !!(c.baseUrl && c.model && (c.apiKey || isProxyBase(c.baseUrl))); }
 
   // 每份档案的柱集：four=四柱（默认）；seven=七柱（四柱+三垣）。缺失时本地现算（与主排盘同源 paipan）
   var _ppCache = {}, _ppCacheN = 0;
@@ -7951,35 +7951,65 @@ function cmpSetState(entries) {
   function aiOpenSettings(msg) {
     var old = document.getElementById('aiCfgOverlay');
     if (old) { old.parentNode.removeChild(old); }
+    if (!document.getElementById('aiCfgStyle')) {
+      var st = document.createElement('style');
+      st.id = 'aiCfgStyle';
+      st.textContent = CSS;
+      document.head.appendChild(st);
+    }
     var cfg = cfgGet();
     var ov = document.createElement('div');
     ov.id = 'aiCfgOverlay';
     ov.className = 'ai-cfg-overlay';
     ov.innerHTML = '<div class="ai-cfg-card">'
-      + '<div class="ai-cfg-title">🤖 AI 搜索设置</div>'
+      + '<div class="ai-cfg-title">⚙ AI 设置（全局）</div>'
       + (msg ? '<div class="ai-cfg-msg">' + escA(msg) + '</div>' : '')
       + '<label class="ai-cfg-row">接口<select id="aiCfgProvider">'
-      + '<option value="deepseek">DeepSeek（推荐）</option><option value="glm">智谱 GLM</option><option value="openai">OpenAI</option><option value="custom">自定义</option></select></label>'
-      + '<label class="ai-cfg-row">接口地址<input id="aiCfgBase" type="text" placeholder="https://api.deepseek.com"></label>'
-      + '<label class="ai-cfg-row">模型<input id="aiCfgModel" type="text" placeholder="deepseek-chat"></label>'
+      + '<option value="deepseek">DeepSeek（推荐）</option><option value="glm">智谱 GLM</option><option value="openai">OpenAI</option><option value="custom">自定义（本地代理）</option></select></label>'
+      + '<label class="ai-cfg-row">接口地址<input id="aiCfgBase" type="text" placeholder="https://api.deepseek.com 或 http://127.0.0.1:18924"></label>'
+      + '<div class="ai-cfg-row">模型<select id="aiCfgModelSel"></select><button type="button" id="aiCfgMref" title="从接口重新拉取模型列表">刷新模型</button></div>'
+      + '<div class="ai-cfg-tip" id="aiCfgMtip"></div>'
       + '<label class="ai-cfg-row">API Key<input id="aiCfgKey" type="password" placeholder="' + (cfg.apiKey ? '已保存（不回显，留空即沿用）' : 'sk-...') + '"></label>'
-      + '<div class="ai-cfg-hint">Key 只保存在本机浏览器（localStorage），请求由浏览器直连你选的接口。没有 Key 可在 platform.deepseek.com 申请。</div>'
+      + '<div class="ai-cfg-fhead">参考文件夹（AI 回答时按文件引用，可多选）</div>'
+      + '<div id="aiCfgFolders"></div>'
+      + '<div class="ai-cfg-fbtns"><button type="button" id="aiCfgFoldAdd">＋ 添加文件夹</button><button type="button" id="aiCfgFoldClr">移除全部</button></div>'
+      + '<div class="ai-cfg-hint">模型列表来自接口：本地代理返回 config.yml 全部模型（同模型多账号带序号区分），「跟随欢喜默认」跟随排盘配置。Key 只存本机浏览器。</div>'
       + '<div class="ai-cfg-btns"><button type="button" id="aiCfgSave">保存</button><button type="button" id="aiCfgCancel">取消</button></div>'
       + '</div>';
     document.body.appendChild(ov);
     var sel = ov.querySelector('#aiCfgProvider');
     sel.value = PRESETS[cfg.provider] ? cfg.provider : (cfg.baseUrl ? 'custom' : 'deepseek');
-    var base = ov.querySelector('#aiCfgBase'), model = ov.querySelector('#aiCfgModel');
+    var base = ov.querySelector('#aiCfgBase');
     base.value = cfg.baseUrl || PRESETS[sel.value].baseUrl;
-    model.value = cfg.model || PRESETS[sel.value].model;
-    sel.onchange = function() { if (PRESETS[sel.value]) { base.value = PRESETS[sel.value].baseUrl; model.value = PRESETS[sel.value].model; } };
+    sel.onchange = function() { if (PRESETS[sel.value]) { base.value = PRESETS[sel.value].baseUrl; renderModelSel(base.value); } };
+    var msel = ov.querySelector('#aiCfgModelSel');
+    renderModelSel(base.value);
+    ov.querySelector('#aiCfgMref').onclick = function() {
+      var tip = ov.querySelector('#aiCfgMtip');
+      if (tip) tip.textContent = '正在刷新模型列表…';
+      fetchModels(true, (base.value || '').trim()).then(function() { renderModelSel((base.value || '').trim()); });
+    };
+    base.addEventListener('change', function() { renderModelSel((base.value || '').trim()); });
+    ov.querySelector('#aiCfgFoldAdd').onclick = function() { addRefFolder().then(renderFolderRows); };
+    ov.querySelector('#aiCfgFoldClr').onclick = function() {
+      if (!confirm('移除全部参考文件夹？（不会删除文件夹本身）')) return;
+      refClear().then(renderFolderRows);
+    };
+    var fbox = ov.querySelector('#aiCfgFolders');
+    fbox.addEventListener('click', function(e) {
+      var t = e.target;
+      if (t.classList && t.classList.contains('ai-cfg-fx')) { e.stopPropagation(); refDel(t.getAttribute('data-x')).then(renderFolderRows); return; }
+      var row = t.closest ? t.closest('.ai-cfg-frow') : null;
+      if (row && row.getAttribute('data-need') === '1') refReperm(row.getAttribute('data-name'));
+    });
+    renderFolderRows();
     ov.querySelector('#aiCfgCancel').onclick = function() { ov.parentNode.removeChild(ov); };
     ov.querySelector('#aiCfgSave').onclick = function() {
       var p = sel.value;
       var nc = {
         provider: p,
         baseUrl: (base.value || '').trim() || (PRESETS[p] ? PRESETS[p].baseUrl : ''),
-        model: (model.value || '').trim() || (PRESETS[p] ? PRESETS[p].model : ''),
+        model: (msel.value && msel.value !== '__more__') ? msel.value : (cfg.model || (PRESETS[p] ? PRESETS[p].model : '')),
         apiKey: (ov.querySelector('#aiCfgKey').value || '').trim() || cfg.apiKey || ''
       };
       cfgSet(nc);
@@ -8034,7 +8064,18 @@ function cmpSetState(entries) {
     + '.ai-cfg-btns{display:flex;gap:8px;justify-content:flex-end;}'
     + '.ai-cfg-btns button{padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}'
     + '.ai-cfg-btns #aiCfgSave{background:#8a6d3b;color:#fff;}'
-    + '.ai-cfg-btns #aiCfgCancel{background:#eee;color:#444;}';
+    + '.ai-cfg-btns #aiCfgCancel{background:#eee;color:#444;}'
+    + '.ai-cfg-row #aiCfgMref{flex:none;padding:6px 10px;border:1px solid var(--c-line,#ccc);border-radius:4px;background:#fff;color:#444;font-size:12px;cursor:pointer;}'
+    + '.ai-cfg-tip{font-size:11.5px;color:#8a6d3b;margin:-2px 0 8px;min-height:14px;line-height:1.5;}'
+    + '.ai-cfg-fhead{font-size:12px;font-weight:700;margin:12px 0 6px;color:var(--c-ink,#222);}'
+    + '.ai-cfg-frow{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--c-line,#ccc);border-radius:5px;margin-bottom:5px;font-size:12.5px;background:#fff;color:#222;}'
+    + '.ai-cfg-frow.need{border-style:dashed;color:#8a6d3b;cursor:pointer;}'
+    + '.ai-cfg-fwarn{font-size:11px;color:#8a6d3b;}'
+    + '.ai-cfg-frow .ai-cfg-fx{margin-left:auto;border:none;background:transparent;color:#888;font-size:14px;cursor:pointer;line-height:1;padding:0 2px;}'
+    + '.ai-cfg-frow .ai-cfg-fx:hover{color:#b5343a;}'
+    + '.ai-cfg-fempty{font-size:12px;color:#888;padding:4px 0;}'
+    + '.ai-cfg-fbtns{display:flex;gap:8px;margin:6px 0 2px;}'
+    + '.ai-cfg-fbtns button{flex:none;padding:5px 12px;border:1px solid var(--c-line,#ccc);border-radius:4px;background:#fff;color:#444;font-size:12px;cursor:pointer;}';
 
   function inject() {
     var row = null;
@@ -8086,6 +8127,277 @@ function cmpSetState(entries) {
   else inject();
 
   // ===== 导出 =====
+  // ===== v0.102.2 模型选择（复刻邦顺日记「创作模型」区块）+ 参考文件夹（复刻「素材文件夹」区块）=====
+  var MODEL_LS = 'bz_ai_models', MODEL_TTL = 600000;
+  var MODEL_PRESETS = {
+    deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+    glm: ['glm-4-flash', 'glm-4.5-air', 'glm-4.6'],
+    openai: ['gpt-4o-mini', 'gpt-4o']
+  };
+  var REF_IDB = 'bz_agent_ref', REF_DEPTH = 3, REF_MAX_FILES = 300, REF_FILE_CAP = 12000, REF_TOTAL_CAP = 60000;
+  function isProxyBase(u) { return /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:\d+)?/i.test(String(u || '')); }
+  function modelCache() {
+    try { var v = JSON.parse(localStorage.getItem(MODEL_LS)); return (v && Array.isArray(v.list)) ? v : null; } catch (e) { return null; }
+  }
+  function modelOptions(base) {
+    var cfg = cfgGet();
+    base = base || cfg.baseUrl || '';
+    var ids = [];
+    function push1(id, name, dft, note) {
+      id = String(id || '');
+      if (!id) return;
+      for (var i = 0; i < ids.length; i++) { if (ids[i].id === id) { if (dft) ids[i].dft = true; return; } }
+      ids.push({ id: id, name: name || id, dft: !!dft, note: note || '' });
+    }
+    if (isProxyBase(base)) push1('default', '跟随欢喜默认', false, '');
+    var cache = modelCache();
+    if (cache && cache.base === base) {
+      for (var c = 0; c < cache.list.length; c++) push1(cache.list[c].id, cache.list[c].name, cache.list[c].default, cache.list[c].remark);
+    }
+    if (!isProxyBase(base)) {
+      var presets = MODEL_PRESETS[cfg.provider] || [];
+      for (var p = 0; p < presets.length; p++) push1(presets[p], presets[p], false, '');
+    }
+    push1(cfg.model, cfg.model, false, '');
+    return ids;
+  }
+  function renderModelSel(base) {
+    var sel = document.getElementById('aiCfgModelSel');
+    if (!sel) return;
+    var cfg = cfgGet();
+    base = base || cfg.baseUrl || '';
+    var cur = String(cfg.model || '');
+    var ids = modelOptions(base);
+    var h = '', hasCur = false;
+    for (var i = 0; i < ids.length; i++) {
+      if (ids[i].id === cur) hasCur = true;
+      var label = ids[i].id === 'default' ? '跟随欢喜默认' : (ids[i].name || ids[i].id) + (ids[i].note ? '（' + ids[i].note + '）' : '') + (ids[i].dft ? ' · 默认' : '');
+      h += '<option value="' + escA(ids[i].id) + '">' + escA(label) + '</option>';
+    }
+    if (cur && cur !== 'default' && !hasCur) h = '<option value="' + escA(cur) + '">' + escA(cur) + '</option>' + h;
+    sel.innerHTML = h;
+    sel.value = (cur && (hasCur || cur)) ? cur : (ids.length ? ids[0].id : '');
+    var tip = document.getElementById('aiCfgMtip');
+    if (tip) {
+      var cache = modelCache();
+      var fetched = !!(cache && cache.base === base && cache.list.length);
+      if (fetched && cur && cur !== 'default' && !hasCur) {
+        cfg.model = 'default';
+        cfgSet(cfg);
+        sel.value = 'default';
+        tip.textContent = '上次所选模型已不在接口列表中，已切回「跟随欢喜默认」';
+      } else if (fetched) {
+        tip.textContent = '已加载 ' + ids.length + ' 个候选（来自接口列表）';
+      } else {
+        tip.textContent = base ? '未获取到在线列表，显示预设与当前模型；可点「刷新模型」' : '先填接口地址，再刷新模型';
+      }
+    }
+  }
+  function fetchModels(force, baseOverride) {
+    var cfg = cfgGet();
+    var base = baseOverride || cfg.baseUrl || '';
+    if (!base || !window.fetch) return Promise.resolve(0);
+    var cache = modelCache();
+    if (!force && cache && cache.base === base && Date.now() - cache.ts < MODEL_TTL) return Promise.resolve(cache.list.length);
+    return new Promise(function(res) {
+      try {
+        var ac = new AbortController();
+        var to = setTimeout(function() { try { ac.abort(); } catch (e2) {} }, 8000);
+        fetch(String(base).replace(/\/+$/, '') + '/models', {
+          headers: cfg.apiKey ? { 'Authorization': 'Bearer ' + cfg.apiKey } : {},
+          signal: ac.signal
+        }).then(function(r) { clearTimeout(to); return r.ok ? r.json() : null; }).then(function(j) {
+          if (!j || !Array.isArray(j.data)) { res(0); return; }
+          var list = [];
+          for (var i = 0; i < j.data.length && i < 100; i++) {
+            var it = j.data[i];
+            if (it && it.id && it.available !== false) list.push({ id: String(it.id), name: String(it.name || it.id), default: !!it.default, remark: String(it.remark || '') });
+          }
+          if (!list.length) { res(0); return; }
+          try { localStorage.setItem(MODEL_LS, JSON.stringify({ ts: Date.now(), base: base, list: list })); } catch (e3) {}
+          res(list.length);
+        }).catch(function() { res(0); });
+      } catch (e) { res(0); }
+    });
+  }
+  function refDb() {
+    return new Promise(function(res, rej) {
+      var rq = indexedDB.open(REF_IDB, 1);
+      rq.onupgradeneeded = function() { rq.result.createObjectStore('folders', { keyPath: 'name' }); };
+      rq.onsuccess = function() { res(rq.result); };
+      rq.onerror = function() { rej(rq.error || new Error('IndexedDB 打不开')); };
+    });
+  }
+  function refAll() {
+    return refDb().then(function(db) {
+      return new Promise(function(res) {
+        var out = [];
+        var rq = db.transaction('folders').objectStore('folders').openCursor();
+        rq.onsuccess = function() { var c = rq.result; if (c) { out.push(c.value); c.continue(); } else { db.close(); res(out); } };
+        rq.onerror = function() { db.close(); res(out); };
+      });
+    });
+  }
+  function refPut(entry) {
+    return refDb().then(function(db) {
+      return new Promise(function(res, rej) {
+        var tx = db.transaction('folders', 'readwrite');
+        tx.objectStore('folders').put(entry);
+        tx.oncomplete = function() { db.close(); res(true); };
+        tx.onerror = function() { db.close(); rej(tx.error); };
+      });
+    });
+  }
+  function refDel(name) {
+    return refDb().then(function(db) {
+      return new Promise(function(res) {
+        var tx = db.transaction('folders', 'readwrite');
+        tx.objectStore('folders').delete(name);
+        tx.oncomplete = function() { db.close(); res(true); };
+        tx.onerror = function() { db.close(); res(false); };
+      });
+    });
+  }
+  function refClear() {
+    return refDb().then(function(db) {
+      return new Promise(function(res) {
+        var tx = db.transaction('folders', 'readwrite');
+        tx.objectStore('folders').clear();
+        tx.oncomplete = function() { db.close(); res(true); };
+        tx.onerror = function() { db.close(); res(false); };
+      });
+    });
+  }
+  function renderFolderRows() {
+    var box = document.getElementById('aiCfgFolders');
+    if (!box) return Promise.resolve();
+    return refAll().then(function(entries) {
+      var checks = [];
+      for (var i = 0; i < entries.length; i++) {
+        (function(e) {
+          if (e.handle && e.handle.queryPermission) {
+            checks.push(Promise.resolve().then(function() { return e.handle.queryPermission({ mode: 'read' }); }).then(function(s) { e._need = s !== 'granted'; }).catch(function() { e._need = true; }));
+          } else e._need = !e.mock;
+        })(entries[i]);
+      }
+      return Promise.all(checks).then(function() {
+        if (!box.isConnected) return;
+        if (!entries.length) { box.innerHTML = '<div class="ai-cfg-fempty">尚未添加文件夹</div>'; return; }
+        var h = '';
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          h += '<div class="ai-cfg-frow' + (e._need ? ' need' : '') + '" data-need="' + (e._need ? '1' : '0') + '" data-name="' + escA(e.name) + '"'
+            + (e._need ? ' title="未授权读取，点击重新授权"' : ' title="参考文件夹"') + '>📁 ' + escA(e.name)
+            + (e._need ? ' <span class="ai-cfg-fwarn">未授权 · 点击授权</span>' : '')
+            + '<button type="button" class="ai-cfg-fx" data-x="' + escA(e.name) + '" title="移除">×</button></div>';
+        }
+        box.innerHTML = h;
+      });
+    });
+  }
+  function addRefFolder() {
+    if (!window.showDirectoryPicker) {
+      alert('当前浏览器不支持选择本地文件夹。\n\n请用 Chrome 或 Edge，通过 https:// 或 localhost 打开本页面（file:// 不支持）。');
+      return Promise.resolve();
+    }
+    return showDirectoryPicker({ mode: 'read' }).then(function(h) {
+      return refPut({ name: h.name, ts: Date.now(), handle: h }).then(renderFolderRows);
+    }).catch(function(e) {
+      if (e && e.name === 'AbortError') return;
+      alert('选择文件夹失败：' + (e && e.message ? e.message : '未知错误'));
+    });
+  }
+  function refReperm(name) {
+    refAll().then(function(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].name === name && entries[i].handle && entries[i].handle.requestPermission) {
+          entries[i].handle.requestPermission({ mode: 'read' }).then(function() { renderFolderRows(); }).catch(function() {});
+          return;
+        }
+      }
+    });
+  }
+  function refWalk(dir, depth, out) {
+    if (depth > REF_DEPTH || out.files.length >= REF_MAX_FILES) return Promise.resolve();
+    var it = dir.values();
+    function step() {
+      if (out.files.length >= REF_MAX_FILES) return Promise.resolve();
+      return Promise.resolve(it.next()).then(function(r) {
+        if (!r || r.done) return null;
+        var h = r.value, go = null;
+        if (h.kind === 'file') {
+          if (/\.(md|txt|markdown)$/i.test(h.name)) out.files.push({ path: (out.prefix ? out.prefix + '/' : '') + h.name, handle: h });
+        } else if (h.kind === 'directory' && h.name.charAt(0) !== '.') {
+          var saved = out.prefix;
+          out.prefix = (out.prefix ? out.prefix + '/' : '') + h.name;
+          go = refWalk(h, depth + 1, out).then(function() { out.prefix = saved; });
+        }
+        return go ? go.then(step) : step();
+      });
+    }
+    return step();
+  }
+  function refReadEntry(e, budget) {
+    if (e.mock) {
+      var files = (e.mock.files || []).slice(0, REF_MAX_FILES);
+      var parts = [], used = 0;
+      for (var i = 0; i < files.length; i++) {
+        var t = String(files[i].text || '');
+        if (t.length > REF_FILE_CAP) t = t.slice(0, REF_FILE_CAP) + '…（超长截断）';
+        if (used + t.length > budget) { parts.push('- ' + files[i].path + '（超出预算未纳入）'); break; }
+        parts.push('### ' + files[i].path + '\n' + t);
+        used += t.length;
+      }
+      return Promise.resolve({ md: parts.join('\n\n'), files: files.length, chars: used });
+    }
+    var h = e.handle;
+    if (!h || !h.queryPermission) return Promise.resolve({ md: '', files: 0, chars: 0 });
+    return Promise.resolve().then(function() { return h.queryPermission({ mode: 'read' }); }).then(function(s) {
+      if (s !== 'granted') return Promise.resolve({ md: '- （未授权读取：在「AI 设置」里点击该文件夹重新授权后生效）', files: 0, chars: 0 });
+      var out = { files: [], prefix: '' };
+      return refWalk(h, 1, out).then(function() {
+        var parts = [], used = 0, nf = 0;
+        function readOne(i) {
+          if (i >= out.files.length || used >= budget) return Promise.resolve();
+          return out.files[i].handle.getFile().then(function(f) { return f.text(); }).then(function(txt) {
+            if (txt.length > REF_FILE_CAP) txt = txt.slice(0, REF_FILE_CAP) + '…（超长截断）';
+            if (used + txt.length > budget) { parts.push('- ' + out.files[i].path + '（超出预算未纳入）'); return null; }
+            parts.push('### ' + out.files[i].path + '\n' + txt);
+            used += txt.length; nf++;
+            return readOne(i + 1);
+          }).catch(function() { return readOne(i + 1); });
+        }
+        return readOne(0).then(function() {
+          var extra = out.files.length > nf ? '\n- （另有 ' + (out.files.length - nf) + ' 个文件未纳入）' : '';
+          return { md: parts.join('\n\n') + extra, files: out.files.length, chars: used };
+        });
+      });
+    }).catch(function() {
+      return Promise.resolve({ md: '- （读取失败）', files: 0, chars: 0 });
+    });
+  }
+  function refContext() {
+    return refAll().then(function(entries) {
+      if (!entries.length) return { md: '', files: 0, chars: 0, n: 0 };
+      var md = ['【参考文件夹】用户指定要参考的本地资料，按文件夹与文件给出：'];
+      var totF = 0, totC = 0;
+      function one(i) {
+        if (i >= entries.length) return Promise.resolve();
+        var left = REF_TOTAL_CAP - totC;
+        if (left <= 0) { md.push('\n## 文件夹「' + entries[i].name + '」（预算已用完，未读取）'); return one(i + 1); }
+        return refReadEntry(entries[i], left).then(function(r) {
+          md.push('\n## 文件夹「' + entries[i].name + '」');
+          md.push(r.md || '（无 .md/.txt/.markdown 文件）');
+          totF += r.files; totC += r.chars;
+          return one(i + 1);
+        });
+      }
+      return one(0).then(function() {
+        return { md: md.join('\n'), files: totF, chars: totC, n: entries.length };
+      });
+    });
+  }
+
   window.RENDER_AI = {
     aiSearch: aiSearch,
     aiMatch: aiMatch,
@@ -8096,8 +8408,20 @@ function cmpSetState(entries) {
     condToggle: condToggle,
     condClose: condClose,
     aiOpenSettings: aiOpenSettings,
+    isProxyBase: isProxyBase,
     cfgGet: cfgGet,
     cfgSet: cfgSet,
+    refAll: refAll,
+    refPut: refPut,
+    refDel: refDel,
+    refClear: refClear,
+    refContext: refContext,
+    debugRefAll: refAll,
+    debugModelRender: renderModelSel,
+    debugModelsFetch: fetchModels,
+    debugRefAdd: function(entry) { return refPut(entry).then(renderFolderRows); },
+    debugRefRemove: function(name) { return refDel(name).then(renderFolderRows); },
+    debugRefClear: function() { return refClear().then(renderFolderRows); },
     // 测试钩子：直接对单档案求值查询树（不落盘、无副作用）
     debugEval: function(query, archive) { return matchQuery(archive, pillarsOf(archive), query); },
     debugPillars: function(archive) { var p = pillarsOf(archive); return p ? p.map(gzName) : null; },
@@ -8148,7 +8472,6 @@ function cmpSetState(entries) {
   var CARD_FULL_BUDGET = 18000, CARD_FULL_MAX = 12, CARD_DIM_CAP = 1500;
   var STARTERS = ['讲讲这个盘的格局与做功', '当下大运流年有什么要注意', '结合录音稿总结这个案例', '档案库里有哪些类似的盘'];
   var CHAT = { open: false, msgs: [], busy: false, ac: null };
-
   function dataNow() {
     // 部分路径（如开档/恢复）只把数据挂在容器上，window._paipanData 不一定有值
     var out = document.getElementById('output');
@@ -8318,19 +8641,27 @@ function cmpSetState(entries) {
       if (archs.length > n) lib.push('（另有 ' + (archs.length - n) + ' 份略）');
       stats.cardsFull = fullN;
       md += '\n' + lib.join('\n');
-      return { md: md, stats: stats };
+      var refFn = (window.RENDER_AI && RENDER_AI.refContext) ? RENDER_AI.refContext : null;
+      if (!refFn) return { md: md, stats: stats };
+      return refFn().then(function(ref) {
+        if (ref.md) md += '\n' + ref.md;
+        stats.refN = ref.n; stats.refFiles = ref.files; stats.refChars = ref.chars;
+        return { md: md, stats: stats };
+      });
     });
   }
 
   // —— 对话 ——
-  var SYS_BASE = '你是八字排盘工作台里的分析搭档「✦ Agent」。用户正在看一个命盘，随消息附上三段资料：'
+  var SYS_BASE = '你是八字排盘工作台里的分析搭档「✦ Agent」。用户正在看一个命盘，随消息附上资料：'
     + '【盘面信息】（四柱/藏干/十神/要位/起运大运/近年流年，含该盘分析记录全维度）、'
     + '【录音稿】（该盘名下的录音纪要，可能没有）、'
-    + '【档案卡片库】（本机全部档案的卡片：昵称/标签/四柱/记录摘引，重点卡片附「▤ 卡片内容」记录全文）。\n'
+    + '【档案卡片库】（本机全部档案的卡片：昵称/标签/四柱/记录摘引，重点卡片附「▤ 卡片内容」记录全文）、'
+    + '【参考文件夹】（可选：用户指定的本地参考资料，按文件夹与文件给出，可能没有）。\n'
     + '规则：1) 只依据资料作答，资料里没有的直说没有，绝不编造干支或案例；'
     + '2) 谈结构必须落到具体干支（哪一柱、什么十神、什么刑冲合害）；'
     + '3) 提到别的案例要报姓名；'
-    + '4) 结论先行，分点简短，用中文回答。';
+    + '4) 【参考文件夹】里的内容按口径与知识点引用，注明文件名；'
+    + '5) 结论先行，分点简短，用中文回答。';
   function sysPrompt() { return SYS_BASE; }
   function loadConv() {
     try { var v = JSON.parse(localStorage.getItem(convKeyOf())); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -8439,8 +8770,9 @@ function cmpSetState(entries) {
     if (!text) return;
     if (!dataNow()) { alert('请先排一张盘，再与 Agent 交流'); return; }
     var cfg = (window.RENDER_AI && RENDER_AI.cfgGet) ? RENDER_AI.cfgGet() : {};
-    if (!(cfg.apiKey && cfg.baseUrl && cfg.model)) {
-      CHAT.msgs.push({ who: 'agent', err: '先配置 AI 接口（填一次 Key 即可，只存在本机）', q: text });
+    var noProxyKey = cfg.apiKey || (RENDER_AI.isProxyBase && RENDER_AI.isProxyBase(cfg.baseUrl));
+    if (!(cfg.baseUrl && cfg.model && noProxyKey)) {
+      CHAT.msgs.push({ who: 'agent', err: '先配置 AI 接口（⚙ AI 设置：直连接口填一次 Key，选本地代理则无需 Key）', q: text });
       draw();
       if (window.RENDER_AI && RENDER_AI.aiOpenSettings) RENDER_AI.aiOpenSettings('✦ Agent 与 AI 搜索共用这套接口配置');
       return;
@@ -8655,7 +8987,8 @@ function cmpSetState(entries) {
     buildContext().then(function(ctx) {
       if (!el.isConnected) return;
       if (!ctx) { el.textContent = '上下文：无盘面'; return; }
-      el.textContent = '正在读取 · 盘面 ' + ctx.stats.recChars + ' 字 · 录音 ' + ctx.stats.clips + ' 条 · 档案 ' + ctx.stats.archs + ' 份';
+      el.textContent = '正在读取 · 盘面 ' + ctx.stats.recChars + ' 字 · 录音 ' + ctx.stats.clips + ' 条 · 档案 ' + ctx.stats.archs + ' 份'
+        + (ctx.stats.refN ? ' · 参考 ' + ctx.stats.refN + ' 处 ' + ctx.stats.refChars + ' 字' : '');
     }).catch(function() { if (el.isConnected) el.textContent = '上下文：读取失败'; });
   }
   function syncTrigger(on) {

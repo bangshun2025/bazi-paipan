@@ -7969,7 +7969,66 @@ window.__testAppend = function(t) {
                && parseFloat(pgEdgeS.borderRightWidth) === 0
                && (window.innerWidth - drEdgeR.right) <= 1;
       push({ ok: joinSkipP || joinP, label: 'AGP T20: 挤压态版心右缘与抽屉左缘重合（只隔一条线）', detail: (drEdgeR && pgEdgeS) ? ('挤压量=' + bodyPadRP + '/' + drwWG + ' 版心右边框=' + pgEdgeS.borderRightWidth + ' 右缝=' + (window.innerWidth - drEdgeR.right).toFixed(1)) : '无版心' });
+      // v0.103.0 弹窗让位：挤压态下全屏居中层收窄到抽屉左侧，不被抽屉盖住
+      var arcOvP = document.getElementById('archiveOverlay');
+      var arcWasP = arcOvP ? arcOvP.style.display : '';
+      var arcW1 = 0;
+      if (arcOvP) { arcOvP.style.display = 'flex'; arcOvP.getBoundingClientRect(); arcW1 = arcOvP.getBoundingClientRect().width; arcOvP.style.display = arcWasP; }
+      var ovFitP = !!arcOvP && Math.abs(arcW1 - (vwP - drwWG)) <= 1.5;
+      push({ ok: ovFitP, label: 'AGP T21: 挤压态档案弹窗让位（宽=视口-抽屉）', detail: arcW1 ? (arcW1.toFixed(0) + ' / 期望 ' + (vwP - drwWG).toFixed(0)) : '无弹窗' });
+      var recOvP = document.getElementById('recordsOverlay');
+      var recOvWasP = recOvP ? recOvP.style.display : '';
+      var recOvW = 0;
+      if (recOvP) { recOvP.style.display = 'flex'; recOvP.getBoundingClientRect(); recOvW = recOvP.getBoundingClientRect().width; recOvP.style.display = recOvWasP; }
+      var recOvFitP = !!recOvP && Math.abs(recOvW - (vwP - drwWG)) <= 1.5;
+      push({ ok: recOvFitP, label: 'AGP T22: 挤压态记录弹窗让位（id 型层同样收窄）', detail: recOvW ? (recOvW.toFixed(0) + ' / 期望 ' + (vwP - drwWG).toFixed(0)) : '无弹窗' });
+      // v0.102.2 全局「AI 设置」面板：模型下拉（日记创作模型口径）+ 参考文件夹行列表（日记素材文件夹口径）
+      var oldCfgP = window.RENDER_AI.cfgGet();
+      var refSnapP = await window.RENDER_AI.refAll();
+      var testCfgP = { provider: oldCfgP.provider || 'custom', baseUrl: 'http://127.0.0.1:18924', apiKey: 'AGPKey', model: 'agt-model-x' };
+      window.RENDER_AI.cfgSet(testCfgP);
+      var oldCacheP = localStorage.getItem('bz_ai_models');
+      localStorage.setItem('bz_ai_models', JSON.stringify({ ts: Date.now(), base: 'http://127.0.0.1:18924', list: [ { id: 'agt-model-x', name: 'agt-model-x', default: false, remark: '' } ] }));
+      window.RENDER_AI.aiOpenSettings();
+      var ovP = document.getElementById('aiCfgOverlay');
+      var selMP = document.getElementById('aiCfgModelSel');
+      push({ ok: !!ovP && !!selMP && selMP.value === 'agt-model-x', label: 'AGP T24: 全局面板模型下拉显示当前配置模型', detail: selMP ? ('value=' + selMP.value + ' options=' + selMP.options.length) : (ovP ? '无下拉' : '无面板') });
+      var switchOkP = false;
+      if (ovP && selMP) {
+        selMP.value = 'default';
+        ovP.querySelector('#aiCfgSave').click();
+        var cfgAfterP = window.RENDER_AI.cfgGet();
+        switchOkP = cfgAfterP.model === 'default' && cfgAfterP.apiKey === 'AGPKey' && cfgAfterP.baseUrl === 'http://127.0.0.1:18924' && !document.getElementById('aiCfgOverlay');
+      }
+      push({ ok: switchOkP, label: 'AGP T25: 下拉切「跟随欢喜默认」保存写回且 Key/接口保留', detail: 'cfg.model=' + window.RENDER_AI.cfgGet().model });
+      window.RENDER_AI.cfgSet(oldCfgP);
+      if (oldCacheP === null) localStorage.removeItem('bz_ai_models'); else localStorage.setItem('bz_ai_models', oldCacheP);
+      window.RENDER_AI.aiOpenSettings();
+      var ov2P = document.getElementById('aiCfgOverlay');
+      var foldBoxP = document.getElementById('aiCfgFolders');
+      await window.RENDER_AI.debugRefClear();
+      await window.RENDER_AI.debugRefAdd({ name: 'AGT参考夹', ts: Date.now(), mock: { files: [ { path: 'a.md', text: 'AGT参考标记甲' }, { path: 'sub/b.txt', text: 'AGT参考标记乙' } ] } });
+      await new Promise(function(rP) { setTimeout(rP, 150); });
+      var rowP = foldBoxP ? foldBoxP.querySelector('.ai-cfg-frow[data-name="AGT参考夹"]') : null;
+      var ctxRP = await AGENT.buildContext();
+      push({ ok: !!rowP && !!ctxRP && ctxRP.md.indexOf('【参考文件夹】') >= 0 && ctxRP.md.indexOf('AGT参考标记甲') >= 0 && ctxRP.md.indexOf('AGT参考标记乙') >= 0 && ctxRP.stats.refFiles === 2 && ctxRP.stats.refN === 1, label: 'AGP T26: 参考文件夹行+全文装载进上下文（全局面板行列表）', detail: ctxRP ? ('refN=' + ctxRP.stats.refN + ' files=' + ctxRP.stats.refFiles + ' chars=' + ctxRP.stats.refChars) : '无ctx' });
+      var idbLeftP = await window.RENDER_AI.debugRefAll();
+      push({ ok: !!idbLeftP && idbLeftP.length === 1, label: 'AGP T27: 参考文件夹条目持久化到 IndexedDB', detail: 'IDB 条目=' + (idbLeftP ? idbLeftP.length : '无') });
+      await window.RENDER_AI.debugRefClear();
+      await new Promise(function(rP2) { setTimeout(rP2, 150); });
+      var rowsAfterP = foldBoxP ? foldBoxP.querySelectorAll('.ai-cfg-frow').length : -1;
+      var idbAfterP = await window.RENDER_AI.debugRefAll();
+      push({ ok: rowsAfterP === 0 && !!idbAfterP && idbAfterP.length === 0, label: 'AGP T28: 移除全部后行列表与 IndexedDB 同步清场（自恢复）', detail: 'rows=' + rowsAfterP + ' idb=' + (idbAfterP ? idbAfterP.length : '无') });
+      await window.RENDER_AI.debugRefClear();
+      for (var siP = 0; siP < refSnapP.length; siP++) { await window.RENDER_AI.refPut(refSnapP[siP]); }
+      await new Promise(function(rP3) { setTimeout(rP3, 60); });
+      var cancelP = ov2P ? ov2P.querySelector('#aiCfgCancel') : null;
+      if (cancelP) cancelP.click();
       AGENT.close();
+      var arcOv2 = document.getElementById('archiveOverlay');
+      var arcW2 = 0;
+      if (arcOv2) { arcOv2.style.display = 'flex'; arcOv2.getBoundingClientRect(); arcW2 = arcOv2.getBoundingClientRect().width; arcOv2.style.display = arcWasP; }
+      push({ ok: !!arcOv2 && Math.abs(arcW2 - window.innerWidth) <= 1.5, label: 'AGP T23: 关 Agent 后档案弹窗恢复全屏宽', detail: arcW2 ? (arcW2.toFixed(0) + ' / 期望 ' + window.innerWidth) : '无弹窗' });
       push({ ok: AGENT.debugPush() === false && !(agTrgP && agTrgP.classList.contains('on')), label: 'AGP T08: 关闭后挤压态与按钮态同时复位' });
       push({ ok: document.activeElement === agTrgP, label: 'AGP T09: 关闭后焦点回到入口按钮', detail: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : '无' });
       var wKeepP = AGENT.debugWidth();

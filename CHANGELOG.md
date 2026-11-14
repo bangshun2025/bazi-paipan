@@ -1,3 +1,26 @@
+## 全局「AI 设置」：模型选择 + 参考文件夹搬出 Agent（v0.102.2，2026-11-14）
+
+模型选择与参考文件夹是全局设置，不该埋在 Agent 抽屉里——单独入口「⚙ AI 设置」面板承载，复刻邦顺日记「创作模型 / 素材文件夹」两区块的口径。配套本地代理升 v3：每段独立 id，同模型多账号各自可选
+
+- **代理（aicors-proxy.py，v3）**：`sections()` 给 config.yml 每个模型段生成段级 id（`模型名#同名列序号`，如 `glm-5.3-flash#1/#2` 两账号各自独立），`GET /models` 返回 `{id, name, default, remark, available}` 全部段不再去重；`route()` 先按 id 精确匹配，再按模型名，`default`/空/陌生回落 type:default 段。**实测**：POST `gpt-6-luna#1` 路由 ccproxy 返回 `"model":"gpt-6-luna"`；默认段行为不变零破坏
+- **入口**：顶栏「✦ Agent」旁新增「⚙ AI 设置」按钮（单实例），原档案库齿轮入口保留；面板标题「⚙ AI 设置（全局）」
+- **模型选择（复刻日记创作模型区块）**：模型从文本输入改下拉——「跟随欢喜默认」（仅本地代理基址时）+ `GET {baseUrl}/models` 实拉列表（缓存 `bz_ai_models` 10 分钟 TTL，「刷新模型」按钮手动重拉）+ 非代理接口的预设 + 当前模型兜底；候选项带 remark 备注（如「1333 帐号」）与「· 默认」标记；状态 tip 行报「已加载 N 个候选 / 未获取到在线列表」；**不可用自动回落守门**：已选模型不在实拉列表 → 写回「跟随欢喜默认」并提示（日记同款行为）。保存写回 `bz_ai_cfg.model`，Key/接口地址保留
+- **参考文件夹（复刻日记素材文件夹区块）**：面板内行列表（📁 名称 + 未授权虚线标 + × 移除 + 「＋ 添加文件夹」/「移除全部」），`showDirectoryPicker` 添加、句柄存 IndexedDB `bz_agent_ref` 持久，重启浏览器后点行重新授权。上下文注入口径不变：递归 ≤3 层、每夹 ≤300 个 .md/.txt/.markdown、单文件截 12000 字、总预算 60000 字；Agent 状态行「· 参考 N 处 M 字」
+- **Agent 抽屉瘦身**：撤头部模型选择器与文件夹芯片条（CSS/接线/导出全清），`buildContext` 改守卫调用 `RENDER_AI.refContext`——Agent 只消费全局配置，面板是唯一设置入口
+- **守门放行本地代理**：`cfgReady` 与 Agent send 原本强制要求 apiKey，本地代理（127.0.0.1/localhost 基址）无需 Key 会被误拦——改 `(apiKey || isProxyBase(baseUrl))`，`isProxyBase` 从 RENDER_AI 导出供 Agent 判断；错误文案改「直连接口填一次 Key，选本地代理则无需 Key」
+- **断言**：AGP +5 → 28 条（T24 全局面板下拉显示当前模型 / T25 下拉切「跟随欢喜默认」保存写回且 Key/接口保留 / T26 文件夹行+全文进上下文 / T27 条目持久化 IDB / T28 移除全部后行列表与 IDB 清场）。`?test=1` 2133 条全绿
+- **真实 UI 实测**：「⚙ AI 设置」打开面板，基址填代理后下拉先出「跟随欢喜默认」，点「刷新模型」实拉 11 项（default + 10 个段级 id，`glm-5.3-flash#1` 标「· 默认」、`#2` 带「（1333 帐号）」备注，tip「已加载 11 个候选（来自接口列表）」）；选 `gpt-6-luna#1` 保存写回 cfg（无 Key）；排示例盘后 Agent 发「请回复两个字：收到」，经代理段级 id 路由 ccproxy 真实回复「收到」，端到端全链路通；文件夹行增删实测（原生目录对话框无法自动化，授权流程为手工路径）
+- **产物**：index ≡ standalone（md5 `16be6e1d…`，2,198,507 B）；split `4995c169…`（162,602 B）
+## 弹窗让位：挤压态下弹层不再被 Agent 盖住（v0.102.1，2026-11-14）
+
+v0.100.7~v0.102.0 把版心和抽屉的挤压做完，但弹出层没跟上：Agent 打开时点「📋 档案」，档案弹窗仍按全屏宽居中，右半被 420px 抽屉压住。盘点了全部全屏层，11 类有此问题（note-drawer 已在 v0.100.9 修过），统一让位
+
+- **盘点清单（z-index 均低于抽屉 9800，全部让位）**：档案 `.archive-overlay`（1001）与合盘 `#hepanOverlay`（同 class）、干支编辑 `.gz-edit-overlay`（1001）、排盘解读 `.chartmd-overlay`（1003）、登录 `#authOverlay`（2000）、分析记录 `#recordsOverlay`（1900）、记录详情 `#recordDetailOverlay`（1950）、AI 分析 `.ai-overlay`（999）、六爻设置 `.xy-settings-overlay`（1000）、干支设置 `.gz-settings-overlay`（1000）、编辑 `.edit-overlay`（1000）、对比页 `.cmp-overlay`（1000）、AI 配置 `.ai-cfg-overlay`（4000）。右键菜单 / toast / 全屏确认框 z-index 99990+ 在抽屉之上，不用动
+- **规则**：`body.bz-ag-push` 下统一 `width:calc(100% - var(--bz-ag-w)) !important`，弹层内容自动在抽屉左侧居中。`!important` 是必需——`recordsOverlay`/`authOverlay`/`recordDetailOverlay` 三个 id 层的宽度写在内联 style 里，普通规则压不过（首轮实测 T22 1512=全宽暴露）
+- **小屏回退**：≤1080px 时抽屉是浮层而非挤压，让位规则回退 `width:100%`
+- **断言**：AGP +3 → 23 条。T21 挤压态档案弹窗宽=视口−抽屉 / T22 记录弹窗（id+内联 width 型）同让位 / T23 关 Agent 后恢复全宽。`?test=1` 2128 条全绿（2125+3）
+- **真实点击实测（1512×827）**：开 Agent（push=true）→ 坐标点击「📋 档案」→ 遮罩 `ovW=1092=1512−420`、`ovRight=1092=drLeft` 零越界，弹窗内容 880px 完整可见，抽屉完好
+
 ## 侧栏提亮一档，与版心分出层次（v0.102.0，2026-11-13）
 
 v0.101.0 把抽屉贴到了窗口边缘，几何上已经是 Chrome side panel。但材质还差最后一步：侧栏底色和版心同为 `#f5f0e8`，两者只靠一条 1.5px 线分开——整片读成一张纸，侧栏「陷」进页面里
