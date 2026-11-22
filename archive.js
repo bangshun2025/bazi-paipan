@@ -2143,12 +2143,18 @@ function syncOff() {
   syncStatus();
 }
 
+// Chrome 偶发 queryPermission 永久 pending（目录句柄后端失效，重启/升级后出现过）——超时按需重授处理，别让链条挂死
+function syncPermOf(h, ms) {
+  var t = new Promise(function(res) { setTimeout(function() { res('prompt'); }, ms || 2500); });
+  return Promise.race([h.queryPermission({ mode: 'readwrite' }), t]).catch(function() { return 'denied'; });
+}
+
 function syncResume() {
   if (!syncSupported()) { syncStatus(); return; }
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') { syncStatus(); return; }
   syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
     if (!h || !h.queryPermission) { syncStatus(); return; }
-    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+    return syncPermOf(h).then(function(perm) {
       if (perm === 'granted') {
         _syncDir = h;
         return syncAll();
@@ -2221,7 +2227,7 @@ function syncEnsureDir() {
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') return Promise.resolve(null);
   return syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
     if (!h || !h.queryPermission) return null;
-    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+    return syncPermOf(h).then(function(perm) {
       if (perm !== 'granted') return null;
       _syncDir = h;
       return h;

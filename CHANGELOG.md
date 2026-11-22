@@ -1,3 +1,11 @@
+## 档案md 权限查询超时兜底：Chrome 偶发 queryPermission 挂起不再卡死（v0.102.3，2026-11-22）
+
+2026-11-22 实报：点「📄 档案md」弹层永远停在「正在同步并读取最新 md……」，md 打不开。CDP 注入逐环探测定位——IndexedDB 里目录句柄完好（1ms 打开、`get('dir')` 命中），但 `handle.queryPermission({mode:'readwrite'})` **永久 pending**（6 秒无 onsuccess/onerror），`syncEnsureDir` 之后的整条 promise 链挂死。句柄指向的目录一直在原位、文件齐全，属 Chrome File System Access 后端偶发失效（句柄反序列化后内部后端不可用），非权限被拒
+
+- **修复（archive.js）**：新增 `syncPermOf(h, ms)`——`queryPermission` 与 2.5s 超时竞速，超时按 `'prompt'`（需重授）处理、异常按 `'denied'`；`syncResume` 与 `syncEnsureDir` 两处调用点替换。效果：点「档案md」最多 2.5 秒即显示明确错误「目录权限已失效，点本地同步重选授权」，不再无限转圈；页面加载时 `syncResume` 同样不再挂死
+- **恢复路径**：点「📁 本地同步」→ `showDirectoryPicker` 拿全新句柄（写回 IndexedDB）→ queryPermission 正常，一次授权即恢复
+- **产物**：`sync-module-inline.py --from-external archive --apply` 回推，三端一致；横幅/`ext.yml` bump v0.102.3
+
 ## 全局「AI 设置」：模型选择 + 参考文件夹搬出 Agent（v0.102.2，2026-11-14）
 
 模型选择与参考文件夹是全局设置，不该埋在 Agent 抽屉里——单独入口「⚙ AI 设置」面板承载，复刻邦顺日记「创作模型 / 素材文件夹」两区块的口径。配套本地代理升 v3：每段独立 id，同模型多账号各自可选

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 八字排盘 ·  从真版 v0.102.2 | 2026-11-14 -->
+<!-- 八字排盘 ·  从真版 v0.102.3 | 2026-11-22 -->
 <!-- v0.100.4: ✦ Agent 卡片库升级 —— 卡片头带昵称/标签（摘引 80→160 字），同名或同四柱、有记录的重点卡片附「▤ 卡片内容」分析记录全文（单维截 1500 字，总预算 18000 字封顶、至多 12 卡），其余保持一行摘要；上下文条加「全文 N 卡」。断言 +2（AGT T16/T17）。 -->
 <!-- v0.100.3: 热修 —— AGT T10 测试隔离缺陷：AGT 段接管 window._paipanData 时未接管 #output 容器挂载点，而 dataNow() 容器优先，AUD 段渲染后容器有值导致会话键指纹错位（线上 ?test=1 出现第 6 条失败）。修复后 AGT 15 条全绿，回归回到既有 5 条环境失败口径。功能与 v0.100.2 相同。 -->
 <!-- v0.100.2: ✦ Agent 对话 —— 主盘顶栏「✦ Agent」一点即开右侧抽屉（430px docked 不遮盘面，Esc/✕ 关）。三源资料自动进上下文：①盘面+分析记录+近年流年（今年-1~+5）②IndexedDB 录音稿（单条截 6000 字）③档案卡片库逐份摘要（上限 40）。流式回复 rAF 节流+光标动画+贴底自动滚，发送中按钮变「停止」（AbortController），Markdown 行内渲染先转义防 XSS，会话按盘指纹存 bz_agent_conv_<fp>（上限 80 条）清空即删，未配 Key 引导设置，失败气泡可重试。附带修复：dataNow() 双源取盘（开档/恢复路径只挂 #output._paipanData，单源误判无盘）；streamTick 非 busy 跳过重绘（流结束 rAF 补刀会把光标画回去） -->
@@ -8919,12 +8919,18 @@ function syncOff() {
   syncStatus();
 }
 
+// Chrome 偶发 queryPermission 永久 pending（目录句柄后端失效，重启/升级后出现过）——超时按需重授处理，别让链条挂死
+function syncPermOf(h, ms) {
+  var t = new Promise(function(res) { setTimeout(function() { res('prompt'); }, ms || 2500); });
+  return Promise.race([h.queryPermission({ mode: 'readwrite' }), t]).catch(function() { return 'denied'; });
+}
+
 function syncResume() {
   if (!syncSupported()) { syncStatus(); return; }
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') { syncStatus(); return; }
   syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
     if (!h || !h.queryPermission) { syncStatus(); return; }
-    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+    return syncPermOf(h).then(function(perm) {
       if (perm === 'granted') {
         _syncDir = h;
         return syncAll();
@@ -8997,7 +9003,7 @@ function syncEnsureDir() {
   if (localStorage.getItem(SYNC_ON_KEY) !== '1') return Promise.resolve(null);
   return syncDbOp('readonly', function(st) { return st.get(SYNC_ID); }).then(function(h) {
     if (!h || !h.queryPermission) return null;
-    return h.queryPermission({ mode: 'readwrite' }).then(function(perm) {
+    return syncPermOf(h).then(function(perm) {
       if (perm !== 'granted') return null;
       _syncDir = h;
       return h;
@@ -27969,7 +27975,9 @@ function captureScreenshot() {
       }
       tests.push(eq(sec + ' X18: 藏气层间有分隔线且首层无', dividerState, 'Y'));
       var nsEl = host2.querySelector('.ssh-cg-ns');
-      tests.push(eq(sec + ' X19: 藏气组对应名列统一左对齐', nsEl ? window.getComputedStyle(nsEl).alignItems : 'MISS', 'flex-start'));
+      // 新 Chrome getComputedStyle 将 flex-start 规范化序列化为 flow-start，同义视为左对齐
+      var nsAlign = nsEl ? window.getComputedStyle(nsEl).alignItems : 'MISS';
+      tests.push(eq(sec + ' X19: 藏气组对应名列统一左对齐', nsAlign === 'flow-start' ? 'flex-start' : nsAlign, 'flex-start'));
       var luckOn = host2.querySelector('.luck-col');
       tests.push(eq(sec + ' X20: 勾选十神组时运流区左对齐',
         (luckOn && luckOn.classList.contains('ssh-on') ? 'Y' : 'N') + '/' +
