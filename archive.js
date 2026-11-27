@@ -155,7 +155,14 @@ function initPresetArchives() {
   var hasPreset = existing.some(function(a) { return a.isPreset === true; });
   if (!hasPreset) {
     var now = new Date().toISOString();
-    var presets = PRESET_ARCHIVES.map(function(a, i) {
+    // isPreset 标记可能因历史导入/同步丢失：按姓名+性别+生日查重，避免重复追加同一预置档案
+    var presets = PRESET_ARCHIVES.filter(function(a) {
+      return !existing.some(function(e) {
+        return (e.name || '') === a.name && (e.gender || '') === a.gender
+          && +e.year === a.year && +e.month === a.month && +e.day === a.day
+          && (+e.hour || 0) === a.hour && (+e.min || 0) === a.min;
+      });
+    }).map(function(a, i) {
       return {
         id: Date.now() + i,
         nickname: a.nickname, name: a.name, gender: a.gender,
@@ -172,8 +179,10 @@ function initPresetArchives() {
       };
     });
     // 追加预置数据到现有档案（不替换用户自建档案）
-    var merged = existing.concat(presets);
-    saveArchivesRaw(merged);
+    if (presets.length) {
+      var merged = existing.concat(presets);
+      saveArchivesRaw(merged);
+    }
   }
   try { migrateOrphanRecNotes(); } catch (e) {}
 }

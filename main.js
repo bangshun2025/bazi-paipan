@@ -7759,6 +7759,24 @@ function captureScreenshot() {
       tests.push(eq(sec + ' T2: 段名与候选全不同名且二轮多候选→保持 free', localStorage.getItem('bz_rec_notes_路人甲|男|1980|5|6|10|20'), '悬空内容'));
       tests.push(eq(sec + ' T3: 消歧源键已删', localStorage.getItem('bz_rec_notes_消歧真身|男|1980|5|6|10|20'), null));
       tests.push(eq(sec + ' T4: 迁移戳已打', localStorage.getItem('bz_mount_v1'), '1'));
+      // T5-T7: initPresetArchives 预置查重（isPreset 标记丢失的老库不被重复追加）
+      var P0 = (A.PRESET_ARCHIVES && A.PRESET_ARCHIVES[0]) || null;
+      if (!P0 || typeof A.initPresetArchives !== 'function') {
+        tests.push(fail(sec + ' T5: 前置 initPresetArchives/PRESET_ARCHIVES 已挂载', '缺失'));
+      } else {
+        var ghost = { id: 901031, name: P0.name, gender: P0.gender, year: P0.year, month: P0.month, day: P0.day, hour: P0.hour, min: P0.min, calendarType: 'solar', createdAt: 901031, updatedAt: 901031, isPreset: false };
+        A.saveArchivesRaw([ghost]);
+        localStorage.removeItem('bz_mount_v1');
+        localStorage.removeItem('bz_mount_v1_audio');
+        A.initPresetArchives();
+        var afterArch = A.getArchives();
+        var dup = afterArch.filter(function(x) { return (x.name || '') === P0.name && (x.gender || '') === P0.gender; });
+        var expectAdd = A.PRESET_ARCHIVES.filter(function(a) {
+          return !((a.name || '') === P0.name && (a.gender || '') === P0.gender && +a.year === P0.year && +a.month === P0.month && +a.day === P0.day && (+a.hour || 0) === P0.hour && (+a.min || 0) === P0.min);
+        }).length;
+        tests.push(eq(sec + ' T6: isPreset 丢失时同名同盘预置不重复追加', dup.length, 1));
+        tests.push(eq(sec + ' T7: 去重后只追加不重复的预置', afterArch.length, 1 + expectAdd));
+      }
     } catch (e) {
       tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
     } finally {
