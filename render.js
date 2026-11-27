@@ -1,4 +1,4 @@
-/* 八字排盘 v0.56.0 — render.js */
+/* 八字排盘 v0.103.0 — render.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -1231,7 +1231,9 @@ function dimRemove(name) {
 function dimVisKey() {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_DIM_VIS + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_DIM_VIS + m;
 }
 function dimVisGet() {
   var v = null;
@@ -1262,7 +1264,9 @@ function dimVisibleDims(suffix, pd) {
 function recNotesKey(suffix, dim, pd) {
   var d = pd || window._paipanData;
   if (!d) return null;
-  return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + m;
 }
 
 // ===== v0.66.0 分析记录防丢（指纹取不到时不再显示空白）=====
@@ -1282,9 +1286,11 @@ function recKeyParts(key) {
     dim = raw.slice(1, cut);
     raw = raw.slice(cut + 1);
   }
+  // v0.103.0：编号挂载段 #档案id（改名改生日不变）
+  if (/^#\d+$/.test(raw)) return { prefix: prefix, dim: dim, mount: raw, mountId: +raw.slice(1), name: null };
   var p = raw.split('|');
   if (p.length !== 7) return null;
-  return { prefix: prefix, dim: dim, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
+  return { prefix: prefix, dim: dim, mount: raw, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
 }
 function recNoteGet(key) {
   try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
@@ -1311,7 +1317,7 @@ function recNoteCandidates(suffix, dim, pd) {
       var k = localStorage.key(i);
       if (!k || k === out.key || k.indexOf(LS_REC_NOTES) !== 0) continue;
       var p = recKeyParts(k);
-      if (!p || p.prefix !== prefix || p.dim !== dim || p.name !== name || p.gender !== gender) continue;
+      if (!p || p.mountId != null || p.prefix !== prefix || p.dim !== dim || p.name !== name || p.gender !== gender) continue;
       var txt = recNoteGet(k);
       if (!txt.trim()) continue;
       all.push({ key: k, ymd: [p.y, p.m, p.d].join('|'), h: p.h, mi: p.mi, text: txt });
@@ -1390,7 +1396,7 @@ function loadRecAlt(btn) {
   var box = panel.querySelector('.rec-alts');
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
   var p = recKeyParts(k);
-  recStatusShow(panel, '已载入 ' + (p ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
+  recStatusShow(panel, '已载入 ' + (p && p.y != null ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
 }
 function recAutogrow(ta) {
   ta.style.height = 'auto';
@@ -1713,7 +1719,7 @@ function dimRename(oldName, newName) {
       if (!k) continue;
       var p = recKeyParts(k);
       if (p && p.dim === oldName) {
-        var nk = LS_REC_NOTES + p.prefix + dimSegOf(newName) + [p.name, p.gender, p.y, p.m, p.d, p.h, p.mi].join('|');
+        var nk = LS_REC_NOTES + p.prefix + dimSegOf(newName) + p.mount;
         if (recNoteGet(nk).trim()) { conflict = nk; break; }
         moves.push({ from: k, to: nk });
       } else if (k.indexOf(LS_DIM_VIS) === 0) {
@@ -1881,7 +1887,9 @@ var LS_REC_AUDIO = 'bz_rec_audio_';
 function recAudioKey(suffix) {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_REC_AUDIO + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_REC_AUDIO + (suffix || '') + m;
 }
 function recAudioDb() {
   return new Promise(function(res, rej) {
@@ -6922,6 +6930,14 @@ function cmpSetState(entries) {
       var cut = rest.lastIndexOf('§');
       first = (cut >= 0) ? rest.slice(cut + 1) : rest;
     }
+    if (/^#\d+$/.test(first)) {
+      var aid = +first.slice(1);
+      var arcs = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : [];
+      for (var ai = 0; ai < arcs.length; ai++) {
+        if (arcs[ai].id === aid) return ftIdOf(arcs[ai]);
+      }
+      return null;
+    }
     return first + '|' + s[1] + '|' + s[2] + '|' + s[3] + '|' + s[4];
   }
   function buildFTIndex() {
@@ -8499,8 +8515,18 @@ function cmpSetState(entries) {
     for (var i = 0; i < list.length; i++) {
       var dim = list[i], seg = (dim === '分析记录') ? '' : (DIM_MARK + dim + '|'), txt = '';
       try {
-        var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, seg) : null;
-        txt = k ? (localStorage.getItem(k) || '') : '';
+        var kk = null;
+        if (window.ARCHIVE && ARCHIVE.recNotesKeyFor) {
+          if (a && a.id != null) kk = ARCHIVE.recNotesKeyFor(a, seg);
+          else if (a && ARCHIVE.findArchiveByNameGender) {
+            var ra = ARCHIVE.findArchiveByNameGender(a.name, a.gender);
+            kk = ra ? ARCHIVE.recNotesKeyFor(ra, seg) : null;
+          }
+        }
+        if (!kk && window.ARCHIVE && ARCHIVE.mountSegOf && a) {
+          kk = 'bz_rec_notes_' + seg + ARCHIVE.mountSegOf({ name: a.name, gender: a.gender, y: a.year, m: a.month, d: a.day, h: a.hour, mi: a.min }) || null;
+        }
+        txt = kk ? (localStorage.getItem(kk) || '') : '';
       } catch (e) { txt = ''; }
       txt = String(txt).trim();
       if (!txt) continue;
@@ -8601,7 +8627,7 @@ function cmpSetState(entries) {
     var md = '【盘面信息】\n' + (chartMd || '（排盘数据暂缺）');
     var ln = liunianLine();
     if (ln) md += '\n## 近年流年\n' + ln + '\n';
-    return clipsOfKey(REC_KEY_PFX + fpOf(d)).then(function(clips) {
+    return clipsOfKey(REC_KEY_PFX + ((window.ARCHIVE && ARCHIVE.mountSegOf) ? (ARCHIVE.mountSegOf(d) || fpOf(d)) : fpOf(d))).then(function(clips) {
       stats.clips = clips.length;
       if (clips.length) {
         var seg = ['【录音稿】'];

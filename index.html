@@ -7570,10 +7570,24 @@ function archiveSolarYmd(a) {
   }
   return { y: y, m: m, d: d };
 }
+// v0.103.0 编号挂载：档案/记录/录音改挂档案编号（#id），改名改生日不再迁移键。
+// 未建档的无名盘保持原指纹段，建档（autoSaveArchive）时由 migrateFreeNotesToArchive 绑定编号。
+function findArchiveByNameGender(name, gender) {
+  var archives = getArchives();
+  for (var i = 0; i < archives.length; i++) {
+    if ((archives[i].name || '') === (name || '') && (archives[i].gender || '') === (gender || '')) return archives[i];
+  }
+  return null;
+}
+function mountSegOf(d) {
+  if (!d) return null;
+  var a = d.name ? findArchiveByNameGender(d.name, d.gender) : null;
+  if (a && a.id != null) return '#' + a.id;
+  return [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+}
 function recNotesKeyFor(a, suffix) {
-  var s = archiveSolarYmd(a);
-  if (!s) return null;
-  return 'bz_rec_notes_' + (suffix || '') + [a.name || '', a.gender || '', s.y, s.m, s.d, +a.hour || 0, +a.min || 0].join('|');
+  if (!a || a.id == null) return null;
+  return 'bz_rec_notes_' + (suffix || '') + '#' + a.id;
 }
 var REC_SUFFIXES = ['', 'twin|'];
 function migrateRecNotesKeys(oldA, newA) {
@@ -7599,9 +7613,10 @@ function parseRecNotesKey(key) {
     dim = rest.slice(0, cut + 1);
     rest = rest.slice(cut + 1);
   }
+  if (/^#\d+$/.test(rest)) return { suffix: suffix, dim: dim, fp: rest, id: +rest.slice(1), parts: [rest] };
   var parts = rest.split('|');
   if (parts.length !== 7) return null;
-  return { suffix: suffix, dim: dim, fp: parts.join('|') };
+  return { suffix: suffix, dim: dim, fp: parts.join('|'), parts: parts };
 }
 
 // v0.100.1 删除档案时找唯一幸存者：同公历生日+时辰，姓名或性别至少一项相同；
@@ -7657,65 +7672,169 @@ function migrateAllNotesToSurvivor(del, survivor) {
   migrateRecAudioKeys(del, survivor);
 }
 
+// v0.103.0 一次性搬家：旧「姓名|性别|公历y|m|d|h|mi」指纹键 → 唯一匹配档案的「#编号」键。
+// 两轮匹配（生日时辰精确 / 姓名性别唯一），匹配不唯一的键保持指纹形态（自由盘语义）。
+// 录音 IndexedDB 侧由 migrateAudioKeysToIdMount 异步承接（大 blob 逐条短事务，先复制后删除）。
+function moveFreeKeyToArchive(key, p, a) {
+  var nk = 'bz_rec_notes_' + p.suffix + p.dim + '#' + a.id;
+  if (!nk || nk === key) return;
+  var ov = null, nv = null;
+  try { ov = localStorage.getItem(key); nv = localStorage.getItem(nk); } catch (e) {}
+  if (ov == null || ov === '') { try { localStorage.removeItem(key); } catch (e) {} return; }
+  var merged = (nv != null && nv !== '') ? ov + '\n\n' + nv : ov;
+  try { backupNoteValue(merged, p.parts[0] + '编号迁移'); } catch (e) {}
+  try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
+}
+function parseAudioKey(key) {
+  if (typeof key !== 'string' || key.indexOf('bz_rec_audio_') !== 0) return null;
+  var rest = key.slice('bz_rec_audio_'.length);
+  var suffix = '';
+  if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
+  if (/^#\d+$/.test(rest)) return { suffix: suffix, fp: rest, parts: [rest], id: +rest.slice(1) };
+  var parts = rest.split('|');
+  if (parts.length !== 7) return null;
+  return { suffix: suffix, fp: parts.join('|'), parts: parts };
+}
+// v0.103.0 建档即绑定：新建/覆盖档案时，把同名同性别自由指纹键挂到档案编号下
+function migrateFreeNotesToArchive(a) {
+  if (!a || a.id == null) return;
+  var keys = [];
+  try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+  for (var k = 0; k < keys.length; k++) {
+    var p = parseRecNotesKey(keys[k]);
+    if (!p || p.id != null || p.parts.length !== 7) continue;
+    if ((p.parts[0] || '') !== (a.name || '') || (p.parts[1] || '') !== (a.gender || '')) continue;
+    moveFreeKeyToArchive(keys[k], p, a);
+  }
+}
+function migrateAudioKeysToIdMount(archives) {
+  var rq = indexedDB.open('bz_rec_audio', 1);
+  rq.onupgradeneeded = function() {
+    var db0 = rq.result;
+    if (!db0.objectStoreNames.contains('clips')) {
+      var st0 = db0.createObjectStore('clips', { keyPath: 'id' });
+      st0.createIndex('key', 'key', { unique: false });
+    }
+  };
+  rq.onsuccess = function() {
+    var db = rq.result;
+    var clips = [];
+    var rc = db.transaction('clips', 'readonly').objectStore('clips').openCursor();
+    rc.onsuccess = function() {
+      var cur = rc.result;
+      if (cur) { clips.push(cur.value); cur.continue(); return; }
+      var freeKeys = {};
+      for (var i = 0; i < clips.length; i++) {
+        var p = parseAudioKey(clips[i].key);
+        if (p && p.id == null) freeKeys[clips[i].key] = p;
+      }
+      var plans = [];
+      for (var fk in freeKeys) {
+        var p2 = freeKeys[fk];
+        var hits = [];
+        for (var j = 0; j < archives.length; j++) {
+          var a = archives[j];
+          if ((a.gender || '') !== p2.parts[1]) continue;
+          var s = archiveSolarYmd(a);
+          if (!s || s.y !== +p2.parts[2] || s.m !== +p2.parts[3] || s.d !== +p2.parts[4]) continue;
+          if ((+a.hour || 0) !== +p2.parts[5] || (+a.min || 0) !== +p2.parts[6]) continue;
+          hits.push(a);
+        }
+        if (hits.length !== 1) {
+          hits = [];
+          for (var j2 = 0; j2 < archives.length; j2++) {
+            if ((archives[j2].name || '') === p2.parts[0] && (archives[j2].gender || '') === p2.parts[1]) hits.push(archives[j2]);
+          }
+        }
+        if (hits.length === 1 && hits[0].id != null) plans.push({ oldKey: fk, newKey: 'bz_rec_audio_' + p2.suffix + '#' + hits[0].id });
+      }
+      var idx = 0;
+      function step() {
+        if (idx >= plans.length) {
+          try { localStorage.setItem('bz_mount_v1_audio', '1'); } catch (e) {}
+          db.close();
+          return;
+        }
+        var pl = plans[idx++];
+        var tx = db.transaction('clips', 'readwrite');
+        var st = tx.objectStore('clips');
+        var greq = st.index('key').getAll(pl.oldKey);
+        greq.onsuccess = function() {
+          var rows = greq.result || [];
+          var n = 0;
+          if (!rows.length) { step(); return; }
+          rows.forEach(function(c) {
+            var nc = Object.assign({}, c, { id: pl.newKey + '|' + c.ts, key: pl.newKey });
+            var pr = st.put(nc);
+            pr.onsuccess = function() {
+              var dr = st.delete(c.id);
+              dr.onsuccess = function() { if (++n === rows.length) setTimeout(step, 0); };
+              dr.onerror = function() { if (++n === rows.length) setTimeout(step, 0); };
+            };
+            pr.onerror = function() { if (++n === rows.length) setTimeout(step, 0); };
+          });
+        };
+        greq.onerror = function() { step(); };
+      }
+      setTimeout(step, 0);
+    };
+    rc.onerror = function() { db.close(); };
+  };
+  rq.onerror = function() {};
+}
 function migrateOrphanRecNotes() {
+  if (localStorage.getItem('bz_mount_v1') === '1') { 
+    try { if (localStorage.getItem('bz_mount_v1_audio') !== '1') { var arcs0 = getArchives(); if (arcs0.length) migrateAudioKeysToIdMount(arcs0); } } catch (e) {}
+    return;
+  }
   var archives = getArchives();
   var keys = [];
   try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
   for (var k = 0; k < keys.length; k++) {
     var key = keys[k];
     if (key.indexOf('bz_rec_notes_') !== 0) continue;
-    var rest = key.slice('bz_rec_notes_'.length);
-    var suffix = '';
-    if (rest.indexOf('twin|') === 0) { suffix = 'twin|'; rest = rest.slice(5); }
-    var parts = rest.split('|');
-    if (parts.length !== 7) continue;
-    var og = parts[1], oy = +parts[2], om = +parts[3], od = +parts[4], oh = +parts[5], omi = +parts[6];
+    var p = parseRecNotesKey(key);
+    if (!p || p.id != null || p.parts.length !== 7) continue;
     var hits = [];
     for (var j = 0; j < archives.length; j++) {
       var a = archives[j];
-      if ((a.gender || '') !== og) continue;
+      if ((a.gender || '') !== p.parts[1]) continue;
       var s = archiveSolarYmd(a);
-      if (!s || s.y !== oy || s.m !== om || s.d !== od) continue;
-      if ((+a.hour || 0) !== oh || (+a.min || 0) !== omi) continue;
+      if (!s || s.y !== +p.parts[2] || s.m !== +p.parts[3] || s.d !== +p.parts[4]) continue;
+      if ((+a.hour || 0) !== +p.parts[5] || (+a.min || 0) !== +p.parts[6]) continue;
       hits.push(a);
     }
-    if (hits.length !== 1) continue;
-    if (hits[0].name === parts[0]) continue;
-    var nk = recNotesKeyFor(hits[0], suffix);
-    if (!nk || nk === key) continue;
-    var ov2 = null, nv2 = null;
-    try { ov2 = localStorage.getItem(key); nv2 = localStorage.getItem(nk); } catch (e) {}
-    if (!ov2) continue;
-    var merged = (nv2 != null && nv2 !== '') ? ov2 + '\n\n' + nv2 : ov2;
-    backupNoteValue(merged, parts[0] + '迁移');
-    try { localStorage.setItem(nk, merged); localStorage.removeItem(key); } catch (e) {}
-  }
-  // 二轮：生日/时辰变更（含农历互转）后旧 key 按 7 字段匹配不上任何档案，改按名字+性别回收；
-  // 双胞胎同生日场景靠名字区分（彭子旭/彭子阳类），重名档案 hits!==1 跳过
-  for (var k2 = 0; k2 < keys.length; k2++) {
-    var key2 = keys[k2];
-    if (key2.indexOf('bz_rec_notes_') !== 0) continue;
-    var rest2 = key2.slice('bz_rec_notes_'.length);
-    var suffix2 = '';
-    if (rest2.indexOf('twin|') === 0) { suffix2 = 'twin|'; rest2 = rest2.slice(5); }
-    var parts2 = rest2.split('|');
-    if (parts2.length !== 7) continue;
-    var hits2 = [];
+    if (hits.length === 1) { moveFreeKeyToArchive(key, p, hits[0]); continue; }
+    hits = [];
     for (var j2 = 0; j2 < archives.length; j2++) {
-      if ((archives[j2].name || '') === parts2[0] && (archives[j2].gender || '') === parts2[1]) hits2.push(archives[j2]);
+      if ((archives[j2].name || '') === p.parts[0] && (archives[j2].gender || '') === p.parts[1]) hits.push(archives[j2]);
     }
-    if (hits2.length !== 1) continue;
-    var nk2 = recNotesKeyFor(hits2[0], suffix2);
-    if (!nk2 || nk2 === key2) continue;
-    var ov3 = null, nv3 = null;
-    try { ov3 = localStorage.getItem(key2); nv3 = localStorage.getItem(nk2); } catch (e) {}
-    if (ov3 == null) continue;
-    if (nv3 != null && nv3 !== '') {
-      if (String(nv3).indexOf(String(ov3)) >= 0) { try { localStorage.removeItem(key2); } catch (e) {} }
-      continue;
-    }
-    try { localStorage.setItem(nk2, ov3); localStorage.removeItem(key2); } catch (e) {}
+    if (hits.length === 1) moveFreeKeyToArchive(key, p, hits[0]);
   }
+  // 维度可见性键同构搬家
+  for (var k3 = 0; k3 < keys.length; k3++) {
+    var key3 = keys[k3];
+    if (key3.indexOf('bz_dim_vis_') !== 0) continue;
+    var fp3 = key3.slice('bz_dim_vis_'.length);
+    var seg3 = /^#\d+$/.test(fp3) ? null : fp3;
+    if (!seg3) continue;
+    var pr3 = seg3.split('|');
+    if (pr3.length !== 7) continue;
+    var hits3 = [];
+    for (var j3 = 0; j3 < archives.length; j3++) {
+      if ((archives[j3].name || '') === pr3[0] && (archives[j3].gender || '') === pr3[1]) hits3.push(archives[j3]);
+    }
+    if (hits3.length !== 1) continue;
+    try {
+      var v3 = localStorage.getItem(key3);
+      if (v3 != null && localStorage.getItem('bz_dim_vis_#' + hits3[0].id) == null) {
+        localStorage.setItem('bz_dim_vis_#' + hits3[0].id, v3);
+        localStorage.removeItem(key3);
+      }
+    } catch (e) {}
+  }
+  try { localStorage.setItem('bz_mount_v1', '1'); } catch (e) {}
+  try { if (localStorage.getItem('bz_mount_v1_audio') !== '1') migrateAudioKeysToIdMount(archives); } catch (e) {}
 }
 
 // ===== v0.80.0 录音随档案变更迁移（IndexedDB fire-and-forget，键指纹与分析记录同构） =====
@@ -8723,11 +8842,13 @@ function syncChartMd(a, noteText, dimNotes) {
 }
 
 function syncNoteOf(a, notes) {
-  // 记录键存的是公历（排盘数据），农历档案必须转公历再拼键，否则永远匹配不上
+  var base = recNotesKeyFor(a, '');
+  if (base && notes[base]) return notes[base];
+  // 旧版指纹键兜底（编号挂载上线前的存量记录）
   var sd = archiveSolarYmd(a) || { y: a.year, m: a.month, d: a.day };
-  var base = REC_NOTES_PREFIX + (a.name || '') + '|' + (a.gender || '') + '|'
+  var base0 = REC_NOTES_PREFIX + (a.name || '') + '|' + (a.gender || '') + '|'
     + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
-  if (notes[base]) return notes[base];
+  if (notes[base0]) return notes[base0];
   var pfx = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|';
   var best = '';
   for (var k in notes) {
@@ -8756,10 +8877,11 @@ function syncNoteDimsOf(a, notes) {
     var dm2 = rest.slice(0, cut);
     if (order.indexOf(dm2) < 0) order.push(dm2);
   }
-  var tail = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
+  var tail = '#' + a.id;
+  var tail0 = (a.name || '') + '|' + (a.gender || '') + '|' + sd.y + '|' + sd.m + '|' + sd.d + '|' + (+a.hour || 0) + '|' + (+a.min || 0);
   var out = [];
   for (var i = 0; i < order.length; i++) {
-    var txt = notes[pfx + order[i] + '|' + tail] || '';
+    var txt = notes[pfx + order[i] + '|' + tail] || notes[pfx + order[i] + '|' + tail0] || '';
     if (String(txt).trim()) out.push([order[i], txt]);
   }
   return out;
@@ -9268,6 +9390,10 @@ function openChartMd() {
     migrateRecNotesKeys: migrateRecNotesKeys,
     migrateOrphanRecNotes: migrateOrphanRecNotes,
     migrateRecAudioKeys: migrateRecAudioKeys,
+    migrateFreeNotesToArchive: migrateFreeNotesToArchive,
+    findArchiveByNameGender: findArchiveByNameGender,
+    mountSegOf: mountSegOf,
+    parseRecNotesKey: parseRecNotesKey,
     recNotesKeyFor: recNotesKeyFor,
     editCalChange: editCalChange,
     editSolarToggle: editSolarToggle,
@@ -13911,7 +14037,9 @@ function dimRemove(name) {
 function dimVisKey() {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_DIM_VIS + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_DIM_VIS + m;
 }
 function dimVisGet() {
   var v = null;
@@ -13942,7 +14070,9 @@ function dimVisibleDims(suffix, pd) {
 function recNotesKey(suffix, dim, pd) {
   var d = pd || window._paipanData;
   if (!d) return null;
-  return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_REC_NOTES + (suffix || '') + dimSegOf(dim) + m;
 }
 
 // ===== v0.66.0 分析记录防丢（指纹取不到时不再显示空白）=====
@@ -13962,9 +14092,11 @@ function recKeyParts(key) {
     dim = raw.slice(1, cut);
     raw = raw.slice(cut + 1);
   }
+  // v0.103.0：编号挂载段 #档案id（改名改生日不变）
+  if (/^#\d+$/.test(raw)) return { prefix: prefix, dim: dim, mount: raw, mountId: +raw.slice(1), name: null };
   var p = raw.split('|');
   if (p.length !== 7) return null;
-  return { prefix: prefix, dim: dim, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
+  return { prefix: prefix, dim: dim, mount: raw, name: p[0], gender: p[1], y: p[2], m: p[3], d: p[4], h: p[5], mi: p[6] };
 }
 function recNoteGet(key) {
   try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
@@ -13991,7 +14123,7 @@ function recNoteCandidates(suffix, dim, pd) {
       var k = localStorage.key(i);
       if (!k || k === out.key || k.indexOf(LS_REC_NOTES) !== 0) continue;
       var p = recKeyParts(k);
-      if (!p || p.prefix !== prefix || p.dim !== dim || p.name !== name || p.gender !== gender) continue;
+      if (!p || p.mountId != null || p.prefix !== prefix || p.dim !== dim || p.name !== name || p.gender !== gender) continue;
       var txt = recNoteGet(k);
       if (!txt.trim()) continue;
       all.push({ key: k, ymd: [p.y, p.m, p.d].join('|'), h: p.h, mi: p.mi, text: txt });
@@ -14070,7 +14202,7 @@ function loadRecAlt(btn) {
   var box = panel.querySelector('.rec-alts');
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
   var p = recKeyParts(k);
-  recStatusShow(panel, '已载入 ' + (p ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
+  recStatusShow(panel, '已载入 ' + (p && p.y != null ? p.y + '-' + p.m + '-' + p.d + ' ' + recPad(p.h) + ':' + recPad(p.mi) : ''), true);
 }
 function recAutogrow(ta) {
   ta.style.height = 'auto';
@@ -14393,7 +14525,7 @@ function dimRename(oldName, newName) {
       if (!k) continue;
       var p = recKeyParts(k);
       if (p && p.dim === oldName) {
-        var nk = LS_REC_NOTES + p.prefix + dimSegOf(newName) + [p.name, p.gender, p.y, p.m, p.d, p.h, p.mi].join('|');
+        var nk = LS_REC_NOTES + p.prefix + dimSegOf(newName) + p.mount;
         if (recNoteGet(nk).trim()) { conflict = nk; break; }
         moves.push({ from: k, to: nk });
       } else if (k.indexOf(LS_DIM_VIS) === 0) {
@@ -14561,7 +14693,9 @@ var LS_REC_AUDIO = 'bz_rec_audio_';
 function recAudioKey(suffix) {
   var d = window._paipanData;
   if (!d) return null;
-  return LS_REC_AUDIO + (suffix || '') + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
+  var m = (window.ARCHIVE && ARCHIVE.mountSegOf) ? ARCHIVE.mountSegOf(d) : null;
+  if (!m) return null;
+  return LS_REC_AUDIO + (suffix || '') + m;
 }
 function recAudioDb() {
   return new Promise(function(res, rej) {
@@ -19602,6 +19736,14 @@ function cmpSetState(entries) {
       var cut = rest.lastIndexOf('§');
       first = (cut >= 0) ? rest.slice(cut + 1) : rest;
     }
+    if (/^#\d+$/.test(first)) {
+      var aid = +first.slice(1);
+      var arcs = (window.ARCHIVE && ARCHIVE.getArchives) ? ARCHIVE.getArchives() : [];
+      for (var ai = 0; ai < arcs.length; ai++) {
+        if (arcs[ai].id === aid) return ftIdOf(arcs[ai]);
+      }
+      return null;
+    }
     return first + '|' + s[1] + '|' + s[2] + '|' + s[3] + '|' + s[4];
   }
   function buildFTIndex() {
@@ -21179,8 +21321,18 @@ function cmpSetState(entries) {
     for (var i = 0; i < list.length; i++) {
       var dim = list[i], seg = (dim === '分析记录') ? '' : (DIM_MARK + dim + '|'), txt = '';
       try {
-        var k = (window.ARCHIVE && ARCHIVE.recNotesKeyFor) ? ARCHIVE.recNotesKeyFor(a, seg) : null;
-        txt = k ? (localStorage.getItem(k) || '') : '';
+        var kk = null;
+        if (window.ARCHIVE && ARCHIVE.recNotesKeyFor) {
+          if (a && a.id != null) kk = ARCHIVE.recNotesKeyFor(a, seg);
+          else if (a && ARCHIVE.findArchiveByNameGender) {
+            var ra = ARCHIVE.findArchiveByNameGender(a.name, a.gender);
+            kk = ra ? ARCHIVE.recNotesKeyFor(ra, seg) : null;
+          }
+        }
+        if (!kk && window.ARCHIVE && ARCHIVE.mountSegOf && a) {
+          kk = 'bz_rec_notes_' + seg + ARCHIVE.mountSegOf({ name: a.name, gender: a.gender, y: a.year, m: a.month, d: a.day, h: a.hour, mi: a.min }) || null;
+        }
+        txt = kk ? (localStorage.getItem(kk) || '') : '';
       } catch (e) { txt = ''; }
       txt = String(txt).trim();
       if (!txt) continue;
@@ -21281,7 +21433,7 @@ function cmpSetState(entries) {
     var md = '【盘面信息】\n' + (chartMd || '（排盘数据暂缺）');
     var ln = liunianLine();
     if (ln) md += '\n## 近年流年\n' + ln + '\n';
-    return clipsOfKey(REC_KEY_PFX + fpOf(d)).then(function(clips) {
+    return clipsOfKey(REC_KEY_PFX + ((window.ARCHIVE && ARCHIVE.mountSegOf) ? (ARCHIVE.mountSegOf(d) || fpOf(d)) : fpOf(d))).then(function(clips) {
       stats.clips = clips.length;
       if (clips.length) {
         var seg = ['【录音稿】'];
@@ -25559,61 +25711,112 @@ function captureScreenshot() {
     host.innerHTML = '';
   })();
 
-  // ===== v0.55.1 分析记录随档案改名迁移 =====
-  (function() {
-    tests.push({ section:'分析记录迁移(v0.55.1)' });
+  // ===== v0.103.0 编号挂载：档案/记录/录音键挂 #编号，改名改生日不再迁移 =====
+  // 异步断言（IndexedDB 搬家），经 __testAppend 追加统一统计（与 AUD 段同模式）
+  (async function() {
+    function push(t) { if (typeof window.__testAppend === 'function') window.__testAppend(t); else tests.push(t); }
     var A = window.ARCHIVE;
-    if (!A || typeof A.migrateRecNotesKeys !== 'function' || typeof A.recNotesKeyFor !== 'function') {
-      tests.push(fail('MIG 前置: ARCHIVE.migrateRecNotesKeys/recNotesKeyFor 已挂载', '缺失'));
+    if (!A || typeof A.recNotesKeyFor !== 'function' || typeof A.mountSegOf !== 'function' || typeof A.migrateOrphanRecNotes !== 'function') {
+      push(fail('MNT 前置: ARCHIVE.recNotesKeyFor/mountSegOf/migrateOrphanRecNotes 已挂载', '缺失'));
       return;
     }
-    var oldA = { name:'迁测旧名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar' };
-    var newA = Object.assign({}, oldA, { name:'迁测新名' });
-    var ok = A.recNotesKeyFor(oldA, '');
-    var nk = A.recNotesKeyFor(newA, '');
-    var savedArch = null;
+    var a1 = { id: 'mnt-t1', name:'挂测甲', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
+    var savedArch = null, savedMount = null, savedMountA = null;
+    var okFree = 'bz_rec_notes_挂测甲|女|1981|9|6|22|30';
+    var okFreeA = 'bz_rec_audio_挂测甲|女|1981|9|6|22|30';
     try {
-      tests.push(eq('MIG T01: key 构造含名字性别生日', ok, 'bz_rec_notes_迁测旧名|女|1981|9|6|22|30'));
       savedArch = localStorage.getItem('bz_archives_v2');
-      localStorage.setItem(ok, '旧记录X');
-      localStorage.removeItem(nk);
-      A.migrateRecNotesKeys(oldA, newA);
-      tests.push(eq('MIG T02: 改名后记录迁至新key', localStorage.getItem(nk), '旧记录X'));
-      tests.push(eq('MIG T03: 旧key已删', localStorage.getItem(ok), null));
+      savedMount = localStorage.getItem('bz_mount_v1');
+      savedMountA = localStorage.getItem('bz_mount_v1_audio');
+      localStorage.removeItem('bz_mount_v1');
+      localStorage.removeItem('bz_mount_v1_audio');
       var archList = [];
       try { archList = JSON.parse(savedArch) || []; } catch(e) { archList = []; }
-      var migArch = { id: 'mig-t04', name:'迁测新名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
-      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([migArch])));
-      localStorage.setItem(ok, '孤儿Y');
-      localStorage.setItem(nk, '新Z');
+      archList = archList.filter(function(x) { return String(x.id).indexOf('mnt-t') !== 0; });
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([a1])));
+
+      push(eq('MNT T01: recNotesKeyFor 挂 #id', A.recNotesKeyFor(a1, ''), 'bz_rec_notes_#mnt-t1'));
+      push(eq('MNT T02: recNotesKeyFor twin 前缀保留', A.recNotesKeyFor(a1, 'twin|'), 'bz_rec_notes_twin|#mnt-t1'));
+      var pd1 = { name:'挂测甲', gender:'女', y:1981, m:9, d:6, h:22, mi:30 };
+      push(eq('MNT T03: 盘面挂载段为 #id', A.mountSegOf(pd1), '#mnt-t1'));
+      var pd2 = Object.assign({}, pd1, { name:'挂测甲改名' });
+      push(eq('MNT T04: 档案改名后记录键不变', A.recNotesKeyFor(Object.assign({}, a1, { name:'挂测甲改名' }), ''), 'bz_rec_notes_#mnt-t1'));
+      var pd3 = Object.assign({}, pd1, { y:1982, h:5 });
+      push(eq('MNT T05: 改生日盘面仍挂 #id', A.mountSegOf(pd3), '#mnt-t1'));
+      push(eq('MNT T06: 未建档盘面退回指纹', A.mountSegOf({ name:'', gender:'男', y:2000, m:1, d:2, h:3, mi:4 }), '|男|2000|1|2|3|4'));
+
+      localStorage.setItem(okFree, '搬家内容');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
-      tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
-      var ok2 = 'bz_rec_notes_迁测新名|女|1981|9|6|20|0';
-      localStorage.setItem(ok2, '时辰改记W');
-      localStorage.removeItem(nk);
+      push(eq('MNT T07: 搬家落 #id 键', localStorage.getItem('bz_rec_notes_#mnt-t1'), '搬家内容'));
+      push(eq('MNT T08: 旧指纹键已删', localStorage.getItem(okFree), null));
+      push(eq('MNT T09: 搬家版本戳写入', localStorage.getItem('bz_mount_v1'), '1'));
+
+      var b1 = Object.assign({}, a1, { id:'mnt-t2' });
+      var arcsNow = JSON.parse(localStorage.getItem('bz_archives_v2'));
+      arcsNow = arcsNow.filter(function(x) { return String(x.id) !== 'mnt-t1'; }).concat([b1]);
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arcsNow));
+      localStorage.setItem(okFree, '歧义不吞');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T06: 时辰变更断链key按名回收', localStorage.getItem(nk), '时辰改记W'));
-      tests.push(eq('MIG T07: 回收后旧key已删', localStorage.getItem(ok2), null));
-      localStorage.setItem(ok2, '另W');
-      localStorage.setItem(nk, '已有V');
+      push(eq('MNT T10: 同名多档案指纹键不误吞', localStorage.getItem(okFree), '歧义不吞'));
+      localStorage.removeItem(okFree);
+      arcsNow = arcsNow.filter(function(x) { return String(x.id) !== 'mnt-t2'; }).concat([a1]);
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arcsNow));
+
+      // 录音 IndexedDB 搬家：写 free 键 clip → 搬家 → #id 键
+      var db = await new Promise(function(res) {
+        var r = indexedDB.open('bz_rec_audio', 1);
+        r.onupgradeneeded = function() {
+          var d0 = r.result;
+          if (!d0.objectStoreNames.contains('clips')) {
+            var st0 = d0.createObjectStore('clips', { keyPath: 'id' });
+            st0.createIndex('key', 'key', { unique: false });
+          }
+        };
+        r.onsuccess = function() { res(r.result); };
+      });
+      var clipId = okFreeA + '|999';
+      await new Promise(function(res) {
+        var tx = db.transaction('clips', 'readwrite');
+        tx.objectStore('clips').put({ id: clipId, key: okFreeA, name: '搬家录音', ts: 999, dur: 1, mime: 'audio/webm', blob: new Blob(['x'], { type: 'audio/webm' }) });
+        tx.oncomplete = function() { res(); };
+      });
+      localStorage.removeItem('bz_mount_v1');
+      localStorage.removeItem('bz_mount_v1_audio');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T08: 新key已有不同内容不覆盖', localStorage.getItem(ok2), '另W'));
-      tests.push(eq('MIG T09: 新key保持原值', localStorage.getItem(nk), '已有V'));
-      var archList2 = JSON.parse(localStorage.getItem('bz_archives_v2'));
-      var twin1 = Object.assign({}, migArch, { id:'mig-t10a', name:'迁测重名' });
-      var twin2 = Object.assign({}, migArch, { id:'mig-t10b', name:'迁测重名' });
-      localStorage.setItem('bz_archives_v2', JSON.stringify(archList2.concat([twin1, twin2])));
-      var ok3 = 'bz_rec_notes_迁测重名|女|1981|9|6|23|0';
-      localStorage.setItem(ok3, '重名R');
-      A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T10: 同名双档案不误吞', localStorage.getItem(ok3), '重名R'));
+      var moved = false, oldGone = false;
+      for (var tries = 0; tries < 40 && !moved; tries++) {
+        await new Promise(function(r) { setTimeout(r, 100); });
+        var l1 = await new Promise(function(res) {
+          var t1 = db.transaction('clips', 'readonly');
+          var g1 = t1.objectStore('clips').get('bz_rec_audio_#mnt-t1|999');
+          g1.onsuccess = function() { res(g1.result); };
+        });
+        var l2 = await new Promise(function(res) {
+          var t2 = db.transaction('clips', 'readonly');
+          var g2 = t2.objectStore('clips').get(clipId);
+          g2.onsuccess = function() { res(g2.result); };
+        });
+        moved = !!l1;
+        oldGone = !l2;
+      }
+      push(eq('MNT T11: 录音搬家落 #id 键', moved, true));
+      push(eq('MNT T12: 录音旧条目已删', oldGone, true));
+      push(eq('MNT T13: 录音搬家戳写入', localStorage.getItem('bz_mount_v1_audio'), '1'));
+      await new Promise(function(res) {
+        var tx = db.transaction('clips', 'readwrite');
+        tx.objectStore('clips').delete('bz_rec_audio_#mnt-t1|999');
+        tx.objectStore('clips').delete('bz_rec_audio_#mnt-t2|999');
+        tx.objectStore('clips').delete(okFreeA + '|999');
+        tx.oncomplete = function() { res(); };
+      });
+      db.close();
     } finally {
       if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
-      localStorage.removeItem(ok);
-      localStorage.removeItem(nk);
-      localStorage.removeItem('bz_rec_notes_迁测新名|女|1981|9|6|20|0');
-      localStorage.removeItem('bz_rec_notes_迁测重名|女|1981|9|6|23|0');
+      if (savedMount != null) localStorage.setItem('bz_mount_v1', savedMount); else localStorage.removeItem('bz_mount_v1');
+      if (savedMountA != null) localStorage.setItem('bz_mount_v1_audio', savedMountA); else localStorage.removeItem('bz_mount_v1_audio');
+      localStorage.removeItem(okFree);
+      localStorage.removeItem('bz_rec_notes_#mnt-t1');
+      localStorage.removeItem('bz_rec_notes_twin|#mnt-t1');
     }
   })();
 
@@ -29355,42 +29558,43 @@ function captureScreenshot() {
       for (var x = 0; x < arr.length; x++) if (arr[x].id === id) i = x;
       return i;
     };
+    var kf = function(pre, id) { return P + (pre || '') + '#' + id; };
     try {
       window.confirm = function() { return true; };
 
-      A.saveArchives([mk('mt-a', '迁移甲', '男'), mk('mt-b', '迁移甲', '女')]);
-      localStorage.setItem(P + '迁移甲|男|1988|3|14|4|30', '男盘记录内容迁移测试');
-      A.moveToTrash(idxOf('mt-a'));
-      tests.push(eq(sec + ' T1: 删除后同名幸存者(性别不同)继承记录', localStorage.getItem(P + '迁移甲|女|1988|3|14|4|30'), '男盘记录内容迁移测试'));
-      tests.push(eq(sec + ' T2: 迁移后旧键删除', localStorage.getItem(P + '迁移甲|男|1988|3|14|4|30'), null));
+      A.saveArchives([mk(901001, '迁移甲', '男'), mk(901002, '迁移甲', '女')]);
+      localStorage.setItem(kf('', 901001), '男盘记录内容迁移测试');
+      A.moveToTrash(idxOf(901001));
+      tests.push(eq(sec + ' T1: 删除后同名幸存者(性别不同)继承记录', localStorage.getItem(kf('', 901002)), '男盘记录内容迁移测试'));
+      tests.push(eq(sec + ' T2: 迁移后旧键删除', localStorage.getItem(kf('', 901001)), null));
 
-      A.saveArchives([mk('mt-c', '迁移乙', '男'), mk('mt-d', '迁移乙', '女')]);
-      localStorage.setItem(P + '迁移乙|男|1988|3|14|4|30', '旧内容');
-      localStorage.setItem(P + '迁移乙|女|1988|3|14|4|30', '新内容更多');
-      A.moveToTrash(idxOf('mt-c'));
-      tests.push(eq(sec + ' T3: 幸存键非空不覆盖', localStorage.getItem(P + '迁移乙|女|1988|3|14|4|30'), '新内容更多'));
-      tests.push(eq(sec + ' T4: 幸存键非空时旧键保留', localStorage.getItem(P + '迁移乙|男|1988|3|14|4|30'), '旧内容'));
+      A.saveArchives([mk(901003, '迁移乙', '男'), mk(901004, '迁移乙', '女')]);
+      localStorage.setItem(kf('', 901003), '旧内容');
+      localStorage.setItem(kf('', 901004), '新内容更多');
+      A.moveToTrash(idxOf(901003));
+      tests.push(eq(sec + ' T3: 幸存键非空不覆盖', localStorage.getItem(kf('', 901004)), '新内容更多'));
+      tests.push(eq(sec + ' T4: 幸存键非空时旧键保留', localStorage.getItem(kf('', 901003)), '旧内容'));
 
-      A.saveArchives([mk('mt-e', '迁移丙', '男')]);
-      localStorage.setItem(P + '迁移丙|男|1988|3|14|4|30', '孤儿内容');
-      A.moveToTrash(idxOf('mt-e'));
-      tests.push(eq(sec + ' T5: 无幸存者记录原地不动', localStorage.getItem(P + '迁移丙|男|1988|3|14|4|30'), '孤儿内容'));
+      A.saveArchives([mk(901005, '迁移丙', '男')]);
+      localStorage.setItem(kf('', 901005), '孤儿内容');
+      A.moveToTrash(idxOf(901005));
+      tests.push(eq(sec + ' T5: 无幸存者记录原地不动', localStorage.getItem(kf('', 901005)), '孤儿内容'));
 
-      A.saveArchives([mk('mt-f', '迁移丁', '男'), mk('mt-g', '迁移丁', '女')]);
-      localStorage.setItem(P + '迁移丁|男|1988|3|14|4|30', '基础');
-      localStorage.setItem(P + 'twin|迁移丁|男|1988|3|14|4|30', '双胞胎');
-      localStorage.setItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', '维度内容');
-      A.moveToTrash(idxOf('mt-f'));
-      tests.push(eq(sec + ' T6: 主键迁移', localStorage.getItem(P + '迁移丁|女|1988|3|14|4|30'), '基础'));
-      tests.push(eq(sec + ' T7: twin 键迁移', localStorage.getItem(P + 'twin|迁移丁|女|1988|3|14|4|30'), '双胞胎'));
-      tests.push(eq(sec + ' T8: 维度键迁移', localStorage.getItem(P + 'twin|§大运|迁移丁|女|1988|3|14|4|30'), '维度内容'));
+      A.saveArchives([mk(901006, '迁移丁', '男'), mk(901007, '迁移丁', '女')]);
+      localStorage.setItem(kf('', 901006), '基础');
+      localStorage.setItem(kf('twin|', 901006), '双胞胎');
+      localStorage.setItem(kf('twin|§大运|', 901006), '维度内容');
+      A.moveToTrash(idxOf(901006));
+      tests.push(eq(sec + ' T6: 主键迁移', localStorage.getItem(kf('', 901007)), '基础'));
+      tests.push(eq(sec + ' T7: twin 键迁移', localStorage.getItem(kf('twin|', 901007)), '双胞胎'));
+      tests.push(eq(sec + ' T8: 维度键迁移', localStorage.getItem(kf('twin|§大运|', 901007)), '维度内容'));
       tests.push(eq(sec + ' T9: 旧 twin/维度键已删',
-        localStorage.getItem(P + 'twin|迁移丁|男|1988|3|14|4|30') === null && localStorage.getItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30') === null, true));
+        localStorage.getItem(kf('twin|', 901006)) === null && localStorage.getItem(kf('twin|§大运|', 901006)) === null, true));
 
-      A.saveArchives([mk('mt-h', '旧名戊', '男'), mk('mt-i', '新名戊', '男')]);
-      localStorage.setItem(P + '旧名戊|男|1988|3|14|4|30', '改名内容');
-      A.moveToTrash(idxOf('mt-h'));
-      tests.push(eq(sec + ' T10: 同性别同盘改名删旧迁移', localStorage.getItem(P + '新名戊|男|1988|3|14|4|30'), '改名内容'));
+      A.saveArchives([mk(901008, '旧名戊', '男'), mk(901009, '新名戊', '男')]);
+      localStorage.setItem(kf('', 901008), '改名内容');
+      A.moveToTrash(idxOf(901008));
+      tests.push(eq(sec + ' T10: 同性别同盘改名删旧迁移', localStorage.getItem(kf('', 901009)), '改名内容'));
     } catch (e) {
       tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
     } finally {
@@ -29398,11 +29602,9 @@ function captureScreenshot() {
       if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
       if (savedTrash === null) localStorage.removeItem(window.CONST.TRASH_KEY); else localStorage.setItem(window.CONST.TRASH_KEY, savedTrash);
       if (savedTomb === null) localStorage.removeItem('bz_archives_tomb'); else localStorage.setItem('bz_archives_tomb', savedTomb);
-      [P + '迁移甲|男|1988|3|14|4|30', P + '迁移甲|女|1988|3|14|4|30', P + '迁移乙|男|1988|3|14|4|30', P + '迁移乙|女|1988|3|14|4|30',
-       P + '迁移丙|男|1988|3|14|4|30', P + '迁移丁|男|1988|3|14|4|30', P + '迁移丁|女|1988|3|14|4|30',
-       P + 'twin|迁移丁|男|1988|3|14|4|30', P + 'twin|迁移丁|女|1988|3|14|4|30',
-       P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', P + 'twin|§大运|迁移丁|女|1988|3|14|4|30',
-       P + '旧名戊|男|1988|3|14|4|30', P + '新名戊|男|1988|3|14|4|30'].forEach(function(k) { localStorage.removeItem(k); });
+      [901001,901002,901003,901004,901005,901006,901007,901008,901009].forEach(function(id) {
+        ['', 'twin|', 'twin|§大运|'].forEach(function(pre) { localStorage.removeItem(kf(pre, id)); });
+      });
     }
   })();
 
@@ -29585,7 +29787,7 @@ window.__testAppend = function(t) {
       push({ ok: md.indexOf('<img') < 0 && md.indexOf('&lt;img') >= 0 && md.indexOf('<b>粗</b>') >= 0 && md.indexOf('<code>码</code>') >= 0, label: 'AGT T03: HTML 先转义再行内 md（防 XSS）', detail: md.slice(0, 32) });
 
       var archG = { name: dg.name, gender: dg.gender, year: dg.y, month: dg.m, day: dg.d, hour: dg.h, min: dg.mi };
-      noteKeyG = ARCHIVE.recNotesKeyFor(archG, '');
+      noteKeyG = 'bz_rec_notes_' + [dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi].join('|');
       localStorage.setItem(noteKeyG, 'AGT记录标记：甲木日主做功。');
       var tsG = Date.now();
       clipIdG = clipKeyG + '|' + tsG;
@@ -29771,7 +29973,7 @@ window.__testAppend = function(t) {
 
       // v0.100.4 卡片库升级：卡头含昵称/标签，重点卡片带记录全文（预算自适应）
       var origArchsG = ARCHIVE.getArchives();
-      var cardAG = { nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };
+      var cardAG = { id: 'agt-card', nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };
       ARCHIVE.saveArchivesRaw([cardAG]);
       var fullKeyG = ARCHIVE.recNotesKeyFor(cardAG, '');
       var bigG = 'AGT全文标记：七杀格，用食神制杀。';

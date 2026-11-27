@@ -1,4 +1,4 @@
-/* 八字排盘 v0.56.0 — main.js */
+/* 八字排盘 v0.103.0 — main.js */
 (function() {
 
   // ===== 别名：来自 constants.js =====
@@ -3835,61 +3835,112 @@ function captureScreenshot() {
     host.innerHTML = '';
   })();
 
-  // ===== v0.55.1 分析记录随档案改名迁移 =====
-  (function() {
-    tests.push({ section:'分析记录迁移(v0.55.1)' });
+  // ===== v0.103.0 编号挂载：档案/记录/录音键挂 #编号，改名改生日不再迁移 =====
+  // 异步断言（IndexedDB 搬家），经 __testAppend 追加统一统计（与 AUD 段同模式）
+  (async function() {
+    function push(t) { if (typeof window.__testAppend === 'function') window.__testAppend(t); else tests.push(t); }
     var A = window.ARCHIVE;
-    if (!A || typeof A.migrateRecNotesKeys !== 'function' || typeof A.recNotesKeyFor !== 'function') {
-      tests.push(fail('MIG 前置: ARCHIVE.migrateRecNotesKeys/recNotesKeyFor 已挂载', '缺失'));
+    if (!A || typeof A.recNotesKeyFor !== 'function' || typeof A.mountSegOf !== 'function' || typeof A.migrateOrphanRecNotes !== 'function') {
+      push(fail('MNT 前置: ARCHIVE.recNotesKeyFor/mountSegOf/migrateOrphanRecNotes 已挂载', '缺失'));
       return;
     }
-    var oldA = { name:'迁测旧名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar' };
-    var newA = Object.assign({}, oldA, { name:'迁测新名' });
-    var ok = A.recNotesKeyFor(oldA, '');
-    var nk = A.recNotesKeyFor(newA, '');
-    var savedArch = null;
+    var a1 = { id: 'mnt-t1', name:'挂测甲', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
+    var savedArch = null, savedMount = null, savedMountA = null;
+    var okFree = 'bz_rec_notes_挂测甲|女|1981|9|6|22|30';
+    var okFreeA = 'bz_rec_audio_挂测甲|女|1981|9|6|22|30';
     try {
-      tests.push(eq('MIG T01: key 构造含名字性别生日', ok, 'bz_rec_notes_迁测旧名|女|1981|9|6|22|30'));
       savedArch = localStorage.getItem('bz_archives_v2');
-      localStorage.setItem(ok, '旧记录X');
-      localStorage.removeItem(nk);
-      A.migrateRecNotesKeys(oldA, newA);
-      tests.push(eq('MIG T02: 改名后记录迁至新key', localStorage.getItem(nk), '旧记录X'));
-      tests.push(eq('MIG T03: 旧key已删', localStorage.getItem(ok), null));
+      savedMount = localStorage.getItem('bz_mount_v1');
+      savedMountA = localStorage.getItem('bz_mount_v1_audio');
+      localStorage.removeItem('bz_mount_v1');
+      localStorage.removeItem('bz_mount_v1_audio');
       var archList = [];
       try { archList = JSON.parse(savedArch) || []; } catch(e) { archList = []; }
-      var migArch = { id: 'mig-t04', name:'迁测新名', gender:'女', year:1981, month:9, day:6, hour:22, min:30, calendarType:'solar', isPreset:false };
-      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([migArch])));
-      localStorage.setItem(ok, '孤儿Y');
-      localStorage.setItem(nk, '新Z');
+      archList = archList.filter(function(x) { return String(x.id).indexOf('mnt-t') !== 0; });
+      localStorage.setItem('bz_archives_v2', JSON.stringify(archList.concat([a1])));
+
+      push(eq('MNT T01: recNotesKeyFor 挂 #id', A.recNotesKeyFor(a1, ''), 'bz_rec_notes_#mnt-t1'));
+      push(eq('MNT T02: recNotesKeyFor twin 前缀保留', A.recNotesKeyFor(a1, 'twin|'), 'bz_rec_notes_twin|#mnt-t1'));
+      var pd1 = { name:'挂测甲', gender:'女', y:1981, m:9, d:6, h:22, mi:30 };
+      push(eq('MNT T03: 盘面挂载段为 #id', A.mountSegOf(pd1), '#mnt-t1'));
+      var pd2 = Object.assign({}, pd1, { name:'挂测甲改名' });
+      push(eq('MNT T04: 档案改名后记录键不变', A.recNotesKeyFor(Object.assign({}, a1, { name:'挂测甲改名' }), ''), 'bz_rec_notes_#mnt-t1'));
+      var pd3 = Object.assign({}, pd1, { y:1982, h:5 });
+      push(eq('MNT T05: 改生日盘面仍挂 #id', A.mountSegOf(pd3), '#mnt-t1'));
+      push(eq('MNT T06: 未建档盘面退回指纹', A.mountSegOf({ name:'', gender:'男', y:2000, m:1, d:2, h:3, mi:4 }), '|男|2000|1|2|3|4'));
+
+      localStorage.setItem(okFree, '搬家内容');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T04: 孤儿记录合并(旧前新后)', localStorage.getItem(nk), '孤儿Y\n\n新Z'));
-      tests.push(eq('MIG T05: 孤儿旧key已删', localStorage.getItem(ok), null));
-      var ok2 = 'bz_rec_notes_迁测新名|女|1981|9|6|20|0';
-      localStorage.setItem(ok2, '时辰改记W');
-      localStorage.removeItem(nk);
+      push(eq('MNT T07: 搬家落 #id 键', localStorage.getItem('bz_rec_notes_#mnt-t1'), '搬家内容'));
+      push(eq('MNT T08: 旧指纹键已删', localStorage.getItem(okFree), null));
+      push(eq('MNT T09: 搬家版本戳写入', localStorage.getItem('bz_mount_v1'), '1'));
+
+      var b1 = Object.assign({}, a1, { id:'mnt-t2' });
+      var arcsNow = JSON.parse(localStorage.getItem('bz_archives_v2'));
+      arcsNow = arcsNow.filter(function(x) { return String(x.id) !== 'mnt-t1'; }).concat([b1]);
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arcsNow));
+      localStorage.setItem(okFree, '歧义不吞');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T06: 时辰变更断链key按名回收', localStorage.getItem(nk), '时辰改记W'));
-      tests.push(eq('MIG T07: 回收后旧key已删', localStorage.getItem(ok2), null));
-      localStorage.setItem(ok2, '另W');
-      localStorage.setItem(nk, '已有V');
+      push(eq('MNT T10: 同名多档案指纹键不误吞', localStorage.getItem(okFree), '歧义不吞'));
+      localStorage.removeItem(okFree);
+      arcsNow = arcsNow.filter(function(x) { return String(x.id) !== 'mnt-t2'; }).concat([a1]);
+      localStorage.setItem('bz_archives_v2', JSON.stringify(arcsNow));
+
+      // 录音 IndexedDB 搬家：写 free 键 clip → 搬家 → #id 键
+      var db = await new Promise(function(res) {
+        var r = indexedDB.open('bz_rec_audio', 1);
+        r.onupgradeneeded = function() {
+          var d0 = r.result;
+          if (!d0.objectStoreNames.contains('clips')) {
+            var st0 = d0.createObjectStore('clips', { keyPath: 'id' });
+            st0.createIndex('key', 'key', { unique: false });
+          }
+        };
+        r.onsuccess = function() { res(r.result); };
+      });
+      var clipId = okFreeA + '|999';
+      await new Promise(function(res) {
+        var tx = db.transaction('clips', 'readwrite');
+        tx.objectStore('clips').put({ id: clipId, key: okFreeA, name: '搬家录音', ts: 999, dur: 1, mime: 'audio/webm', blob: new Blob(['x'], { type: 'audio/webm' }) });
+        tx.oncomplete = function() { res(); };
+      });
+      localStorage.removeItem('bz_mount_v1');
+      localStorage.removeItem('bz_mount_v1_audio');
       A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T08: 新key已有不同内容不覆盖', localStorage.getItem(ok2), '另W'));
-      tests.push(eq('MIG T09: 新key保持原值', localStorage.getItem(nk), '已有V'));
-      var archList2 = JSON.parse(localStorage.getItem('bz_archives_v2'));
-      var twin1 = Object.assign({}, migArch, { id:'mig-t10a', name:'迁测重名' });
-      var twin2 = Object.assign({}, migArch, { id:'mig-t10b', name:'迁测重名' });
-      localStorage.setItem('bz_archives_v2', JSON.stringify(archList2.concat([twin1, twin2])));
-      var ok3 = 'bz_rec_notes_迁测重名|女|1981|9|6|23|0';
-      localStorage.setItem(ok3, '重名R');
-      A.migrateOrphanRecNotes();
-      tests.push(eq('MIG T10: 同名双档案不误吞', localStorage.getItem(ok3), '重名R'));
+      var moved = false, oldGone = false;
+      for (var tries = 0; tries < 40 && !moved; tries++) {
+        await new Promise(function(r) { setTimeout(r, 100); });
+        var l1 = await new Promise(function(res) {
+          var t1 = db.transaction('clips', 'readonly');
+          var g1 = t1.objectStore('clips').get('bz_rec_audio_#mnt-t1|999');
+          g1.onsuccess = function() { res(g1.result); };
+        });
+        var l2 = await new Promise(function(res) {
+          var t2 = db.transaction('clips', 'readonly');
+          var g2 = t2.objectStore('clips').get(clipId);
+          g2.onsuccess = function() { res(g2.result); };
+        });
+        moved = !!l1;
+        oldGone = !l2;
+      }
+      push(eq('MNT T11: 录音搬家落 #id 键', moved, true));
+      push(eq('MNT T12: 录音旧条目已删', oldGone, true));
+      push(eq('MNT T13: 录音搬家戳写入', localStorage.getItem('bz_mount_v1_audio'), '1'));
+      await new Promise(function(res) {
+        var tx = db.transaction('clips', 'readwrite');
+        tx.objectStore('clips').delete('bz_rec_audio_#mnt-t1|999');
+        tx.objectStore('clips').delete('bz_rec_audio_#mnt-t2|999');
+        tx.objectStore('clips').delete(okFreeA + '|999');
+        tx.oncomplete = function() { res(); };
+      });
+      db.close();
     } finally {
       if (savedArch != null) localStorage.setItem('bz_archives_v2', savedArch);
-      localStorage.removeItem(ok);
-      localStorage.removeItem(nk);
-      localStorage.removeItem('bz_rec_notes_迁测新名|女|1981|9|6|20|0');
-      localStorage.removeItem('bz_rec_notes_迁测重名|女|1981|9|6|23|0');
+      if (savedMount != null) localStorage.setItem('bz_mount_v1', savedMount); else localStorage.removeItem('bz_mount_v1');
+      if (savedMountA != null) localStorage.setItem('bz_mount_v1_audio', savedMountA); else localStorage.removeItem('bz_mount_v1_audio');
+      localStorage.removeItem(okFree);
+      localStorage.removeItem('bz_rec_notes_#mnt-t1');
+      localStorage.removeItem('bz_rec_notes_twin|#mnt-t1');
     }
   })();
 
@@ -7631,42 +7682,43 @@ function captureScreenshot() {
       for (var x = 0; x < arr.length; x++) if (arr[x].id === id) i = x;
       return i;
     };
+    var kf = function(pre, id) { return P + (pre || '') + '#' + id; };
     try {
       window.confirm = function() { return true; };
 
-      A.saveArchives([mk('mt-a', '迁移甲', '男'), mk('mt-b', '迁移甲', '女')]);
-      localStorage.setItem(P + '迁移甲|男|1988|3|14|4|30', '男盘记录内容迁移测试');
-      A.moveToTrash(idxOf('mt-a'));
-      tests.push(eq(sec + ' T1: 删除后同名幸存者(性别不同)继承记录', localStorage.getItem(P + '迁移甲|女|1988|3|14|4|30'), '男盘记录内容迁移测试'));
-      tests.push(eq(sec + ' T2: 迁移后旧键删除', localStorage.getItem(P + '迁移甲|男|1988|3|14|4|30'), null));
+      A.saveArchives([mk(901001, '迁移甲', '男'), mk(901002, '迁移甲', '女')]);
+      localStorage.setItem(kf('', 901001), '男盘记录内容迁移测试');
+      A.moveToTrash(idxOf(901001));
+      tests.push(eq(sec + ' T1: 删除后同名幸存者(性别不同)继承记录', localStorage.getItem(kf('', 901002)), '男盘记录内容迁移测试'));
+      tests.push(eq(sec + ' T2: 迁移后旧键删除', localStorage.getItem(kf('', 901001)), null));
 
-      A.saveArchives([mk('mt-c', '迁移乙', '男'), mk('mt-d', '迁移乙', '女')]);
-      localStorage.setItem(P + '迁移乙|男|1988|3|14|4|30', '旧内容');
-      localStorage.setItem(P + '迁移乙|女|1988|3|14|4|30', '新内容更多');
-      A.moveToTrash(idxOf('mt-c'));
-      tests.push(eq(sec + ' T3: 幸存键非空不覆盖', localStorage.getItem(P + '迁移乙|女|1988|3|14|4|30'), '新内容更多'));
-      tests.push(eq(sec + ' T4: 幸存键非空时旧键保留', localStorage.getItem(P + '迁移乙|男|1988|3|14|4|30'), '旧内容'));
+      A.saveArchives([mk(901003, '迁移乙', '男'), mk(901004, '迁移乙', '女')]);
+      localStorage.setItem(kf('', 901003), '旧内容');
+      localStorage.setItem(kf('', 901004), '新内容更多');
+      A.moveToTrash(idxOf(901003));
+      tests.push(eq(sec + ' T3: 幸存键非空不覆盖', localStorage.getItem(kf('', 901004)), '新内容更多'));
+      tests.push(eq(sec + ' T4: 幸存键非空时旧键保留', localStorage.getItem(kf('', 901003)), '旧内容'));
 
-      A.saveArchives([mk('mt-e', '迁移丙', '男')]);
-      localStorage.setItem(P + '迁移丙|男|1988|3|14|4|30', '孤儿内容');
-      A.moveToTrash(idxOf('mt-e'));
-      tests.push(eq(sec + ' T5: 无幸存者记录原地不动', localStorage.getItem(P + '迁移丙|男|1988|3|14|4|30'), '孤儿内容'));
+      A.saveArchives([mk(901005, '迁移丙', '男')]);
+      localStorage.setItem(kf('', 901005), '孤儿内容');
+      A.moveToTrash(idxOf(901005));
+      tests.push(eq(sec + ' T5: 无幸存者记录原地不动', localStorage.getItem(kf('', 901005)), '孤儿内容'));
 
-      A.saveArchives([mk('mt-f', '迁移丁', '男'), mk('mt-g', '迁移丁', '女')]);
-      localStorage.setItem(P + '迁移丁|男|1988|3|14|4|30', '基础');
-      localStorage.setItem(P + 'twin|迁移丁|男|1988|3|14|4|30', '双胞胎');
-      localStorage.setItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', '维度内容');
-      A.moveToTrash(idxOf('mt-f'));
-      tests.push(eq(sec + ' T6: 主键迁移', localStorage.getItem(P + '迁移丁|女|1988|3|14|4|30'), '基础'));
-      tests.push(eq(sec + ' T7: twin 键迁移', localStorage.getItem(P + 'twin|迁移丁|女|1988|3|14|4|30'), '双胞胎'));
-      tests.push(eq(sec + ' T8: 维度键迁移', localStorage.getItem(P + 'twin|§大运|迁移丁|女|1988|3|14|4|30'), '维度内容'));
+      A.saveArchives([mk(901006, '迁移丁', '男'), mk(901007, '迁移丁', '女')]);
+      localStorage.setItem(kf('', 901006), '基础');
+      localStorage.setItem(kf('twin|', 901006), '双胞胎');
+      localStorage.setItem(kf('twin|§大运|', 901006), '维度内容');
+      A.moveToTrash(idxOf(901006));
+      tests.push(eq(sec + ' T6: 主键迁移', localStorage.getItem(kf('', 901007)), '基础'));
+      tests.push(eq(sec + ' T7: twin 键迁移', localStorage.getItem(kf('twin|', 901007)), '双胞胎'));
+      tests.push(eq(sec + ' T8: 维度键迁移', localStorage.getItem(kf('twin|§大运|', 901007)), '维度内容'));
       tests.push(eq(sec + ' T9: 旧 twin/维度键已删',
-        localStorage.getItem(P + 'twin|迁移丁|男|1988|3|14|4|30') === null && localStorage.getItem(P + 'twin|§大运|迁移丁|男|1988|3|14|4|30') === null, true));
+        localStorage.getItem(kf('twin|', 901006)) === null && localStorage.getItem(kf('twin|§大运|', 901006)) === null, true));
 
-      A.saveArchives([mk('mt-h', '旧名戊', '男'), mk('mt-i', '新名戊', '男')]);
-      localStorage.setItem(P + '旧名戊|男|1988|3|14|4|30', '改名内容');
-      A.moveToTrash(idxOf('mt-h'));
-      tests.push(eq(sec + ' T10: 同性别同盘改名删旧迁移', localStorage.getItem(P + '新名戊|男|1988|3|14|4|30'), '改名内容'));
+      A.saveArchives([mk(901008, '旧名戊', '男'), mk(901009, '新名戊', '男')]);
+      localStorage.setItem(kf('', 901008), '改名内容');
+      A.moveToTrash(idxOf(901008));
+      tests.push(eq(sec + ' T10: 同性别同盘改名删旧迁移', localStorage.getItem(kf('', 901009)), '改名内容'));
     } catch (e) {
       tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
     } finally {
@@ -7674,11 +7726,9 @@ function captureScreenshot() {
       if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
       if (savedTrash === null) localStorage.removeItem(window.CONST.TRASH_KEY); else localStorage.setItem(window.CONST.TRASH_KEY, savedTrash);
       if (savedTomb === null) localStorage.removeItem('bz_archives_tomb'); else localStorage.setItem('bz_archives_tomb', savedTomb);
-      [P + '迁移甲|男|1988|3|14|4|30', P + '迁移甲|女|1988|3|14|4|30', P + '迁移乙|男|1988|3|14|4|30', P + '迁移乙|女|1988|3|14|4|30',
-       P + '迁移丙|男|1988|3|14|4|30', P + '迁移丁|男|1988|3|14|4|30', P + '迁移丁|女|1988|3|14|4|30',
-       P + 'twin|迁移丁|男|1988|3|14|4|30', P + 'twin|迁移丁|女|1988|3|14|4|30',
-       P + 'twin|§大运|迁移丁|男|1988|3|14|4|30', P + 'twin|§大运|迁移丁|女|1988|3|14|4|30',
-       P + '旧名戊|男|1988|3|14|4|30', P + '新名戊|男|1988|3|14|4|30'].forEach(function(k) { localStorage.removeItem(k); });
+      [901001,901002,901003,901004,901005,901006,901007,901008,901009].forEach(function(id) {
+        ['', 'twin|', 'twin|§大运|'].forEach(function(pre) { localStorage.removeItem(kf(pre, id)); });
+      });
     }
   })();
 
@@ -7861,7 +7911,7 @@ window.__testAppend = function(t) {
       push({ ok: md.indexOf('<img') < 0 && md.indexOf('&lt;img') >= 0 && md.indexOf('<b>粗</b>') >= 0 && md.indexOf('<code>码</code>') >= 0, label: 'AGT T03: HTML 先转义再行内 md（防 XSS）', detail: md.slice(0, 32) });
 
       var archG = { name: dg.name, gender: dg.gender, year: dg.y, month: dg.m, day: dg.d, hour: dg.h, min: dg.mi };
-      noteKeyG = ARCHIVE.recNotesKeyFor(archG, '');
+      noteKeyG = 'bz_rec_notes_' + [dg.name, dg.gender, dg.y, dg.m, dg.d, dg.h, dg.mi].join('|');
       localStorage.setItem(noteKeyG, 'AGT记录标记：甲木日主做功。');
       var tsG = Date.now();
       clipIdG = clipKeyG + '|' + tsG;
@@ -8047,7 +8097,7 @@ window.__testAppend = function(t) {
 
       // v0.100.4 卡片库升级：卡头含昵称/标签，重点卡片带记录全文（预算自适应）
       var origArchsG = ARCHIVE.getArchives();
-      var cardAG = { nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };
+      var cardAG = { id: 'agt-card', nickname: '测卡', name: 'AGT卡片盘', gender: '男', year: 1990, month: 5, day: 15, hour: 10, min: 0, calendarType: 'solar', tags: ['AGT标签甲', 'AGT标签乙'] };
       ARCHIVE.saveArchivesRaw([cardAG]);
       var fullKeyG = ARCHIVE.recNotesKeyFor(cardAG, '');
       var bigG = 'AGT全文标记：七杀格，用食神制杀。';
