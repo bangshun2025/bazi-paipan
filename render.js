@@ -1306,8 +1306,15 @@ function recNoteCandidates(suffix, dim, pd) {
   var prefix = suffix || '';
   out.key = LS_REC_NOTES + prefix + dimSegOf(dim) + [d.name || '', d.gender || '', d.y, d.m, d.d, d.h, d.mi].join('|');
   var exact = recNoteGet(out.key);
+  // v0.103.2 编号挂载载入链：保存侧 recNotesKey 已挂 #档案id，载入侧必须先读同一键，
+  // 否则保存的内容在编号键里、页面载入却读姓名指纹空壳 → 记录区永远空白
+  var mountKey = recNotesKey(prefix, dim, d);
+  if (mountKey && mountKey !== out.key) {
+    var mExact = recNoteGet(mountKey);
+    if (mExact.trim()) { out.key = mountKey; out.text = mExact; }
+  }
   // v0.79.0：精确键有内容也继续收集候选，否则档案改时辰后完整版被永久隐藏
-  if (exact.trim()) out.text = exact;
+  if (!out.text && exact.trim()) out.text = exact;
   var name = d.name || '', gender = d.gender || '';
   if (!name) return out;
   var ymd = [d.y, d.m, d.d].join('|');
