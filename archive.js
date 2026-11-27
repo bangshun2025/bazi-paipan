@@ -463,9 +463,23 @@ function isTestMode() {
   return /[\?&]test=1(&|$)/.test(location.search);
 }
 
+function bzDbgLog(ev, a, b) {
+  try {
+    var L = null;
+    try { L = JSON.parse(localStorage.getItem('bz_dbg_log') || '[]'); } catch (e) { L = []; }
+    if (!L || !L.push) L = [];
+    L.push({ t: new Date().toISOString().slice(11, 23), ev: ev, a: String(a).slice(0, 60), b: String(b).slice(0, 30), st: new Error().stack.split('\n').slice(2, 5).join(' | ').slice(0, 260) });
+    localStorage.setItem('bz_dbg_log', JSON.stringify(L).slice(0, 40000));
+  } catch (e) {}
+}
+
 function saveLastChart() {
   if (isTestMode()) return;
-  try { localStorage.setItem(LAST_CHART_KEY, JSON.stringify(getFormData())); } catch (e) {}
+  try {
+    var __fd = getFormData();
+    localStorage.setItem(LAST_CHART_KEY, JSON.stringify(__fd));
+    bzDbgLog('save', (__fd && __fd.name) + '|' + (__fd && __fd.year), document.getElementById('inName') ? document.getElementById('inName').value : 'NO-DOM');
+  } catch (e) {}
 }
 
 function parseLastChart(raw) {
@@ -483,8 +497,10 @@ function restoreLastChart() {
   var raw = null;
   try { raw = localStorage.getItem(LAST_CHART_KEY); } catch (e) {}
   var d = parseLastChart(raw);
-  if (!d) return false;
-  try { setFormData(d); } catch (e) { return false; }
+  var formName = document.getElementById('inName') ? document.getElementById('inName').value : 'NO-DOM';
+  if (!d) { bzDbgLog('restore-miss', String(raw).slice(0, 40), formName); return false; }
+  try { setFormData(d); } catch (e) { bzDbgLog('restore-err', e.message, formName); return false; }
+  bzDbgLog('restore-hit', (d.name || '') + '|' + d.year, formName);
   return true;
 }
 
