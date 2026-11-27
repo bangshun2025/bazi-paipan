@@ -7732,6 +7732,43 @@ function captureScreenshot() {
     }
   })();
 
+  // ===== v0.103.0 孤儿迁移第三轮消歧（同生日异名档案按挂载段名精确匹配） =====
+  (function() {
+    tests.push({ section:'孤儿迁移消歧(v0.103.0)' });
+    var sec = 'MZ';
+    var A = window.ARCHIVE;
+    if (!A || typeof A.migrateOrphanRecNotes !== 'function') {
+      tests.push(fail(sec + ' T0: 前置 ARCHIVE.migrateOrphanRecNotes 已挂载', '缺失'));
+      return;
+    }
+    var ARCH_KEY = window.CONST.ARCH_KEY;
+    var savedArch = localStorage.getItem(ARCH_KEY);
+    var savedMount = localStorage.getItem('bz_mount_v1');
+    var savedMountAudio = localStorage.getItem('bz_mount_v1_audio');
+    var probeKeys = ['bz_rec_notes_消歧真身|男|1980|5|6|10|20', 'bz_rec_notes_路人甲|男|1980|5|6|10|20', 'bz_rec_notes_#901011', 'bz_rec_notes_#901012'];
+    var savedProbe = {};
+    probeKeys.forEach(function(k) { savedProbe[k] = localStorage.getItem(k); });
+    try {
+      function mk(id, name) { return { id: id, name: name, gender: '男', year: 1980, month: 5, day: 6, hour: 10, min: 20, calendarType: 'solar', createdAt: id, updatedAt: id }; }
+      A.saveArchives([mk(901011, '测试消歧乙'), mk(901012, '消歧真身')]);
+      localStorage.removeItem('bz_mount_v1');
+      localStorage.setItem('bz_rec_notes_消歧真身|男|1980|5|6|10|20', '消歧内容');
+      localStorage.setItem('bz_rec_notes_路人甲|男|1980|5|6|10|20', '悬空内容');
+      A.migrateOrphanRecNotes();
+      tests.push(eq(sec + ' T1: 同生日异名双候选按段名消歧挂对档案', localStorage.getItem('bz_rec_notes_#901012'), '消歧内容'));
+      tests.push(eq(sec + ' T2: 段名与候选全不同名且二轮多候选→保持 free', localStorage.getItem('bz_rec_notes_路人甲|男|1980|5|6|10|20'), '悬空内容'));
+      tests.push(eq(sec + ' T3: 消歧源键已删', localStorage.getItem('bz_rec_notes_消歧真身|男|1980|5|6|10|20'), null));
+      tests.push(eq(sec + ' T4: 迁移戳已打', localStorage.getItem('bz_mount_v1'), '1'));
+    } catch (e) {
+      tests.push(fail(sec + ' 异常', e && e.message ? e.message : String(e)));
+    } finally {
+      if (savedArch === null) localStorage.removeItem(ARCH_KEY); else localStorage.setItem(ARCH_KEY, savedArch);
+      if (savedMount === null) localStorage.removeItem('bz_mount_v1'); else localStorage.setItem('bz_mount_v1', savedMount);
+      if (savedMountAudio === null) localStorage.removeItem('bz_mount_v1_audio'); else localStorage.setItem('bz_mount_v1_audio', savedMountAudio);
+      probeKeys.forEach(function(k) { if (savedProbe[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, savedProbe[k]); });
+    }
+  })();
+
   // 渲染结果（增强版：顶部横幅 + 详情折叠）
   var results = document.getElementById('test-results');
   var summary = document.getElementById('test-summary');

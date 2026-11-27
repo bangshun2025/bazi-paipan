@@ -964,13 +964,22 @@ function migrateAudioKeysToIdMount(archives) {
           if ((+a.hour || 0) !== +p2.parts[5] || (+a.min || 0) !== +p2.parts[6]) continue;
           hits.push(a);
         }
-        if (hits.length !== 1) {
-          hits = [];
-          for (var j2 = 0; j2 < archives.length; j2++) {
-            if ((archives[j2].name || '') === p2.parts[0] && (archives[j2].gender || '') === p2.parts[1]) hits.push(archives[j2]);
+        if (hits.length === 1) {
+          if (hits[0].id != null) plans.push({ oldKey: fk, newKey: 'bz_rec_audio_' + p2.suffix + '#' + hits[0].id });
+        } else {
+          if (hits.length > 1) {
+            var nmh2 = [];
+            for (var n2 = 0; n2 < hits.length; n2++) if ((hits[n2].name || '') === p2.parts[0]) nmh2.push(hits[n2]);
+            if (nmh2.length === 1) hits = nmh2;
           }
+          if (hits.length !== 1) {
+            hits = [];
+            for (var j2 = 0; j2 < archives.length; j2++) {
+              if ((archives[j2].name || '') === p2.parts[0] && (archives[j2].gender || '') === p2.parts[1]) hits.push(archives[j2]);
+            }
+          }
+          if (hits.length === 1 && hits[0].id != null) plans.push({ oldKey: fk, newKey: 'bz_rec_audio_' + p2.suffix + '#' + hits[0].id });
         }
-        if (hits.length === 1 && hits[0].id != null) plans.push({ oldKey: fk, newKey: 'bz_rec_audio_' + p2.suffix + '#' + hits[0].id });
       }
       var idx = 0;
       function step() {
@@ -1028,14 +1037,18 @@ function migrateOrphanRecNotes() {
       if ((+a.hour || 0) !== +p.parts[5] || (+a.min || 0) !== +p.parts[6]) continue;
       hits.push(a);
     }
-    if (hits.length === 1) { moveFreeKeyToArchive(key, p, hits[0]); continue; }
-    hits = [];
-    for (var j2 = 0; j2 < archives.length; j2++) {
-      if ((archives[j2].name || '') === p.parts[0] && (archives[j2].gender || '') === p.parts[1]) hits.push(archives[j2]);
-    }
-    if (hits.length === 1) moveFreeKeyToArchive(key, p, hits[0]);
-  }
-  // 维度可见性键同构搬家
+      if (hits.length === 1) { moveFreeKeyToArchive(key, p, hits[0]); continue; }
+      if (hits.length > 1) {
+        var nmh = [];
+        for (var n1 = 0; n1 < hits.length; n1++) if ((hits[n1].name || '') === p.parts[0]) nmh.push(hits[n1]);
+        if (nmh.length === 1) { moveFreeKeyToArchive(key, p, nmh[0]); continue; }
+      }
+      hits = [];
+      for (var j2 = 0; j2 < archives.length; j2++) {
+        if ((archives[j2].name || '') === p.parts[0] && (archives[j2].gender || '') === p.parts[1]) hits.push(archives[j2]);
+      }
+      if (hits.length === 1) moveFreeKeyToArchive(key, p, hits[0]);
+    }  // 维度可见性键同构搬家
   for (var k3 = 0; k3 < keys.length; k3++) {
     var key3 = keys[k3];
     if (key3.indexOf('bz_dim_vis_') !== 0) continue;
