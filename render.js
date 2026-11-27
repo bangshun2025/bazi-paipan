@@ -1434,6 +1434,7 @@ function bindRecPanel(container, suffix) {
   renderRecTabs(container, suffix);
   recAutogrow(ta);
   ta.addEventListener('input', function() {
+    ta._userTouched = true;
     recAutogrow(ta);
     recSaveNow(container, ta, suffix, true);
     var rpNow = ta.closest ? ta.closest('.record-panel') : null;
@@ -1764,9 +1765,14 @@ function recSaveNow(container, ta, suffix, userAct) {
   var prev = null;
   try { prev = localStorage.getItem(k); } catch (e) {}
   if (prev === ta.value) return true;
-  // v0.87.1 空写保护：非用户主动的保存（定时巡检等）在已存值非空时不写空，
-  // 防止其他视图渲染清掉数据源后、或双开页面旧状态下，巡检把空值盖掉真实内容
-  if (!userAct && !ta.value && prev && prev.trim()) return true;
+  // v0.87.1 空写保护：已存值非空时不写空，防止其他视图渲染清掉数据源后、或双开页面旧状态下，巡检/blur 把空值盖掉真实内容；
+  // v0.103.2 userAct 不再豁免——17:30 事故实锤：恢复流程 blur 时框被清空、键仍指旧盘，userAct 绕过保护把 100 字真记录清成空串。
+  // 用户真删光的判定 = input 事件置过的 _userTouched（删除键也触发 input，渲染清空不触发）
+  if (!ta.value && prev && prev.trim()) { if (!userAct || !ta._userTouched) return true; }
+  // v0.103.2 键漂移防御：ta._recPd 是绑定时的引用，盘面切换后 window._paipanData 已换新对象；
+  // 用当前全局盘面重算键，与本框归属键不一致 = 内容不再属于这个键，拒写（防把 A 盘内容写进 B 盘键/清掉 A 盘键）
+  var curKey = recNotesKey(suffix, ta._recDim, window._paipanData);
+  if (curKey && curKey !== k) return false;
   recAutogrow(ta);
   if (!recNoteSet(k, ta.value)) {
     recStatusShow(container, '⚠ 保存失败：浏览器存储空间不足，请先复制内容再清理', true);
