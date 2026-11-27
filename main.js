@@ -3838,6 +3838,7 @@ function captureScreenshot() {
   // ===== v0.103.0 编号挂载：档案/记录/录音键挂 #编号，改名改生日不再迁移 =====
   // 异步断言（IndexedDB 搬家），经 __testAppend 追加统一统计（与 AUD 段同模式）
   (async function() {
+    if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     function push(t) { if (typeof window.__testAppend === 'function') window.__testAppend(t); else tests.push(t); }
     var A = window.ARCHIVE;
     if (!A || typeof A.recNotesKeyFor !== 'function' || typeof A.mountSegOf !== 'function' || typeof A.migrateOrphanRecNotes !== 'function') {
@@ -7876,6 +7877,7 @@ window.__testAppend = function(t) {
 
   // ===== v0.80.0 分析记录·录音（IndexedDB 异步断言，经 __testAppend 追加统一统计） =====
   (async function() {
+    if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     var push = function(t) { if (window.__testAppend) window.__testAppend(t); };
     try {
       var R = window.RENDER;
@@ -7938,6 +7940,7 @@ window.__testAppend = function(t) {
 
   // ===== v0.100.2 ✦ Agent 对话：上下文三源 / 会话持久 / 抽屉开合 / 转义（IndexedDB 异步，经 __testAppend 统计） =====
   (async function() {
+    if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     var push = function(t) { if (window.__testAppend) window.__testAppend(t); };
     var R = window.RENDER, A = window.AGENT;
     var dg = { name: 'Agent测试盘', gender: '男', y: 1982, m: 10, d: 18, h: 5, mi: 0 };
@@ -8225,6 +8228,7 @@ window.__testAppend = function(t) {
 
   // ===== v0.100.4 档案排盘·对比页联动：对比页开着时从档案点「排盘」，对比页随档案面板一并关闭 =====
   (async function(){
+    if (!/[\?&]test=1(&|$)/.test(location.search)) return;
     var pushL = function(t) { if (window.__testAppend) window.__testAppend(t); };
     var A = window.ARCHIVE;
     var origArchsL = null;
